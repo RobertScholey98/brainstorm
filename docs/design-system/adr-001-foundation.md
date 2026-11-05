@@ -1,0 +1,163 @@
+# ADR 001: Colour tokens, closed scales and the accent
+
+Status: accepted, with the accent hue open until Rob picks one at the foundation checkpoint.
+
+## Context
+
+The round 1 reviews (`design-review/round-1/`, merged in `worklist.md`) scored self-consistency 5.5 to 7. The worklist traces 12 of its 41 findings to the base layer. Brainstorm had shadcn's default palette, with `accent` meaning a grey hover fill and `primary` meaning near-black, and no brand hue. The renderer used five arbitrary font sizes (10, 11 and 13 px, `0.8rem` and `0.85em`), seven arbitrary radii and focus rings of both 2 and 3 px. The canvas showed classic Windows scrollbars with arrow buttons beside thin ones in the shell (W11). The canvas was a cool blue-grey against warm chrome, and in dark it was darker than the window, so a frame read as a hole (W16).
+
+The foundation phase fixes the base layer so the kit, shell and screen phases build on one set of values. This ADR records those values and why.
+
+## Decision
+
+### One source for every colour
+
+`src/core/design.ts` is the only place a colour value lives. It feeds three consumers.
+
+- `npm run design:tokens` writes `src/renderer/design.css` from `designStylesheet()`. A test in `test/design.test.ts` fails when the committed file differs from the generator's output, so nobody edits the CSS by hand.
+- The canvas runtime inlines `designCss("bs-")` into the frame. The prefix means block code written by an agent can't pick up `--border` or `--accent` by accident, and the frame still matches the shell exactly.
+- `scripts/design/checkpoint.mjs` reads `solidColours()` and `accentCss()` to render the candidates.
+
+Each colour has one meaning. A role is named for what it does, not for its shade, so a reader of `bg-selected` knows what state the element is in.
+
+| Role | Light | Dark | Meaning |
+| --- | --- | --- | --- |
+| `app` | `#f6f5f2` | `#1c1c1a` | The window behind everything, and the sidebar |
+| `canvas` | `#efeeea` | `#21211f` | The canvas behind the frames |
+| `card` | `#ffffff` | `#262624` | A frame body, the inspector and inputs |
+| `raised` | `#ffffff` | `#30302d` | Popovers, menus and the select list |
+| `muted` | `#f1f0ec` | `#32322e` | A quiet fill, such as a secondary button or a confirmed pin |
+| `hover` | `fg` at 6% | same mix | The pointer is over it |
+| `selected` | `accent` at 14% | same mix | It is the chosen item |
+| `fg` | `#1b1b1a` | `#ecebe8` | Body text |
+| `fg-muted` | `#66655f` | `#a8a7a1` | Secondary text and icons |
+| `border` | `#e6e5e1` | `#3a3a36` | Dividers and card edges |
+| `border-strong` | `#d4d3cd` | `#4a4a45` | Input and control edges |
+| `ring` | `#85847e` | `#8a8983` | The focus ring |
+| `inverse`, `inverse-fg` | `#1f1f1e`, `#fafaf9` | `#ecebe8`, `#1f1f1d` | The neutral solid fill of the default button, a checked checkbox and an on switch |
+| `accent`, `accent-fg`, `accent-hover` | see below | see below | Brainstorm itself: the mark, the primary action, open pins, selection |
+| `success` | `#2a7a4b` | `#5cc48a` | Attached, confirmed, done |
+| `warning` | `#8a5300` | `#f2b860` | Needs Rob before it can continue |
+| `danger` | `#c03a2f` | `#ff8a7f` | Failed, destructive |
+| `info` | `#2f63c4` | `#86aeff` | Neutral status, such as the agent asking a question |
+
+Each status colour has a `-subtle` partner, the status mixed 10% into `card`, for a tinted box behind status text. Every derived token is a `color-mix` in oklab over the solids, the same expression in both themes, so a derived value can't drift from its solid.
+
+The neutrals are warm greys, a little yellow, so the app sits next to Claude desktop without looking cold beside it. In dark, each layer is lighter than the one below it, `app` to `card` to `raised`, because a shadow barely shows on a dark ground. The canvas is one step darker than the window in light, so white frames stand out, and one step lighter in dark, so a frame no longer reads as a hole (W15, W16).
+
+Contrast, measured with `contrast()` in `design.ts` against `app`, `canvas`, `card`, `raised` and `muted` in that order:
+
+| Token | Light | Dark |
+| --- | --- | --- |
+| `fg` | 15.81, 14.85, 17.24, 17.24, 15.12 | 14.32, 13.53, 12.72, 11.10, 10.80 |
+| `fg-muted` | 5.36, 5.04, 5.85, 5.85, 5.13 | 7.08, 6.69, 6.29, 5.49, 5.34 |
+| `ring` | 3.44, 3.23, 3.75, 3.75, 3.29 | 4.87, 4.60, 4.32, 3.77, 3.67 |
+| `success` | 4.83, 4.54, 5.27, 5.27, 4.62 | 7.90, 7.46, 7.02, 6.13, 5.96 |
+| `warning` | 5.81, 5.45, 6.33, 6.33, 5.55 | 9.59, 9.06, 8.52, 7.44, 7.23 |
+| `danger` | 4.95, 4.65, 5.40, 5.40, 4.74 | 7.47, 7.06, 6.64, 5.80, 5.64 |
+| `info` | 5.20, 4.89, 5.67, 5.67, 4.97 | 7.73, 7.31, 6.87, 6.00, 5.83 |
+
+Text roles pass 4.5:1 on every surface and the ring passes 3:1. `test/design.test.ts` asserts those floors, so a token edit that breaks one fails `npm test`. A draft `fg-faint` measured 2.46:1 on the light canvas and had no callers, so it was deleted rather than kept for later.
+
+### Closed scales
+
+`src/renderer/styles.css` clears Tailwind's defaults with `--<namespace>-*: initial` and defines only these keys. A utility outside them generates no CSS, and `npm run lint:design` reports it.
+
+| Scale | Steps |
+| --- | --- |
+| Spacing | `0` 0, `0.5` 2, `1` 4, `1.5` 6, `2` 8, `3` 12, `4` 16, `5` 20, `6` 24, `8` 32, `10` 40, `12` 48 px |
+| Sizing only | `2.5` 10, `3.5` 14, `4.5` 18, `7` 28, `16` 64 px, for icons, dots and control heights |
+| Layout widths | `inspector` 280, `popover-sm` 320, `popover-md` 380, `menu` 144, `picker` 220 px; containers `xs` 20rem, `sm` 24rem, `md` 28rem |
+| Type | `2xs` 11/14, `xs` 12/16, `sm` 13/18, `base` 14/20, `lg` 16/22 px |
+| Weight | `normal` 400, `medium` 500, `semibold` 600 |
+| Leading | `none` 1, `snug` 1.375, `relaxed` 1.55 |
+| Tracking | `tight` -0.01em |
+| Radius | `sm` 4, `md` 6, `lg` 8, `xl` 12 px, plus `full` |
+| Shadow | `xs`, `sm`, `md`, `lg`, each a per-theme `elevation-*` token; dark adds a 1 px white hairline |
+| Layers | `raised` 10, `sticky` 20, `popover` 40, `tooltip` 50, `toast` 60 |
+
+Every font size carries its own line height, so `text-sm` is always 13/18 and a line-height modifier such as `text-sm/6` is off the scale. Sizing-only steps share the spacing namespace, because Tailwind sizes and spaces from one namespace. The lint keeps them off padding, margin and gap. Tailwind still compiles a bare `z-10` from the number, so the lint allows only the named layers.
+
+The runtime `--spacing: 4px` sits outside the theme on `:root`. `tw-animate-css` reads it for slide offsets, and as a plain variable it opens no `p-13`.
+
+### Density
+
+Brainstorm is a tool Rob keeps open all day beside two other dense apps, so the default control is 28 px (`h-7`) and body text is 13 px. Buttons, inputs, selects and toggles moved from 32 to 28 px, and their large sizes from 36 to 32 px. Where the codemod met a spacing value between two steps, it rounded down, so `px-2.5` became `px-2` and `gap-2.5` became `gap-2`. The inspector narrowed from 300 to 280 px so both demo frames fit beside it at 1440 (W4).
+
+### Scrollbars
+
+Every scroll region, the canvas frame included, uses one `::-webkit-scrollbar` style. It is 10 px, with no arrow buttons, a transparent track and a round thumb of `fg` at 22% that darkens to 36% on hover. A 2 px transparent border clipped to the padding box makes the thumb sit inside the track. The stylesheet sets neither `scrollbar-width` nor `scrollbar-color`, because Chromium ignores the `::-webkit-scrollbar` rules once either is set, and the standard properties can't round or inset the thumb.
+
+### Font
+
+Brainstorm keeps Segoe UI Variable for the interface and Cascadia Mono for code, and bundles no font. Both ship with Windows 11, where Rob runs Brainstorm, so they cost nothing to load and match the Windows chrome around the window. Segoe UI Variable has an optical-size axis tuned for small text and true 400, 500 and 600 weights. The reviewers' type findings (W12, W13) were about the size scale and the weights in use, and the closed scale fixes both. One reviewer suggested Inter and another called a bundled face optional. Inter would mean bundling and loading font files and would make Brainstorm look like most Electron apps, and no finding needs it.
+
+### Accent
+
+The accent is one token family, `accent`, `accent-fg` and `accent-hover`, picked from `ACCENTS` by `ACCENT` in `design.ts`. Changing that one value, running `npm run design:tokens` and rebuilding moves the mark, the primary button, open pins, selection and the canvas frame together. `selected` and `accent-hover` are mixes of `accent`, so they follow without a second edit.
+
+Three candidates pass 4.5:1 as text on all five surfaces and with `accent-fg` on an accent fill, in both themes. The minimum on any surface is listed.
+
+| Candidate | Light accent, fg | Light min on surface, fg on fill | Dark accent, fg | Dark min on surface, fg on fill |
+| --- | --- | --- | --- | --- |
+| Iris | `#5b4bd1`, `#ffffff` | 5.36, 6.23 | `#a89cff`, `#17132e` | 5.43, 7.58 |
+| Lagoon | `#0b7570`, `#ffffff` | 4.77, 5.54 | `#43c4b9`, `#062421` | 6.03, 7.67 |
+| Plum | `#a0306f`, `#ffffff` | 5.75, 6.67 | `#ec8fc7`, `#2a0a1d` | 5.71, 8.04 |
+
+- **Iris** is a blue-violet. It reads as a creative tool and stays clear of Claude's clay orange, T3 Code's sky-blue links and Brainstorm's own `info` blue. It is the default until Rob chooses.
+- **Lagoon** is a teal, the quietest of the three and the most like a utility. In dark, `#43c4b9` sits near `success` `#5cc48a`, so an open pin and an attached badge could read as related.
+- **Plum** is a red-violet that pairs with the warm neutrals. It sits nearest to `danger`, which matters most on the pins, where open and failed must never look alike.
+
+`npm run design:checkpoint` renders the open demo session under each candidate in both themes, to `design-review/checkpoint/accent-<name>-<theme>.png`.
+
+### Mark
+
+The "B" tile is now `src/renderer/Mark.tsx`, an inline SVG drawn from `MARK` in `design.ts` on a 16-unit grid. It is a canvas pin's teardrop, rounded on three corners and square at the bottom left where a pin points, with an `accent-fg` dot where a comment anchors. Brainstorm's one distinct gesture is pinning feedback to a design, so the mark is that pin. The shape has no detail under 2 units, so it holds at 16 and 20 px. `design-review/checkpoint/mark.png` shows it at 16, 20 and 48 px in every candidate and theme.
+
+### Pins show status by form as well as colour
+
+An open pin is an accent fill with `accent-fg` numerals. An addressed pin is a card fill with an accent ring and accent numerals. A confirmed pin is a muted fill with `fg-muted` numerals. Rob can tell the three apart without telling hues apart, and the canvas runtime and `Feedback.tsx` use the same three forms.
+
+### The codemod
+
+`scripts/design/codemod.mjs` moved the renderer onto the scales. It parses string literals and template chunks out of each TSX file with `scripts/design/classes.mjs` and rewrites only class tokens. Its tables map arbitrary sizes, radii and widths to scale steps, shadcn colour names to roles, numeric layers to named ones, and any background in a pressed, active or selected state to `bg-selected`. Lookups use `Object.hasOwn`, so a class named `constructor` can't hit `Object.prototype`. Replacements are functions, so a `$` in a class never acts as a replacement pattern. It rewrites only the text inside literals, so a CRLF file keeps its line endings, and it writes a file only when its content changed.
+
+Pass `--shadcn` for a component fresh from `shadcn add`. shadcn's `accent` is a hover fill, and Brainstorm's `accent` is the brand, so the flag maps `accent` to `hover`. Without the flag the codemod is idempotent. A second run over the migrated renderer changed nothing.
+
+### The lint
+
+`npm run lint:design` (`scripts/design/lint.mjs`) checks every TSX file under `src/renderer` for three rules.
+
+- `arbitrary-value` fails a utility with a bracket or parenthesis value, such as `text-[13px]`, outside `components/ui`. Variants such as `data-[selected]:` are allowed.
+- `raw-colour` fails a hex colour or a colour function such as `rgb(` or `oklch(` in any string, the kit included.
+- `off-scale` fails a utility that generates no CSS under the closed theme, a numeric `z-*`, a sizing-only step on padding, margin or gap, and a ring or outline wider than 2 px.
+
+The lint loads `styles.css` into Tailwind's own design system through `@tailwindcss/node` and asks it whether each candidate compiles, so the theme is the only list of allowed values. A string inside `className`, `cn`, `cva`, `cx` or `clsx` is always classes. Any other string counts as classes only when every word in it parses as a Tailwind candidate and at least one compiles, which keeps `align="end"` and `data-icon="inline-start"` out. `test/design-lint.test.ts` tests each rule with literal input and runs the lint over the real renderer, so `npm test` enforces it too.
+
+## Edits to `components/ui`
+
+These files came from shadcn's base-nova registry. The foundation edited them only where a token or scale required it.
+
+- **Colour names.** The codemod with `--shadcn` renamed shadcn's colours to roles in every file. `primary` became `inverse`, `secondary` became `muted`, `destructive` became `danger`, `input` became `border-strong`, `popover` became `raised`, `background` became `card`, `foreground` became `fg`, the `sidebar-*` family became `app`, `hover`, `border` and `ring`, and shadcn's `accent` became `hover`.
+- **Selection.** Pressed, active and selected backgrounds in `toggle.tsx` and `sidebar.tsx` became `bg-selected`.
+- **Density.** `button.tsx`, `input.tsx`, `select.tsx` and `toggle.tsx` moved the default height from 32 to 28 px and the large size from 36 to 32 px. Horizontal padding went from 10 to 8 px.
+- **Accent variant.** `button.tsx` gained `variant="accent"`, `bg-accent text-accent-fg hover:bg-accent-hover`, for the one primary action on a screen.
+- **Radius.** `rounded-[min(var(--radius-md),10px)]` and its 12 px twin became `rounded-md` in `button.tsx`, `select.tsx`, `toggle.tsx` and `toggle-group.tsx`. `rounded-[4px]` in `checkbox.tsx` and `rounded-[2px]` in `tooltip.tsx` became `rounded-sm`. `rounded-4xl` in `badge.tsx` became `rounded-full`.
+- **Focus.** Every `ring-3` and `ring-[3px]` became `ring-2`.
+- **Layers.** `z-10`, `z-20` and `z-50` became `z-raised`, `z-sticky` and `z-popover`.
+- **Widths.** `w-72` in `popover.tsx` became `w-popover-sm`, `min-w-36` in `select.tsx` became `min-w-menu`, and `min-h-40` in `slider.tsx` became `min-h-picker`.
+- **Spacing function.** Tailwind's `--spacing()` needs a theme `--spacing`, which the closed theme clears. `toggle-group.tsx` now reads `gap-[calc(var(--gap)*4px)]` and `sidebar.tsx` adds `16px` where it added `--spacing(4)`.
+- **Slider thumb.** `bg-white` became `bg-card`, so the thumb follows the theme.
+
+## Consequences
+
+- A new colour, size or layer starts in `design.ts` or `styles.css`, and nowhere else. The lint and the token tests fail anything that skips that step.
+- The kit can't drift back to shadcn's defaults without the lint saying so, but a fresh `shadcn add` needs the codemod with `--shadcn` before it passes.
+- The accent is provisional. Rob's pick changes one value in `design.ts`, and the token test reruns the contrast for it.
+
+These are open and belong to later phases.
+
+- Both active variant rows in the session panel show `bg-selected`, one per slot, so selection still doesn't say which slot holds the selected frame (W18, shell).
+- The selected segment in a toggle group now uses `bg-selected`, but the group's track and the segment's edge need the kit pass to read clearly (W6, kit).
+- Tooltips use `bg-fg text-card` and sit on `z-popover`, the same layer as popovers. The kit pass moves them to `inverse` and `z-tooltip`.
+- The sheet scrim maps `bg-black/10` to `bg-fg/10`, which lightens the backdrop in dark. Nothing opens a sheet at desktop widths today.
