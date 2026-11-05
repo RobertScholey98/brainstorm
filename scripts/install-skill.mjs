@@ -1,4 +1,4 @@
-import { cpSync, existsSync, readFileSync, readdirSync, renameSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,9 +48,14 @@ if (existsSync(target)) {
     console.log(`${target} is already up to date`);
     process.exit(0);
   }
-  const backup = `${target}.bak-${timestamp(new Date())}`;
+  // Outside skills/, because Claude Code loads every folder there as a skill and the backup would compete to trigger.
+  const backups = join(homedir(), ".claude", "skill-backups");
+  const backup = join(backups, `ux-brainstorm.bak-${timestamp(new Date())}`);
   say(`move ${target} to ${backup}`);
-  if (!dryRun) renameSync(target, backup);
+  if (!dryRun) {
+    mkdirSync(backups, { recursive: true });
+    renameSync(target, backup);
+  }
 }
 say(`copy ${source} to ${target}`);
 if (!dryRun) cpSync(source, target, { recursive: true });
