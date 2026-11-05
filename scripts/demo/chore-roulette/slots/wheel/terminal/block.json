@@ -1,0 +1,26 @@
+{
+  "title": "Terminal draw",
+  "props": {
+    "data": {
+      "crew": {
+        "type": "data",
+        "description": "the household, with chore points this week",
+        "sample": [
+          { "name": "You", "color": "#00f0ff", "points": 2 },
+          { "name": "Maya", "color": "#ff2bd6", "points": 5 },
+          { "name": "Jun", "color": "#f5ff3b", "points": 1 },
+          { "name": "Priyanka", "color": "#39ff88", "points": 3 }
+        ]
+      },
+      "chore": { "type": "data", "description": "the chore being drawn for", "sample": { "name": "Bins out", "due": "tonight 21:00" } }
+    },
+    "appearance": {
+      "tickMs": { "type": "number", "label": "Tick speed", "default": 70, "min": 30, "max": 300, "step": 10, "unit": "ms" },
+      "accent": { "type": "color", "label": "Phosphor", "default": "#39ff88" },
+      "font": { "type": "enum", "label": "Typeface", "default": "Cascadia Mono", "options": ["Cascadia Mono", "Consolas", "Courier New", "Lucida Console"] },
+      "cursor": { "type": "enum", "label": "Cursor", "default": "Block", "options": ["Block", "Bar", "Underline"] },
+      "showPoints": { "type": "boolean", "label": "Show points", "default": true },
+      "prompt": { "type": "text", "label": "Command", "default": "draw --fair bins_out" }
+    }
+  }
+}

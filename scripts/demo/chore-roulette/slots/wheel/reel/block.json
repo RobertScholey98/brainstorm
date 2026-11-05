@@ -1,0 +1,27 @@
+{
+  "title": "Slot reel",
+  "props": {
+    "data": {
+      "crew": {
+        "type": "data",
+        "description": "the household, with chore points this week",
+        "sample": [
+          { "name": "You", "color": "#00f0ff", "points": 2 },
+          { "name": "Maya", "color": "#ff2bd6", "points": 5 },
+          { "name": "Jun", "color": "#f5ff3b", "points": 1 },
+          { "name": "Priyanka", "color": "#39ff88", "points": 3 }
+        ]
+      },
+      "chore": { "type": "data", "description": "the chore being drawn for", "sample": { "name": "Bins out", "due": "tonight 21:00" } }
+    },
+    "appearance": {
+      "spinSeconds": { "type": "number", "label": "Roll time", "default": 2.8, "min": 0.6, "max": 6, "step": 0.1, "unit": "s" },
+      "rowHeight": { "type": "number", "label": "Row height", "default": 72, "min": 48, "max": 96, "step": 4, "unit": "px" },
+      "accent": { "type": "color", "label": "Accent", "default": "#f5ff3b" },
+      "housing": { "type": "enum", "label": "Housing", "default": "Chrome", "options": ["Chrome", "Glass", "Hazard", "Bare"] },
+      "motionBlur": { "type": "enum", "label": "Motion blur", "default": "Soft", "options": ["None", "Soft", "Heavy"] },
+      "scanlines": { "type": "boolean", "label": "Scanlines", "default": true },
+      "buttonLabel": { "type": "text", "label": "Button text", "default": "Pull" }
+    }
+  }
+}

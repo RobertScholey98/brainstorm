@@ -17,4 +17,6 @@ npm run typecheck
 npm run verify:1   # the built CLI and headless server against a fake T3
 ```
 
+`node scripts/seed-demo.mjs` opens the app on a temp home with a demo session, the cyberpunk chore roulette, committed through the real CLI against a fake T3 thread.
+
 `npm install` builds `dist/` and exposes the `brainstorm` command (`npm link` puts it on PATH). Run `brainstorm --help` for the commands.
