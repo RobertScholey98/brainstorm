@@ -33,7 +33,24 @@ async function checkWorker() {
   });
 }
 
-export const targets = { "check-worker": checkWorker };
+/** The CLI and the headless server, run from the repo, so dependencies resolve from node_modules. */
+const nodeEntry = (entry, out) => () =>
+  build({
+    entryPoints: [`${root}/${entry}`],
+    outfile: `${root}/${out}`,
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    target: "node22",
+    packages: "external",
+    logLevel: "error",
+  });
+
+export const targets = {
+  "check-worker": checkWorker,
+  server: nodeEntry("src/server/headless.ts", "dist/server/headless.js"),
+  cli: nodeEntry("src/cli/main.ts", "dist/cli/main.js"),
+};
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const names = process.argv.slice(2);

@@ -366,7 +366,7 @@ export class Brainstorm {
     const byId = new Map(feedback.map((f) => [f.id, f]));
     const unknown = input.addresses.filter((id) => !byId.has(id));
     if (unknown.length > 0) {
-      return fail(notFound("feedback", `no open or addressed feedback ${unknown.map((id) => `#${id}`).join(", ")} in ${session}`));
+      return fail(notFound("feedback", `no feedback ${unknown.map((id) => `#${id}`).join(", ")} in ${session}`));
     }
     const addressable = input.addresses.filter((id) => {
       const f = byId.get(id);
@@ -378,7 +378,10 @@ export class Brainstorm {
     const previous = latest === null ? [] : this.#store.iterationBlocks(session, latest.n);
     const previousHash = new Map(previous.map((b) => [b.id, b.hash]));
     const drafted = new Set<BlockId>(draft.blocks.map((b) => b.id));
-    const changed = draft.blocks.filter((b) => previousHash.get(b.id) !== b.hash).map((b) => b.id);
+    const changed = draft.blocks
+      .filter((b) => previousHash.get(b.id) !== b.hash)
+      .map((b) => b.id)
+      .sort();
     const removed = previous.filter((b) => !drafted.has(b.id)).map((b) => b.id);
     const sameSlots = latest !== null && JSON.stringify(latest.slots) === JSON.stringify(draft.manifest.slots);
     if (latest !== null && changed.length === 0 && removed.length === 0 && sameSlots && adding.length === 0) {
