@@ -37,9 +37,9 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
       >
         Export
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[340px] gap-3 p-3" data-exported={done !== null || undefined}>
+      <PopoverContent align="end" className="w-popover-md gap-3 p-3" data-exported={done !== null || undefined}>
         {done === null ? (
-          <p className="flex items-center gap-2 text-muted-foreground">
+          <p className="flex items-center gap-2 text-fg-muted">
             <Spinner />
             Writing the file…
           </p>

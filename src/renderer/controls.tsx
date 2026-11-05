@@ -56,12 +56,12 @@ function Row({ bound, trailing, children }: { bound: Pick<Bound<AppearanceType>,
   return (
     <div className="grid gap-1.5" data-control={spec.name} data-overridden={overridden || undefined}>
       <div className="flex min-h-6 items-center gap-1">
-        <span className="truncate text-[13px] font-medium">{label}</span>
+        <span className="truncate text-sm font-medium">{label}</span>
         {overridden && (
           <Button
             variant="ghost"
             size="icon-xs"
-            className="text-muted-foreground"
+            className="text-fg-muted"
             title={`Reset ${label} to the block's default`}
             aria-label={`Reset ${label}`}
             onClick={() => scope.reset(spec.name)}
@@ -89,7 +89,7 @@ function Slider(control: ControlProps) {
     <Row
       bound={bound}
       trailing={
-        <span className="text-xs tabular-nums text-muted-foreground" data-value>
+        <span className="text-xs tabular-nums text-fg-muted" data-value>
           {formatNumber(value, spec.step)}
           {spec.unit}
         </span>
@@ -197,11 +197,11 @@ function ColourField({ bound }: { bound: Bound<"color"> }) {
   };
   return (
     <Row bound={bound}>
-      <div className="flex h-7 items-center gap-2 rounded-lg border border-input pr-2.5 pl-1 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
+      <div className="flex h-7 items-center gap-2 rounded-lg border border-border-strong pr-2 pl-1 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 dark:bg-border-strong/30">
         <input
           type="color"
           aria-label={`${label} colour`}
-          className="size-5 cursor-pointer rounded-md border-0 bg-transparent p-0 [&::-webkit-color-swatch]:rounded-[5px] [&::-webkit-color-swatch]:border [&::-webkit-color-swatch]:border-foreground/15 [&::-webkit-color-swatch-wrapper]:p-0"
+          className="size-5 cursor-pointer rounded-md border-0 bg-transparent p-0 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border [&::-webkit-color-swatch]:border-fg/15 [&::-webkit-color-swatch-wrapper]:p-0"
           value={value}
           onChange={(e) => setValue(e.target.value.toLowerCase())}
         />
@@ -232,7 +232,7 @@ function Section({ props, children }: BaseComponentProps<{ title: string | null 
   const title = props.title === scope?.block.title ? null : props.title;
   return (
     <section className="grid gap-4 border-b px-4 pt-4 pb-5 last:border-b-0">
-      {title !== null && <h3 className="text-xs font-semibold text-muted-foreground">{title}</h3>}
+      {title !== null && <h3 className="text-xs font-semibold text-fg-muted">{title}</h3>}
       {children}
     </section>
   );

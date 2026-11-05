@@ -22,9 +22,9 @@ const GROUPS: readonly { state: FeedbackStatus["state"]; title: string }[] = [
 ];
 
 const STATUS_DOT: Record<FeedbackStatus["state"], string> = {
-  open: "bg-open",
-  addressed: "bg-addressed",
-  confirmed: "bg-confirmed",
+  open: "bg-accent",
+  addressed: "bg-accent",
+  confirmed: "bg-success",
 };
 
 function statusLine(status: FeedbackStatus): string | null {
@@ -68,15 +68,15 @@ export function FeedbackPanel({
   return (
     <section className="border-t" aria-label="Feedback" data-feedback-panel>
       <header className="flex items-center gap-2 px-4 pt-3 pb-2">
-        <h2 className="text-[13px] font-semibold">Feedback</h2>
-        <span className="text-xs tabular-nums text-muted-foreground">{feedback.length > 0 ? feedback.length : ""}</span>
+        <h2 className="text-sm font-semibold">Feedback</h2>
+        <span className="text-xs tabular-nums text-fg-muted">{feedback.length > 0 ? feedback.length : ""}</span>
         <Button variant={picking ? "default" : "outline"} size="sm" className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
           <MessageSquarePlus data-icon="inline-start" aria-hidden />
           {picking ? "Picking…" : "Pin comment"}
         </Button>
       </header>
       {feedback.length === 0 ? (
-        <p className="px-4 pb-4 text-[13px]/relaxed text-muted-foreground">
+        <p className="px-4 pb-4 text-sm/relaxed text-fg-muted">
           Pin a comment to an element in the canvas. The agent sees it with your next Regenerate.
         </p>
       ) : (
@@ -85,7 +85,7 @@ export function FeedbackPanel({
           if (items.length === 0) return null;
           return (
             <div key={state} className="pb-2" data-group={state}>
-              <h3 className="px-4 pt-1 pb-1 text-xs font-medium text-muted-foreground">
+              <h3 className="px-4 pt-1 pb-1 text-xs font-medium text-fg-muted">
                 {title} <span className="tabular-nums">{items.length}</span>
               </h3>
               <ul className="grid">
@@ -150,12 +150,12 @@ function FeedbackItem({
       data-status={f.status.state}
       data-place={place}
       data-focused={focused || undefined}
-      className="group relative mx-2 rounded-lg px-2 py-2 hover:bg-accent/60 data-[focused]:bg-accent"
+      className="group relative mx-2 rounded-lg px-2 py-2 hover:bg-hover/60 data-[focused]:bg-hover"
     >
-      <div className="flex gap-2.5">
+      <div className="flex gap-2">
         <span
           aria-hidden
-          className={`mt-px grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-[9px_9px_9px_3px] px-1 text-[10px] font-bold tabular-nums text-white ${STATUS_DOT[f.status.state]}`}
+          className={`mt-px grid h-4.5 min-w-4.5 shrink-0 place-items-center rounded-full rounded-bl-sm px-1 text-2xs font-semibold tabular-nums text-card ${STATUS_DOT[f.status.state]}`}
         >
           {f.id}
         </span>
@@ -171,11 +171,11 @@ function FeedbackItem({
               }}
             />
           ) : (
-            <button type="button" onClick={onOpen} className="block w-full text-left text-[13px]/snug whitespace-pre-wrap" data-feedback-text>
+            <button type="button" onClick={onOpen} className="block w-full text-left text-sm/snug whitespace-pre-wrap" data-feedback-text>
               {f.text}
             </button>
           )}
-          <p className="pt-1 text-xs/snug text-muted-foreground" data-feedback-meta>
+          <p className="pt-1 text-xs/snug text-fg-muted" data-feedback-meta>
             {block?.title ?? f.pin.blockId} · {f.pin.part ?? "whole block"}
             {line !== null && <span data-feedback-status> · {line}</span>}
           </p>
@@ -236,7 +236,7 @@ export function TextEditor({
     <div className="grid gap-2">
       <Textarea ref={area} rows={3} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} className="resize-none" />
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Ctrl+Enter</span>
+        <span className="text-xs text-fg-muted">Ctrl+Enter</span>
         <Button variant="ghost" size="sm" className="ml-auto" onClick={onCancel}>
           Cancel
         </Button>
@@ -273,12 +273,12 @@ export function PinComposer({
       role="dialog"
       aria-label="New comment"
       data-composer
-      className="absolute z-10 grid gap-2 rounded-xl bg-popover p-3 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10 animate-in fade-in-0 zoom-in-95 duration-100"
+      className="absolute z-raised grid gap-2 rounded-xl bg-raised p-3 text-sm text-fg shadow-lg ring-1 ring-fg/10 animate-in fade-in-0 zoom-in-95 duration-100"
       style={{ left, top, width: COMPOSER_WIDTH }}
     >
-      <span aria-hidden className="absolute size-2 rounded-full bg-open ring-2 ring-background" style={{ left: at.x - left - 4, top: at.y - top - 4 }} />
-      <p className="truncate text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">{pin.part ?? "Whole block"}</span> in {block?.title ?? pin.blockId}
+      <span aria-hidden className="absolute size-2 rounded-full bg-accent ring-2 ring-card" style={{ left: at.x - left - 4, top: at.y - top - 4 }} />
+      <p className="truncate text-xs text-fg-muted">
+        <span className="font-medium text-fg">{pin.part ?? "Whole block"}</span> in {block?.title ?? pin.blockId}
       </p>
       <TextEditor initial="" placeholder="What should change here?" submitLabel="Pin comment" onSubmit={onSave} onCancel={onCancel} />
     </div>

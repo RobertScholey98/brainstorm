@@ -58,7 +58,7 @@ export function Regenerate({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger render={<Button size="sm" title="Send a request to the T3 thread" data-regenerate-toggle />}>Regenerate</PopoverTrigger>
-      <PopoverContent align="end" className="w-[380px] gap-3 p-3" data-regenerate-menu>
+      <PopoverContent align="end" className="w-popover-md gap-3 p-3" data-regenerate-menu>
         <RegenerateForm view={view} selected={selected} onClose={() => setOpen(false)} send={send} />
       </PopoverContent>
     </Popover>
@@ -123,10 +123,10 @@ function RegenerateForm({
       </ToggleGroup>
 
       {kind === "blocks" && (
-        <div className="grid max-h-[220px] gap-2 overflow-y-auto" data-block-choices>
+        <div className="grid max-h-picker gap-2 overflow-y-auto" data-block-choices>
           {slots.map((slot) => (
             <fieldset key={slot.id} className="grid gap-0.5">
-              <legend className="pb-0.5 text-xs font-medium text-muted-foreground">{slot.title}</legend>
+              <legend className="pb-0.5 text-xs font-medium text-fg-muted">{slot.title}</legend>
               {blocks
                 .filter((b) => b.slot === slot.id)
                 .map((b) => (
@@ -136,8 +136,8 @@ function RegenerateForm({
           ))}
         </div>
       )}
-      {kind === "all" && <p className="text-muted-foreground">The agent may change any block, in every slot.</p>}
-      {kind === "described" && <p className="text-muted-foreground">Say what to change. The agent works out which blocks that means.</p>}
+      {kind === "all" && <p className="text-fg-muted">The agent may change any block, in every slot.</p>}
+      {kind === "described" && <p className="text-fg-muted">Say what to change. The agent works out which blocks that means.</p>}
 
       <Textarea
         rows={3}
@@ -151,23 +151,23 @@ function RegenerateForm({
       />
 
       <div className="grid gap-1" data-attached-feedback>
-        <h3 className="text-xs font-medium text-muted-foreground">
+        <h3 className="text-xs font-medium text-fg-muted">
           {attached.length === 0 ? "No open feedback in scope" : `Open feedback sent with it (${attached.length})`}
         </h3>
         {attached.map((f) => (
-          <p key={f.id} className="flex gap-1.5 text-[13px]/snug" data-attached={f.id}>
-            <span className="shrink-0 font-semibold tabular-nums text-open">#{f.id}</span>
+          <p key={f.id} className="flex gap-1.5 text-sm/snug" data-attached={f.id}>
+            <span className="shrink-0 font-semibold tabular-nums text-accent">#{f.id}</span>
             <span className="min-w-0 truncate" title={f.text}>
               {f.text}
             </span>
-            <span className="ml-auto shrink-0 text-muted-foreground">{f.pin.part ?? "whole block"}</span>
+            <span className="ml-auto shrink-0 text-fg-muted">{f.pin.part ?? "whole block"}</span>
           </p>
         ))}
       </div>
 
       <Separator />
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Goes to the attached T3 thread</span>
+        <span className="text-xs text-fg-muted">Goes to the attached T3 thread</span>
         <Button variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
           Cancel
         </Button>
@@ -182,10 +182,10 @@ function RegenerateForm({
 
 function BlockChoice({ block, showing, checked, onToggle }: { block: BlockView; showing: boolean; checked: boolean; onToggle: () => void }) {
   return (
-    <label className="flex h-8 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-accent" data-choice={block.id}>
+    <label className="flex h-8 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-hover" data-choice={block.id}>
       <Checkbox checked={checked} onCheckedChange={onToggle} />
       <span className="truncate">{block.title}</span>
-      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{showing ? "showing" : block.variant}</span>
+      <span className="ml-auto shrink-0 text-xs text-fg-muted">{showing ? "showing" : block.variant}</span>
     </label>
   );
 }
@@ -194,29 +194,29 @@ function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
   const cls = "size-4 shrink-0";
   switch (phase) {
     case "sending":
-      return <Spinner className={`${cls} text-open`} aria-hidden data-progress />;
+      return <Spinner className={`${cls} text-accent`} aria-hidden data-progress />;
     case "working":
       return (
         <span aria-hidden className="relative grid size-4 shrink-0 place-items-center" data-progress>
-          <span className="absolute size-2 animate-ping rounded-full bg-open/60" />
-          <span className="size-2 rounded-full bg-open" />
+          <span className="absolute size-2 animate-ping rounded-full bg-accent/60" />
+          <span className="size-2 rounded-full bg-accent" />
         </span>
       );
     case "queued":
-      return <Clock className={`${cls} text-muted-foreground`} aria-hidden />;
+      return <Clock className={`${cls} text-fg-muted`} aria-hidden />;
     case "asking":
       return <CircleHelp className={`${cls} text-warning`} aria-hidden />;
     case "no_change":
       return <MessageSquare className={`${cls} text-warning`} aria-hidden />;
     case "fulfilled":
-      return <Check className={`${cls} text-confirmed`} aria-hidden />;
+      return <Check className={`${cls} text-success`} aria-hidden />;
     case "withdrawn":
-      return <Undo2 className={`${cls} text-muted-foreground`} aria-hidden />;
+      return <Undo2 className={`${cls} text-fg-muted`} aria-hidden />;
     case "send_failed":
     case "run_failed":
     case "previous_thread":
     case "thread_lost":
-      return <AlertTriangle className={`${cls} ${phase === "previous_thread" ? "text-warning" : "text-destructive"}`} aria-hidden />;
+      return <AlertTriangle className={`${cls} ${phase === "previous_thread" ? "text-warning" : "text-danger"}`} aria-hidden />;
   }
 }
 
@@ -233,9 +233,9 @@ export function RequestStatus({ view, send }: { view: SessionView; send: (action
   if (request === null) return null;
   const { phase } = request;
   return (
-    <div className="flex min-w-0 items-center gap-2 text-[13px]" data-request-phase={phase.phase}>
+    <div className="flex min-w-0 items-center gap-2 text-sm" data-request-phase={phase.phase}>
       <PhaseIcon phase={phase.phase} />
-      <span className="truncate text-muted-foreground" title={request.message} data-request-message>
+      <span className="truncate text-fg-muted" title={request.message} data-request-message>
         {request.message}
       </span>
       {phase.actions.length > 0 && (

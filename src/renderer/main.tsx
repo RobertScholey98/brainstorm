@@ -10,7 +10,7 @@ history.replaceState(null, "", location.pathname);
 const root = createRoot(document.getElementById("root") as HTMLElement);
 root.render(
   token === null ? (
-    <div className="grid h-full place-items-center px-8 text-center text-[13px] text-muted-foreground">
+    <div className="grid h-full place-items-center px-8 text-center text-sm text-fg-muted">
       This page needs Brainstorm's window. Open Brainstorm from its app, or run a brainstorm command to start it.
     </div>
   ) : (

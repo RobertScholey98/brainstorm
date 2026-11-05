@@ -24,12 +24,12 @@ import { groupByProject } from "./sessionGroups";
 export function AppSidebar({ children }: { children: ReactNode }) {
   return (
     <Sidebar variant="inset" collapsible="offcanvas">
-      <SidebarHeader className="flex-row items-center gap-2 px-3 pt-2.5 pb-1">
-        <span aria-hidden className="grid size-6 place-items-center rounded-md bg-primary text-xs font-semibold text-primary-foreground">
+      <SidebarHeader className="flex-row items-center gap-2 px-3 pt-2 pb-1">
+        <span aria-hidden className="grid size-6 place-items-center rounded-md bg-inverse text-xs font-semibold text-inverse-fg">
           B
         </span>
         <span className="text-sm font-semibold">Brainstorm</span>
-        <SidebarTrigger className="ml-auto text-muted-foreground" />
+        <SidebarTrigger className="ml-auto text-fg-muted" />
       </SidebarHeader>
       {children}
     </Sidebar>
@@ -41,13 +41,13 @@ export function HomePanel({ sessions, onSession }: { sessions: readonly SessionL
   return (
     <SidebarContent className="animate-in fade-in-0 slide-in-from-left-3 duration-200" data-sidebar-panel="home">
       {groups.length === 0 ? (
-        <p className="px-4 py-3 text-sm/relaxed text-muted-foreground">No brainstorms yet.</p>
+        <p className="px-4 py-3 text-sm/relaxed text-fg-muted">No brainstorms yet.</p>
       ) : (
         groups.map((group) => (
           <Collapsible key={group.projectId} defaultOpen render={<SidebarGroup data-project={group.projectId} />}>
             <SidebarGroupLabel
               render={<CollapsibleTrigger />}
-              className="group/label w-full cursor-pointer gap-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              className="group/label w-full cursor-pointer gap-1 hover:bg-hover hover:text-fg"
               data-project-label
             >
               <span className="truncate">{group.label}</span>
@@ -65,7 +65,7 @@ export function HomePanel({ sessions, onSession }: { sessions: readonly SessionL
                         data-lost={s.lost || undefined}
                       >
                         <span className="w-full truncate">{s.title}</span>
-                        <span className="flex w-full items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="flex w-full items-center gap-1.5 text-xs text-fg-muted">
                           <span className="tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
                           {s.lost && (
                             <span className="flex items-center gap-1" title="The T3 thread this brainstorm was attached to is gone" data-session-lost>
@@ -112,7 +112,7 @@ export function SessionPanel({
       <SidebarGroup className="gap-1 pb-1">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={onHome} className="text-muted-foreground" data-back>
+            <SidebarMenuButton onClick={onHome} className="text-fg-muted" data-back>
               <ChevronLeft aria-hidden />
               <span>All brainstorms</span>
             </SidebarMenuButton>
@@ -155,19 +155,19 @@ function ThreadSection({ view }: { view: SessionView }) {
               : { render: <a href={view.thread.link} target="_blank" rel="noreferrer" /> })}
             data-thread-link
           >
-            <span aria-hidden className={`mt-1.5 size-1.5 shrink-0 rounded-full ${lost ? "bg-warning" : "bg-attached"}`} />
+            <span aria-hidden className={`mt-1.5 size-1.5 shrink-0 rounded-full ${lost ? "bg-warning" : "bg-success"}`} />
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="truncate">{name}</span>
-              <span className="text-xs text-muted-foreground" data-thread={lost ? "lost" : "attached"}>
+              <span className="text-xs text-fg-muted" data-thread={lost ? "lost" : "attached"}>
                 {lost ? "Unattached" : "Attached"}
               </span>
             </span>
-            {view.thread !== null && <ExternalLink aria-hidden className="mt-0.5 text-muted-foreground" />}
+            {view.thread !== null && <ExternalLink aria-hidden className="mt-0.5 text-fg-muted" />}
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
       {showTakeover && (
-        <div className="mx-2 mt-1 grid gap-2 rounded-lg bg-warning-surface p-2.5 text-xs/relaxed" data-takeover>
+        <div className="mx-2 mt-1 grid gap-2 rounded-lg bg-warning-subtle p-2 text-xs/relaxed" data-takeover>
           <p className="text-warning">In a T3 thread on this project, say: {takeoverPhrase(view.session.title)}</p>
           <CopyPhrase title={view.session.title} />
         </div>
@@ -195,7 +195,7 @@ function SlotSection({
       <SidebarGroup data-slot-id={slot.id}>
         <SidebarGroupLabel
           render={<button type="button" onClick={onSlot} />}
-          className="w-full cursor-pointer gap-2 hover:bg-sidebar-accent data-[selected]:text-sidebar-foreground"
+          className="w-full cursor-pointer gap-2 hover:bg-hover data-[selected]:text-fg"
           data-selected={selected || undefined}
           title="Show this slot's controls"
         >
@@ -219,10 +219,10 @@ function SlotSection({
                   data-variant={variant}
                 >
                   <span className="min-w-0 flex-1 truncate">{block?.title ?? variant}</span>
-                  <span className="shrink-0 text-xs font-normal text-muted-foreground">{variant}</span>
+                  <span className="shrink-0 text-xs font-normal text-fg-muted">{variant}</span>
                 </SidebarMenuButton>
                 {active && block?.about && (
-                  <div className="grid gap-1.5 px-2 pt-1.5 pb-2 text-xs/relaxed text-muted-foreground" data-about>
+                  <div className="grid gap-1.5 px-2 pt-1.5 pb-2 text-xs/relaxed text-fg-muted" data-about>
                     <Markdown source={block.about} />
                   </div>
                 )}

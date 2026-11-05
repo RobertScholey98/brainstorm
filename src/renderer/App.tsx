@@ -283,13 +283,13 @@ function SessionWorkspace({
         )}
         {interaction.kind === "picking" && (
           <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center" data-pick-hint>
-            <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-primary py-1.5 pr-1.5 pl-3.5 text-xs text-primary-foreground shadow-lg">
+            <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-inverse py-1.5 pr-1.5 pl-3 text-xs text-inverse-fg shadow-lg">
               Click an element to pin a comment
               <Button
                 variant="ghost"
                 size="xs"
                 onClick={() => setInteraction({ kind: "view" })}
-                className="rounded-full bg-primary-foreground/15 px-2.5 text-primary-foreground hover:bg-primary-foreground/25 hover:text-primary-foreground dark:hover:bg-primary-foreground/25"
+                className="rounded-full bg-inverse-fg/15 px-2 text-inverse-fg hover:bg-inverse-fg/25 hover:text-inverse-fg dark:hover:bg-inverse-fg/25"
               >
                 Cancel
               </Button>
@@ -336,7 +336,7 @@ function SessionWorkspace({
 
 function HomeEmpty({ hasSessions }: { hasSessions: boolean }) {
   return (
-    <Empty className="size-full rounded-none bg-background" data-home-empty>
+    <Empty className="size-full rounded-none bg-card" data-home-empty>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Lightbulb aria-hidden />
@@ -344,7 +344,7 @@ function HomeEmpty({ hasSessions }: { hasSessions: boolean }) {
         <EmptyTitle>{hasSessions ? "Pick a brainstorm" : "No brainstorms yet"}</EmptyTitle>
         <EmptyDescription>
           {hasSessions ? "Open one from the sidebar. To start a new one, run " : "To start one, run "}
-          <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-foreground">/ux-brainstorm</code> in a T3 thread on your
+          <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-fg">/ux-brainstorm</code> in a T3 thread on your
           project. It appears in the sidebar as soon as the agent creates it.
         </EmptyDescription>
       </EmptyHeader>
@@ -354,7 +354,7 @@ function HomeEmpty({ hasSessions }: { hasSessions: boolean }) {
 
 function WaitingEmpty({ loading }: { loading: boolean }) {
   return (
-    <Empty className="size-full rounded-none bg-background">
+    <Empty className="size-full rounded-none bg-card">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Loader2 aria-hidden className="animate-spin" />

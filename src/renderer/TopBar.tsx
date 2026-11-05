@@ -12,14 +12,14 @@ export function TopBar({ notice, actions, children }: { notice: string | null; a
     <header className="flex h-12 shrink-0 items-center gap-3 border-b px-3" data-topbar>
       {(state === "collapsed" || isMobile) && (
         <>
-          <SidebarTrigger className="text-muted-foreground" />
+          <SidebarTrigger className="text-fg-muted" />
           <Separator orientation="vertical" className="h-4 self-center" />
         </>
       )}
       {children}
       <div className="ml-auto flex shrink-0 items-center gap-2">
         {notice !== null && (
-          <span role="alert" className="max-w-[420px] truncate text-xs text-destructive" title={notice}>
+          <span role="alert" className="max-w-md truncate text-xs text-danger" title={notice}>
             {notice}
           </span>
         )}
@@ -55,7 +55,7 @@ export function SessionBar({
       }
     >
       {view !== null && (
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 pl-1">
+        <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
           <h1 className="shrink-0 truncate text-sm font-semibold">{view.session.title}</h1>
           {view.iteration !== null && (
             <Badge variant="secondary" className="shrink-0 tabular-nums" data-iteration>

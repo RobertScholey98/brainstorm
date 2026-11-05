@@ -8,7 +8,7 @@ function InlineNodes({ nodes }: { nodes: readonly Inline[] }): ReactNode {
         return n.text;
       case "strong":
         return (
-          <strong key={i} className="font-semibold text-foreground">
+          <strong key={i} className="font-semibold text-fg">
             <InlineNodes nodes={n.children} />
           </strong>
         );
@@ -20,7 +20,7 @@ function InlineNodes({ nodes }: { nodes: readonly Inline[] }): ReactNode {
         );
       case "code":
         return (
-          <code key={i} className="rounded-[3px] bg-muted px-1 font-mono text-[11px]">
+          <code key={i} className="rounded-sm bg-muted px-1 font-mono text-xs">
             {n.text}
           </code>
         );
