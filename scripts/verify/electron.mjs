@@ -1,0 +1,83 @@
+// Shared by the verify scripts that drive the real Electron app through Playwright.
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual, inspect } from "node:util";
+import { _electron } from "playwright";
+import { demoEnv } from "../seed-demo.mjs";
+
+// resolve() drops the trailing separator, which would otherwise escape the closing quote on a Windows command line.
+export const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+
+export function build() {
+  execFileSync(process.execPath, [join(root, "scripts", "build.mjs")], { cwd: root, stdio: "inherit" });
+}
+
+/** A temp BRAINSTORM_HOME with the fake T3 thread, and a fresh screenshot directory. */
+export function workspace(name) {
+  const home = mkdtempSync(join(tmpdir(), `bs-${name}-`));
+  const shots = join(root, "test-results", name);
+  rmSync(shots, { recursive: true, force: true });
+  mkdirSync(shots, { recursive: true });
+  const { ELECTRON_RUN_AS_NODE: _, ...env } = demoEnv(home);
+  return { home, shots, env };
+}
+
+export function checks() {
+  let failures = 0;
+  return {
+    check(label, actual, expected) {
+      if (isDeepStrictEqual(actual, expected)) {
+        console.log(`ok   ${label}`);
+      } else {
+        failures += 1;
+        console.log(`FAIL ${label}\n  expected ${inspect(expected, { depth: 8 })}\n  actual   ${inspect(actual, { depth: 8 })}`);
+      }
+    },
+    finish() {
+      if (failures > 0) {
+        console.log(`${failures} check${failures === 1 ? "" : "s"} failed`);
+        process.exit(1);
+      }
+      console.log("VERIFIED");
+      process.exit(0);
+    },
+  };
+}
+
+/** Launches the app on `home` and returns it once its server has written api.json. Errors in the window are collected. */
+export async function launch(home, env) {
+  const startedAt = Date.now();
+  const app = await _electron.launch({ args: [root], env, cwd: root });
+  const window = await app.firstWindow();
+  const errors = [];
+  window.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
+  window.on("console", (m) => {
+    if (m.type() === "error" || m.type() === "warning") errors.push(`${m.type()}: ${m.text()}`);
+  });
+  const apiPath = join(home, "api.json");
+  while (!existsSync(apiPath) || JSON.parse(readFileSync(apiPath, "utf8")).startedAt < new Date(startedAt).toISOString()) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  const api = JSON.parse(readFileSync(apiPath, "utf8"));
+  return { app, window, errors, api };
+}
+
+/** The canvas iframe's Frame, for evaluating inside its document. */
+export async function canvasFrame(window) {
+  await window.waitForSelector("iframe[title=Canvas]");
+  for (;;) {
+    const frame = window.frames().find((f) => f.url().endsWith("/canvas"));
+    if (frame !== undefined) return frame;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+/** A block's root element inside the canvas, found through the host-stamped wrapper. */
+export const inBlock = (blockId, part) => `div[data-bid="${blockId}"] [data-part="${part}"]`;
+
+export async function shot(window, shots, name) {
+  await window.screenshot({ path: join(shots, `${name}.png`) });
+}

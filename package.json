@@ -14,7 +14,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.web.json",
     "verify:1": "node scripts/verify/1-storage-api.mjs",
-    "lint:skill": "node scripts/lint-skill.mjs"
+    "lint:skill": "node scripts/lint-skill.mjs",
+    "verify:2": "node scripts/verify/2-canvas.mjs",
+    "verify:3": "node scripts/verify/3-controls.mjs"
   },
   "dependencies": {
     "@json-render/core": "0.22.0",
