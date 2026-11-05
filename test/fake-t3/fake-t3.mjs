@@ -1,9 +1,10 @@
 // A stand-in for `t3 thread …`, driven by the JSON file named in BRAINSTORM_FAKE_T3_STATE:
 // { "fail": false | true | ["send", "show", "list"],
+//   "failAfter": ["send"],  commands that do their work and then exit 1, as when the CLI loses the reply
 //   "threads": { "<threadId>": { "projectId", "title", "status", "activeRunId", "latestRunId",
 //                               "pendingRequestCount", "messages": [{ "role", "runId", "text" }], "missing" } },
 //   "sent": [{ "thread", "message" }] }
-// Output mirrors the real shapes recorded in docs/t3-cli.md.
+// Output mirrors the real shapes recorded in docs/t3-cli.md. control.mjs moves threads through runs for verify scripts.
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 
 const statePath = process.env.BRAINSTORM_FAKE_T3_STATE;
@@ -80,6 +81,7 @@ switch (command) {
     t.messages = [...(t.messages ?? []), { role: "user", runId: null, text }];
     state.sent = [...(state.sent ?? []), { thread: id, message: text }];
     save(state);
+    if (state.failAfter?.includes("send")) fail("fake t3 failure: the reply was lost");
     process.stdout.write(`Sent to ${id}.\n`);
     break;
   }
