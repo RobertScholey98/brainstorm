@@ -1,8 +1,14 @@
 import type { StateStore } from "@json-render/core";
 import { defineRegistry, useBoundProp, type BaseComponentProps } from "@json-render/react";
-import { shadcnComponents as ui } from "@json-render/shadcn";
 import { RotateCcw } from "lucide-react";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select as SelectRoot, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider as SliderBar } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { controlCatalog } from "../core/controls";
 import { HEX_COLOR_PATTERN } from "../core/props";
 import type { AppearanceProp, AppearanceValue, BlockView, PropName } from "../core/types";
@@ -45,18 +51,19 @@ function Row({
   const overridden = scope.overridden.has(spec.name);
   return (
     <div className="grid gap-1.5" data-control={spec.name} data-overridden={overridden || undefined}>
-      <div className="flex min-h-6 items-center gap-1.5">
-        <span className="truncate text-[12px] font-medium text-foreground">{text}</span>
+      <div className="flex min-h-6 items-center gap-1">
+        <span className="truncate text-[13px] font-medium">{text}</span>
         {overridden && (
-          <button
-            type="button"
-            className="grid size-5 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground"
             title={`Reset ${text} to the block's default`}
             aria-label={`Reset ${text}`}
             onClick={() => scope.reset(spec.name)}
           >
-            <RotateCcw className="size-3" aria-hidden />
-          </button>
+            <RotateCcw aria-hidden />
+          </Button>
         )}
         <span className="ml-auto flex items-center">{trailing}</span>
       </div>
@@ -70,69 +77,93 @@ const formatNumber = (value: number, step: number | null) => {
   return value.toFixed(decimals);
 };
 
-function Slider({ props, bindings, emit, on }: ControlProps) {
+function Slider({ props, bindings }: ControlProps) {
   const bound = useBound(bindings, "number");
+  const [value, setValue] = useBoundProp<number>(typeof props.value === "number" ? props.value : undefined, bindings?.value);
   if (bound === null) return null;
   const { scope, spec } = bound;
-  const value = typeof props.value === "number" ? props.value : spec.default;
+  const current = value ?? spec.default;
   return (
     <Row
       spec={spec}
       label={props.label}
       scope={scope}
       trailing={
-        <span className="text-[12px] tabular-nums text-muted-foreground" data-value>
-          {formatNumber(value, spec.step)}
+        <span className="text-xs tabular-nums text-muted-foreground" data-value>
+          {formatNumber(current, spec.step)}
           {spec.unit}
         </span>
       }
     >
-      <ui.Slider
-        props={{ label: null, min: spec.min, max: spec.max, step: spec.step ?? (spec.max - spec.min) / 100, value }}
-        bindings={bindings}
-        emit={emit}
-        on={on}
+      <SliderBar
+        className="py-1.5"
+        min={spec.min}
+        max={spec.max}
+        step={spec.step ?? (spec.max - spec.min) / 100}
+        value={[current]}
+        onValueChange={(v) => setValue((v as number[])[0] ?? current)}
+        aria-label={props.label ?? spec.label}
       />
     </Row>
   );
 }
 
-function Select({ props, bindings, emit, on }: ControlProps) {
+function Select({ props, bindings }: ControlProps) {
   const bound = useBound(bindings, "enum");
+  const [value, setValue] = useBoundProp<string>(typeof props.value === "string" ? props.value : undefined, bindings?.value);
   if (bound === null) return null;
   const { scope, spec } = bound;
+  const items = spec.options.map((o) => ({ label: o, value: o }));
   return (
     <Row spec={spec} label={props.label} scope={scope}>
-      <ui.Select
-        props={{ label: "", name: spec.name, options: [...spec.options], placeholder: null, value: String(props.value ?? spec.default), checks: null, validateOn: null }}
-        bindings={bindings}
-        emit={emit}
-        on={on}
-      />
+      <SelectRoot items={items} value={value ?? spec.default} onValueChange={(v) => v !== null && setValue(v)}>
+        <SelectTrigger className="w-full" size="sm" aria-label={props.label ?? spec.label}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {items.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </SelectRoot>
     </Row>
   );
 }
 
-function Segmented({ props, bindings, emit, on }: ControlProps) {
+function Segmented({ props, bindings }: ControlProps) {
   const bound = useBound(bindings, "enum");
+  const [value, setValue] = useBoundProp<string>(typeof props.value === "string" ? props.value : undefined, bindings?.value);
   if (bound === null) return null;
   const { scope, spec } = bound;
   return (
     <Row spec={spec} label={props.label} scope={scope}>
-      <div className="segmented">
-        <ui.ToggleGroup
-          props={{ items: spec.options.map((o) => ({ label: o, value: o })), type: "single", value: String(props.value ?? spec.default) }}
-          bindings={bindings}
-          emit={emit}
-          on={on}
-        />
-      </div>
+      <ToggleGroup
+        variant="outline"
+        size="sm"
+        spacing={0}
+        className="w-full"
+        value={[value ?? spec.default]}
+        // A segmented control always has one option on, so a press on the current one changes nothing.
+        onValueChange={(v) => v[0] !== undefined && setValue(v[0] as string)}
+        aria-label={props.label ?? spec.label}
+      >
+        {spec.options.map((o) => (
+          <ToggleGroupItem key={o} value={o} className="flex-1">
+            {o}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
     </Row>
   );
 }
 
-function Toggle({ props, bindings, emit, on }: ControlProps) {
+function Toggle({ props, bindings }: ControlProps) {
   const bound = useBound(bindings, "boolean");
+  const [value, setValue] = useBoundProp<boolean>(typeof props.value === "boolean" ? props.value : undefined, bindings?.value);
   if (bound === null) return null;
   const { scope, spec } = bound;
   return (
@@ -140,39 +171,24 @@ function Toggle({ props, bindings, emit, on }: ControlProps) {
       spec={spec}
       label={props.label}
       scope={scope}
-      trailing={
-        <ui.Switch
-          props={{ label: "", name: `control-${spec.name}`, checked: props.value === true, checks: null, validateOn: null }}
-          bindings={bindings}
-          emit={emit}
-          on={on}
-        />
-      }
+      trailing={<Switch checked={value ?? spec.default} onCheckedChange={(checked) => setValue(checked)} aria-label={props.label ?? spec.label} />}
     />
   );
 }
 
-function Text({ props, bindings, emit, on }: ControlProps) {
+function Text({ props, bindings }: ControlProps) {
   const bound = useBound(bindings, "text");
+  const [value, setValue] = useBoundProp<string>(typeof props.value === "string" ? props.value : undefined, bindings?.value);
   if (bound === null) return null;
   const { scope, spec } = bound;
-  const value = typeof props.value === "string" ? props.value : spec.default;
+  const current = value ?? spec.default;
+  const label = props.label ?? spec.label;
   return (
     <Row spec={spec} label={props.label} scope={scope}>
       {spec.multiline ? (
-        <ui.Textarea
-          props={{ label: "", name: `control-${spec.name}`, placeholder: null, rows: 3, value, checks: null, validateOn: null }}
-          bindings={bindings}
-          emit={emit}
-          on={on}
-        />
+        <Textarea rows={3} value={current} onChange={(e) => setValue(e.target.value)} aria-label={label} />
       ) : (
-        <ui.Input
-          props={{ label: "", name: `control-${spec.name}`, type: "text", placeholder: null, value, checks: null, validateOn: null }}
-          bindings={bindings}
-          emit={emit}
-          on={on}
-        />
+        <Input type="text" value={current} onChange={(e) => setValue(e.target.value)} aria-label={label} />
       )}
     </Row>
   );
@@ -193,11 +209,11 @@ function Colour({ props, bindings }: ControlProps) {
   };
   return (
     <Row spec={spec} label={props.label} scope={scope}>
-      <div className="flex h-8 items-center gap-2 rounded-md border border-input bg-background pr-2 pl-1 focus-within:border-primary">
+      <div className="flex h-8 items-center gap-2 rounded-lg border border-input pr-2.5 pl-1 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
         <input
           type="color"
           aria-label={`${props.label ?? spec.label} colour`}
-          className="size-6 cursor-pointer rounded-sm border-0 bg-transparent p-0 [&::-webkit-color-swatch]:rounded-[3px] [&::-webkit-color-swatch]:border [&::-webkit-color-swatch]:border-black/15 [&::-webkit-color-swatch-wrapper]:p-0"
+          className="size-6 cursor-pointer rounded-md border-0 bg-transparent p-0 [&::-webkit-color-swatch]:rounded-[5px] [&::-webkit-color-swatch]:border [&::-webkit-color-swatch]:border-foreground/15 [&::-webkit-color-swatch-wrapper]:p-0"
           value={current}
           onChange={(e) => setValue(e.target.value.toLowerCase())}
         />
@@ -206,7 +222,7 @@ function Colour({ props, bindings }: ControlProps) {
           aria-label={`${props.label ?? spec.label} hex`}
           spellCheck={false}
           maxLength={7}
-          className="min-w-0 flex-1 bg-transparent text-[12px] tabular-nums uppercase outline-none"
+          className="min-w-0 flex-1 bg-transparent text-sm tabular-nums uppercase outline-none"
           value={draft}
           onChange={(e) => {
             setDraft(e.target.value);

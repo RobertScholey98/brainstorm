@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@source "../../node_modules/@json-render/shadcn/dist";
 
 @theme inline {
   --color-background: var(--background);
@@ -92,30 +91,6 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
-}
-
-/* shadcn's Select always renders its Label; the registry draws its own label row instead. */
-[data-slot="label"]:empty {
-  display: none;
-}
-
-.segmented [data-slot="toggle-group"] {
-  display: flex;
-  width: 100%;
-  padding: 2px;
-  border-radius: var(--radius-md);
-  background: var(--muted);
-}
-.segmented [data-slot="toggle-group-item"] {
-  flex: 1;
-  height: 26px;
-  font-size: 12px;
-  color: var(--muted-foreground);
-}
-.segmented [data-slot="toggle-group-item"][data-state="on"] {
-  background: var(--background);
-  color: var(--foreground);
-  box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.08);
 }
 
 * {

@@ -10,7 +10,7 @@ build();
 const { home, shots, env } = workspace("verify-3");
 const { check, finish } = checks();
 
-const slider = '[data-control="spinSeconds"] [role="slider"]';
+const slider = '[data-control="spinSeconds"] input[type="range"]';
 const hex = '[data-control="accent"] input[type="text"]';
 
 async function neonState(window, canvas) {
