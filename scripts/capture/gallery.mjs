@@ -3,7 +3,8 @@
 //   npm run capture -- --round <n>
 //
 // Writes design-review/round-<n>/app/<theme>/<width>/<NN-name>.png, a manifest.json reviewers read, and contact
-// sheets at 1440 for a quick check that every shot settled. The round folder is rebuilt from scratch on every run.
+// sheets at 1440 for a quick check that every shot settled. Those outputs are rebuilt on every run, and the round's reviews
+// and worklist beside them are kept.
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -73,7 +74,7 @@ const outcomes = new Map();
 
 const out = join(root, "design-review", `round-${round}`);
 const comboDir = (c) => join(out, "app", c.theme, String(c.width));
-rmSync(out, { recursive: true, force: true });
+for (const own of ["app", "manifest.json", "contact-light-1440.png", "contact-dark-1440.png"]) rmSync(join(out, own), { recursive: true, force: true });
 for (const c of COMBOS) mkdirSync(comboDir(c), { recursive: true });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
