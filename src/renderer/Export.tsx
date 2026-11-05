@@ -1,19 +1,28 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import type { ExportResult } from "../core/types";
 
-/** Opening the popover runs the export; it shows the file once it's written, or closes if it failed. */
+/**
+ * Opening the popover runs the export; it shows the file once it's written, or closes if it failed. Each open or
+ * close starts a new attempt, so an export that finishes after its popover closed changes nothing.
+ */
 export function ExportButton({ disabled, exportHtml }: { disabled: boolean; exportHtml: () => Promise<ExportResult | null> }) {
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState<ExportResult | null>(null);
+  const attempt = useRef(0);
 
   const onOpenChange = (next: boolean) => {
     setOpen(next);
+    const mine = ++attempt.current;
     if (!next) return;
     setDone(null);
-    void exportHtml().then((result) => (result === null ? setOpen(false) : setDone(result)));
+    void exportHtml().then((result) => {
+      if (attempt.current !== mine) return;
+      if (result === null) setOpen(false);
+      else setDone(result);
+    });
   };
 
   return (
@@ -47,7 +56,7 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
               {done.path}
             </code>
             <div className="flex justify-end gap-1.5">
-              <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+              <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
                 Done
               </Button>
               <Button
