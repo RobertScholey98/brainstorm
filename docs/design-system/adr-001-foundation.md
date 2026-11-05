@@ -1,6 +1,6 @@
 # ADR 001: Colour tokens, closed scales and the accent
 
-Status: accepted, with the accent hue open until Rob picks one at the foundation checkpoint.
+Status: accepted. Rob picked the Lagoon accent at the foundation checkpoint on 2026-11-05, and approved the rest of the direction.
 
 ## Context
 
@@ -16,7 +16,7 @@ The foundation phase fixes the base layer so the kit, shell and screen phases bu
 
 - `npm run design:tokens` writes `src/renderer/design.css` from `designStylesheet()`. A test in `test/design.test.ts` fails when the committed file differs from the generator's output, so nobody edits the CSS by hand.
 - The canvas runtime inlines `designCss("bs-")` into the frame. The prefix means block code written by an agent can't pick up `--border` or `--accent` by accident, and the frame still matches the shell exactly.
-- `scripts/design/checkpoint.mjs` reads `solidColours()` and `accentCss()` to render the candidates.
+- `scripts/design/checkpoint.mjs` reads `solidColours()` to draw the mark sheet.
 
 Each colour has one meaning. A role is named for what it does, not for its shade, so a reader of `bg-selected` knows what state the element is in.
 
@@ -36,7 +36,7 @@ Each colour has one meaning. A role is named for what it does, not for its shade
 | `ring` | `#85847e` | `#8a8983` | The focus ring |
 | `inverse`, `inverse-fg` | `#1f1f1e`, `#fafaf9` | `#ecebe8`, `#1f1f1d` | The neutral solid fill of the default button, a checked checkbox and an on switch |
 | `accent`, `accent-fg`, `accent-hover` | see below | see below | Brainstorm itself: the mark, the primary action, open pins, selection |
-| `success` | `#2a7a4b` | `#5cc48a` | Attached, confirmed, done |
+| `success` | `#4e7514` | `#9ccc5a` | Attached, confirmed, done |
 | `warning` | `#8a5300` | `#f2b860` | Needs Rob before it can continue |
 | `danger` | `#c03a2f` | `#ff8a7f` | Failed, destructive |
 | `info` | `#2f63c4` | `#86aeff` | Neutral status, such as the agent asking a question |
@@ -52,7 +52,8 @@ Contrast, measured with `contrast()` in `design.ts` against `app`, `canvas`, `ca
 | `fg` | 15.81, 14.85, 17.24, 17.24, 15.12 | 14.32, 13.53, 12.72, 11.10, 10.80 |
 | `fg-muted` | 5.36, 5.04, 5.85, 5.85, 5.13 | 7.08, 6.69, 6.29, 5.49, 5.34 |
 | `ring` | 3.44, 3.23, 3.75, 3.75, 3.29 | 4.87, 4.60, 4.32, 3.77, 3.67 |
-| `success` | 4.83, 4.54, 5.27, 5.27, 4.62 | 7.90, 7.46, 7.02, 6.13, 5.96 |
+| `accent` | 5.08, 4.77, 5.54, 5.54, 4.86 | 7.99, 7.55, 7.10, 6.20, 6.03 |
+| `success` | 4.97, 4.66, 5.41, 5.41, 4.75 | 9.10, 8.60, 8.08, 7.06, 6.86 |
 | `warning` | 5.81, 5.45, 6.33, 6.33, 5.55 | 9.59, 9.06, 8.52, 7.44, 7.23 |
 | `danger` | 4.95, 4.65, 5.40, 5.40, 4.74 | 7.47, 7.06, 6.64, 5.80, 5.64 |
 | `info` | 5.20, 4.89, 5.67, 5.67, 4.97 | 7.73, 7.31, 6.87, 6.00, 5.83 |
@@ -94,25 +95,17 @@ Brainstorm keeps Segoe UI Variable for the interface and Cascadia Mono for code,
 
 ### Accent
 
-The accent is one token family, `accent`, `accent-fg` and `accent-hover`, picked from `ACCENTS` by `ACCENT` in `design.ts`. Changing that one value, running `npm run design:tokens` and rebuilding moves the mark, the primary button, open pins, selection and the canvas frame together. `selected` and `accent-hover` are mixes of `accent`, so they follow without a second edit.
+The accent is one token family, `accent`, `accent-fg` and `accent-hover`, set by `ACCENT` in `design.ts`. Changing it, running `npm run design:tokens` and rebuilding moves the mark, the primary button, open pins, selection and the canvas frame together. `selected` and `accent-hover` are mixes of `accent`, so they follow without a second edit.
 
-Three candidates pass 4.5:1 as text on all five surfaces and with `accent-fg` on an accent fill, in both themes. The minimum on any surface is listed.
+Rob picked **Lagoon**, a teal: `#0b7570` with `#ffffff` on it in light, and `#43c4b9` with `#062421` on it in dark. It is the quietest of the three candidates (Iris, Lagoon and Plum) and the most like a utility. The other two were deleted with the code that rendered them.
 
-| Candidate | Light accent, fg | Light min on surface, fg on fill | Dark accent, fg | Dark min on surface, fg on fill |
-| --- | --- | --- | --- | --- |
-| Iris | `#5b4bd1`, `#ffffff` | 5.36, 6.23 | `#a89cff`, `#17132e` | 5.43, 7.58 |
-| Lagoon | `#0b7570`, `#ffffff` | 4.77, 5.54 | `#43c4b9`, `#062421` | 6.03, 7.67 |
-| Plum | `#a0306f`, `#ffffff` | 5.75, 6.67 | `#ec8fc7`, `#2a0a1d` | 5.71, 8.04 |
+In dark, Lagoon sat 14.3 CIEDE2000 from the old `success` `#5cc48a`, and 14.8 in light, so an open pin and an attached badge read as one family. `success` moved to a yellower green, `#4e7514` light and `#9ccc5a` dark. It now sits 25.5 from the accent in light and 26.8 in dark, and still passes 4.5:1 on every surface.
 
-- **Iris** is a blue-violet. It reads as a creative tool and stays clear of Claude's clay orange, T3 Code's sky-blue links and Brainstorm's own `info` blue. It is the default until Rob chooses.
-- **Lagoon** is a teal, the quietest of the three and the most like a utility. In dark, `#43c4b9` sits near `success` `#5cc48a`, so an open pin and an attached badge could read as related.
-- **Plum** is a red-violet that pairs with the warm neutrals. It sits nearest to `danger`, which matters most on the pins, where open and failed must never look alike.
-
-`npm run design:checkpoint` renders the open demo session under each candidate in both themes, to `design-review/checkpoint/accent-<name>-<theme>.png`.
+`test/design.test.ts` holds that apart. Every pair among `accent`, `success`, `warning`, `danger` and `info` must be at least **20 CIEDE2000** apart in each theme. CIEDE2000 is the CIE's perceptual difference formula, and 2.3 is a just-noticeable difference, so 20 is a hue that reads as different at a glance. The closest pair today is light `warning` and `danger` at 23.1. The test checks the formula against Sharma, Wu and Dalal's published reference pairs.
 
 ### Mark
 
-The "B" tile is now `src/renderer/Mark.tsx`, an inline SVG drawn from `MARK` in `design.ts` on a 16-unit grid. It is a canvas pin's teardrop, rounded on three corners and square at the bottom left where a pin points, with an `accent-fg` dot where a comment anchors. Brainstorm's one distinct gesture is pinning feedback to a design, so the mark is that pin. The shape has no detail under 2 units, so it holds at 16 and 20 px. `design-review/checkpoint/mark.png` shows it at 16, 20 and 48 px in every candidate and theme.
+The "B" tile is now `src/renderer/Mark.tsx`, an inline SVG drawn from `MARK` in `design.ts` on a 16-unit grid. It is a canvas pin's teardrop, rounded on three corners and square at the bottom left where a pin points, with an `accent-fg` dot where a comment anchors. Brainstorm's one distinct gesture is pinning feedback to a design, so the mark is that pin. The shape has no detail under 2 units, so it holds at 16 and 20 px. `design-review/checkpoint/mark.png` shows it at 16, 20 and 48 px in both themes.
 
 ### Pins show status by form as well as colour
 
@@ -153,7 +146,6 @@ These files came from shadcn's base-nova registry. The foundation edited them on
 
 - A new colour, size or layer starts in `design.ts` or `styles.css`, and nowhere else. The lint and the token tests fail anything that skips that step.
 - The kit can't drift back to shadcn's defaults without the lint saying so, but a fresh `shadcn add` needs the codemod with `--shadcn` before it passes.
-- The accent is provisional. Rob's pick changes one value in `design.ts`, and the token test reruns the contrast for it.
 
 These are open and belong to later phases.
 

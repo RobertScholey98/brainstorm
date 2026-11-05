@@ -7,19 +7,11 @@
 export type Theme = "light" | "dark";
 export const THEMES: readonly Theme[] = ["light", "dark"];
 
-type AccentPair = { readonly accent: string; readonly fg: string };
-
-/** Each candidate passes 4.5:1 as text on every surface and as a fill under its `fg`, in both themes. */
-export const ACCENTS = {
-  iris: { light: { accent: "#5b4bd1", fg: "#ffffff" }, dark: { accent: "#a89cff", fg: "#17132e" } },
-  lagoon: { light: { accent: "#0b7570", fg: "#ffffff" }, dark: { accent: "#43c4b9", fg: "#062421" } },
-  plum: { light: { accent: "#a0306f", fg: "#ffffff" }, dark: { accent: "#ec8fc7", fg: "#2a0a1d" } },
-} as const satisfies Record<string, Record<Theme, AccentPair>>;
-
-export type AccentName = keyof typeof ACCENTS;
-
-/** Rob picks the hue at the foundation checkpoint; this one value swaps it everywhere. */
-export const ACCENT: AccentName = "iris";
+/** Lagoon, Rob's pick at the foundation checkpoint (2026-11-05). */
+const ACCENT: Readonly<Record<Theme, { readonly accent: string; readonly fg: string }>> = {
+  light: { accent: "#0b7570", fg: "#ffffff" },
+  dark: { accent: "#43c4b9", fg: "#062421" },
+};
 
 /** Solid colours that differ by theme. Everything else is mixed from these in `designCss`. */
 const SOLID = {
@@ -36,7 +28,7 @@ const SOLID = {
     ring: "#85847e",
     inverse: "#1f1f1e",
     "inverse-fg": "#fafaf9",
-    success: "#2a7a4b",
+    success: "#4e7514",
     warning: "#8a5300",
     danger: "#c03a2f",
     info: "#2f63c4",
@@ -58,7 +50,7 @@ const SOLID = {
     ring: "#8a8983",
     inverse: "#ecebe8",
     "inverse-fg": "#1f1f1d",
-    success: "#5cc48a",
+    success: "#9ccc5a",
     warning: "#f2b860",
     danger: "#ff8a7f",
     info: "#86aeff",
@@ -88,28 +80,21 @@ const DERIVED: Readonly<Record<string, (v: (name: string) => string) => string>>
   "scrollbar-thumb-hover": (v) => `color-mix(in oklab, ${v("fg")} 36%, transparent)`,
 };
 
-export function solidColours(theme: Theme, accent: AccentName = ACCENT): Readonly<Record<string, string>> {
-  const pair = ACCENTS[accent][theme];
-  return { ...SOLID[theme], accent: pair.accent, "accent-fg": pair.fg };
+export function solidColours(theme: Theme): Readonly<Record<string, string>> {
+  return { ...SOLID[theme], accent: ACCENT[theme].accent, "accent-fg": ACCENT[theme].fg };
 }
 
 const block = (selector: string, vars: Readonly<Record<string, string>>, prefix: string, indent: string) =>
   [`${indent}${selector} {`, ...Object.entries(vars).map(([k, val]) => `${indent}  --${prefix}${k}: ${val};`), `${indent}}`].join("\n");
 
-/** Only the accent family: what the checkpoint renders laid over a page to show another candidate. */
-export function accentCss(accent: AccentName, prefix = ""): string {
-  const pick = (theme: Theme) => ({ accent: ACCENTS[accent][theme].accent, "accent-fg": ACCENTS[accent][theme].fg });
-  return [block(":root", pick("light"), prefix, ""), "@media (prefers-color-scheme: dark) {", block(":root", pick("dark"), prefix, "  "), "}"].join("\n");
-}
-
-export function designCss(prefix = "", accent: AccentName = ACCENT): string {
+export function designCss(prefix = ""): string {
   const v = (name: string) => `var(--${prefix}${name})`;
   const derived = Object.fromEntries(Object.entries(DERIVED).map(([k, mix]) => [k, mix(v)]));
   return [
-    block(":root", { ...solidColours("light", accent), ...derived, ...FONTS }, prefix, ""),
+    block(":root", { ...solidColours("light"), ...derived, ...FONTS }, prefix, ""),
     ":root { color-scheme: light; }",
     "@media (prefers-color-scheme: dark) {",
-    block(":root", solidColours("dark", accent), prefix, "  "),
+    block(":root", solidColours("dark"), prefix, "  "),
     "  :root { color-scheme: dark; }",
     "}",
     // Chromium ignores these pseudo-elements once scrollbar-width or scrollbar-color is set, so neither is.
@@ -122,7 +107,6 @@ export function designCss(prefix = "", accent: AccentName = ACCENT): string {
   ].join("\n");
 }
 
-
 const channel = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const luminance = (hex: string) => {
   const n = Number.parseInt(hex.slice(1), 16);
@@ -134,6 +118,40 @@ const luminance = (hex: string) => {
 export function contrast(a: string, b: string): number {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
   return (hi + 0.05) / (lo + 0.05);
+}
+
+type Lab = readonly [l: number, a: number, b: number];
+
+/** CIE L*a*b* (D65) of a #rrggbb colour. */
+export function lab(hex: string): Lab {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const [r, g, b] = [16, 8, 0].map((s) => channel(((n >> s) & 255) / 255)) as [number, number, number];
+  const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : ((24389 / 27) * t + 16) / 116);
+  const x = f((0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047);
+  const y = f(0.2126729 * r + 0.7151522 * g + 0.072175 * b);
+  const z = f((0.0193339 * r + 0.119192 * g + 0.9503041 * b) / 1.08883);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+}
+
+/** CIEDE2000 colour difference, as Sharma, Wu and Dalal (2005) give it. */
+export function deltaE2000([l1, a1, b1]: Lab, [l2, a2, b2]: Lab): number {
+  const rad = Math.PI / 180;
+  const g7 = (c: number) => Math.sqrt(c ** 7 / (c ** 7 + 25 ** 7));
+  const g = 0.5 * (1 - g7((Math.hypot(a1, b1) + Math.hypot(a2, b2)) / 2));
+  const [c1, c2] = [Math.hypot((1 + g) * a1, b1), Math.hypot((1 + g) * a2, b2)];
+  const hue = (b: number, a: number) => (a === 0 && b === 0 ? 0 : (Math.atan2(b, a) / rad + 360) % 360);
+  const [h1, h2] = [hue(b1, (1 + g) * a1), hue(b2, (1 + g) * a2)];
+  const chromatic = c1 * c2 !== 0;
+  const dh = !chromatic ? 0 : h2 - h1 > 180 ? h2 - h1 - 360 : h2 - h1 < -180 ? h2 - h1 + 360 : h2 - h1;
+  const l = (l1 + l2) / 2;
+  const c = (c1 + c2) / 2;
+  const h = !chromatic ? h1 + h2 : Math.abs(h1 - h2) > 180 ? (h1 + h2 + (h1 + h2 < 360 ? 360 : -360)) / 2 : (h1 + h2) / 2;
+  const t = 1 - 0.17 * Math.cos((h - 30) * rad) + 0.24 * Math.cos(2 * h * rad) + 0.32 * Math.cos((3 * h + 6) * rad) - 0.2 * Math.cos((4 * h - 63) * rad);
+  const dl = (l2 - l1) / (1 + (0.015 * (l - 50) ** 2) / Math.sqrt(20 + (l - 50) ** 2));
+  const dc = (c2 - c1) / (1 + 0.045 * c);
+  const dH = (2 * Math.sqrt(c1 * c2) * Math.sin((dh * rad) / 2)) / (1 + 0.015 * c * t);
+  const rt = -Math.sin(60 * Math.exp(-(((h - 275) / 25) ** 2)) * rad) * 2 * g7(c);
+  return Math.sqrt(dl ** 2 + dc ** 2 + dH ** 2 + rt * dc * dH);
 }
 
 /** The renderer's src/renderer/design.css, exactly as `npm run design:tokens` writes it. */
