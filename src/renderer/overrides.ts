@@ -11,7 +11,7 @@ type Edit = { readonly value: AppearanceValue; readonly saving: boolean };
  */
 export class PendingOverrides {
   readonly #edits = new Map<BlockId, Map<PropName, Edit>>();
-  readonly #timers = new Map<string, ReturnType<typeof setTimeout>>();
+  readonly #timers = new Map<string, { readonly timer: ReturnType<typeof setTimeout>; readonly save: () => void }>();
   readonly #listeners = new Set<() => void>();
   readonly #send: (action: RobAction) => Promise<SessionView | null>;
   #version = 0;
@@ -43,25 +43,23 @@ export class PendingOverrides {
     this.#edits.set(blockId, edits);
     edits.set(prop, { value, saving: false });
     const key = `${blockId}\0${prop}`;
-    clearTimeout(this.#timers.get(key));
-    this.#timers.set(
-      key,
-      setTimeout(() => {
-        this.#timers.delete(key);
-        edits.set(prop, { value, saving: true });
-        void this.#send({ kind: "set_override", blockId, prop, value }).then((view) => {
-          if (view === null && edits.get(prop)?.value === value) edits.delete(prop);
-          if (view !== null) this.settle(view);
-          this.#changed();
-        });
-      }, SAVE_DELAY_MS),
-    );
+    clearTimeout(this.#timers.get(key)?.timer);
+    const save = () => {
+      this.#timers.delete(key);
+      edits.set(prop, { value, saving: true });
+      void this.#send({ kind: "set_override", blockId, prop, value }).then((view) => {
+        if (view === null && edits.get(prop)?.value === value) edits.delete(prop);
+        if (view !== null) this.settle(view);
+        this.#changed();
+      });
+    };
+    this.#timers.set(key, { timer: setTimeout(save, SAVE_DELAY_MS), save });
     this.#changed();
   }
 
   reset(blockId: BlockId, prop: PropName): void {
     const key = `${blockId}\0${prop}`;
-    clearTimeout(this.#timers.get(key));
+    clearTimeout(this.#timers.get(key)?.timer);
     this.#timers.delete(key);
     this.#edits.get(blockId)?.delete(prop);
     this.#changed();
@@ -77,10 +75,11 @@ export class PendingOverrides {
     }
   }
 
-  clear(): void {
-    for (const timer of this.#timers.values()) clearTimeout(timer);
-    this.#timers.clear();
-    this.#edits.clear();
-    this.#changed();
+  /** Saves every edit still waiting out its delay, so leaving a brainstorm mid-drag keeps the last value. */
+  flush(): void {
+    for (const { timer, save } of [...this.#timers.values()]) {
+      clearTimeout(timer);
+      save();
+    }
   }
 }

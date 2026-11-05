@@ -63,4 +63,12 @@ describe("PendingOverrides", () => {
     expect(sent).toEqual([{ kind: "clear_override", blockId: NEON, prop: SPIN }]);
     expect(pending.effective(NEON, { spinSeconds: 2.4 })).toEqual({ spinSeconds: 2.4 });
   });
+
+  test("flush saves an edit still waiting out its delay, once", async () => {
+    pending.set(NEON, SPIN, 3.1);
+    pending.flush();
+    expect(sent).toEqual([{ kind: "set_override", blockId: NEON, prop: SPIN, value: 3.1 }]);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(sent).toHaveLength(1);
+  });
 });

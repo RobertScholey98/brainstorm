@@ -169,7 +169,7 @@ function SessionWorkspace({
   );
   const pending = useMemo(() => new PendingOverrides(send), [send]);
   const pendingVersion = useSyncExternalStore(pending.subscribe, pending.version);
-  useEffect(() => () => pending.clear(), [pending]);
+  useEffect(() => () => pending.flush(), [pending]);
   useEffect(() => {
     if (view !== null) pending.settle(view);
   }, [pending, view]);
