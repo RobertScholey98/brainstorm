@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { controlCatalog } from "../core/controls";
 import { HEX_COLOR_PATTERN } from "../core/props";
-import type { AppearanceProp, AppearanceValue, BlockView, PropName } from "../core/types";
+import type { AppearanceProp, AppearanceType, AppearanceValue, BlockView, PropName } from "../core/types";
 
 type ControlScope = {
   readonly block: BlockView;
@@ -23,43 +23,50 @@ export const ControlScopeContext = createContext<ControlScope | null>(null);
 
 type ControlProps = BaseComponentProps<{ label: string | null; value: unknown }>;
 
-/** The appearance prop a control binds. Range, step, unit and options always come from here, never from the control. */
-function useBound<T extends AppearanceProp["type"]>(
-  bindings: ControlProps["bindings"],
-  type: T,
-): { scope: ControlScope; spec: Extract<AppearanceProp, { type: T }> } | null {
+type Spec<T extends AppearanceType> = Extract<AppearanceProp, { type: T }>;
+
+type Bound<T extends AppearanceType> = {
+  readonly scope: ControlScope;
+  readonly spec: Spec<T>;
+  readonly value: Spec<T>["default"];
+  readonly setValue: (value: Spec<T>["default"]) => void;
+  readonly label: string;
+};
+
+/**
+ * The appearance prop a control binds, with its current value (the default when the state holds none of its type)
+ * and its label. Range, step, unit and options always come from the spec, never from the control.
+ */
+function useBound<T extends AppearanceType>({ props, bindings }: ControlProps, type: T): Bound<T> | null {
   const scope = useContext(ControlScopeContext);
+  const [value, setValue] = useBoundProp<AppearanceValue>(props.value as AppearanceValue | undefined, bindings?.value);
   const name = bindings?.value?.slice(1);
   const spec = scope?.block.props.appearance.find((p) => p.name === name);
-  return scope === null || spec?.type !== type ? null : { scope, spec: spec as Extract<AppearanceProp, { type: T }> };
+  if (scope === null || spec?.type !== type) return null;
+  const typed = spec as Spec<T>;
+  return {
+    scope,
+    spec: typed,
+    value: (typeof value === typeof typed.default ? value : typed.default) as Spec<T>["default"],
+    setValue: setValue as Bound<T>["setValue"],
+    label: props.label ?? typed.label,
+  };
 }
 
-function Row({
-  spec,
-  label,
-  scope,
-  trailing,
-  children,
-}: {
-  spec: AppearanceProp;
-  label: string | null;
-  scope: ControlScope;
-  trailing?: ReactNode;
-  children?: ReactNode;
-}) {
-  const text = label ?? spec.label;
+function Row({ bound, trailing, children }: { bound: Pick<Bound<AppearanceType>, "scope" | "spec" | "label">; trailing?: ReactNode; children?: ReactNode }) {
+  const { scope, spec, label } = bound;
   const overridden = scope.overridden.has(spec.name);
   return (
     <div className="grid gap-1.5" data-control={spec.name} data-overridden={overridden || undefined}>
       <div className="flex min-h-6 items-center gap-1">
-        <span className="truncate text-[13px] font-medium">{text}</span>
+        <span className="truncate text-[13px] font-medium">{label}</span>
         {overridden && (
           <Button
             variant="ghost"
             size="icon-xs"
             className="text-muted-foreground"
-            title={`Reset ${text} to the block's default`}
-            aria-label={`Reset ${text}`}
+            title={`Reset ${label} to the block's default`}
+            aria-label={`Reset ${label}`}
             onClick={() => scope.reset(spec.name)}
           >
             <RotateCcw aria-hidden />
@@ -77,20 +84,16 @@ const formatNumber = (value: number, step: number | null) => {
   return value.toFixed(decimals);
 };
 
-function Slider({ props, bindings }: ControlProps) {
-  const bound = useBound(bindings, "number");
-  const [value, setValue] = useBoundProp<number>(typeof props.value === "number" ? props.value : undefined, bindings?.value);
+function Slider(control: ControlProps) {
+  const bound = useBound(control, "number");
   if (bound === null) return null;
-  const { scope, spec } = bound;
-  const current = value ?? spec.default;
+  const { spec, value, setValue, label } = bound;
   return (
     <Row
-      spec={spec}
-      label={props.label}
-      scope={scope}
+      bound={bound}
       trailing={
         <span className="text-xs tabular-nums text-muted-foreground" data-value>
-          {formatNumber(current, spec.step)}
+          {formatNumber(value, spec.step)}
           {spec.unit}
         </span>
       }
@@ -100,24 +103,23 @@ function Slider({ props, bindings }: ControlProps) {
         min={spec.min}
         max={spec.max}
         step={spec.step ?? (spec.max - spec.min) / 100}
-        value={[current]}
-        onValueChange={(v) => setValue((v as number[])[0] ?? current)}
-        aria-label={props.label ?? spec.label}
+        value={[value]}
+        onValueChange={(v) => setValue((v as number[])[0] ?? value)}
+        aria-label={label}
       />
     </Row>
   );
 }
 
-function Select({ props, bindings }: ControlProps) {
-  const bound = useBound(bindings, "enum");
-  const [value, setValue] = useBoundProp<string>(typeof props.value === "string" ? props.value : undefined, bindings?.value);
+function Select(control: ControlProps) {
+  const bound = useBound(control, "enum");
   if (bound === null) return null;
-  const { scope, spec } = bound;
+  const { spec, value, setValue, label } = bound;
   const items = spec.options.map((o) => ({ label: o, value: o }));
   return (
-    <Row spec={spec} label={props.label} scope={scope}>
-      <SelectRoot items={items} value={value ?? spec.default} onValueChange={(v) => v !== null && setValue(v)}>
-        <SelectTrigger className="w-full" size="sm" aria-label={props.label ?? spec.label}>
+    <Row bound={bound}>
+      <SelectRoot items={items} value={value} onValueChange={(v) => v !== null && setValue(v)}>
+        <SelectTrigger className="w-full" size="sm" aria-label={label}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -134,22 +136,21 @@ function Select({ props, bindings }: ControlProps) {
   );
 }
 
-function Segmented({ props, bindings }: ControlProps) {
-  const bound = useBound(bindings, "enum");
-  const [value, setValue] = useBoundProp<string>(typeof props.value === "string" ? props.value : undefined, bindings?.value);
+function Segmented(control: ControlProps) {
+  const bound = useBound(control, "enum");
   if (bound === null) return null;
-  const { scope, spec } = bound;
+  const { spec, value, setValue, label } = bound;
   return (
-    <Row spec={spec} label={props.label} scope={scope}>
+    <Row bound={bound}>
       <ToggleGroup
         variant="outline"
         size="sm"
         spacing={0}
         className="w-full"
-        value={[value ?? spec.default]}
+        value={[value]}
         // A segmented control always has one option on, so a press on the current one changes nothing.
         onValueChange={(v) => v[0] !== undefined && setValue(v[0] as string)}
-        aria-label={props.label ?? spec.label}
+        aria-label={label}
       >
         {spec.options.map((o) => (
           <ToggleGroupItem key={o} value={o} className="flex-1">
@@ -161,65 +162,55 @@ function Segmented({ props, bindings }: ControlProps) {
   );
 }
 
-function Toggle({ props, bindings }: ControlProps) {
-  const bound = useBound(bindings, "boolean");
-  const [value, setValue] = useBoundProp<boolean>(typeof props.value === "boolean" ? props.value : undefined, bindings?.value);
+function Toggle(control: ControlProps) {
+  const bound = useBound(control, "boolean");
   if (bound === null) return null;
-  const { scope, spec } = bound;
-  return (
-    <Row
-      spec={spec}
-      label={props.label}
-      scope={scope}
-      trailing={<Switch checked={value ?? spec.default} onCheckedChange={(checked) => setValue(checked)} aria-label={props.label ?? spec.label} />}
-    />
-  );
+  const { value, setValue, label } = bound;
+  return <Row bound={bound} trailing={<Switch checked={value} onCheckedChange={(checked) => setValue(checked)} aria-label={label} />} />;
 }
 
-function Text({ props, bindings }: ControlProps) {
-  const bound = useBound(bindings, "text");
-  const [value, setValue] = useBoundProp<string>(typeof props.value === "string" ? props.value : undefined, bindings?.value);
+function Text(control: ControlProps) {
+  const bound = useBound(control, "text");
   if (bound === null) return null;
-  const { scope, spec } = bound;
-  const current = value ?? spec.default;
-  const label = props.label ?? spec.label;
+  const { spec, value, setValue, label } = bound;
   return (
-    <Row spec={spec} label={props.label} scope={scope}>
+    <Row bound={bound}>
       {spec.multiline ? (
-        <Textarea rows={3} value={current} onChange={(e) => setValue(e.target.value)} aria-label={label} />
+        <Textarea rows={3} value={value} onChange={(e) => setValue(e.target.value)} aria-label={label} />
       ) : (
-        <Input type="text" value={current} onChange={(e) => setValue(e.target.value)} aria-label={label} />
+        <Input type="text" value={value} onChange={(e) => setValue(e.target.value)} aria-label={label} />
       )}
     </Row>
   );
 }
 
+function Colour(control: ControlProps) {
+  const bound = useBound(control, "color");
+  return bound === null ? null : <ColourField bound={bound} />;
+}
+
 /** A native colour well for dragging, plus a hex field that commits only a complete #rrggbb. */
-function Colour({ props, bindings }: ControlProps) {
-  const bound = useBound(bindings, "color");
-  const [value, setValue] = useBoundProp<string>(typeof props.value === "string" ? props.value : undefined, bindings?.value);
-  const current = value ?? bound?.spec.default ?? "#000000";
-  const [draft, setDraft] = useState(current);
-  useEffect(() => setDraft(current), [current]);
-  if (bound === null) return null;
-  const { scope, spec } = bound;
+function ColourField({ bound }: { bound: Bound<"color"> }) {
+  const { value, setValue, label } = bound;
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
   const commit = (raw: string) => {
     const hex = (raw.startsWith("#") ? raw : `#${raw}`).toLowerCase();
     if (HEX_COLOR_PATTERN.test(hex)) setValue(hex);
   };
   return (
-    <Row spec={spec} label={props.label} scope={scope}>
+    <Row bound={bound}>
       <div className="flex h-8 items-center gap-2 rounded-lg border border-input pr-2.5 pl-1 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
         <input
           type="color"
-          aria-label={`${props.label ?? spec.label} colour`}
+          aria-label={`${label} colour`}
           className="size-6 cursor-pointer rounded-md border-0 bg-transparent p-0 [&::-webkit-color-swatch]:rounded-[5px] [&::-webkit-color-swatch]:border [&::-webkit-color-swatch]:border-foreground/15 [&::-webkit-color-swatch-wrapper]:p-0"
-          value={current}
+          value={value}
           onChange={(e) => setValue(e.target.value.toLowerCase())}
         />
         <input
           type="text"
-          aria-label={`${props.label ?? spec.label} hex`}
+          aria-label={`${label} hex`}
           spellCheck={false}
           maxLength={7}
           className="min-w-0 flex-1 bg-transparent text-sm tabular-nums uppercase outline-none"
@@ -228,7 +219,7 @@ function Colour({ props, bindings }: ControlProps) {
             setDraft(e.target.value);
             commit(e.target.value);
           }}
-          onBlur={() => setDraft(current)}
+          onBlur={() => setDraft(value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") e.currentTarget.blur();
           }}

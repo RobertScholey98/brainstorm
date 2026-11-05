@@ -287,7 +287,7 @@ The top bar shows the session, its iteration and the request phase, a Regenerate
 
 The renderer reads the UI token from `location.hash`, strips it from the URL and history, and keeps it in a closure in `api.ts`. It refetches the session list and the `SessionView` on each event from `/v1/ui/events`, and again whenever the stream reconnects. The server serves the built renderer at `/` and `/assets/*` only, under `default-src 'self'` (styles may be inline).
 
-The registry implements our catalog with the app's own Base UI shadcn components (`src/renderer/components/ui`: `Slider`, `Select`, `Switch`, `Input`, `Textarea`, `ToggleGroup`), each wrapped in one label row and bound with `useBoundProp`. `@json-render/shadcn` is not used: it is built on Radix, and the catalog's schemas live in `src/core/controls.ts`, so nothing needs it. `Colour` is a native `<input type=color>` with a hex field that commits only a complete `#rrggbb`. A derived spec's Section title repeats the block title, which the panel header already shows, so it is hidden.
+The registry implements our catalog with the app's own Base UI shadcn components (`src/renderer/components/ui`: `Slider`, `Select`, `Switch`, `Input`, `Textarea`, `ToggleGroup`), each wrapped in one label row and bound through one `useBound` hook over json-render's `useBoundProp`, which applies the prop's default and label. `@json-render/shadcn` is not used: it is built on Radix, and the catalog's schemas live in `src/core/controls.ts`, so nothing needs it. `Colour` is a native `<input type=color>` with a hex field that commits only a complete `#rrggbb`. A derived spec's Section title repeats the block title, which the panel header already shows, so it is hidden.
 
 ## Export
 
