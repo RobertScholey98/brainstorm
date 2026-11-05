@@ -15,6 +15,7 @@ import {
   requestFeedback,
   requestPhase,
 } from "./machines";
+import { projectNameAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { Store, type FeedbackRecord, type IterationBlock, type StoredContent, type StoredIteration } from "./store";
 import {
@@ -124,7 +125,7 @@ type Loaded = { readonly draft: Pick<BlockDraft, "title" | "props" | "controls">
 /** The last snapshot T3 gave for a thread, and when we last asked. */
 type Seen = { readonly snapshot: ThreadSnapshot | null; readonly checkedAt: number };
 
-const summaryOf = ({ id, projectId, projectName, title, brief, createdAt }: SessionSummary): SessionSummary => ({ id, projectId, projectName, title, brief, createdAt });
+const summaryOf = ({ id, projectId, title, brief, createdAt }: SessionSummary): SessionSummary => ({ id, projectId, title, brief, createdAt });
 
 /** The one facade over Brainstorm's rules. The store owns SQL, the bridge owns T3, and this class owns policy. */
 export class Brainstorm {
@@ -184,20 +185,20 @@ export class Brainstorm {
     brief: string;
     thread: ThreadId;
     projectPath: string | null;
-    projectName: string | null;
   }): Promise<Result<NewSessionResult>> {
     const thread = await this.#resolveThread(input.thread);
     if (!thread.ok) return thread;
+    const name = input.projectPath === null ? null : await projectNameAt(input.projectPath);
     const session: SessionSummary = {
       id: this.#newSessionId(),
       projectId: thread.data.projectId,
-      projectName: input.projectName,
       title: input.title,
       brief: input.brief,
       createdAt: this.#now(),
     };
     this.#store.tx(() => {
       this.#store.ensureProject(session.projectId, input.projectPath, session.createdAt);
+      if (name !== null) this.#store.nameProject(session.projectId, name);
       this.#store.createSession(session, input.thread);
     });
     this.#emit(session.id);

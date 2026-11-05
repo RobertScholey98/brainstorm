@@ -4,10 +4,7 @@ export type ProjectGroup = { readonly projectId: ProjectId; readonly label: stri
 
 const newestFirst = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
 
-/**
- * The home sidebar's groups: one per project, labelled with the newest session's project name that isn't null.
- * Groups and the rows in them both run from the most recent activity.
- */
+/** The home sidebar's groups, one per project. Groups and the rows in them both run from the most recent activity. */
 export function groupByProject(sessions: readonly SessionListing[]): ProjectGroup[] {
   const groups = new Map<ProjectId, SessionListing[]>();
   for (const s of [...sessions].sort((a, b) => newestFirst(a.activeAt, b.activeAt))) {
@@ -17,7 +14,7 @@ export function groupByProject(sessions: readonly SessionListing[]): ProjectGrou
   }
   return [...groups].map(([projectId, rows]) => ({
     projectId,
-    label: [...rows].sort((a, b) => newestFirst(a.createdAt, b.createdAt)).find((s) => s.projectName !== null)?.projectName ?? "Other project",
+    label: rows[0]?.projectName ?? "Other project",
     sessions: rows,
   }));
 }

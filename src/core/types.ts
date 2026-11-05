@@ -440,14 +440,14 @@ export type ExportResult = { readonly path: string; readonly file: string };
 export type SessionSummary = {
   readonly id: SessionId;
   readonly projectId: ProjectId;
-  /** The repo's folder name where `session new` ran. T3 lists no projects, so this is the only readable label. */
-  readonly projectName: string | null;
   readonly title: string;
   readonly brief: string;
   readonly createdAt: string;
 };
 
 export type SessionListing = SessionSummary & {
+  /** The project's repo folder name. T3 lists no projects, so this is the only readable label. */
+  readonly projectName: string | null;
   readonly attachedThread: ThreadId;
   readonly lost: boolean;
   readonly latest: IterationN | null;

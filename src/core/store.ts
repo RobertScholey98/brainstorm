@@ -55,7 +55,7 @@ const MIGRATIONS: readonly string[] = [
     error TEXT, sent_at TEXT, fulfilled_in INTEGER, created_at TEXT NOT NULL, PRIMARY KEY(session_id, n));
   CREATE UNIQUE INDEX one_open_request ON request(session_id) WHERE state IN ('sending','sent','send_failed');
   `,
-  `ALTER TABLE session ADD COLUMN project_name TEXT;`,
+  `ALTER TABLE project ADD COLUMN name TEXT;`,
 ];
 
 const OPEN_REQUEST = `state IN ('sending','sent','send_failed')`;
@@ -98,7 +98,6 @@ const num = (v: unknown): number => Number(v);
 const toSession = (r: Row): SessionSummary => ({
   id: str(r.id) as SessionId,
   projectId: str(r.project_id) as ProjectId,
-  projectName: strOrNull(r.project_name),
   title: str(r.title),
   brief: str(r.brief),
   createdAt: str(r.created_at),
@@ -108,6 +107,7 @@ const toListing = (r: Row): SessionListing => {
   const createdAt = str(r.created_at);
   return {
     ...toSession(r),
+    projectName: strOrNull(r.project_name),
     attachedThread: str(r.thread_id) as ThreadId,
     lost: r.lost_at !== null,
     latest: r.latest_n === null ? null : (num(r.latest_n) as IterationN),
@@ -235,14 +235,17 @@ export class Store {
     this.#run("INSERT OR IGNORE INTO project(id, repo_path, created_at) VALUES (?, ?, ?)", id, repoPath, at);
   }
 
+  nameProject(id: ProjectId, name: string): void {
+    this.#run("UPDATE project SET name = ? WHERE id = ?", name, id);
+  }
+
   /** Inserts the session and its first attachment together. */
   createSession(session: SessionSummary, thread: ThreadId): void {
     this.tx(() => {
       this.#run(
-        "INSERT INTO session(id, project_id, project_name, title, brief, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO session(id, project_id, title, brief, created_at) VALUES (?, ?, ?, ?, ?)",
         session.id,
         session.projectId,
-        session.projectName,
         session.title,
         session.brief,
         session.createdAt,
@@ -259,11 +262,11 @@ export class Store {
   /** Oldest first, each with its open attachment and latest activity. `project: null` lists every project's sessions. */
   sessions(project: ProjectId | null): SessionListing[] {
     return this.#all(
-      `SELECT s.id, s.project_id, s.project_name, s.title, s.brief, s.created_at, a.thread_id, a.lost_at,
+      `SELECT s.id, s.project_id, p.name AS project_name, s.title, s.brief, s.created_at, a.thread_id, a.lost_at,
         (SELECT MAX(n) FROM iteration WHERE session_id = s.id) AS latest_n,
         (SELECT MAX(created_at) FROM iteration WHERE session_id = s.id) AS latest_at,
         (SELECT MAX(created_at) FROM request WHERE session_id = s.id) AS request_at
-      FROM session s JOIN attachment a ON a.session_id = s.id AND a.detached_at IS NULL
+      FROM session s JOIN project p ON p.id = s.project_id JOIN attachment a ON a.session_id = s.id AND a.detached_at IS NULL
       WHERE s.archived_at IS NULL AND (? IS NULL OR s.project_id = ?)
       ORDER BY s.created_at, s.id`,
       project,

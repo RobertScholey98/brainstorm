@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -80,7 +81,7 @@ async function setup(clockMs?: () => number, now: () => string = () => AT) {
 
 async function withIteration() {
   const ctx = await setup();
-  data(await ctx.service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: "C:\\repo", projectName: "repo" }));
+  data(await ctx.service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: "C:\\repo" }));
   data(await ctx.service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: "first cut" }));
   return ctx;
 }
@@ -94,10 +95,10 @@ const SLOTS = [
 describe("commit", () => {
   test("creates a session attached to the caller, then an iteration that pull round-trips", async () => {
     const { service } = await setup();
-    expect(await service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: "C:\\repo", projectName: "repo" })).toEqual({
+    expect(await service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: "C:\\repo" })).toEqual({
       ok: true,
       data: {
-        session: { id: S, projectId: "proj-a", projectName: "repo", title: "Chore wheel", brief: "Pick who does chores", createdAt: AT },
+        session: { id: S, projectId: "proj-a", title: "Chore wheel", brief: "Pick who does chores", createdAt: AT },
         attachment: { session: S, threadId: T1, attachedAt: AT, lostAt: null },
       },
     });
@@ -309,7 +310,7 @@ describe("Rob's actions", () => {
 
   test("view.regenerate says why Regenerate is blocked, and regenerate refuses the same cases", async () => {
     const { service, bridge } = await setup();
-    data(await service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: null, projectName: null }));
+    data(await service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: null }));
     expect(data(await service.view(S)).regenerate).toEqual({ ok: false, reason: "no_iteration" });
     expect(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null })).toEqual({
       ok: false,
@@ -345,13 +346,20 @@ describe("Rob's actions", () => {
   });
 });
 
+const gitRepo = (name: string) => {
+  const repo = join(mkdtempSync(join(tmpdir(), "bs-repo-")), name);
+  mkdirSync(repo);
+  execFileSync("git", ["init", "-q"], { cwd: repo, stdio: "ignore" });
+  return repo;
+};
+
 describe("listSessions", () => {
   test("lists each session with its project name, attachment and latest activity", async () => {
     let at = "2026-11-05T10:00:00.000Z";
     const { service } = await setup(undefined, () => at);
-    data(await service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: null, projectName: "repo" }));
+    data(await service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: gitRepo("repo") }));
     at = "2026-11-05T11:00:00.000Z";
-    data(await service.newSession({ title: "Onboarding", brief: "", thread: T3, projectPath: null, projectName: null }));
+    data(await service.newSession({ title: "Onboarding", brief: "", thread: T3, projectPath: null }));
     at = "2026-11-05T12:00:00.000Z";
     data(await service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: null }));
     const listed = async () => data(await service.listSessions(null)).map((s) => [s.id, s.projectId, s.projectName, s.latest, s.lost, s.activeAt]);
@@ -362,6 +370,18 @@ describe("listSessions", () => {
     at = "2026-11-05T13:00:00.000Z";
     data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null }));
     expect((await listed())[0]).toEqual([S, "proj-a", "repo", 1, false, "2026-11-05T13:00:00.000Z"]);
+  });
+
+  test("names a project from its newest session in git, and keeps the name when a later one isn't", async () => {
+    const { service } = await setup();
+    const names = async () => data(await service.listSessions(null)).map((s) => s.projectName);
+    data(await service.newSession({ title: "Loose", brief: "", thread: T1, projectPath: null }));
+    expect(await names()).toEqual([null]);
+    data(await service.newSession({ title: "Wheel", brief: "", thread: T1, projectPath: gitRepo("brainstorm") }));
+    data(await service.newSession({ title: "Notes", brief: "", thread: T2, projectPath: mkdtempSync(join(tmpdir(), "bs-loose-")) }));
+    expect(await names()).toEqual(["brainstorm", "brainstorm", "brainstorm"]);
+    data(await service.newSession({ title: "Renamed", brief: "", thread: T1, projectPath: gitRepo("brainstorm-app") }));
+    expect(await names()).toEqual(["brainstorm-app", "brainstorm-app", "brainstorm-app", "brainstorm-app"]);
   });
 });
 
@@ -381,8 +401,8 @@ describe("attach", () => {
 
   test("resolves an exact title, lists candidates for an ambiguous one, and records the takeover", async () => {
     const { service } = await withIteration();
-    data(await service.newSession({ title: "Onboarding A", brief: "", thread: T1, projectPath: null, projectName: null }));
-    data(await service.newSession({ title: "Onboarding B", brief: "", thread: T1, projectPath: null, projectName: null }));
+    data(await service.newSession({ title: "Onboarding A", brief: "", thread: T1, projectPath: null }));
+    data(await service.newSession({ title: "Onboarding B", brief: "", thread: T1, projectPath: null }));
     expect(await service.attach({ ref: "onboarding", thread: T2 })).toEqual({
       ok: false,
       error: {
@@ -397,7 +417,7 @@ describe("attach", () => {
     expect(await service.attach({ ref: "CHORE WHEEL", thread: T2 })).toEqual({
       ok: true,
       data: {
-        session: { id: S, projectId: "proj-a", projectName: "repo", title: "Chore wheel", brief: "Pick who does chores", createdAt: AT },
+        session: { id: S, projectId: "proj-a", title: "Chore wheel", brief: "Pick who does chores", createdAt: AT },
         attachment: { session: S, threadId: T2, attachedAt: AT, lostAt: null },
         previous: T1,
       },
@@ -544,7 +564,7 @@ describe("view and T3", () => {
   test("view() asks T3 about an unreachable thread at most once per 10 s", async () => {
     let clock = 0;
     const { service, bridge, open } = await setup(() => clock);
-    data(await service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: null, projectName: null }));
+    data(await service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: null }));
     bridge.snapshotFails = true;
     const restarted = await open();
     const calls = bridge.snapshotCalls;
@@ -702,7 +722,7 @@ describe("exportHtml", () => {
 
   test("a session with no iteration has nothing to export", async () => {
     const { service } = await setup();
-    data(await service.newSession({ title: "Empty", brief: "", thread: T1, projectPath: null, projectName: null }));
+    data(await service.newSession({ title: "Empty", brief: "", thread: T1, projectPath: null }));
     expect(await service.exportHtml(S)).toEqual({
       ok: false,
       error: { code: "not_found", entity: "iteration", message: "s_wheel01 has no iteration to export yet" },
