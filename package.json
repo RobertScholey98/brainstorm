@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.web.json",
     "verify:1": "node scripts/verify/1-storage-api.mjs",
     "lint:skill": "node scripts/lint-skill.mjs",
+    "lint:design": "node scripts/design/lint.mjs",
     "verify:2": "node scripts/verify/2-canvas.mjs",
     "verify:3": "node scripts/verify/3-controls.mjs",
     "verify:4": "node scripts/verify/4-feedback.mjs",
