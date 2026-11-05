@@ -21,6 +21,7 @@ Every branch runs `brainstorm` commands. Read [the Brainstorm loop](references/b
 - Build on the user's accepted choices, corrections and scope. Earlier recommendations the user never accepted are not the baseline.
 - Improve the experience before its appearance: remove unnecessary decisions, infer safely, choose understandable defaults, sequence necessary questions, and give occasional controls a home.
 - Preserve necessary capabilities and safety boundaries. Name every proposed behavior change and its consequence. Leave permissions, ownership, destructive actions and review gates as they are unless the study is about them.
+- Every branch ends with a one-line reply: that line is the whole message, and the detail lives on the canvas and in the session brief.
 - A study produces blocks on the canvas, not production changes, a PRD or tickets. Follow an explicit request for a different deliverable. When the user asks to discuss first, stay in discussion until they authorize the study.
 
 ## Start a study
@@ -31,7 +32,7 @@ Every branch runs `brainstorm` commands. Read [the Brainstorm loop](references/b
 4. **Start the session.** Check `T3CODE_THREAD_ID` is set (`$env:T3CODE_THREAD_ID` in PowerShell). If it is empty, tell the user in one line that a Brainstorm session must start inside a T3 thread, and stop. Otherwise run `session new` with the brief on stdin, `pull`, and read the generated `GUIDE.md`.
 5. **Build the blocks.** Map the hypotheses onto slots and variants as the loop reference describes. Copy the product's real look from the repo. Each variant implements the task through its useful outcome, including the failure and recovery states that distinguish its hypothesis. [The worked example](references/example/slots/start-dialog/missing-only/) is one valid variant.
 6. **Commit until it succeeds.** Run `commit`. Fix every error it lists and commit again until it succeeds, then fix any warning you caused. The commit only proves each block compiles and renders with its defaults, so trace every variant's path to its outcome and through its failure state in the code as well.
-7. **Reply in one short line.** Name the session, its slots and variant counts, and the variant you recommend.
+7. **Reply in one line.** Name the session, its slots and variant counts, and the variant you recommend. The whole reply looks like `Session s_x "Pin a comment": 1 slot, 3 variants; I recommend pick-and-widen.`
 
 ## Handle a request
 
@@ -39,12 +40,12 @@ Every branch runs `brainstorm` commands. Read [the Brainstorm loop](references/b
 2. Run `pull` into a fresh copy. Your earlier copy is stale.
 3. Change only the blocks in scope. Address the requested feedback and free text. Keep every `data-part` name an open feedback pin points at, and keep Rob's overridden props valid for his values.
 4. Run `commit --addresses <ids>` with only the feedback you actually addressed. Fix errors until it succeeds, and act on each warning as the loop reference says.
-5. Reply in one short line naming what changed and any feedback left open.
+5. Reply in one line naming what changed and any feedback left open. The whole reply looks like `Request 2: changed pin-flow/pick-and-widen; addressed #1, #3 still open.`
 
 ## Take over a session
 
 1. Run `brainstorm session list`, then `brainstorm session attach "<X>"`. On `ambiguous_title`, show the user the candidates and ask which one. On `wrong_project`, tell the user the session belongs to another project and stop.
-2. Run `brainstorm context <id>`. If it shows an open request, handle it as **Handle a request** from step 2. Otherwise reply in one line that this thread now holds the session.
+2. Run `brainstorm context <id>`. If it shows an open request, handle it as **Handle a request** from step 2. Otherwise reply in one line that this thread now holds the session. The whole reply looks like `This thread now holds session s_x "Pin a comment"; no request is open.`
 
 ## Boundaries
 
