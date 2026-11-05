@@ -16,7 +16,8 @@
     "verify:1": "node scripts/verify/1-storage-api.mjs",
     "lint:skill": "node scripts/lint-skill.mjs",
     "verify:2": "node scripts/verify/2-canvas.mjs",
-    "verify:3": "node scripts/verify/3-controls.mjs"
+    "verify:3": "node scripts/verify/3-controls.mjs",
+    "verify:4": "node scripts/verify/4-feedback.mjs"
   },
   "dependencies": {
     "@json-render/core": "0.22.0",

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { BlockId, BlockView, CanvasFrame, FrameToHost, HostToFrame, Props } from "../core/types";
+import type { BlockId, BlockView, CanvasFrame, CanvasMode, CanvasPin, FeedbackId, FrameToHost, HostToFrame, Pin, Props } from "../core/types";
+
+export type Placement = { readonly placed: ReadonlySet<FeedbackId>; readonly detached: ReadonlySet<FeedbackId> };
 
 /**
  * The host side of the frame protocol. The frame's origin is `null`, so messages are matched by `event.source`, and
@@ -10,21 +12,34 @@ export function CanvasHost({
   frames,
   props,
   selected,
+  mode,
+  pins,
+  pulse,
   onSelect,
   onBlockError,
+  onPicked,
+  onPinClicked,
+  onPlacement,
 }: {
   blocks: readonly BlockView[];
   frames: readonly CanvasFrame[];
   props: Readonly<Record<string, Props>>;
   selected: BlockId | null;
+  mode: CanvasMode;
+  pins: readonly CanvasPin[];
+  /** A new `seq` pulses the pin again, even the same one. */
+  pulse: { readonly id: FeedbackId; readonly seq: number } | null;
   onSelect: (blockId: BlockId) => void;
   onBlockError: (blockId: BlockId, message: string) => void;
+  onPicked: (pin: Pin, at: { x: number; y: number }) => void;
+  onPinClicked: (id: FeedbackId) => void;
+  onPlacement: (placement: Placement) => void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const sent = useRef(new Set<string>());
   const [readyCount, setReadyCount] = useState(0);
-  const handlers = useRef({ onSelect, onBlockError });
-  handlers.current = { onSelect, onBlockError };
+  const handlers = useRef({ onSelect, onBlockError, onPicked, onPinClicked, onPlacement });
+  handlers.current = { onSelect, onBlockError, onPicked, onPinClicked, onPlacement };
 
   const post = (message: HostToFrame) => frame.current?.contentWindow?.postMessage(message, "*");
 
@@ -43,10 +58,17 @@ export function CanvasHost({
         case "block_error":
           handlers.current.onBlockError(message.blockId, message.message);
           return;
+        case "picked":
+          handlers.current.onPicked(message.pin, message.at);
+          return;
+        case "pin_clicked":
+          handlers.current.onPinClicked(message.id);
+          return;
+        case "pin_placement":
+          handlers.current.onPlacement({ placed: new Set(message.placed), detached: new Set(message.detached) });
+          return;
         case "csp_violation":
           console.warn(`The canvas blocked ${message.blockedUri || "a resource"} (${message.directive}).`);
-          return;
-        default:
           return;
       }
     };
@@ -65,6 +87,18 @@ export function CanvasHost({
   useEffect(() => {
     if (readyCount > 0) post({ kind: "state", frames, props, selected });
   }, [readyCount, frames, props, selected]);
+
+  useEffect(() => {
+    if (readyCount > 0) post({ kind: "mode", mode });
+  }, [readyCount, mode]);
+
+  useEffect(() => {
+    if (readyCount > 0) post({ kind: "pins", pins });
+  }, [readyCount, pins]);
+
+  useEffect(() => {
+    if (readyCount > 0 && pulse !== null) post({ kind: "pulse", id: pulse.id });
+  }, [readyCount, pulse]);
 
   return <iframe ref={frame} title="Canvas" src="/canvas" sandbox="allow-scripts" className="block size-full border-0" />;
 }

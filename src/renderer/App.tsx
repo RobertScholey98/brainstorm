@@ -5,7 +5,11 @@ import {
   type BlockId,
   type BlockView,
   type CanvasFrame,
+  type CanvasPin,
+  type Feedback,
+  type FeedbackId,
   type InapplicableOverride,
+  type Pin,
   type PropName,
   type Props,
   type RobAction,
@@ -16,12 +20,21 @@ import {
   type VariantKey,
 } from "../core/types";
 import type { Api } from "./api";
-import { CanvasHost } from "./CanvasHost";
+import { CanvasHost, type Placement } from "./CanvasHost";
+import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { Inspector } from "./Inspector";
 import { PendingOverrides } from "./overrides";
 import { Sidebar } from "./Sidebar";
 
 const NOTICE_MS = 6000;
+
+/** What a click in the canvas does: select, pick an element to pin, or nothing while a comment is being written. */
+type CanvasInteraction =
+  | { readonly kind: "view" }
+  | { readonly kind: "picking" }
+  | { readonly kind: "composing"; readonly pin: Pin; readonly at: { readonly x: number; readonly y: number } };
+
+const NO_PLACEMENT: Placement = { placed: new Set(), detached: new Set() };
 
 export function App({ api }: { api: Api }) {
   const [sessions, setSessions] = useState<readonly SessionListing[]>([]);
@@ -31,6 +44,11 @@ export function App({ api }: { api: Api }) {
   const [selectedSlot, setSelectedSlot] = useState<SlotId | null>(null);
   const [blockErrors, setBlockErrors] = useState<ReadonlyMap<BlockId, string>>(new Map());
   const [notice, setNotice] = useState<string | null>(null);
+  const [interaction, setInteraction] = useState<CanvasInteraction>({ kind: "view" });
+  const [placement, setPlacement] = useState<Placement>(NO_PLACEMENT);
+  const [focusedFeedback, setFocusedFeedback] = useState<FeedbackId | null>(null);
+  const [pulse, setPulse] = useState<{ id: FeedbackId; seq: number } | null>(null);
+  const canvasArea = useRef<HTMLElement>(null);
 
   const current = useRef<SessionId | null>(null);
   current.current = sessionId;
@@ -92,6 +110,9 @@ export function App({ api }: { api: Api }) {
     setView(null);
     setSelectedSlot(null);
     setBlockErrors(new Map());
+    setInteraction({ kind: "view" });
+    setPlacement(NO_PLACEMENT);
+    setFocusedFeedback(null);
     setSessionId(id);
     current.current = id;
     void refresh();
@@ -129,6 +150,43 @@ export function App({ api }: { api: Api }) {
   );
   const onBlockError = useCallback((blockId: BlockId, message: string) => setBlockErrors((m) => new Map(m).set(blockId, message)), []);
 
+  const feedback = view?.feedback ?? [];
+  const pins = useMemo<CanvasPin[]>(() => feedback.map((f) => ({ id: f.id, pin: f.pin, status: f.status.state })), [feedback]);
+  const activeBlocks = useMemo(() => new Set(frames.map((f) => f.blockId)), [frames]);
+
+  useEffect(() => {
+    if (interaction.kind !== "picking") return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setInteraction({ kind: "view" });
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [interaction.kind]);
+
+  const onPicked = useCallback(
+    (pin: Pin, at: { x: number; y: number }) => {
+      setSelectedSlot((blocks.find((b) => b.id === pin.blockId)?.slot ?? null) as SlotId | null);
+      setInteraction({ kind: "composing", pin, at });
+    },
+    [blocks],
+  );
+  const onPinClicked = useCallback(
+    (id: FeedbackId) => {
+      const f = feedback.find((x) => x.id === id);
+      if (f !== undefined) setSelectedSlot((blocks.find((b) => b.id === f.pin.blockId)?.slot ?? null) as SlotId | null);
+      setFocusedFeedback(id);
+    },
+    [feedback, blocks],
+  );
+  const openFeedback = (f: Feedback) => {
+    const block = blocks.find((b) => b.id === f.pin.blockId);
+    if (block !== undefined && !activeBlocks.has(block.id)) onVariant(block.slot, block.variant);
+    else if (block !== undefined) setSelectedSlot(block.slot);
+    setFocusedFeedback(f.id);
+    setPulse((p) => ({ id: f.id, seq: (p?.seq ?? 0) + 1 }));
+  };
+  const saveComment = async (pin: Pin, text: string) => {
+    if ((await send({ kind: "add_feedback", pin, text })) !== null) setInteraction({ kind: "view" });
+  };
+
   return (
     <div className="grid h-full grid-cols-[248px_minmax(0,1fr)_296px] grid-rows-[44px_minmax(0,1fr)]">
       <TopBar view={view} notice={notice} />
@@ -142,7 +200,7 @@ export function App({ api }: { api: Api }) {
         onSlot={setSelectedSlot}
         onVariant={onVariant}
       />
-      <main className="relative min-h-0 min-w-0" aria-label="Canvas">
+      <main ref={canvasArea} className="relative min-h-0 min-w-0" aria-label="Canvas">
         {iteration === null ? (
           <EmptyCanvas view={view} hasSessions={sessions.length > 0} />
         ) : (
@@ -151,8 +209,35 @@ export function App({ api }: { api: Api }) {
             frames={frames}
             props={frameProps}
             selected={selectedBlock?.id ?? null}
+            mode={interaction.kind === "picking" ? "pin" : "view"}
+            pins={pins}
+            pulse={pulse}
             onSelect={onSelectBlock}
             onBlockError={onBlockError}
+            onPicked={onPicked}
+            onPinClicked={onPinClicked}
+            onPlacement={setPlacement}
+          />
+        )}
+        {interaction.kind === "picking" && (
+          <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center" data-pick-hint>
+            <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-foreground py-1.5 pr-1.5 pl-3.5 text-[12px] text-background shadow-lg">
+              Click an element to pin a comment
+              <button type="button" onClick={() => setInteraction({ kind: "view" })} className="h-6 rounded-full bg-background/15 px-2.5 font-medium hover:bg-background/25">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {interaction.kind === "composing" && (
+          <PinComposer
+            key={JSON.stringify(interaction)}
+            pin={interaction.pin}
+            at={interaction.at}
+            block={blocks.find((b) => b.id === interaction.pin.blockId) ?? null}
+            bounds={{ width: canvasArea.current?.clientWidth ?? 0, height: canvasArea.current?.clientHeight ?? 0 }}
+            onSave={(text) => saveComment(interaction.pin, text)}
+            onCancel={() => setInteraction({ kind: "view" })}
           />
         )}
       </main>
@@ -167,7 +252,18 @@ export function App({ api }: { api: Api }) {
           onSet={onSet}
           onReset={onReset}
           onDismiss={onDismiss}
-        />
+        >
+          <FeedbackPanel
+            feedback={feedback}
+            blocks={blocks}
+            place={(f) => pinPlace(f, blocks, activeBlocks, placement)}
+            picking={interaction.kind === "picking"}
+            focused={focusedFeedback}
+            onPickToggle={() => setInteraction((i) => (i.kind === "picking" ? { kind: "view" } : { kind: "picking" }))}
+            onOpen={openFeedback}
+            send={send}
+          />
+        </Inspector>
       )}
     </div>
   );

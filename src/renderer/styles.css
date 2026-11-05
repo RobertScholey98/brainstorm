@@ -23,6 +23,8 @@
   --color-panel: var(--panel);
   --color-warning: var(--warning);
   --color-warning-surface: var(--warning-surface);
+  --color-addressed: var(--addressed);
+  --color-confirmed: var(--confirmed);
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -45,6 +47,8 @@
   --destructive: #c4352b;
   --warning: #8a5300;
   --warning-surface: #fff5df;
+  --addressed: #c77c00;
+  --confirmed: #2a9563;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -64,6 +68,8 @@
     --destructive: #ff8a7f;
     --warning: #f2b860;
     --warning-surface: #33280f;
+    --addressed: #e9a23b;
+    --confirmed: #4cc38a;
   }
 }
 

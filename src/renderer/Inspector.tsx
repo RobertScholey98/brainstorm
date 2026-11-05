@@ -1,6 +1,6 @@
 import { JSONUIProvider, Renderer } from "@json-render/react";
 import type { Spec } from "@json-render/core";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import type { AppearanceValue, BlockView, InapplicableOverride, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
 import { ControlScopeContext, controlRegistry, createBlockStore } from "./controls";
 
@@ -22,6 +22,7 @@ export function Inspector({
   onSet,
   onReset,
   onDismiss,
+  children,
 }: {
   view: SessionView;
   block: BlockView | null;
@@ -30,6 +31,7 @@ export function Inspector({
   onSet: (block: BlockView, prop: PropName, value: AppearanceValue) => void;
   onReset: (block: BlockView, prop: PropName) => void;
   onDismiss: (o: InapplicableOverride) => void;
+  children: ReactNode;
 }) {
   const blocks = view.iteration?.blocks ?? [];
   return (
@@ -40,10 +42,7 @@ export function Inspector({
       ) : (
         <BlockControls key={block.id} view={view} block={block} props={props} error={error} onSet={onSet} onReset={onReset} />
       )}
-      <section className="mt-auto border-t border-border px-4 py-3" aria-label="Feedback">
-        <h2 className="text-[12px] font-semibold">Feedback</h2>
-        <p className="pt-1 text-[12px] leading-relaxed text-muted-foreground">Pinned comments will show here.</p>
-      </section>
+      {children}
     </aside>
   );
 }
