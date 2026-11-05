@@ -18,6 +18,7 @@ import type {
   RequestN,
   RequestState,
   SessionId,
+  SessionListing,
   SessionSummary,
   SlotId,
   SlotManifest,
@@ -102,6 +103,17 @@ const toSession = (r: Row): SessionSummary => ({
   brief: str(r.brief),
   createdAt: str(r.created_at),
 });
+
+const toListing = (r: Row): SessionListing => {
+  const createdAt = str(r.created_at);
+  return {
+    ...toSession(r),
+    attachedThread: str(r.thread_id) as ThreadId,
+    lost: r.lost_at !== null,
+    latest: r.latest_n === null ? null : (num(r.latest_n) as IterationN),
+    activeAt: [strOrNull(r.latest_at), strOrNull(r.request_at)].reduce<string>((max, t) => (t !== null && t > max ? t : max), createdAt),
+  };
+};
 
 const toAttachment = (r: Row): Attachment => ({
   session: str(r.session_id) as SessionId,
@@ -244,13 +256,19 @@ export class Store {
     return row === undefined ? null : toSession(row);
   }
 
-  /** Oldest first. `project: null` lists every project's sessions. */
-  sessions(project: ProjectId | null): SessionSummary[] {
-    const rows =
-      project === null
-        ? this.#all("SELECT * FROM session WHERE archived_at IS NULL ORDER BY created_at, id")
-        : this.#all("SELECT * FROM session WHERE archived_at IS NULL AND project_id = ? ORDER BY created_at, id", project);
-    return rows.map(toSession);
+  /** Oldest first, each with its open attachment and latest activity. `project: null` lists every project's sessions. */
+  sessions(project: ProjectId | null): SessionListing[] {
+    return this.#all(
+      `SELECT s.id, s.project_id, s.project_name, s.title, s.brief, s.created_at, a.thread_id, a.lost_at,
+        (SELECT MAX(n) FROM iteration WHERE session_id = s.id) AS latest_n,
+        (SELECT MAX(created_at) FROM iteration WHERE session_id = s.id) AS latest_at,
+        (SELECT MAX(created_at) FROM request WHERE session_id = s.id) AS request_at
+      FROM session s JOIN attachment a ON a.session_id = s.id AND a.detached_at IS NULL
+      WHERE s.archived_at IS NULL AND (? IS NULL OR s.project_id = ?)
+      ORDER BY s.created_at, s.id`,
+      project,
+      project,
+    ).map(toListing);
   }
 
   attachment(session: SessionId): Attachment {

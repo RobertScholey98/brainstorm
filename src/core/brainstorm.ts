@@ -124,6 +124,8 @@ type Loaded = { readonly draft: Pick<BlockDraft, "title" | "props" | "controls">
 /** The last snapshot T3 gave for a thread, and when we last asked. */
 type Seen = { readonly snapshot: ThreadSnapshot | null; readonly checkedAt: number };
 
+const summaryOf = ({ id, projectId, projectName, title, brief, createdAt }: SessionSummary): SessionSummary => ({ id, projectId, projectName, title, brief, createdAt });
+
 /** The one facade over Brainstorm's rules. The store owns SQL, the bridge owns T3, and this class owns policy. */
 export class Brainstorm {
   readonly #store: Store;
@@ -210,14 +212,7 @@ export class Brainstorm {
       if (!info.ok) return info;
       project = info.data.projectId;
     }
-    return ok(
-      this.#store.sessions(project).map((s) => {
-        const attachment = this.#store.attachment(s.id);
-        const latest = this.#store.latestIteration(s.id);
-        const times = [s.createdAt, latest?.createdAt, this.#store.latestRequest(s.id)?.createdAt].filter((t) => t !== undefined);
-        return { ...s, attachedThread: attachment.threadId, lost: attachment.lostAt !== null, latest: latest?.n ?? null, activeAt: times.sort().at(-1) ?? s.createdAt };
-      }),
-    );
+    return ok(this.#store.sessions(project));
   }
 
   async attach(input: { ref: string; thread: ThreadId }): Promise<Result<AttachResult>> {
@@ -252,14 +247,14 @@ export class Brainstorm {
   #match(ref: string, project: ProjectId): Result<SessionSummary> {
     const all = this.#store.sessions(null);
     const byId = all.find((s) => s.id === ref);
-    if (byId !== undefined) return ok(byId);
+    if (byId !== undefined) return ok(summaryOf(byId));
     const wanted = ref.toLowerCase();
     const tests = [(s: SessionSummary) => s.title.toLowerCase() === wanted, (s: SessionSummary) => s.title.toLowerCase().includes(wanted)];
     for (const pool of [all.filter((s) => s.projectId === project), all]) {
       for (const test of tests) {
         const [first, ...more] = pool.filter(test);
         if (first === undefined) continue;
-        if (more.length === 0) return ok(first);
+        if (more.length === 0) return ok(summaryOf(first));
         const candidates = [first, ...more].map((s) => ({ id: s.id, title: s.title }));
         return fail({
           code: "ambiguous_title",
