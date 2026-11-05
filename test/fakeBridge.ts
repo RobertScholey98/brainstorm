@@ -1,0 +1,83 @@
+import type {
+  AgentBridge,
+  ProjectId,
+  RunId,
+  SendResult,
+  SnapshotResult,
+  ThreadId,
+  ThreadInfo,
+  ThreadMessage,
+} from "../src/core/types";
+
+type FakeThread = { info: ThreadInfo; messages: ThreadMessage[]; missing: boolean };
+
+/**
+ * An in-memory T3 for service tests. `sendMode` picks what the next sends do: deliver, fail without delivering,
+ * deliver and still report failure (the CLI lost the reply), or hang until `release()`.
+ */
+export class FakeBridge implements AgentBridge {
+  readonly threads = new Map<ThreadId, FakeThread>();
+  readonly sent: { thread: ThreadId; message: string }[] = [];
+  sendMode: "deliver" | "fail" | "deliver_then_fail" | "hang" = "deliver";
+  snapshotFails = false;
+  #held: (() => void)[] = [];
+
+  add(id: string, projectId: string, title = "Thread"): ThreadId {
+    const threadId = id as ThreadId;
+    this.threads.set(threadId, {
+      info: {
+        threadId,
+        projectId: projectId as ProjectId,
+        title,
+        link: `https://app.t3.codes/threads/p/${id}`,
+        status: "completed",
+        activeRunId: null,
+        latestRunId: null,
+        pendingRequestCount: 0,
+      },
+      messages: [],
+      missing: false,
+    });
+    return threadId;
+  }
+
+  thread(id: ThreadId): FakeThread {
+    const t = this.threads.get(id);
+    if (t === undefined) throw new Error(`no fake thread ${id}`);
+    return t;
+  }
+
+  /** The agent picks up every queued message in a new run. */
+  startRun(id: ThreadId, run: string, pendingRequestCount = 0): void {
+    const t = this.thread(id);
+    const runId = run as RunId;
+    t.messages = t.messages.map((m) => (m.runId === null ? { ...m, runId } : m));
+    t.info = { ...t.info, status: "running", activeRunId: runId, latestRunId: runId, pendingRequestCount };
+  }
+
+  endRun(id: ThreadId, status: "completed" | "failed"): void {
+    const t = this.thread(id);
+    t.info = { ...t.info, status, activeRunId: null, pendingRequestCount: 0 };
+  }
+
+  release(): void {
+    for (const resolve of this.#held.splice(0)) resolve();
+  }
+
+  async send(thread: ThreadId, message: string): Promise<SendResult> {
+    const t = this.threads.get(thread);
+    if (t === undefined || t.missing) return { kind: "failed", error: `Thread ${thread} is no longer available.` };
+    if (this.sendMode === "hang") await new Promise<void>((resolve) => this.#held.push(resolve));
+    if (this.sendMode === "fail") return { kind: "failed", error: "t3 did not answer within 15 s" };
+    t.messages.push({ role: "user", runId: null, text: message });
+    this.sent.push({ thread, message });
+    return this.sendMode === "deliver_then_fail" ? { kind: "failed", error: "t3 did not answer within 15 s" } : { kind: "sent" };
+  }
+
+  async snapshot(thread: ThreadId, { messages }: { messages: number }): Promise<SnapshotResult> {
+    if (this.snapshotFails) return { kind: "failed", error: "t3 did not answer within 15 s" };
+    const t = this.threads.get(thread);
+    if (t === undefined || t.missing) return { kind: "missing" };
+    return { kind: "found", snapshot: { thread: t.info, messages: t.messages.slice(-messages) } };
+  }
+}
