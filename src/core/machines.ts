@@ -14,8 +14,6 @@ import {
   type ThreadSnapshot,
 } from "./types";
 
-// Feedback.
-
 const LEGAL_EVENTS: { readonly [S in FeedbackStatus["state"]]: readonly FeedbackEventKind[] } = {
   open: ["address"],
   addressed: ["address", "confirm", "reopen"],
@@ -45,8 +43,6 @@ function apply(status: FeedbackStatus, event: FeedbackEvent): FeedbackStatus {
 export function foldFeedback(events: readonly FeedbackEvent[]): FeedbackStatus {
   return events.reduce<FeedbackStatus>(apply, { state: "open", previouslyAddressedIn: null });
 }
-
-// Requests.
 
 export function requestPhase(request: Request, attachment: Attachment, observation: Observation | null): RequestPhase {
   switch (request.state.state) {
@@ -130,8 +126,6 @@ export function observeRequest(session: SessionId, n: RequestN, snapshot: Thread
   if (!isLatest && !laterRun) return { kind: "queued" };
   return { kind: "ended", failed: isLatest && thread.status === "failed" };
 }
-
-// The [brainstorm] message.
 
 const MARKER = /\[brainstorm\] session (\S+) · request (\d+)/;
 

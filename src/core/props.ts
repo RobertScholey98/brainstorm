@@ -199,7 +199,6 @@ function mismatch(schema: PropsSchema | undefined, override: Override): Override
   return check.ok ? null : check.reason;
 }
 
-/** Data samples, then appearance defaults, then the block's applicable overrides. */
 export function resolveProps(schema: PropsSchema, applicable: readonly Override[]): Props {
   const props: Record<string, Json> = {};
   for (const d of schema.data) props[d.name] = d.sample;

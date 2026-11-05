@@ -67,8 +67,6 @@ export function parseBlockId(raw: string): BlockId | null {
   return s && v ? blockIdOf(s, v) : null;
 }
 
-// Props schema (block.json "props"), after parsePropsSchema.
-
 export type DataProp = {
   readonly name: PropName;
   readonly type: "data";
@@ -129,8 +127,6 @@ export type OverrideMismatch = "prop_removed" | "type_changed" | "out_of_range" 
 
 export type InapplicableOverride = { readonly override: Override; readonly reason: OverrideMismatch };
 
-// Controls spec (controls.json), after validateControls.
-
 export type ControlKind = "Slider" | "Select" | "Segmented" | "Colour" | "Toggle" | "Text";
 
 export type SectionElement = {
@@ -150,8 +146,6 @@ export type ControlsSpec = {
   readonly root: string;
   readonly elements: Readonly<Record<string, SectionElement | ControlElement>>;
 };
-
-// Working copy.
 
 /** Relative POSIX path to UTF-8 text. */
 export type FileMap = Readonly<Record<string, string>>;
@@ -261,8 +255,6 @@ export type Parsed<T> =
   | { readonly ok: true; readonly value: T; readonly warnings: readonly Issue[] }
   | { readonly ok: false; readonly issues: readonly Issue[] };
 
-// Failures and the wire result.
-
 export type Failure =
   | { readonly code: "usage"; readonly message: string }
   | { readonly code: "unavailable"; readonly message: string }
@@ -301,8 +293,6 @@ export type FailureCode = Failure["code"];
 
 export type Result<T> = { readonly ok: true; readonly data: T } | { readonly ok: false; readonly error: Failure };
 
-// Feedback.
-
 /** `part: null` pins the whole block. */
 export type Pin = { readonly blockId: BlockId; readonly part: PartName | null };
 
@@ -327,8 +317,6 @@ export type Feedback = {
   readonly history: readonly FeedbackEvent[];
   readonly status: FeedbackStatus;
 };
-
-// Requests.
 
 /** A `described` request has no block list, so its free text is required. */
 export type RequestBody =
@@ -364,8 +352,6 @@ export type Attachment = {
   readonly attachedAt: string;
   readonly lostAt: string | null;
 };
-
-// The T3 side, as the bridge reports it.
 
 export type ThreadStatus = "running" | "completed" | "failed" | "unknown";
 
@@ -423,8 +409,6 @@ export type RequestPhase = { readonly actions: readonly RequestPhaseAction[] } &
   | { readonly phase: "withdrawn" }
 );
 
-// What Rob can do in the window.
-
 export type RobAction =
   | { readonly kind: "set_override"; readonly blockId: BlockId; readonly prop: PropName; readonly value: AppearanceValue }
   | { readonly kind: "clear_override"; readonly blockId: BlockId; readonly prop: PropName }
@@ -439,8 +423,6 @@ export type RobAction =
   | { readonly kind: "retry_request" }
   | { readonly kind: "withdraw_request" }
   | { readonly kind: "check_thread" };
-
-// Read models.
 
 export type SessionSummary = {
   readonly id: SessionId;
@@ -516,8 +498,6 @@ export type SessionView = {
   readonly feedback: readonly Feedback[];
   readonly request: { readonly request: Request; readonly phase: RequestPhase; readonly message: string } | null;
 };
-
-// Canvas frame protocol (postMessage between the renderer and the sandboxed /canvas frame).
 
 export type CanvasModule = {
   readonly blockId: BlockId;
