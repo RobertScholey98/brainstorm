@@ -21,8 +21,10 @@ import {
   blockIdOf,
   issue,
   isError,
+  splitBlockId,
   type AgentBridge,
   type AgentContext,
+  type Attachment,
   type AttachResult,
   type BlockDraft,
   type BlockId,
@@ -66,6 +68,8 @@ import {
 import { blockFile, emitWorkingCopy, readStoredBlock, scanWorkingCopy } from "./workingCopy";
 
 const SNAPSHOT_MESSAGES = 30;
+/** How long view() trusts a failed or missing snapshot before asking T3 again. */
+const UNREACHABLE_TTL_MS = 10_000;
 
 export type BrainstormOptions = {
   readonly dbPath: string;
@@ -74,6 +78,8 @@ export type BrainstormOptions = {
   readonly checker: Checker;
   readonly now?: () => string;
   readonly newSessionId?: () => SessionId;
+  /** Monotonic milliseconds, for the snapshot cache's TTL. */
+  readonly clockMs?: () => number;
 };
 
 export type CommitInput = {
@@ -112,6 +118,12 @@ type Prepared =
       readonly warnings: readonly Issue[];
     };
 
+/** The part of a parsed block that depends only on its content, so it can be shared by every block with that hash. */
+type Loaded = { readonly draft: Pick<BlockDraft, "title" | "props" | "controls">; readonly content: StoredContent };
+
+/** The last snapshot T3 gave for a thread, and when we last asked. */
+type Seen = { readonly snapshot: ThreadSnapshot | null; readonly checkedAt: number };
+
 /** The one facade over Brainstorm's rules. The store owns SQL, the bridge owns T3, and this class owns policy. */
 export class Brainstorm {
   readonly #store: Store;
@@ -120,9 +132,11 @@ export class Brainstorm {
   readonly #exportsDir: string;
   readonly #now: () => string;
   readonly #newSessionId: () => SessionId;
-  readonly #snapshots = new Map<ThreadId, ThreadSnapshot>();
-  readonly #drafts = new Map<string, BlockDraft>();
+  readonly #clockMs: () => number;
+  readonly #seen = new Map<ThreadId, Seen>();
+  readonly #loaded = new Map<ContentHash, Loaded>();
   readonly #listeners = new Set<(session: SessionId) => void>();
+  readonly #emitting = new Set<SessionId>();
   #ticking = false;
 
   private constructor(options: BrainstormOptions) {
@@ -132,6 +146,7 @@ export class Brainstorm {
     this.#exportsDir = options.exportsDir;
     this.#now = options.now ?? (() => new Date().toISOString());
     this.#newSessionId = options.newSessionId ?? randomSessionId;
+    this.#clockMs = options.clockMs ?? (() => performance.now());
   }
 
   /** Opens the database and reconciles requests a previous run left in `sending`. */
@@ -150,8 +165,14 @@ export class Brainstorm {
     return () => this.#listeners.delete(listener);
   }
 
+  /** Tells listeners once per session per microtask, however many writes the current step made. */
   #emit(session: SessionId): void {
-    for (const listener of this.#listeners) listener(session);
+    if (this.#emitting.has(session)) return;
+    this.#emitting.add(session);
+    queueMicrotask(() => {
+      this.#emitting.delete(session);
+      for (const listener of this.#listeners) listener(session);
+    });
   }
 
   // ---- agent commands
@@ -251,7 +272,8 @@ export class Brainstorm {
     if (session === null) return fail(notFound("session", `no session ${id}`));
     const attachment = this.#store.attachment(id);
     const latest = this.#store.latestIteration(id);
-    const schemas = latest === null ? new Map<BlockId, PropsSchema>() : this.#schemas(id, latest.n);
+    const blocks = latest === null ? [] : this.#store.iterationBlocks(id, latest.n);
+    const schemas = this.#schemas(blocks);
     const { applicable } = classifyOverrides(schemas, this.#store.overrides(id));
     const feedback = this.#feedback(id);
     const open = this.#store.openRequest(id);
@@ -260,7 +282,7 @@ export class Brainstorm {
     const addresses = open?.feedbackIds ?? [];
     return ok({
       session: { id, title: session.title, brief: session.brief },
-      latest: latest === null ? null : this.#summary(id, latest),
+      latest: latest === null ? null : this.#summary(id, latest, blocks),
       attached,
       attachedThread: attachment.threadId,
       request:
@@ -421,14 +443,11 @@ export class Brainstorm {
     const { issues: checkIssues, contents } = await this.#check(draft.blocks, overrides);
     if (checkIssues.some(isError)) return fail(validationFailed([...parsed.warnings, ...checkIssues]));
 
-    const partsOf = (hash: ContentHash) => contents.get(hash)?.parts ?? this.#store.content(hash).parts;
-    const before = {
-      schemas: latest === null ? new Map<BlockId, PropsSchema>() : this.#schemas(session, latest.n),
-      parts: new Map(previous.map((b) => [b.id, partsOf(b.hash)])),
-    };
+    const partsOf = (b: IterationBlock) => contents.get(b.hash)?.parts ?? this.#load(b).content.parts;
+    const before = { schemas: this.#schemas(previous), parts: new Map(previous.map((b) => [b.id, partsOf(b)])) };
     const after = {
       schemas: new Map(draft.blocks.map((b) => [b.id, b.props])),
-      parts: new Map(draft.blocks.map((b) => [b.id, partsOf(b.hash)])),
+      parts: new Map(draft.blocks.map((b) => [b.id, partsOf(b)])),
     };
     const request = this.#store.openRequest(session);
     const warnings = [
@@ -469,19 +488,19 @@ export class Brainstorm {
   async view(id: SessionId): Promise<Result<SessionView>> {
     const session = this.#store.session(id);
     if (session === null) return fail(notFound("session", `no session ${id}`));
-    if (!this.#snapshots.has(this.#store.attachment(id).threadId)) await this.#poll(id);
-    const attachment = this.#store.attachment(id);
+    const known = this.#store.attachment(id);
+    const attachment = this.#shouldPoll(known.threadId) ? await this.#poll(id) : known;
     const latest = this.#store.latestIteration(id);
     const { iteration, overrides } = this.#current(id, latest);
     const request = this.#store.latestRequest(id);
     return ok({
       session,
       attachment,
-      thread: this.#snapshots.get(attachment.threadId)?.thread ?? null,
+      thread: this.#seen.get(attachment.threadId)?.snapshot?.thread ?? null,
       iteration,
       overrides,
       feedback: this.#feedback(id),
-      request: request === null ? null : this.#requestView(session, request),
+      request: request === null ? null : this.#requestView(session, request, attachment, iteration),
       regenerate: regenerateGate({ hasIteration: latest !== null, open: this.#store.openRequest(id), attachment }),
     });
   }
@@ -489,32 +508,27 @@ export class Brainstorm {
   /** The latest iteration as Rob sees it, with every override classified against its schemas. */
   #current(id: SessionId, latest: StoredIteration | null): { iteration: IterationView | null; overrides: SessionView["overrides"] } {
     const blocks = latest === null ? [] : this.#store.iterationBlocks(id, latest.n);
-    const drafts = blocks.map((b) => ({ ...b, draft: this.#draft(b), content: this.#store.content(b.hash) }));
-    const overrides = classifyOverrides(new Map(drafts.map((d) => [d.id, d.draft.props])), this.#store.overrides(id));
-    return { iteration: latest === null ? null : this.#iterationView(id, latest, drafts, overrides.applicable), overrides };
+    const overrides = classifyOverrides(this.#schemas(blocks), this.#store.overrides(id));
+    return { iteration: latest === null ? null : this.#iterationView(id, latest, blocks, overrides.applicable), overrides };
   }
 
-  #iterationView(
-    id: SessionId,
-    latest: StoredIteration,
-    drafts: readonly { id: BlockId; draft: BlockDraft; content: StoredContent }[],
-    applicable: readonly Override[],
-  ): IterationView {
+  #iterationView(id: SessionId, latest: StoredIteration, blocks: readonly IterationBlock[], applicable: readonly Override[]): IterationView {
     const choices = this.#store.slotChoices(id);
-    const { slots: _slots, blocks: _blocks, ...summary } = this.#summary(id, latest);
+    const { slots: _slots, blocks: _blocks, ...summary } = this.#summary(id, latest, blocks);
+    const loaded = blocks.map((b) => ({ id: b.id, ...splitBlockId(b.id), ...this.#load(b) }));
     const slots: SlotView[] = latest.slots.flatMap((s) => {
-      const [first, ...rest] = drafts.filter((d) => d.draft.slot === s.id).map((d) => d.draft.variant);
+      const [first, ...rest] = loaded.filter((l) => l.slot === s.id).map((l) => l.variant);
       if (first === undefined) return [];
       const chosen = choices.get(s.id);
       const variants = [first, ...rest] as const;
       return [{ ...s, variants, active: chosen !== undefined && variants.includes(chosen) ? chosen : first }];
     });
-    const blocks: BlockView[] = drafts.map(({ id: blockId, draft, content }) => ({
+    const views: BlockView[] = loaded.map(({ id: blockId, slot, variant, draft, content }) => ({
       id: blockId,
-      slot: draft.slot,
-      variant: draft.variant,
+      slot,
+      variant,
       title: draft.title,
-      hash: draft.hash,
+      hash: content.hash,
       compiled: content.compiled,
       css: content.files.css,
       about: content.files.about,
@@ -526,16 +540,21 @@ export class Brainstorm {
         applicable.filter((o) => o.blockId === blockId),
       ),
     }));
-    return { ...summary, slots, blocks };
+    return { ...summary, slots, blocks: views };
   }
 
-  #requestView(session: SessionSummary, request: Request): NonNullable<SessionView["request"]> {
-    const attachment = this.#store.attachment(session.id);
-    const snapshot = this.#snapshots.get(request.threadId);
-    const observation = snapshot === undefined ? null : observeRequest(session.id, request.n, snapshot);
+  /** `latest` is the latest iteration when the caller already has it, so a request it fulfilled needs no second read. */
+  #requestView(
+    session: SessionSummary,
+    request: Request,
+    attachment: Attachment,
+    latest: Pick<IterationSummary, "n" | "changed"> | null,
+  ): NonNullable<SessionView["request"]> {
+    const snapshot = this.#seen.get(request.threadId)?.snapshot ?? null;
+    const observation = snapshot === null ? null : observeRequest(session.id, request.n, snapshot);
     const phase = requestPhase(request, attachment, observation);
-    const fulfilled = phase.phase === "fulfilled" ? this.#store.iteration(session.id, phase.iteration) : null;
-    const changed = fulfilled === null ? [] : this.#summary(session.id, fulfilled).changed;
+    const changed =
+      phase.phase !== "fulfilled" ? [] : phase.iteration === latest?.n ? latest.changed : this.#changedIn(session.id, phase.iteration);
     return { request, phase, message: phaseMessage(phase, { title: session.title, changed }) };
   }
 
@@ -561,7 +580,7 @@ export class Brainstorm {
       case "set_override": {
         const b = block(action.blockId);
         if (b === undefined) return noBlock(action.blockId);
-        const prop = appearanceProp(this.#draft(b).props, action.prop);
+        const prop = appearanceProp(this.#load(b).draft.props, action.prop);
         if (prop === undefined) return invalid(`${action.prop} is not an appearance prop of ${action.blockId}`);
         const value = parseAppearanceValue(prop, action.value);
         if (!value.ok) return invalid(`${JSON.stringify(action.value)} doesn't fit ${action.prop} (${value.reason})`);
@@ -667,7 +686,7 @@ export class Brainstorm {
     const id = session.id;
     const open = this.#store.openRequest(id);
     if (open === null) return invalid(`${id} has no open request to retry`);
-    const { phase, actions } = this.#requestView(session, open).phase;
+    const { phase, actions } = this.#requestView(session, open, this.#store.attachment(id), null).phase;
     if (!actions.includes("retry") && !actions.includes("resend")) return invalid(`request ${open.n} is ${phase}, so it can't be retried`);
 
     const thread = this.#store.attachment(id).threadId;
@@ -693,7 +712,7 @@ export class Brainstorm {
     if (request === null || request.n !== n) return;
     const result = await this.#bridge.send(thread, formatRequestMessage(request));
     // The cached snapshot predates the message, so the next view must look again.
-    this.#snapshots.delete(thread);
+    this.#seen.delete(thread);
     this.#store.setRequestState(
       id,
       n,
@@ -728,20 +747,34 @@ export class Brainstorm {
     }
   }
 
-  async #poll(id: SessionId): Promise<void> {
-    const thread = this.#store.attachment(id).threadId;
-    const before = JSON.stringify(this.#snapshots.get(thread) ?? null);
-    const lostBefore = this.#store.attachment(id).lostAt !== null;
-    await this.#snapshot(id, thread);
-    const after = JSON.stringify(this.#snapshots.get(thread) ?? null);
-    if (before !== after || lostBefore !== (this.#store.attachment(id).lostAt !== null)) this.#emit(id);
+  /** view() asks T3 only about a thread it has never seen, or one that failed or went missing at least the TTL ago. */
+  #shouldPoll(thread: ThreadId): boolean {
+    const seen = this.#seen.get(thread);
+    return seen === undefined || (seen.snapshot === null && this.#clockMs() - seen.checkedAt >= UNREACHABLE_TTL_MS);
+  }
+
+  /** Snapshots the attached thread, tells listeners if anything Rob sees changed, and returns the attachment after. */
+  async #poll(id: SessionId): Promise<Attachment> {
+    const before = this.#store.attachment(id);
+    const snapshotBefore = JSON.stringify(this.#seen.get(before.threadId)?.snapshot ?? null);
+    await this.#snapshot(id, before.threadId);
+    const after = this.#store.attachment(id);
+    const snapshotAfter = JSON.stringify(this.#seen.get(after.threadId)?.snapshot ?? null);
+    if (snapshotBefore !== snapshotAfter || (before.lostAt !== null) !== (after.lostAt !== null)) this.#emit(id);
+    return after;
+  }
+
+  /** Keeps the last snapshot that was found, so a failed check doesn't blank what Rob already sees. */
+  #remember(thread: ThreadId, result: SnapshotResult): void {
+    const snapshot = result.kind === "found" ? result.snapshot : (this.#seen.get(thread)?.snapshot ?? null);
+    this.#seen.set(thread, { snapshot, checkedAt: this.#clockMs() });
   }
 
   /** Snapshots a thread, caches it, and records loss or recovery when it is the session's attached thread. */
   async #snapshot(id: SessionId, thread: ThreadId): Promise<SnapshotResult> {
     const result = await this.#bridge.snapshot(thread, { messages: SNAPSHOT_MESSAGES });
     const attachment = this.#store.attachment(id);
-    if (result.kind === "found") this.#snapshots.set(thread, result.snapshot);
+    this.#remember(thread, result);
     if (attachment.threadId === thread) {
       if (result.kind === "found" && attachment.lostAt !== null) this.#store.setLost(id, null);
       if (result.kind === "missing" && attachment.lostAt === null) this.#store.setLost(id, this.#now());
@@ -777,9 +810,9 @@ export class Brainstorm {
 
   async #resolveThread(thread: ThreadId): Promise<Result<ThreadInfo>> {
     const result = await this.#bridge.snapshot(thread, { messages: SNAPSHOT_MESSAGES });
+    this.#remember(thread, result);
     switch (result.kind) {
       case "found":
-        this.#snapshots.set(thread, result.snapshot);
         return ok(result.snapshot.thread);
       case "missing":
         return fail({ code: "thread_missing", message: `T3 has no thread ${thread}`, thread });
@@ -795,22 +828,28 @@ export class Brainstorm {
       .map(({ deletedAt: _deleted, ...f }: FeedbackRecord) => ({ ...f, status: foldFeedback(f.history) }));
   }
 
-  #draft(block: IterationBlock): BlockDraft {
-    const key = `${block.id}@${block.hash}`;
-    const cached = this.#drafts.get(key);
+  /** Stored content never changes, so its row and its parse are read once per hash for the life of the service. */
+  #load(block: IterationBlock): Loaded {
+    const cached = this.#loaded.get(block.hash);
     if (cached !== undefined) return cached;
-    const draft = readStoredBlock({ id: block.id, files: this.#store.content(block.hash).files });
+    const content = this.#store.content(block.hash);
+    const draft = readStoredBlock({ id: block.id, files: content.files });
     if (draft === null) throw new Error(`stored block ${block.id} (${block.hash}) no longer parses`);
-    this.#drafts.set(key, draft);
-    return draft;
+    const loaded: Loaded = { draft: { title: draft.title, props: draft.props, controls: draft.controls }, content };
+    this.#loaded.set(block.hash, loaded);
+    return loaded;
   }
 
-  #schemas(id: SessionId, n: IterationN): Map<BlockId, PropsSchema> {
-    return new Map(this.#store.iterationBlocks(id, n).map((b) => [b.id, this.#draft(b).props]));
+  #schemas(blocks: readonly IterationBlock[]): Map<BlockId, PropsSchema> {
+    return new Map(blocks.map((b) => [b.id, this.#load(b).draft.props]));
   }
 
-  #summary(id: SessionId, iteration: StoredIteration): IterationSummary {
-    const blocks = this.#store.iterationBlocks(id, iteration.n);
+  #changedIn(id: SessionId, n: IterationN): readonly BlockId[] {
+    const iteration = this.#store.iteration(id, n);
+    return iteration === null ? [] : this.#summary(id, iteration).changed;
+  }
+
+  #summary(id: SessionId, iteration: StoredIteration, blocks: readonly IterationBlock[] = this.#store.iterationBlocks(id, iteration.n)): IterationSummary {
     const previous = new Map(
       iteration.n > 1 ? this.#store.iterationBlocks(id, (iteration.n - 1) as IterationN).map((b) => [b.id, b.hash]) : [],
     );

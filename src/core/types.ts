@@ -60,6 +60,11 @@ export function blockIdOf(slot: SlotId, variant: VariantKey): BlockId {
   return `${slot}/${variant}` as BlockId;
 }
 
+export function splitBlockId(id: BlockId): { readonly slot: SlotId; readonly variant: VariantKey } {
+  const [slot, variant] = id.split("/") as [SlotId, VariantKey];
+  return { slot, variant };
+}
+
 export function parseBlockId(raw: string): BlockId | null {
   const [slot, variant, ...rest] = raw.split("/");
   if (rest.length > 0 || slot === undefined || variant === undefined) return null;

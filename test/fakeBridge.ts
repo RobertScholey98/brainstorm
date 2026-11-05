@@ -20,6 +20,8 @@ export class FakeBridge implements AgentBridge {
   readonly sent: { thread: ThreadId; message: string }[] = [];
   sendMode: "deliver" | "fail" | "deliver_then_fail" | "hang" = "deliver";
   snapshotFails = false;
+  /** How many times anything asked for a snapshot. */
+  snapshotCalls = 0;
   #held: (() => void)[] = [];
 
   add(id: string, projectId: string, title = "Thread"): ThreadId {
@@ -75,6 +77,7 @@ export class FakeBridge implements AgentBridge {
   }
 
   async snapshot(thread: ThreadId, { messages }: { messages: number }): Promise<SnapshotResult> {
+    this.snapshotCalls += 1;
     if (this.snapshotFails) return { kind: "failed", error: "t3 did not answer within 15 s" };
     const t = this.threads.get(thread);
     if (t === undefined || t.missing) return { kind: "missing" };

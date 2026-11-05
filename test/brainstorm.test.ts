@@ -64,7 +64,7 @@ const data = <T,>(result: Result<T>): T => {
   return result.data;
 };
 
-async function setup() {
+async function setup(clockMs?: () => number) {
   const home = mkdtempSync(join(tmpdir(), "bs-service-"));
   const dbPath = join(home, "brainstorm.db");
   const exportsDir = join(home, "exports");
@@ -73,7 +73,7 @@ async function setup() {
   bridge.add(T2, "proj-a", "Takeover thread");
   bridge.add(T3, "proj-b", "Other project");
   const ids = ["s_wheel01", "s_onbrd02", "s_onbrd03"] as SessionId[];
-  const open = () => Brainstorm.open({ dbPath, exportsDir, bridge, checker, now: () => AT, newSessionId: () => ids.shift() ?? ("s_spare99" as SessionId) });
+  const open = () => Brainstorm.open({ dbPath, exportsDir, bridge, checker, now: () => AT, clockMs, newSessionId: () => ids.shift() ?? ("s_spare99" as SessionId) });
   const service = await open();
   return { service, bridge, open, exportsDir };
 }
@@ -517,6 +517,38 @@ describe("request phases", () => {
     bridge.release();
     await pending;
     restarted.close();
+  });
+});
+
+describe("view and T3", () => {
+  test("view() asks T3 about an unreachable thread at most once per 10 s", async () => {
+    let clock = 0;
+    const { service, bridge, open } = await setup(() => clock);
+    data(await service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: null }));
+    bridge.snapshotFails = true;
+    const restarted = await open();
+    const calls = bridge.snapshotCalls;
+    expect(data(await restarted.view(S)).thread).toBe(null);
+    clock = 9_999;
+    data(await restarted.view(S));
+    data(await restarted.view(S));
+    expect(bridge.snapshotCalls - calls).toBe(1);
+
+    bridge.snapshotFails = false;
+    clock = 10_000;
+    expect(data(await restarted.view(S)).thread?.title).toBe("Design thread");
+    clock = 60_000;
+    data(await restarted.view(S));
+    expect(bridge.snapshotCalls - calls).toBe(2);
+    restarted.close();
+  });
+
+  test("a failed check keeps the thread Rob already sees", async () => {
+    const { service, bridge } = await withIteration();
+    expect(data(await service.view(S)).thread?.title).toBe("Design thread");
+    bridge.snapshotFails = true;
+    data(await service.act(S, { kind: "check_thread" }));
+    expect(data(await service.view(S)).thread?.title).toBe("Design thread");
   });
 });
 
