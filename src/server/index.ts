@@ -34,7 +34,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   const home = options.home ?? brainstormHome();
   mkdirSync(join(home, "exports"), { recursive: true });
   const checker = createChecker();
-  const service = await Brainstorm.open({ dbPath: join(home, "brainstorm.db"), bridge: options.bridge ?? createT3Bridge(), checker });
+  const service = await Brainstorm.open({ dbPath: join(home, "brainstorm.db"), exportsDir: join(home, "exports"), bridge: options.bridge ?? createT3Bridge(), checker });
   const agentToken = token();
   const uiToken = token();
   const version = packageVersion();

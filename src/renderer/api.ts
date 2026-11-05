@@ -1,9 +1,10 @@
-import type { Result, RobAction, SessionId, SessionListing, SessionView } from "../core/types";
+import type { ExportResult, Result, RobAction, SessionId, SessionListing, SessionView } from "../core/types";
 
 export type Api = {
   sessions(): Promise<Result<SessionListing[]>>;
   view(id: SessionId): Promise<Result<SessionView>>;
   act(id: SessionId, action: RobAction): Promise<Result<SessionView>>;
+  exportHtml(id: SessionId): Promise<Result<ExportResult>>;
   /** Calls `onSession` with each changed session id until `signal` aborts, reconnecting after a drop. */
   events(onSession: (id: SessionId) => void, onOpen: () => void, signal: AbortSignal): Promise<void>;
 };
@@ -56,6 +57,7 @@ export function createApi(token: string): Api {
     sessions: () => call("GET", "/v1/ui/sessions"),
     view: (id) => call("GET", `/v1/ui/sessions/${id}`),
     act: (id, action) => call("POST", `/v1/ui/sessions/${id}/actions`, action),
+    exportHtml: (id) => call("POST", `/v1/ui/sessions/${id}/export`),
     events,
   };
 }

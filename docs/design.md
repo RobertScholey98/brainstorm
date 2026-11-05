@@ -248,7 +248,7 @@ Each actor writes its own rows:
   - `check/`: the worker pool plus `checkBlocks(drafts, overridesByBlock) → Map<hash, artifacts | issues>`. Results are keyed by content hash, and `parts` come from the defaults render, so stored artifacts don't depend on Rob's overrides at check time.
   - The three boundary parsers (`parsePropsSchema`, `validateControls`, `parseWorkingCopy`) return `Parsed<T>`: `{ ok: true, value, warnings }` or `{ ok: false, issues }`.
   - `store.ts`: SQL only, private to the service
-  - `brainstorm.ts`: the `Brainstorm` service. It has one method per agent command (`newSession`, `listSessions`, `attach`, `context`, `pull`, `validate`, `commit`), plus `view(sessionId)`, `act(sessionId, RobAction) → SessionView`, `exportHtml(sessionId) → { path }`, `tick()` for the tracker poll, and `subscribe(listener)`.
+  - `brainstorm.ts`: the `Brainstorm` service. It has one method per agent command (`newSession`, `listSessions`, `attach`, `context`, `pull`, `validate`, `commit`), plus `view(sessionId)`, `act(sessionId, RobAction) → SessionView`, `exportHtml(sessionId) → { path, file }`, `tick()` for the tracker poll, and `subscribe(listener)`.
   - `bridge/t3.ts`: the only file that knows the `t3` CLI. It runs `cmd.exe /d /s /c <t3.cmd> …` with the message on stdin, and checks thread ids against `^[0-9a-f-]{36}$`. The path comes from `BRAINSTORM_T3_CLI`, then `T3CODE_CLI_PATH`, then `%USERPROFILE%\.t3\bin\t3.cmd`.
 - `src/server/http.ts`: auth, Host/Origin checks, body parsing into domain types, `Failure` → HTTP status, SSE, static files. It is adaptation, not a pass-through.
 - `src/server/headless.ts`: starts the server with no window and prints the UI URL.
@@ -287,7 +287,9 @@ The registry implements our catalog with shadcn components where their props fit
 
 ## Export
 
-`exportHtml` writes `exports\<session>-i<n>-<yyyyMMdd-HHmmss>.html`. It's one file: `buildCanvasDocument(payload, "export")`, with the runtime and every variant's compiled module inlined, plus the effective props, the active choices and a minimal in-page variant switcher. It needs no network and no server, and loads with no console errors.
+`exportHtml` writes `exports\<session>-i<n>-<yyyyMMdd-HHmmss>.html`, stamped in local time because that is what Rob reads in Explorer. It's one file: `buildCanvasDocument(exportPayload(iteration), "export")`. The payload is what a host would send: `modules` for every variant (so any of them can be shown), `variants` with each slot's variants and titles, and `state` with the frames on Rob's choices and every block's effective props. The runtime draws the in-page switcher from `variants` and switches locally. It needs no network and no server, and loads with no console errors.
+
+The Export button shows the file's path with Show in folder. The renderer has no preload, so Show in folder is a link to `/reveal-export/<file>`. Electron's window-open handler catches it, checks the name is a bare `*.html` file name, calls `shell.showItemInFolder` on it inside `exports`, and opens no window. The server never sees that URL.
 
 ## Verification harness
 

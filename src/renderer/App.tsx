@@ -6,6 +6,7 @@ import {
   type BlockView,
   type CanvasFrame,
   type CanvasPin,
+  type ExportResult,
   type Feedback,
   type FeedbackId,
   type InapplicableOverride,
@@ -25,6 +26,7 @@ import { CanvasHost, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { Inspector } from "./Inspector";
 import { PendingOverrides } from "./overrides";
+import { ExportButton } from "./Export";
 import { CopyPhrase, isOpen, RegenerateMenu, RequestStatus } from "./Regenerate";
 import { Sidebar } from "./Sidebar";
 
@@ -191,7 +193,17 @@ export function App({ api }: { api: Api }) {
 
   return (
     <div className="grid h-full grid-cols-[248px_minmax(0,1fr)_296px] grid-rows-[44px_minmax(0,1fr)]">
-      <TopBar view={view} notice={notice} selected={selectedBlock?.id ?? null} send={send} />
+      <TopBar
+        view={view}
+        notice={notice}
+        selected={selectedBlock?.id ?? null}
+        send={send}
+        exportHtml={async () => {
+          const result = sessionId === null ? null : await api.exportHtml(sessionId);
+          if (result?.ok === false) showNotice(result.error.message);
+          return result?.ok ? result.data : null;
+        }}
+      />
       <Sidebar
         sessions={sessions}
         current={sessionId}
@@ -276,11 +288,13 @@ function TopBar({
   notice,
   selected,
   send,
+  exportHtml,
 }: {
   view: SessionView | null;
   notice: string | null;
   selected: BlockId | null;
   send: (action: RobAction) => Promise<SessionView | null>;
+  exportHtml: () => Promise<ExportResult | null>;
 }) {
   const [menu, setMenu] = useState(false);
   const closeMenu = useCallback(() => setMenu(false), []);
@@ -350,14 +364,7 @@ function TopBar({
           </button>
           {menu && view !== null && regenerateBlocked === null && <RegenerateMenu view={view} selected={selected} onClose={closeMenu} send={send} />}
         </div>
-        <button
-          type="button"
-          disabled
-          title="Export arrives in a later build"
-          className="h-7 rounded-md border border-border px-3 text-[12px] font-medium disabled:opacity-45"
-        >
-          Export
-        </button>
+        <ExportButton disabled={view?.iteration == null} exportHtml={exportHtml} />
       </div>
     </header>
   );

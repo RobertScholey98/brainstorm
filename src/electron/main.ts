@@ -55,8 +55,12 @@ async function run(): Promise<void> {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   const contents = window.webContents;
+  // The renderer has no preload, so Show in folder is a link to /reveal-export/<file> that never opens a window.
   contents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url) && new URL(url).origin !== origin) void shell.openExternal(url);
+    const target = new URL(url);
+    const file = decodeURIComponent(/^\/reveal-export\/([^/]+)$/.exec(target.pathname)?.[1] ?? "");
+    if (target.origin === origin && /^[\w.-]+\.html$/.test(file)) shell.showItemInFolder(join(home, "exports", file));
+    else if (/^https?:$/.test(target.protocol) && target.origin !== origin) void shell.openExternal(url);
     return { action: "deny" };
   });
   // will-frame-navigate also covers the canvas iframe, which block code could otherwise point at any URL.

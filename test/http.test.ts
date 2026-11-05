@@ -81,7 +81,10 @@ describe("http", () => {
       status: 404,
       body: { ok: false, error: { code: "not_found", entity: "block", message: `wheel/neon is not in the latest iteration of ${id}` } },
     });
-    expect((await call("POST", `/v1/ui/sessions/${id}/export`, server.uiToken)).status).toBe(501);
+    expect(await call("POST", `/v1/ui/sessions/${id}/export`, server.uiToken)).toEqual({
+      status: 404,
+      body: { ok: false, error: { code: "not_found", entity: "iteration", message: `${id} has no iteration to export yet` } },
+    });
   });
 
   test("streams a session id over SSE when the session changes", async () => {

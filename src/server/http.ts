@@ -48,7 +48,6 @@ const STATUS: Record<FailureCode, number> = {
   request_open: 409,
   validation_failed: 422,
   invalid_action: 422,
-  not_implemented: 501,
   unavailable: 503,
   internal: 500,
 };

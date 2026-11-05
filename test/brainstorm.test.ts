@@ -1,10 +1,10 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { Brainstorm } from "../src/core/brainstorm";
 import { createChecker } from "../src/core/check";
-import type { BlockId, FeedbackId, FileMap, IterationN, PartName, PropName, Result, SessionId, ThreadId } from "../src/core/types";
+import type { BlockId, FeedbackId, FileMap, IterationN, PartName, PropName, Result, SessionId, SlotId, ThreadId, VariantKey } from "../src/core/types";
 import { FakeBridge } from "./fakeBridge";
 import { wheelProps } from "./fixtures";
 
@@ -65,15 +65,17 @@ const data = <T,>(result: Result<T>): T => {
 };
 
 async function setup() {
-  const dbPath = join(mkdtempSync(join(tmpdir(), "bs-service-")), "brainstorm.db");
+  const home = mkdtempSync(join(tmpdir(), "bs-service-"));
+  const dbPath = join(home, "brainstorm.db");
+  const exportsDir = join(home, "exports");
   const bridge = new FakeBridge();
   bridge.add(T1, "proj-a", "Design thread");
   bridge.add(T2, "proj-a", "Takeover thread");
   bridge.add(T3, "proj-b", "Other project");
   const ids = ["s_wheel01", "s_onbrd02", "s_onbrd03"] as SessionId[];
-  const open = () => Brainstorm.open({ dbPath, bridge, checker, now: () => AT, newSessionId: () => ids.shift() ?? ("s_spare99" as SessionId) });
+  const open = () => Brainstorm.open({ dbPath, exportsDir, bridge, checker, now: () => AT, newSessionId: () => ids.shift() ?? ("s_spare99" as SessionId) });
   const service = await open();
-  return { service, bridge, open };
+  return { service, bridge, open, exportsDir };
 }
 
 async function withIteration() {
@@ -537,6 +539,61 @@ describe("context", () => {
       },
       controlVocabulary: undefined,
       next: [`brainstorm session attach ${S}`, `brainstorm pull ${S}`, `brainstorm validate ${S}`, `brainstorm commit ${S} --addresses 1`],
+    });
+  });
+});
+
+describe("exportHtml", () => {
+  test("writes the latest iteration with every variant, Rob's choices and overrides, named by session, iteration and time", async () => {
+    const { service, exportsDir } = await withIteration();
+    const reelJson = JSON.stringify({ title: "Slot reel", props: { appearance: { headline: { type: "text", label: "Headline", default: "Pull" } } } });
+    data(await service.commit({ session: S, thread: T1, files: copy(1, { "wheel/reel": { tsx: sheetTsx, json: reelJson } }), addresses: [], note: null }));
+    data(await service.act(S, { kind: "select_variant", slot: "wheel" as SlotId, variant: "reel" as VariantKey }));
+    data(await service.act(S, { kind: "set_override", blockId: NEON, prop: "accent" as PropName, value: "#00ff00" }));
+
+    const tz = process.env.TZ;
+    process.env.TZ = "UTC";
+    const result = await service.exportHtml(S);
+    process.env.TZ = tz;
+    const file = "s_wheel01-i2-20261105-100000.html";
+    expect(result).toEqual({ ok: true, data: { path: join(exportsDir, file), file } });
+
+    const html = readFileSync(join(exportsDir, file), "utf8");
+    const boot = JSON.parse(/<script type="application\/json" id="brainstorm-boot">(.*?)<\/script>/s.exec(html)?.[1] ?? "null");
+    const [modules, variants, state] = boot.messages;
+    expect(boot.mode).toBe("export");
+    expect(modules.modules.map((m: { blockId: string }) => m.blockId)).toEqual(["result/sheet", "wheel/neon", "wheel/reel"]);
+    expect(variants).toEqual({
+      kind: "variants",
+      slots: {
+        wheel: [
+          { blockId: "wheel/neon", title: "Neon wheel" },
+          { blockId: "wheel/reel", title: "Slot reel" },
+        ],
+        result: [{ blockId: "result/sheet", title: "Result sheet" }],
+      },
+    });
+    expect(state).toEqual({
+      kind: "state",
+      frames: [
+        { slot: "wheel", title: "The wheel", frame: FRAME, blockId: "wheel/reel" },
+        { slot: "result", title: "Result", frame: FRAME, blockId: "result/sheet" },
+      ],
+      props: {
+        "result/sheet": { headline: "Kai" },
+        "wheel/neon": { people: [{ name: "Kai" }, { name: "Roz" }], spinSeconds: 1.5, accent: "#00ff00", density: "roomy", showOdds: true, headline: "Who's up?" },
+        "wheel/reel": { headline: "Pull" },
+      },
+      selected: null,
+    });
+  });
+
+  test("a session with no iteration has nothing to export", async () => {
+    const { service } = await setup();
+    data(await service.newSession({ title: "Empty", brief: "", thread: T1, projectPath: null }));
+    expect(await service.exportHtml(S)).toEqual({
+      ok: false,
+      error: { code: "not_found", entity: "iteration", message: "s_wheel01 has no iteration to export yet" },
     });
   });
 });

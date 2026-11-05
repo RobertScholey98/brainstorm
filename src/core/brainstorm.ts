@@ -1,4 +1,7 @@
 import { randomBytes } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { buildCanvasDocument, exportPayload } from "../canvas/document";
 import type { Checker } from "./check";
 import { controlVocabulary } from "./controls";
 import { canAppend, foldFeedback, formatRequestMessage, observeRequest, phaseMessage, requestPhase } from "./machines";
@@ -16,6 +19,7 @@ import {
   type BlockView,
   type CommitResult,
   type ContentHash,
+  type ExportResult,
   type Failure,
   type Feedback,
   type FeedbackId,
@@ -54,6 +58,8 @@ const SNAPSHOT_MESSAGES = 30;
 
 export type BrainstormOptions = {
   readonly dbPath: string;
+  /** Where exportHtml writes. */
+  readonly exportsDir: string;
   readonly bridge: AgentBridge;
   readonly checker: Checker;
   readonly now?: () => string;
@@ -101,6 +107,7 @@ export class Brainstorm {
   readonly #store: Store;
   readonly #bridge: AgentBridge;
   readonly #checker: Checker;
+  readonly #exportsDir: string;
   readonly #now: () => string;
   readonly #newSessionId: () => SessionId;
   readonly #snapshots = new Map<ThreadId, ThreadSnapshot>();
@@ -112,6 +119,7 @@ export class Brainstorm {
     this.#store = new Store(options.dbPath);
     this.#bridge = options.bridge;
     this.#checker = options.checker;
+    this.#exportsDir = options.exportsDir;
     this.#now = options.now ?? (() => new Date().toISOString());
     this.#newSessionId = options.newSessionId ?? randomSessionId;
   }
@@ -454,19 +462,25 @@ export class Brainstorm {
     if (!this.#snapshots.has(this.#store.attachment(id).threadId)) await this.#poll(id);
     const attachment = this.#store.attachment(id);
     const latest = this.#store.latestIteration(id);
-    const blocks = latest === null ? [] : this.#store.iterationBlocks(id, latest.n);
-    const drafts = blocks.map((b) => ({ ...b, draft: this.#draft(b), content: this.#store.content(b.hash) }));
-    const overrides = classifyOverrides(new Map(drafts.map((d) => [d.id, d.draft.props])), this.#store.overrides(id));
+    const { iteration, overrides } = this.#current(id, latest);
     const request = this.#store.latestRequest(id);
     return ok({
       session,
       attachment,
       thread: this.#snapshots.get(attachment.threadId)?.thread ?? null,
-      iteration: latest === null ? null : this.#iterationView(id, latest, drafts, overrides.applicable),
+      iteration,
       overrides,
       feedback: this.#feedback(id),
       request: request === null ? null : this.#requestView(session, request),
     });
+  }
+
+  /** The latest iteration as Rob sees it, with every override classified against its schemas. */
+  #current(id: SessionId, latest: StoredIteration | null): { iteration: IterationView | null; overrides: SessionView["overrides"] } {
+    const blocks = latest === null ? [] : this.#store.iterationBlocks(id, latest.n);
+    const drafts = blocks.map((b) => ({ ...b, draft: this.#draft(b), content: this.#store.content(b.hash) }));
+    const overrides = classifyOverrides(new Map(drafts.map((d) => [d.id, d.draft.props])), this.#store.overrides(id));
+    return { iteration: latest === null ? null : this.#iterationView(id, latest, drafts, overrides.applicable), overrides };
   }
 
   #iterationView(
@@ -658,8 +672,17 @@ export class Brainstorm {
     );
   }
 
-  async exportHtml(_id: SessionId): Promise<Result<{ path: string }>> {
-    return fail({ code: "not_implemented", message: "export is not built yet" });
+  /** Writes the latest iteration, with Rob's overrides and variant choices, as one offline HTML file. */
+  async exportHtml(id: SessionId): Promise<Result<ExportResult>> {
+    if (this.#store.session(id) === null) return fail(notFound("session", `no session ${id}`));
+    const latest = this.#store.latestIteration(id);
+    const { iteration } = this.#current(id, latest);
+    if (latest === null || iteration === null) return fail(notFound("iteration", `${id} has no iteration to export yet`));
+    const file = `${id}-i${latest.n}-${fileStamp(new Date(this.#now()))}.html`;
+    const path = join(this.#exportsDir, file);
+    mkdirSync(this.#exportsDir, { recursive: true });
+    writeFileSync(path, buildCanvasDocument(exportPayload(iteration), "export"));
+    return ok({ path, file });
   }
 
   // ---- tracker
@@ -774,6 +797,12 @@ export class Brainstorm {
 }
 
 const invalid = (message: string): Failure => ({ code: "invalid_action", message });
+
+/** yyyyMMdd-HHmmss in local time, which is what Rob reads in Explorer. */
+function fileStamp(d: Date): string {
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}`;
+}
 
 const requestBody = (request: Request): RequestBody =>
   request.scope.kind === "described"

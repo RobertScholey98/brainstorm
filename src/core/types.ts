@@ -287,7 +287,6 @@ export type Failure =
   | { readonly code: "thread_missing"; readonly message: string; readonly thread: ThreadId }
   | { readonly code: "request_open"; readonly message: string; readonly n: RequestN }
   | { readonly code: "invalid_action"; readonly message: string }
-  | { readonly code: "not_implemented"; readonly message: string }
   | { readonly code: "internal"; readonly message: string };
 
 export type FailureCode = Failure["code"];
@@ -424,6 +423,9 @@ export type RobAction =
   | { readonly kind: "retry_request" }
   | { readonly kind: "withdraw_request" }
   | { readonly kind: "check_thread" };
+
+/** `file` is the name inside the exports folder. */
+export type ExportResult = { readonly path: string; readonly file: string };
 
 export type SessionSummary = {
   readonly id: SessionId;

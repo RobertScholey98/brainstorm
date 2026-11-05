@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { builtFile } from "../core/packageRoot";
-import type { HostToFrame } from "../core/types";
+import { blockIdOf, type HostToFrame, type IterationView } from "../core/types";
 
 /** Served as a header on /canvas and repeated as a meta tag, so an exported file carries the same policy off disk. */
 export const CANVAS_CSP =
@@ -13,6 +13,25 @@ export const CANVAS_CSP =
 export type CanvasDocumentMode = "live" | "export";
 
 export type CanvasPayload = readonly HostToFrame[];
+
+/**
+ * What a host would send for this iteration, for an export: every variant's module (so the in-page switcher can show
+ * any of them), each slot's variants, and the frames on Rob's choices with every block's effective props.
+ */
+export function exportPayload(iteration: IterationView): CanvasPayload {
+  const variants = (slot: IterationView["slots"][number]) =>
+    slot.variants.flatMap((v) => iteration.blocks.filter((b) => b.id === blockIdOf(slot.id, v)).map((b) => ({ blockId: b.id, title: b.title })));
+  return [
+    { kind: "modules", modules: iteration.blocks.map((b) => ({ blockId: b.id, hash: b.hash, compiled: b.compiled, css: b.css })) },
+    { kind: "variants", slots: Object.fromEntries(iteration.slots.map((s) => [s.id, variants(s)])) },
+    {
+      kind: "state",
+      frames: iteration.slots.map((s) => ({ slot: s.id, title: s.title, frame: s.frame, blockId: blockIdOf(s.id, s.active) })),
+      props: Object.fromEntries(iteration.blocks.map((b) => [b.id, b.effectiveProps])),
+      selected: null,
+    },
+  ];
+}
 
 let runtime: string | null = null;
 
