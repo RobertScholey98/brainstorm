@@ -119,9 +119,11 @@ function receive(message: HostToFrame): void {
       document.body.dataset.mode = message.mode;
       if (message.mode !== "pin") hover = null;
       setState({ mode: message.mode });
+      wake();
       return;
     case "pins":
       setState({ pins: message.pins });
+      wake();
       return;
     case "pulse":
       // A pulse can arrive just before its block renders, so the layout loop runs it once the pin is placed.
@@ -229,6 +231,13 @@ function Canvas() {
                     key={p.id}
                     type="button"
                     className="bs-pin"
+                    ref={(el) => {
+                      if (el === null) return;
+                      markers.set(p.id, el);
+                      return () => {
+                        if (markers.get(p.id) === el) markers.delete(p.id);
+                      };
+                    }}
                     data-pin={p.id}
                     data-status={p.status}
                     aria-label={`Feedback ${p.id}`}
@@ -252,7 +261,10 @@ const PIN_SIZE = 20;
 type Target = { readonly pin: Pin; readonly anchor: Element };
 let hover: Target | null = null;
 let wantedPulse: FeedbackId | null = null;
-let lastPlacement = "";
+let looping = false;
+let lastPlacement: { readonly placed: readonly FeedbackId[]; readonly detached: readonly FeedbackId[] } | null = null;
+/** The rendered marker for each pin, kept by its ref so the layout loop never searches the document for one. */
+const markers = new Map<FeedbackId, HTMLElement>();
 
 /** The nearest data-part inside the block under `target`, or the whole block when there is none. */
 function pickTarget(target: EventTarget | null): Target | null {
@@ -271,15 +283,28 @@ function pickTarget(target: EventTarget | null): Target | null {
 
 const visible = (el: Element) => el.getClientRects().length > 0;
 
+const sameIds = (a: readonly FeedbackId[], b: readonly FeedbackId[]) => a.length === b.length && a.every((id, i) => id === b[i]);
+
+function reportPlacement(placed: readonly FeedbackId[], detached: readonly FeedbackId[]): void {
+  if (lastPlacement !== null && sameIds(placed, lastPlacement.placed) && sameIds(detached, lastPlacement.detached)) return;
+  lastPlacement = { placed, detached };
+  post({ kind: "pin_placement", placed, detached });
+}
+
 function layoutPins(): void {
   const placed: FeedbackId[] = [];
   const detached: FeedbackId[] = [];
   const stacked = new Map<Element, number>();
+  const wrappers = new Map<BlockId, Element | null>();
+  const wrapperOf = (blockId: BlockId) => {
+    if (!wrappers.has(blockId)) wrappers.set(blockId, document.querySelector(`[data-bid="${blockId}"]`));
+    return wrappers.get(blockId) ?? null;
+  };
   for (const { id, pin } of state.pins) {
-    const wrapper = document.querySelector(`[data-bid="${pin.blockId}"]`);
-    const marker = document.querySelector<HTMLElement>(`.bs-pin[data-pin="${id}"]`);
+    const wrapper = wrapperOf(pin.blockId);
+    const marker = markers.get(id);
     const body = wrapper?.closest(".bs-frame-body");
-    if (wrapper == null || marker == null || body == null) continue;
+    if (wrapper == null || marker === undefined || body == null) continue;
     const anchor = pin.part === null ? body : wrapper.querySelector(`[data-part="${CSS.escape(pin.part)}"]`);
     if (anchor === null || !visible(anchor)) {
       detached.push(id);
@@ -313,11 +338,7 @@ function layoutPins(): void {
       marker.classList.add("bs-pulse");
     }
   }
-  const placement = JSON.stringify([placed, detached]);
-  if (placement !== lastPlacement) {
-    lastPlacement = placement;
-    post({ kind: "pin_placement", placed, detached });
-  }
+  reportPlacement(placed, detached);
 }
 
 const highlight = document.createElement("div");
@@ -359,12 +380,28 @@ if (live) {
   }
   window.addEventListener("pointermove", (e) => (hover = state.mode === "pin" ? pickTarget(e.target) : null), true);
   document.documentElement.addEventListener("pointerleave", () => (hover = null));
-  const loop = () => {
-    layoutPins();
-    layoutHover();
-    requestAnimationFrame(loop);
-  };
+  wake();
+}
+
+/** Runs every frame while there are pins to place or a pick to highlight, and stops once there is neither. */
+function loop(): void {
+  if (state.pins.length === 0 && state.mode !== "pin") {
+    looping = false;
+    delete highlight.dataset.on;
+    reportPlacement([], []);
+    return;
+  }
+  looping = true;
+  layoutPins();
+  layoutHover();
   requestAnimationFrame(loop);
+}
+
+function wake(): void {
+  if (live && !looping) {
+    looping = true;
+    requestAnimationFrame(loop);
+  }
 }
 
 const CHROME_CSS = `
