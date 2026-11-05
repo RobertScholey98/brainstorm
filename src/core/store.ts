@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type {
   AppearanceValue,
   Attachment,
@@ -151,6 +151,7 @@ const toEvent = (r: Row): FeedbackEvent => {
 /** SQL only. Private to the Brainstorm service, which owns every rule about what may be written. */
 export class Store {
   readonly #db: DatabaseSync;
+  readonly #statements = new Map<string, StatementSync>();
   #depth = 0;
 
   constructor(path: string) {
@@ -190,16 +191,26 @@ export class Store {
     );
   }
 
+  /** The SQL texts are a small fixed set, so each is prepared once and reused. */
+  #statement(sql: string): StatementSync {
+    let statement = this.#statements.get(sql);
+    if (statement === undefined) {
+      statement = this.#db.prepare(sql);
+      this.#statements.set(sql, statement);
+    }
+    return statement;
+  }
+
   #get(sql: string, ...params: (string | number | null)[]): Row | undefined {
-    return this.#db.prepare(sql).get(...params) as Row | undefined;
+    return this.#statement(sql).get(...params) as Row | undefined;
   }
 
   #all(sql: string, ...params: (string | number | null)[]): Row[] {
-    return this.#db.prepare(sql).all(...params) as Row[];
+    return this.#statement(sql).all(...params) as Row[];
   }
 
   #run(sql: string, ...params: (string | number | null)[]): void {
-    this.#db.prepare(sql).run(...params);
+    this.#statement(sql).run(...params);
   }
 
   schemaVersion(): number {
