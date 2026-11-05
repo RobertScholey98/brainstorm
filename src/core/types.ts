@@ -556,11 +556,18 @@ export type HostToFrame =
       readonly selected: BlockId | null;
     }
   | { readonly kind: "mode"; readonly mode: CanvasMode }
-  | { readonly kind: "pins"; readonly pins: readonly CanvasPin[] };
+  | { readonly kind: "pins"; readonly pins: readonly CanvasPin[] }
+  /** Scrolls a pin into view and pulses it. */
+  | { readonly kind: "pulse"; readonly id: FeedbackId }
+  /** Export only: every variant of each slot, for the in-page switcher. Keyed by SlotId. */
+  | { readonly kind: "variants"; readonly slots: Readonly<Record<string, readonly CanvasVariant[]>> };
+
+export type CanvasVariant = { readonly blockId: BlockId; readonly title: string };
 
 export type FrameToHost =
   | { readonly kind: "ready" }
-  | { readonly kind: "picked"; readonly pin: Pin }
+  /** `at` is where Rob clicked, in the frame's viewport coordinates, so the host can anchor the composer there. */
+  | { readonly kind: "picked"; readonly pin: Pin; readonly at: { readonly x: number; readonly y: number } }
   | { readonly kind: "pin_clicked"; readonly id: FeedbackId }
   | { readonly kind: "select_block"; readonly blockId: BlockId }
   | { readonly kind: "pin_placement"; readonly placed: readonly FeedbackId[]; readonly detached: readonly FeedbackId[] }
