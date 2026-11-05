@@ -15,14 +15,17 @@ import {
   SLOT_ID_PATTERN,
   type BlockDraft,
   type BlockFiles,
+  type BlockId,
   type ContentHash,
   type FileMap,
   type IterationContents,
+  type IterationN,
   type Issue,
   type Parsed,
   type SessionId,
   type SlotId,
   type SlotManifest,
+  type StoredBlock,
   type VariantKey,
   type WorkingCopyDraft,
   type WorkingCopyManifest,
@@ -47,6 +50,10 @@ const BLOCK_FILES = {
 
 type BlockFileName = keyof typeof BLOCK_FILES;
 const BLOCK_FILE_NAMES = Object.keys(BLOCK_FILES) as BlockFileName[];
+const FILE_NAME_OF = Object.fromEntries(BLOCK_FILE_NAMES.map((name) => [BLOCK_FILES[name].key, name])) as Record<
+  keyof BlockFiles,
+  BlockFileName
+>;
 const isBlockFileName = (name: string): name is BlockFileName => Object.hasOwn(BLOCK_FILES, name);
 
 const manifestShape = z.strictObject({
@@ -94,6 +101,11 @@ const inFile = (issues: readonly Issue[], file: string, prefix = ""): Issue[] =>
 type BlockDir = { slot: SlotId; variant: VariantKey; files: Partial<Record<BlockFileName, string>> };
 
 export function parseWorkingCopy(raw: FileMap): Parsed<WorkingCopyDraft> {
+  return scanWorkingCopy(raw).parsed;
+}
+
+/** parseWorkingCopy, plus the blocks that parsed even when others failed, so a caller can check them in the same round. */
+export function scanWorkingCopy(raw: FileMap): { readonly parsed: Parsed<WorkingCopyDraft>; readonly blocks: readonly BlockDraft[] } {
   const issues: Issue[] = [];
   const dirs = new Map<string, BlockDir>();
   const badIds = new Set<string>();
@@ -170,8 +182,8 @@ export function parseWorkingCopy(raw: FileMap): Parsed<WorkingCopyDraft> {
   }
 
   const all = [...issues, ...warnings];
-  if (manifest === null || all.some(isError)) return { ok: false, issues: all };
-  return { ok: true, value: { manifest, blocks }, warnings };
+  if (manifest === null || all.some(isError)) return { parsed: { ok: false, issues: all }, blocks };
+  return { parsed: { ok: true, value: { manifest, blocks }, warnings }, blocks };
 }
 
 function parseManifest(text: string, issues: Issue[]): WorkingCopyManifest | null {
@@ -274,6 +286,51 @@ function parseBlock(dir: BlockDir, issues: Issue[], warnings: Issue[]): BlockDra
     props: props.value,
     controls,
   };
+}
+
+/** Reads a stored block back into its parsed form. Stored blocks passed this same parse when they were committed. */
+export function readStoredBlock(block: StoredBlock): BlockDraft | null {
+  const [slot, variant] = block.id.split("/");
+  const s = parseSlotId(slot ?? "");
+  const v = parseVariantKey(variant ?? "");
+  if (s === null || v === null) return null;
+  const files: BlockDir["files"] = {};
+  for (const name of BLOCK_FILE_NAMES) {
+    const text = block.files[BLOCK_FILES[name].key];
+    if (text !== null) files[name] = text;
+  }
+  return parseBlock({ slot: s, variant: v, files }, [], []);
+}
+
+const manifestJson = (files: FileMap): Record<string, unknown> | null => {
+  const text = files[MANIFEST];
+  if (text === undefined) return null;
+  const json = parseJson(normalize(text), MANIFEST);
+  return json.ok && typeof json.value === "object" && json.value !== null && !Array.isArray(json.value)
+    ? (json.value as Record<string, unknown>)
+    : null;
+};
+
+/** The session a directory's manifest names, or null when it has no readable manifest. */
+export function workingCopySession(files: FileMap): SessionId | null {
+  const session = manifestJson(files)?.session;
+  return typeof session === "string" ? parseSessionId(session) : null;
+}
+
+/** The files to write so the copy records `base` after a commit. Empty when the manifest is unreadable. */
+export function withBase(files: FileMap, base: IterationN): FileMap {
+  const manifest = manifestJson(files);
+  return manifest === null ? {} : { [MANIFEST]: JSON.stringify({ ...manifest, base }, null, 2) + "\n" };
+}
+
+/** The working-copy path of one of a block's files, for issues that point at it. */
+export function blockFile(id: BlockId, key: keyof BlockFiles): string {
+  return `slots/${id}/${FILE_NAME_OF[key]}`;
+}
+
+/** Whether `pull` owns this path: it replaces `slots/` wholesale and rewrites the generated files. */
+export function ownedByPull(path: string): boolean {
+  return path === MANIFEST || IGNORED_ON_COMMIT.has(path) || path.startsWith("slots/");
 }
 
 export function emitWorkingCopy(session: SessionId, iteration: IterationContents | null): FileMap {

@@ -287,6 +287,7 @@ export type Failure =
   | { readonly code: "thread_missing"; readonly message: string; readonly thread: ThreadId }
   | { readonly code: "request_open"; readonly message: string; readonly n: RequestN }
   | { readonly code: "invalid_action"; readonly message: string }
+  | { readonly code: "not_implemented"; readonly message: string }
   | { readonly code: "internal"; readonly message: string };
 
 export type FailureCode = Failure["code"];
@@ -432,6 +433,31 @@ export type SessionSummary = {
   readonly createdAt: string;
 };
 
+export type SessionListing = SessionSummary & {
+  readonly attachedThread: ThreadId;
+  readonly lost: boolean;
+  readonly latest: IterationN | null;
+};
+
+export type NewSessionResult = { readonly session: SessionSummary; readonly attachment: Attachment };
+
+/** `previous` is the thread that owned the session before, or null when the caller already owned it. */
+export type AttachResult = {
+  readonly session: SessionSummary;
+  readonly attachment: Attachment;
+  readonly previous: ThreadId | null;
+};
+
+/** `created: false` is an idempotent replay: nothing changed, and `iteration` is the latest one. */
+export type CommitResult = { readonly iteration: IterationSummary; readonly created: boolean; readonly warnings: readonly Issue[] };
+
+export type ValidateResult = {
+  readonly changed: readonly BlockId[];
+  readonly removed: readonly BlockId[];
+  readonly wouldCreate: boolean;
+  readonly warnings: readonly Issue[];
+};
+
 export type IterationSummary = {
   readonly n: IterationN;
   readonly threadId: ThreadId;
@@ -484,7 +510,7 @@ export type SlotView = {
   readonly active: VariantKey;
 };
 
-export type IterationView = Omit<IterationSummary, "slots"> & {
+export type IterationView = Omit<IterationSummary, "slots" | "blocks"> & {
   readonly slots: readonly SlotView[];
   readonly blocks: readonly BlockView[];
 };
