@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   blockIdOf,
+  framesOf,
   type AppearanceValue,
   type BlockId,
   type BlockView,
-  type CanvasFrame,
   type CanvasPin,
   type ExportResult,
   type Feedback,
@@ -128,10 +128,7 @@ export function App({ api }: { api: Api }) {
   const slot = slots.find((s) => s.id === selectedSlot) ?? slots[0] ?? null;
   const selectedBlock = slot === null ? null : (blocks.find((b) => b.id === blockIdOf(slot.id, slot.active)) ?? null);
 
-  const frames = useMemo<CanvasFrame[]>(
-    () => slots.map((s) => ({ slot: s.id, title: s.title, frame: s.frame, blockId: blockIdOf(s.id, s.active) })),
-    [slots],
-  );
+  const frames = useMemo(() => framesOf(slots), [slots]);
   const frameProps = useMemo(() => {
     const out: Record<string, Props> = {};
     for (const f of frames) {

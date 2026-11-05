@@ -4,6 +4,7 @@ import { shadcnComponents as ui } from "@json-render/shadcn";
 import { RotateCcw } from "lucide-react";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { controlCatalog } from "../core/controls";
+import { HEX_COLOR_PATTERN } from "../core/props";
 import type { AppearanceProp, AppearanceValue, BlockView, PropName } from "../core/types";
 
 type ControlScope = {
@@ -177,8 +178,6 @@ function Text({ props, bindings, emit, on }: ControlProps) {
   );
 }
 
-const HEX = /^#[0-9a-f]{6}$/;
-
 /** A native colour well for dragging, plus a hex field that commits only a complete #rrggbb. */
 function Colour({ props, bindings }: ControlProps) {
   const bound = useBound(bindings, "color");
@@ -190,7 +189,7 @@ function Colour({ props, bindings }: ControlProps) {
   const { scope, spec } = bound;
   const commit = (raw: string) => {
     const hex = (raw.startsWith("#") ? raw : `#${raw}`).toLowerCase();
-    if (HEX.test(hex)) setValue(hex);
+    if (HEX_COLOR_PATTERN.test(hex)) setValue(hex);
   };
   return (
     <Row spec={spec} label={props.label} scope={scope}>

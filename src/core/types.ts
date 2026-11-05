@@ -552,6 +552,11 @@ export type CanvasFrame = {
   readonly blockId: BlockId;
 };
 
+/** The canvas frames for an iteration: each slot showing its active variant, in manifest order. */
+export function framesOf(slots: readonly SlotView[]): CanvasFrame[] {
+  return slots.map((s) => ({ slot: s.id, title: s.title, frame: s.frame, blockId: blockIdOf(s.id, s.active) }));
+}
+
 export type CanvasMode = "view" | "pin";
 
 export type CanvasPin = { readonly id: FeedbackId; readonly pin: Pin; readonly status: FeedbackStatus["state"] };

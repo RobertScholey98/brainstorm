@@ -1,6 +1,7 @@
 import { JSONUIProvider, Renderer } from "@json-render/react";
 import type { Spec } from "@json-render/core";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { HEX_COLOR_PATTERN } from "../core/props";
 import type { AppearanceValue, BlockView, InapplicableOverride, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
 import { ControlScopeContext, controlRegistry, createBlockStore } from "./controls";
 
@@ -12,7 +13,7 @@ const WHY: Record<OverrideMismatch, string> = {
   block_removed: "the block was removed",
 };
 
-const isHex = (value: AppearanceValue): value is string => typeof value === "string" && /^#[0-9a-f]{6}$/.test(value);
+const isHex = (value: AppearanceValue): value is string => typeof value === "string" && HEX_COLOR_PATTERN.test(value);
 
 export function Inspector({
   view,

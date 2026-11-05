@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { builtFile } from "../core/packageRoot";
-import { blockIdOf, type HostToFrame, type IterationView } from "../core/types";
+import { blockIdOf, framesOf, type HostToFrame, type IterationView } from "../core/types";
 
 /** Served as a header on /canvas and repeated as a meta tag, so an exported file carries the same policy off disk. */
 export const CANVAS_CSP =
@@ -26,7 +26,7 @@ export function exportPayload(iteration: IterationView): CanvasPayload {
     { kind: "variants", slots: Object.fromEntries(iteration.slots.map((s) => [s.id, variants(s)])) },
     {
       kind: "state",
-      frames: iteration.slots.map((s) => ({ slot: s.id, title: s.title, frame: s.frame, blockId: blockIdOf(s.id, s.active) })),
+      frames: framesOf(iteration.slots),
       props: Object.fromEntries(iteration.blocks.map((b) => [b.id, b.effectiveProps])),
       selected: null,
     },
