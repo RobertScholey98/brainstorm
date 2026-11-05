@@ -213,7 +213,9 @@ export class Brainstorm {
     return ok(
       this.#store.sessions(project).map((s) => {
         const attachment = this.#store.attachment(s.id);
-        return { ...s, attachedThread: attachment.threadId, lost: attachment.lostAt !== null, latest: this.#store.latestIteration(s.id)?.n ?? null };
+        const latest = this.#store.latestIteration(s.id);
+        const times = [s.createdAt, latest?.createdAt, this.#store.latestRequest(s.id)?.createdAt].filter((t) => t !== undefined);
+        return { ...s, attachedThread: attachment.threadId, lost: attachment.lostAt !== null, latest: latest?.n ?? null, activeAt: times.sort().at(-1) ?? s.createdAt };
       }),
     );
   }

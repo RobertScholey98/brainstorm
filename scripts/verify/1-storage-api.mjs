@@ -154,6 +154,7 @@ try {
           attachedThread: T1,
           lost: false,
           latest: null,
+          activeAt: list.result.data[0].createdAt,
         },
       ],
     },

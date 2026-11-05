@@ -451,6 +451,8 @@ export type SessionListing = SessionSummary & {
   readonly attachedThread: ThreadId;
   readonly lost: boolean;
   readonly latest: IterationN | null;
+  /** The newest of its creation, latest iteration and latest request. */
+  readonly activeAt: string;
 };
 
 export type NewSessionResult = { readonly session: SessionSummary; readonly attachment: Attachment };

@@ -64,7 +64,7 @@ const data = <T,>(result: Result<T>): T => {
   return result.data;
 };
 
-async function setup(clockMs?: () => number) {
+async function setup(clockMs?: () => number, now: () => string = () => AT) {
   const home = mkdtempSync(join(tmpdir(), "bs-service-"));
   const dbPath = join(home, "brainstorm.db");
   const exportsDir = join(home, "exports");
@@ -73,7 +73,7 @@ async function setup(clockMs?: () => number) {
   bridge.add(T2, "proj-a", "Takeover thread");
   bridge.add(T3, "proj-b", "Other project");
   const ids = ["s_wheel01", "s_onbrd02", "s_onbrd03"] as SessionId[];
-  const open = () => Brainstorm.open({ dbPath, exportsDir, bridge, checker, now: () => AT, clockMs, newSessionId: () => ids.shift() ?? ("s_spare99" as SessionId) });
+  const open = () => Brainstorm.open({ dbPath, exportsDir, bridge, checker, now, clockMs, newSessionId: () => ids.shift() ?? ("s_spare99" as SessionId) });
   const service = await open();
   return { service, bridge, open, exportsDir };
 }
@@ -342,6 +342,26 @@ describe("Rob's actions", () => {
     data(await service.act(S, { kind: "add_feedback", pin: { blockId: SHEET, part: null }, text: "bigger" }));
     data(await service.act(S, { kind: "regenerate", scope: { kind: "blocks", blocks: [SHEET] }, freetext: null }));
     expect(bridge.sent.map((m) => m.message.split("\n")[0])).toEqual([`[brainstorm] session ${S} · request 1 · scope: result/sheet · feedback: #2`]);
+  });
+});
+
+describe("listSessions", () => {
+  test("lists each session with its project name, attachment and latest activity", async () => {
+    let at = "2026-11-05T10:00:00.000Z";
+    const { service } = await setup(undefined, () => at);
+    data(await service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: null, projectName: "repo" }));
+    at = "2026-11-05T11:00:00.000Z";
+    data(await service.newSession({ title: "Onboarding", brief: "", thread: T3, projectPath: null, projectName: null }));
+    at = "2026-11-05T12:00:00.000Z";
+    data(await service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: null }));
+    const listed = async () => data(await service.listSessions(null)).map((s) => [s.id, s.projectId, s.projectName, s.latest, s.lost, s.activeAt]);
+    expect(await listed()).toEqual([
+      [S, "proj-a", "repo", 1, false, "2026-11-05T12:00:00.000Z"],
+      ["s_onbrd02", "proj-b", null, null, false, "2026-11-05T11:00:00.000Z"],
+    ]);
+    at = "2026-11-05T13:00:00.000Z";
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null }));
+    expect((await listed())[0]).toEqual([S, "proj-a", "repo", 1, false, "2026-11-05T13:00:00.000Z"]);
   });
 });
 
