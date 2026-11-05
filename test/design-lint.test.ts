@@ -56,6 +56,46 @@ describe("design lint", () => {
     expect(rules(source)).toEqual([{ rule: "off-scale", line: 1, text: "text-open" }]);
   });
 
+  it("surface-recipe: fails a raised fill or floating shadow outside the overlay recipe, kit included", () => {
+    expect(rules(`<div className="rounded-lg bg-raised shadow-md" />\nconst pill = "shadow-lg bg-card shadow-sm";`, true)).toEqual([
+      { rule: "surface-recipe", line: 1, text: "bg-raised" },
+      { rule: "surface-recipe", line: 1, text: "shadow-md" },
+      { rule: "surface-recipe", line: 2, text: "shadow-lg" },
+    ]);
+  });
+
+  it("title-hint: fails a native title on an element or kit component, and allows the iframe's name and plain props", () => {
+    const source = [
+      `import { Button, Hint } from "@/components/ui/button";`,
+      `<span title="Thread lost" />`,
+      `<Button variant="ghost"\n  title={label}>Reset</Button>`,
+      `<iframe title="Canvas" />`,
+      `<SessionPanel title={view.title} />`,
+      `<Hint label="Reset"><Button>Reset</Button></Hint>`,
+    ].join("\n");
+    expect(rules(source)).toEqual([
+      { rule: "title-hint", line: 2, text: "<span title>" },
+      { rule: "title-hint", line: 4, text: "<Button title>" },
+    ]);
+    expect(rules(`<span title="x" />`, true)).toEqual([]);
+  });
+
+  it("kit-override: fails a look class on a kit component with variants, and allows layout", () => {
+    const source = [
+      `import { Button } from "@/components/ui/button";`,
+      `import { Badge as Chip } from "@/components/ui/badge";`,
+      `<Button variant="ghost" className="ml-auto w-fit shrink-0 text-warning hover:bg-warning/10">Dismiss</Button>`,
+      `<Button className={cn("flex-1", open && "bg-muted")} />`,
+      `<Chip className="ml-2" />`,
+      `<Badge className="text-xs" />`,
+    ].join("\n");
+    expect(rules(source)).toEqual([
+      { rule: "kit-override", line: 3, text: "<Button> text-warning" },
+      { rule: "kit-override", line: 3, text: "<Button> hover:bg-warning/10" },
+      { rule: "kit-override", line: 4, text: "<Button> bg-muted" },
+    ]);
+  });
+
   it("passes on the renderer as it stands", async () => {
     expect(await lintRenderer()).toEqual([]);
   });

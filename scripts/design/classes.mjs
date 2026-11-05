@@ -109,3 +109,80 @@ export function splitClass(token) {
 }
 
 export const joinClass = ({ variants, important, negative, utility }) => `${variants}${negative}${utility}${important}`;
+
+/** The index just past the closing quote or backtick that `i` opens, or `i + 1` when a quote has no partner on its line. */
+function skipString(source, i) {
+  const q = source[i];
+  let j = i + 1;
+  while (j < source.length && source[j] !== q) {
+    if (q !== "`" && source[j] === "\n") return i + 1;
+    j += source[j] === "\\" ? 2 : 1;
+  }
+  return j + 1;
+}
+
+/** The index just past the brace that closes the one at `i`. */
+function skipBraces(source, i) {
+  let depth = 0;
+  let j = i;
+  while (j < source.length) {
+    const ch = source[j];
+    if (ch === '"' || ch === "'" || ch === "`") {
+      j = skipString(source, j);
+      continue;
+    }
+    if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) return j + 1;
+    j++;
+  }
+  return j;
+}
+
+/**
+ * Every JSX opening tag in `source`: its name, line, and attributes with the offsets of their values. A `<` counts as
+ * a tag only after a character that can't end an expression, so `useState<Id>` and `a < b` are skipped.
+ */
+export function jsxElements(source) {
+  const out = [];
+  const lineAt = (n) => source.slice(0, n).split("\n").length;
+  const re = /<([A-Za-z][\w.]*)/g;
+  for (let m; (m = re.exec(source)) !== null; ) {
+    const prev = source.slice(0, m.index).trimEnd().at(-1) ?? "";
+    if (/[\w)\]]/.test(prev)) continue;
+    const attrs = [];
+    let i = m.index + m[0].length;
+    while (i < source.length) {
+      const ch = source[i];
+      if (/\s/.test(ch)) i++;
+      else if (ch === ">" || (ch === "/" && source[i + 1] === ">")) break;
+      else if (ch === "{") i = skipBraces(source, i);
+      else {
+        const name = /^[\w:-]+/.exec(source.slice(i))?.[0];
+        if (name === undefined) break;
+        const at = i;
+        i += name.length;
+        if (source[i] !== "=") {
+          attrs.push({ name, line: lineAt(at), start: i, end: i });
+          continue;
+        }
+        const start = i + 1;
+        i = source[start] === "{" ? skipBraces(source, start) : skipString(source, start);
+        attrs.push({ name, line: lineAt(at), start, end: i });
+      }
+    }
+    out.push({ tag: m[1], line: lineAt(m.index), start: m.index, end: i, attrs });
+  }
+  return out;
+}
+
+/** Local names imported from the shadcn kit, `@/components/ui/<file>`. */
+export function kitImports(source) {
+  const names = new Set();
+  for (const m of source.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']@\/components\/ui\/[\w-]+["']/g)) {
+    for (const part of m[1].split(",")) {
+      const local = part.trim().replace(/^type\s+/, "").split(/\s+as\s+/).at(-1)?.trim();
+      if (local) names.add(local);
+    }
+  }
+  return names;
+}
