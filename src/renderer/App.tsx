@@ -19,11 +19,13 @@ import {
   type SlotId,
   type VariantKey,
 } from "../core/types";
+import { takeoverPhrase } from "../core/machines";
 import type { Api } from "./api";
 import { CanvasHost, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { Inspector } from "./Inspector";
 import { PendingOverrides } from "./overrides";
+import { CopyPhrase, isOpen, RegenerateMenu, RequestStatus } from "./Regenerate";
 import { Sidebar } from "./Sidebar";
 
 const NOTICE_MS = 6000;
@@ -189,7 +191,7 @@ export function App({ api }: { api: Api }) {
 
   return (
     <div className="grid h-full grid-cols-[248px_minmax(0,1fr)_296px] grid-rows-[44px_minmax(0,1fr)]">
-      <TopBar view={view} notice={notice} />
+      <TopBar view={view} notice={notice} selected={selectedBlock?.id ?? null} send={send} />
       <Sidebar
         sessions={sessions}
         current={sessionId}
@@ -269,9 +271,32 @@ export function App({ api }: { api: Api }) {
   );
 }
 
-function TopBar({ view, notice }: { view: SessionView | null; notice: string | null }) {
+function TopBar({
+  view,
+  notice,
+  selected,
+  send,
+}: {
+  view: SessionView | null;
+  notice: string | null;
+  selected: BlockId | null;
+  send: (action: RobAction) => Promise<SessionView | null>;
+}) {
+  const [menu, setMenu] = useState(false);
+  const closeMenu = useCallback(() => setMenu(false), []);
   const lost = view?.attachment.lostAt != null;
   const threadName = view?.thread?.title ?? (view === null ? null : `thread ${view.attachment.threadId.slice(0, 8)}`);
+  const open = view !== null && isOpen(view);
+  const regenerateBlocked =
+    view === null || view.iteration === null
+      ? "Regenerate needs a first iteration"
+      : open
+        ? `Request ${view.request?.request.n} is still open. Withdraw it to send another.`
+        : lost
+          ? "This session's thread is gone. Take it over from a T3 thread first."
+          : null;
+  // A lost thread with a request in flight already says so, with the phrase, in the request status.
+  const showTakeover = lost && view?.request?.phase.phase !== "thread_lost";
   return (
     <header className="col-span-3 flex min-w-0 items-center gap-3 border-b border-border bg-background px-3">
       <div className="flex w-[224px] shrink-0 items-center gap-2">
@@ -281,16 +306,28 @@ function TopBar({ view, notice }: { view: SessionView | null; notice: string | n
         <span className="text-[13px] font-semibold">Brainstorm</span>
       </div>
       {view !== null && (
-        <div className="flex min-w-0 items-center gap-3 text-[12px]">
-          <span className="truncate text-[13px] font-medium">{view.session.title}</span>
+        <div className="flex min-w-0 flex-1 items-center gap-3 text-[12px]">
+          <span className="shrink-0 truncate text-[13px] font-medium">{view.session.title}</span>
           {view.iteration !== null && <span className="shrink-0 tabular-nums text-muted-foreground">Iteration {view.iteration.n}</span>}
           {threadName !== null && (
-            <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground" title={view.attachment.threadId}>
+            <span className="flex min-w-0 shrink items-center gap-1.5 text-muted-foreground" title={view.attachment.threadId} data-thread={lost ? "lost" : "attached"}>
               <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${lost ? "bg-warning" : "bg-[#2fa36b]"}`} />
-              <span className="truncate">{lost ? `Lost ${threadName}` : threadName}</span>
+              <span className="truncate">{lost ? "Unattached" : threadName}</span>
             </span>
           )}
-          {view.request !== null && <span className="truncate text-muted-foreground">{view.request.message}</span>}
+          {showTakeover && (
+            <span className="flex min-w-0 items-center gap-2" data-takeover>
+              <span className="truncate text-muted-foreground" title={takeoverPhrase(view.session.title)}>
+                In a T3 thread on this project, say: {takeoverPhrase(view.session.title)}
+              </span>
+              <CopyPhrase title={view.session.title} />
+            </span>
+          )}
+          {view.request !== null && (
+            <span className="flex min-w-0 items-center border-l border-border pl-3">
+              <RequestStatus view={view} send={send} />
+            </span>
+          )}
         </div>
       )}
       <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -299,14 +336,20 @@ function TopBar({ view, notice }: { view: SessionView | null; notice: string | n
             {notice}
           </span>
         )}
-        <button
-          type="button"
-          disabled
-          title="Regenerate arrives with the feedback build"
-          className="h-7 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground disabled:opacity-45"
-        >
-          Regenerate
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            disabled={regenerateBlocked !== null}
+            title={regenerateBlocked ?? "Send a request to the T3 thread"}
+            aria-expanded={menu}
+            data-regenerate-toggle
+            onClick={() => setMenu((m) => !m)}
+            className="h-7 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground disabled:opacity-45"
+          >
+            Regenerate
+          </button>
+          {menu && view !== null && regenerateBlocked === null && <RegenerateMenu view={view} selected={selected} onClose={closeMenu} send={send} />}
+        </div>
         <button
           type="button"
           disabled

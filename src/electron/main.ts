@@ -21,7 +21,6 @@ async function run(): Promise<void> {
 
   await app.whenReady();
   Menu.setApplicationMenu(null);
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
 
   let server: RunningServer;
   try {
@@ -32,6 +31,10 @@ async function run(): Promise<void> {
     return;
   }
   const origin = new URL(server.url).origin;
+  // Copy phrase writes the clipboard from the window; the canvas frame and everything else stay denied.
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) =>
+    callback(permission === "clipboard-sanitized-write" && details.isMainFrame && new URL(details.requestingUrl).origin === origin),
+  );
 
   let closing = false;
   app.on("before-quit", (event) => {
