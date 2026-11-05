@@ -28,6 +28,7 @@ import {
 } from "../core/types";
 import { changedText, scopeText } from "../core/machines";
 import { ownedByPull, withBase, workingCopySession } from "../core/workingCopy";
+import { projectNameAt } from "./projectName";
 
 const MAX_FILES = 300;
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -303,11 +304,13 @@ const COMMANDS: Record<string, Command> = {
       if (isFailure(thread)) return failed(thread);
       const briefFlag = str(flags, "brief");
       const brief = briefFlag === "-" ? (await readStdin()).trim() : (briefFlag ?? "");
+      const project = resolve(str(flags, "project") ?? ".");
       const result = await call<NewSessionResult>("POST", "/v1/agent/sessions", {
         title,
         brief,
         thread,
-        project: resolve(str(flags, "project") ?? "."),
+        project,
+        projectName: projectNameAt(project),
       });
       return {
         result,

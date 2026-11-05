@@ -141,7 +141,22 @@ try {
   const list = cliJson(["session", "list"]);
   check("session list returns the thread's project's sessions", [list.code, list.result], [
     0,
-    { ok: true, data: [{ id: S, projectId: "proj-a", title: "Chore wheel", brief: "Pick who does the chores", createdAt: list.result.data[0].createdAt, attachedThread: T1, lost: false, latest: null }] },
+    {
+      ok: true,
+      data: [
+        {
+          id: S,
+          projectId: "proj-a",
+          projectName: null,
+          title: "Chore wheel",
+          brief: "Pick who does the chores",
+          createdAt: list.result.data[0].createdAt,
+          attachedThread: T1,
+          lost: false,
+          latest: null,
+        },
+      ],
+    },
   ]);
 
   const context = cliJson(["context", S]);

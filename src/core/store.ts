@@ -54,6 +54,7 @@ const MIGRATIONS: readonly string[] = [
     error TEXT, sent_at TEXT, fulfilled_in INTEGER, created_at TEXT NOT NULL, PRIMARY KEY(session_id, n));
   CREATE UNIQUE INDEX one_open_request ON request(session_id) WHERE state IN ('sending','sent','send_failed');
   `,
+  `ALTER TABLE session ADD COLUMN project_name TEXT;`,
 ];
 
 const OPEN_REQUEST = `state IN ('sending','sent','send_failed')`;
@@ -96,6 +97,7 @@ const num = (v: unknown): number => Number(v);
 const toSession = (r: Row): SessionSummary => ({
   id: str(r.id) as SessionId,
   projectId: str(r.project_id) as ProjectId,
+  projectName: strOrNull(r.project_name),
   title: str(r.title),
   brief: str(r.brief),
   createdAt: str(r.created_at),
@@ -225,9 +227,10 @@ export class Store {
   createSession(session: SessionSummary, thread: ThreadId): void {
     this.tx(() => {
       this.#run(
-        "INSERT INTO session(id, project_id, title, brief, created_at) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO session(id, project_id, project_name, title, brief, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         session.id,
         session.projectId,
+        session.projectName,
         session.title,
         session.brief,
         session.createdAt,

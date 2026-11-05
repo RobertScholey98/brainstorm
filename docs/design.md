@@ -144,7 +144,7 @@ brainstorm commit          <session> [--from <dir>] [--thread <id>] [--addresses
 - **`commit`** reads every file under the directory (cap 300 files and 4 MB, skipping `node_modules` and `.git`). On success it rewrites `base` in the directory's `brainstorm.json`.
 
 Rules the server enforces:
-- `session new` resolves the thread through the bridge and creates the `project` row from `thread.projectId` if new. The session is created attached to that thread.
+- `session new` resolves the thread through the bridge and creates the `project` row from `thread.projectId` if new. The session is created attached to that thread. The CLI also sends `projectName`, the folder name of the main checkout (the parent of `git rev-parse --path-format=absolute --git-common-dir` run in `--project`), or null outside git. T3's CLI can't list projects, so this is the only label the app can show for a `projectId`, and a worktree still reports its repo's name.
 - `attach` resolves the caller's thread. It refuses a thread whose `projectId` differs from the session's (`wrong_project`), and for a title that matches more than one session it returns `ambiguous_title` with candidates. Matching is an exact id, then a case-insensitive exact title, then a unique case-insensitive substring. The old attachment row gets `detached_at`.
 - `commit` and `validate` from a thread other than the attached one fail with `thread_not_attached`, naming the owning thread.
 - `commit` writes in one transaction, as follows. `validate` runs steps 1 to 5 and writes nothing.
@@ -181,7 +181,8 @@ The scope is `all`, a block-id list, or `described` (the free text defines it). 
 ```sql
 project(id TEXT PRIMARY KEY, repo_path TEXT, created_at TEXT NOT NULL)            -- id = T3 projectId
 session(id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES project, title TEXT NOT NULL,
-        brief TEXT NOT NULL, created_at TEXT NOT NULL, archived_at TEXT)
+        brief TEXT NOT NULL, created_at TEXT NOT NULL, archived_at TEXT,
+        project_name TEXT)                                                       -- added by migration 2
 attachment(session_id TEXT NOT NULL REFERENCES session, thread_id TEXT NOT NULL,
         attached_at TEXT NOT NULL, detached_at TEXT, lost_at TEXT)
   -- UNIQUE INDEX one_open_attachment ON attachment(session_id) WHERE detached_at IS NULL

@@ -80,7 +80,7 @@ async function setup(clockMs?: () => number) {
 
 async function withIteration() {
   const ctx = await setup();
-  data(await ctx.service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: "C:\\repo" }));
+  data(await ctx.service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: "C:\\repo", projectName: "repo" }));
   data(await ctx.service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: "first cut" }));
   return ctx;
 }
@@ -94,10 +94,10 @@ const SLOTS = [
 describe("commit", () => {
   test("creates a session attached to the caller, then an iteration that pull round-trips", async () => {
     const { service } = await setup();
-    expect(await service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: "C:\\repo" })).toEqual({
+    expect(await service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: "C:\\repo", projectName: "repo" })).toEqual({
       ok: true,
       data: {
-        session: { id: S, projectId: "proj-a", title: "Chore wheel", brief: "Pick who does chores", createdAt: AT },
+        session: { id: S, projectId: "proj-a", projectName: "repo", title: "Chore wheel", brief: "Pick who does chores", createdAt: AT },
         attachment: { session: S, threadId: T1, attachedAt: AT, lostAt: null },
       },
     });
@@ -309,7 +309,7 @@ describe("Rob's actions", () => {
 
   test("view.regenerate says why Regenerate is blocked, and regenerate refuses the same cases", async () => {
     const { service, bridge } = await setup();
-    data(await service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: null }));
+    data(await service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: null, projectName: null }));
     expect(data(await service.view(S)).regenerate).toEqual({ ok: false, reason: "no_iteration" });
     expect(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null })).toEqual({
       ok: false,
@@ -361,8 +361,8 @@ describe("attach", () => {
 
   test("resolves an exact title, lists candidates for an ambiguous one, and records the takeover", async () => {
     const { service } = await withIteration();
-    data(await service.newSession({ title: "Onboarding A", brief: "", thread: T1, projectPath: null }));
-    data(await service.newSession({ title: "Onboarding B", brief: "", thread: T1, projectPath: null }));
+    data(await service.newSession({ title: "Onboarding A", brief: "", thread: T1, projectPath: null, projectName: null }));
+    data(await service.newSession({ title: "Onboarding B", brief: "", thread: T1, projectPath: null, projectName: null }));
     expect(await service.attach({ ref: "onboarding", thread: T2 })).toEqual({
       ok: false,
       error: {
@@ -377,7 +377,7 @@ describe("attach", () => {
     expect(await service.attach({ ref: "CHORE WHEEL", thread: T2 })).toEqual({
       ok: true,
       data: {
-        session: { id: S, projectId: "proj-a", title: "Chore wheel", brief: "Pick who does chores", createdAt: AT },
+        session: { id: S, projectId: "proj-a", projectName: "repo", title: "Chore wheel", brief: "Pick who does chores", createdAt: AT },
         attachment: { session: S, threadId: T2, attachedAt: AT, lostAt: null },
         previous: T1,
       },
@@ -524,7 +524,7 @@ describe("view and T3", () => {
   test("view() asks T3 about an unreachable thread at most once per 10 s", async () => {
     let clock = 0;
     const { service, bridge, open } = await setup(() => clock);
-    data(await service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: null }));
+    data(await service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: null, projectName: null }));
     bridge.snapshotFails = true;
     const restarted = await open();
     const calls = bridge.snapshotCalls;
@@ -682,7 +682,7 @@ describe("exportHtml", () => {
 
   test("a session with no iteration has nothing to export", async () => {
     const { service } = await setup();
-    data(await service.newSession({ title: "Empty", brief: "", thread: T1, projectPath: null }));
+    data(await service.newSession({ title: "Empty", brief: "", thread: T1, projectPath: null, projectName: null }));
     expect(await service.exportHtml(S)).toEqual({
       ok: false,
       error: { code: "not_found", entity: "iteration", message: "s_wheel01 has no iteration to export yet" },

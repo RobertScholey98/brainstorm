@@ -63,11 +63,11 @@ describe("http", () => {
   });
 
   test("maps bodies to domain types and failures to statuses", async () => {
-    expect(await call("POST", "/v1/agent/sessions", agentToken, { title: "", brief: "", thread: "nope", project: null })).toEqual({
+    expect(await call("POST", "/v1/agent/sessions", agentToken, { title: "", brief: "", thread: "nope", project: null, projectName: null })).toEqual({
       status: 400,
       body: { ok: false, error: { code: "usage", message: 'title: Too small: expected string to have >=1 characters; thread: "nope" is not a T3 thread id' } },
     });
-    const created = await call("POST", "/v1/agent/sessions", agentToken, { title: "Chore wheel", brief: "", thread: T1, project: null });
+    const created = await call("POST", "/v1/agent/sessions", agentToken, { title: "Chore wheel", brief: "", thread: T1, project: null, projectName: null });
     expect(created.status).toBe(200);
     const id = created.body.data.session.id;
     expect((await call("POST", "/v1/agent/attach", agentToken, { ref: id, thread: T3 })).body.error.code).toBe("wrong_project");
@@ -92,7 +92,7 @@ describe("http", () => {
   });
 
   test("streams a session id over SSE when the session changes", async () => {
-    const created = await call("POST", "/v1/agent/sessions", agentToken, { title: "Streamed", brief: "", thread: T1, project: null });
+    const created = await call("POST", "/v1/agent/sessions", agentToken, { title: "Streamed", brief: "", thread: T1, project: null, projectName: null });
     const id = created.body.data.session.id;
     const controller = new AbortController();
     const res = await fetch(`${base()}/v1/ui/events`, { headers: { authorization: `Bearer ${server.uiToken}` }, signal: controller.signal });

@@ -63,6 +63,7 @@ const newSessionBody = z.strictObject({
   brief: z.string(),
   thread: threadId,
   project: z.string().nullable(),
+  projectName: z.string().trim().min(1).nullable(),
 });
 const attachBody = z.strictObject({ ref: z.string().trim().min(1), thread: threadId });
 const workingCopyBody = z.strictObject({
@@ -184,7 +185,7 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       auth: "agent",
       handle: async ({ body }) => {
         const b = parseBody(newSessionBody, body);
-        return b.ok ? service.newSession({ title: b.data.title, brief: b.data.brief, thread: b.data.thread, projectPath: b.data.project }) : b;
+        return b.ok ? service.newSession({ title: b.data.title, brief: b.data.brief, thread: b.data.thread, projectPath: b.data.project, projectName: b.data.projectName }) : b;
       },
     },
     {

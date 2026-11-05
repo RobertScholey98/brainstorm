@@ -182,12 +182,14 @@ export class Brainstorm {
     brief: string;
     thread: ThreadId;
     projectPath: string | null;
+    projectName: string | null;
   }): Promise<Result<NewSessionResult>> {
     const thread = await this.#resolveThread(input.thread);
     if (!thread.ok) return thread;
     const session: SessionSummary = {
       id: this.#newSessionId(),
       projectId: thread.data.projectId,
+      projectName: input.projectName,
       title: input.title,
       brief: input.brief,
       createdAt: this.#now(),

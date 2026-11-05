@@ -1,4 +1,5 @@
 import { mkdtempSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
@@ -13,7 +14,7 @@ const at = "2026-11-05T10:00:00.000Z";
 function seeded(path: string): Store {
   const store = new Store(path);
   store.ensureProject("p1" as ProjectId, null, at);
-  store.createSession({ id: session, projectId: "p1" as ProjectId, title: "Wheel", brief: "", createdAt: at }, t1);
+  store.createSession({ id: session, projectId: "p1" as ProjectId, projectName: "brainstorm", title: "Wheel", brief: "", createdAt: at }, t1);
   return store;
 }
 
@@ -21,9 +22,27 @@ test("migrations run once and reopening keeps the data", () => {
   const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
   seeded(path).close();
   const reopened = new Store(path);
-  expect(reopened.schemaVersion()).toBe(1);
-  expect(reopened.session(session)?.title).toBe("Wheel");
+  expect(reopened.schemaVersion()).toBe(2);
+  expect(reopened.session(session)).toEqual({ id: session, projectId: "p1", projectName: "brainstorm", title: "Wheel", brief: "", createdAt: at });
   reopened.close();
+});
+
+test("a version 1 store gains a null project name for the sessions it already has", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
+  const v1 = new DatabaseSync(path);
+  v1.exec(`
+    CREATE TABLE project(id TEXT PRIMARY KEY, repo_path TEXT, created_at TEXT NOT NULL);
+    CREATE TABLE session(id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES project, title TEXT NOT NULL,
+      brief TEXT NOT NULL, created_at TEXT NOT NULL, archived_at TEXT);
+    INSERT INTO project VALUES ('p1', NULL, '${at}');
+    INSERT INTO session VALUES ('${session}', 'p1', 'Wheel', '', '${at}', NULL);
+    PRAGMA user_version = 1;
+  `);
+  v1.close();
+  const store = new Store(path);
+  expect(store.schemaVersion()).toBe(2);
+  expect(store.session(session)).toEqual({ id: session, projectId: "p1", projectName: null, title: "Wheel", brief: "", createdAt: at });
+  store.close();
 });
 
 test("one open attachment and one open request per session", () => {
