@@ -1,20 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import type { BlockId, ExportResult, Regenerate as RegenerateGate, RobAction, SessionView } from "../core/types";
+import type { BlockId, ExportResult, RobAction, SessionView } from "../core/types";
 import { ExportButton } from "./Export";
 import { Regenerate, RequestStatus } from "./Regenerate";
-
-const BLOCKED: Record<Extract<RegenerateGate, { ok: false }>["reason"], (view: SessionView | null) => string> = {
-  no_iteration: () => "Regenerate needs a first iteration",
-  request_open: (view) => `Request ${view?.request?.request.n} is still open. Withdraw it to send another.`,
-  thread_lost: () => "This session's thread is gone. Take it over from a T3 thread first.",
-};
-
-export function blockedReason(view: SessionView | null): string | null {
-  const gate = view?.regenerate ?? { ok: false, reason: "no_iteration" };
-  return gate.ok ? null : BLOCKED[gate.reason](view);
-}
 
 /** The main panel's bar: the session, its iteration and request, then Regenerate and Export. Home shows a title only. */
 export function TopBar({
@@ -69,7 +58,7 @@ export function TopBar({
         )}
         {view !== null && (
           <>
-            <Regenerate view={view} blocked={blockedReason(view)} selected={selected} send={send} />
+            <Regenerate view={view} selected={selected} send={send} />
             <ExportButton disabled={view.iteration === null} exportHtml={exportHtml} />
           </>
         )}

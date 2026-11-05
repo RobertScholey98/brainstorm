@@ -48,6 +48,18 @@ export function regenerateGate(state: { readonly hasIteration: boolean; readonly
   return { ok: true };
 }
 
+/** Regenerate's tooltip when the gate is shut. `open` is the open request's number. */
+export function blockedMessage(reason: Extract<Regenerate, { ok: false }>["reason"], open: RequestN | undefined): string {
+  switch (reason) {
+    case "no_iteration":
+      return "Regenerate needs a first iteration";
+    case "request_open":
+      return `Request ${open} is still open. Withdraw it to send another.`;
+    case "thread_lost":
+      return "This session's thread is gone. Take it over from a T3 thread first.";
+  }
+}
+
 const lastAddressedIn = (status: FeedbackStatus) =>
   status.state === "addressed" ? status.in : status.state === "confirmed" ? status.addressedIn : status.previouslyAddressedIn;
 

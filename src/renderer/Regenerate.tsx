@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { requestFeedback, takeoverPhrase } from "../core/machines";
+import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
 import type { BlockId, BlockView, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
 type ScopeKind = RequestBody["scope"]["kind"];
@@ -35,17 +35,16 @@ function requestBody(scope: RequestScope | null, text: string): RequestBody | nu
 /** Regenerate opens the request form, or, when the gate is shut, stays disabled with the reason as its tooltip. */
 export function Regenerate({
   view,
-  blocked,
   selected,
   send,
 }: {
   view: SessionView;
-  blocked: string | null;
   selected: BlockId | null;
   send: (action: RobAction) => Promise<SessionView | null>;
 }) {
   const [open, setOpen] = useState(false);
-  if (blocked !== null) {
+  const gate = view.regenerate;
+  if (!gate.ok) {
     return (
       <Tooltip>
         <TooltipTrigger render={<span tabIndex={0} />}>
@@ -53,7 +52,7 @@ export function Regenerate({
             Regenerate
           </Button>
         </TooltipTrigger>
-        <TooltipContent>{blocked}</TooltipContent>
+        <TooltipContent>{blockedMessage(gate.reason, view.request?.request.n)}</TooltipContent>
       </Tooltip>
     );
   }

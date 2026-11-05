@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  blockedMessage,
   canAppend,
   foldFeedback,
   formatRequestMessage,
@@ -196,6 +197,14 @@ describe("requestPhase, one test per design.md row", () => {
   test("withdrawn has no actions", () => {
     expect(seen({ state: "withdrawn" }, attached, null)).toEqual({ phase: "withdrawn", actions: [], message: "Withdrawn" });
   });
+});
+
+test("blockedMessage says why Regenerate is shut", () => {
+  expect([blockedMessage("no_iteration", undefined), blockedMessage("request_open", 3 as RequestN), blockedMessage("thread_lost", undefined)]).toEqual([
+    "Regenerate needs a first iteration",
+    "Request 3 is still open. Withdraw it to send another.",
+    "This session's thread is gone. Take it over from a T3 thread first.",
+  ]);
 });
 
 describe("observeRequest", () => {
