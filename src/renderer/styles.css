@@ -1,116 +1,138 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./design.css";
+
+/*
+ * Closed scales. Each namespace is cleared and then listed in full, so an off-scale utility such as p-7 or text-[15px]
+ * generates nothing, and `npm run lint:design` fails it. docs/design-system/adr-001-foundation.md records why each
+ * step is here.
+ */
+@theme {
+  --spacing: initial;
+  --spacing-*: initial;
+  --text-*: initial;
+  --font-weight-*: initial;
+  --leading-*: initial;
+  --tracking-*: initial;
+  --radius-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-shadow-*: initial;
+  --container-*: initial;
+  --font-*: initial;
+
+  /* Spacing: padding, margin, gap and offsets use only these. */
+  --spacing-0: 0px;
+  --spacing-0\.5: 2px;
+  --spacing-1: 4px;
+  --spacing-1\.5: 6px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+
+  /* Sizing only: icons, dots and control heights. The lint keeps these off padding, margin and gap. */
+  --spacing-2\.5: 10px;
+  --spacing-3\.5: 14px;
+  --spacing-4\.5: 18px;
+  --spacing-7: 28px;
+  --spacing-16: 64px;
+
+  /* Layout widths. */
+  --spacing-inspector: 280px;
+  --spacing-popover-sm: 320px;
+  --spacing-popover-md: 380px;
+  --spacing-menu: 144px;
+  --spacing-picker: 220px;
+  --container-xs: 20rem;
+  --container-sm: 24rem;
+  --container-md: 28rem;
+
+  /* Type. Each size carries its line height. 2xs is for numerals in pins and badges only. */
+  --text-2xs: 11px;
+  --text-2xs--line-height: 14px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 18px;
+  --text-base: 14px;
+  --text-base--line-height: 20px;
+  --text-lg: 16px;
+  --text-lg--line-height: 22px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --leading-none: 1;
+  --leading-snug: 1.375;
+  --leading-relaxed: 1.55;
+  --tracking-tight: -0.01em;
+
+  /* Radius: badges and swatches, controls, rows and popovers, the main card. rounded-full is for pins, dots and switches. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Layers. Numeric z-* still compiles, so the lint allows only these names. */
+  --z-index-raised: 10;
+  --z-index-sticky: 20;
+  --z-index-popover: 40;
+  --z-index-tooltip: 50;
+  --z-index-toast: 60;
+}
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--primary);
-  --color-sidebar-primary-foreground: var(--primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--foreground);
-  --color-sidebar-border: var(--border);
-  --color-sidebar-ring: var(--ring);
+  --color-*: initial;
+  --color-app: var(--app);
   --color-canvas: var(--canvas);
-  --color-open: var(--open);
-  --color-addressed: var(--addressed);
-  --color-confirmed: var(--confirmed);
-  --color-attached: var(--attached);
+  --color-card: var(--card);
+  --color-raised: var(--raised);
+  --color-muted: var(--muted);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-ring: var(--ring);
+  --color-inverse: var(--inverse);
+  --color-inverse-fg: var(--inverse-fg);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-hover: var(--accent-hover);
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
   --color-warning: var(--warning);
-  --color-warning-surface: var(--warning-surface);
-  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+
+  --shadow-*: initial;
+  --shadow-xs: var(--elevation-xs);
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
 }
 
-/* The app background is the sidebar's colour; the main panel is a lighter inset card on it. */
+/* tw-animate-css reads this at runtime for its slide offsets. It is not a theme key, so it opens no spacing utilities. */
 :root {
-  color-scheme: light;
-  --radius: 0.625rem;
-  --background: #ffffff;
-  --foreground: #1b1b1a;
-  --card: #ffffff;
-  --popover: #ffffff;
-  --primary: #1f1f1e;
-  --primary-foreground: #fafaf9;
-  --secondary: #f2f2f0;
-  --muted: #f2f2f0;
-  --muted-foreground: #6e6e6a;
-  --accent: #efefec;
-  --destructive: #c4352b;
-  --border: #e6e5e1;
-  --input: #dad9d4;
-  --ring: #a3a29d;
-  --sidebar: #f6f5f2;
-  --sidebar-foreground: #2b2b29;
-  --sidebar-accent: #e9e8e4;
-  /* The canvas frame paints its own background; this matches it so the region never flashes white. */
-  --canvas: #ebecef;
-  /* Feedback colours match the canvas pins, which the frame draws with the same values. */
-  --open: #3b63e6;
-  --addressed: #c77c00;
-  --confirmed: #2a9563;
-  --attached: #2fa36b;
-  --warning: #8a5300;
-  --warning-surface: #fff5df;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --background: #262624;
-    --foreground: #ecebe8;
-    --card: #262624;
-    --popover: #2e2e2b;
-    --primary: #ecebe8;
-    --primary-foreground: #1f1f1d;
-    --secondary: #33332f;
-    --muted: #33332f;
-    --muted-foreground: #a3a29c;
-    --accent: #363632;
-    --destructive: #ff8a7f;
-    --border: #3a3a36;
-    --input: #4a4a45;
-    --ring: #77766f;
-    --sidebar: #1c1c1a;
-    --sidebar-foreground: #dcdbd6;
-    --sidebar-accent: #2c2c29;
-    --canvas: #121316;
-    --open: #7593ff;
-    --addressed: #e9a23b;
-    --confirmed: #4cc38a;
-    --attached: #4cc38a;
-    --warning: #f2b860;
-    --warning-surface: #33280f;
-  }
+  --spacing: 4px;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
-    scrollbar-width: thin;
-    scrollbar-color: var(--input) transparent;
+    @apply border-border outline-ring;
   }
   html,
   body,
@@ -118,9 +140,8 @@
     height: 100%;
   }
   body {
-    @apply bg-sidebar text-foreground antialiased;
+    @apply bg-app font-sans text-sm text-fg antialiased;
     margin: 0;
-    font-family: var(--font-sans);
     overflow: hidden;
   }
 }

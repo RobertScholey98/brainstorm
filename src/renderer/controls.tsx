@@ -197,11 +197,11 @@ function ColourField({ bound }: { bound: Bound<"color"> }) {
   };
   return (
     <Row bound={bound}>
-      <div className="flex h-8 items-center gap-2 rounded-lg border border-input pr-2.5 pl-1 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
+      <div className="flex h-7 items-center gap-2 rounded-lg border border-input pr-2.5 pl-1 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
         <input
           type="color"
           aria-label={`${label} colour`}
-          className="size-6 cursor-pointer rounded-md border-0 bg-transparent p-0 [&::-webkit-color-swatch]:rounded-[5px] [&::-webkit-color-swatch]:border [&::-webkit-color-swatch]:border-foreground/15 [&::-webkit-color-swatch-wrapper]:p-0"
+          className="size-5 cursor-pointer rounded-md border-0 bg-transparent p-0 [&::-webkit-color-swatch]:rounded-[5px] [&::-webkit-color-swatch]:border [&::-webkit-color-swatch]:border-foreground/15 [&::-webkit-color-swatch-wrapper]:p-0"
           value={value}
           onChange={(e) => setValue(e.target.value.toLowerCase())}
         />

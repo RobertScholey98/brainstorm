@@ -2,6 +2,7 @@ import * as React from "react";
 import { Component, type ComponentType, type ReactNode, useSyncExternalStore } from "react";
 import * as JSXRuntime from "react/jsx-runtime";
 import { createRoot } from "react-dom/client";
+import { designCss } from "../core/design";
 import type {
   BlockId,
   CanvasFrame,
@@ -404,102 +405,68 @@ function wake(): void {
 }
 
 const CHROME_CSS = `
-:root {
-  color-scheme: light dark;
-  --bs-canvas: #ebecef;
-  --bs-dot: #d3d5da;
-  --bs-title: #5d636c;
-  --bs-frame: #ffffff;
-  --bs-edge: rgb(15 18 25 / 0.1);
-  --bs-shadow: 0 1px 2px rgb(15 18 25 / 0.06), 0 12px 32px -16px rgb(15 18 25 / 0.28);
-  --bs-accent: #3b63e6;
-  --bs-danger: #c4352b;
-  --bs-addressed: #c77c00;
-  --bs-confirmed: #2a9563;
-  --bs-switch: rgb(15 18 25 / 0.06);
-  --bs-switch-on: #ffffff;
-  --bs-text: #1d1e22;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bs-canvas: #121316;
-    --bs-dot: #26282d;
-    --bs-title: #959aa3;
-    --bs-frame: #1b1c20;
-    --bs-edge: rgb(255 255 255 / 0.08);
-    --bs-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -16px rgb(0 0 0 / 0.7);
-    --bs-accent: #7593ff;
-    --bs-danger: #ff8a7f;
-    --bs-addressed: #e9a23b;
-    --bs-confirmed: #4cc38a;
-    --bs-switch: rgb(255 255 255 / 0.06);
-    --bs-switch-on: #2a2c31;
-    --bs-text: #e7e8eb;
-  }
-}
+${designCss("bs-")}
 html, body { margin: 0; min-height: 100%; }
-html { scrollbar-width: thin; scrollbar-color: var(--bs-dot) transparent; }
 body {
   background-color: var(--bs-canvas);
-  background-image: radial-gradient(var(--bs-dot) 1px, transparent 1.2px);
+  background-image: radial-gradient(color-mix(in oklab, var(--bs-fg) 10%, transparent) 1px, transparent 1.2px);
   background-size: 16px 16px;
-  font: 12px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font: 12px/16px var(--bs-font-ui);
 }
-#canvas { display: flex; align-items: flex-start; gap: 56px; padding: 40px 48px 64px; width: max-content; }
+#canvas { display: flex; align-items: flex-start; gap: 32px; padding: 24px 24px 48px; width: max-content; }
 .bs-frame { flex: none; }
 .bs-frame-title {
   display: flex; justify-content: space-between; gap: 12px;
-  margin: 0 2px 8px; color: var(--bs-title); font-weight: 500; cursor: default; user-select: none;
+  margin: 0 2px 8px; color: var(--bs-fg-muted); font-weight: 500; cursor: default; user-select: none;
 }
-.bs-frame-size { font-variant-numeric: tabular-nums; opacity: 0.7; font-weight: 400; }
+.bs-frame-size { font-variant-numeric: tabular-nums; font-weight: 400; }
 .bs-frame[data-selected] .bs-frame-title { color: var(--bs-accent); }
 .bs-frame-body {
   position: relative; overflow: auto; isolation: isolate;
-  background: var(--bs-frame); border-radius: 4px;
-  box-shadow: 0 0 0 1px var(--bs-edge), var(--bs-shadow);
+  background: var(--bs-card); border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--bs-border), var(--bs-elevation-sm);
   transition: box-shadow 120ms ease-out;
 }
-.bs-frame[data-selected] .bs-frame-body { box-shadow: 0 0 0 2px var(--bs-accent), var(--bs-shadow); }
+.bs-frame[data-selected] .bs-frame-body { box-shadow: 0 0 0 2px var(--bs-accent), var(--bs-elevation-sm); }
 .bs-failure {
-  display: grid; gap: 4px; margin: 16px; padding: 12px 14px; border-radius: 6px;
-  color: var(--bs-danger); background: color-mix(in srgb, var(--bs-danger) 10%, transparent);
-  font: 12px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; white-space: pre-wrap;
+  display: grid; gap: 4px; margin: 16px; padding: 12px; border-radius: 6px;
+  color: var(--bs-danger); background: var(--bs-danger-subtle);
+  font: 12px/16px var(--bs-font-ui); white-space: pre-wrap;
 }
 .bs-switch {
   display: flex; gap: 2px; margin: 0 0 8px; padding: 2px; border-radius: 6px; width: max-content; max-width: 100%;
-  background: var(--bs-switch);
+  background: var(--bs-muted);
 }
 .bs-switch button {
-  height: 24px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--bs-title);
-  font: 500 12px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; cursor: pointer;
+  height: 24px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--bs-fg-muted);
+  font: 500 12px var(--bs-font-ui); cursor: pointer;
 }
-.bs-switch button[aria-checked="true"] { background: var(--bs-switch-on); color: var(--bs-text); box-shadow: 0 0 0 1px var(--bs-edge), 0 1px 2px rgb(0 0 0 / 0.08); }
+.bs-switch button[aria-checked="true"] { background: var(--bs-card); color: var(--bs-fg); box-shadow: 0 0 0 1px var(--bs-border), var(--bs-elevation-xs); }
 .bs-pin {
-  --pin: var(--bs-accent);
   position: absolute; left: 0; top: 0; z-index: 2147483000; display: none; place-items: center;
   width: ${PIN_SIZE}px; height: ${PIN_SIZE}px; box-sizing: border-box; padding: 0;
-  border: 2px solid #fff; border-radius: 10px 10px 10px 3px; background: var(--pin); color: #fff;
-  font: 700 10px/1 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35); cursor: pointer;
+  border: 2px solid var(--bs-card); border-radius: 10px 10px 10px 4px; background: var(--bs-accent); color: var(--bs-accent-fg);
+  font: 600 11px/1 var(--bs-font-ui); font-variant-numeric: tabular-nums;
+  box-shadow: var(--bs-elevation-sm); cursor: pointer;
 }
 .bs-pin[data-placed] { display: grid; }
-.bs-pin[data-status="addressed"] { --pin: var(--bs-addressed); }
-.bs-pin[data-status="confirmed"] { --pin: var(--bs-confirmed); }
-.bs-pin:hover { filter: brightness(1.1); }
+.bs-pin[data-status="addressed"] { background: var(--bs-card); color: var(--bs-accent); border-color: var(--bs-accent); }
+.bs-pin[data-status="confirmed"] { background: var(--bs-muted); color: var(--bs-fg-muted); }
+.bs-pin:hover { filter: brightness(1.08); }
 .bs-pin.bs-pulse { animation: bs-pulse 650ms ease-out 2; }
 @keyframes bs-pulse {
-  0% { box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), 0 0 0 0 color-mix(in srgb, var(--pin) 70%, transparent); scale: 1.25; }
-  100% { box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), 0 0 0 14px transparent; scale: 1; }
+  0% { box-shadow: var(--bs-elevation-sm), 0 0 0 0 color-mix(in oklab, var(--bs-accent) 60%, transparent); scale: 1.25; }
+  100% { box-shadow: var(--bs-elevation-sm), 0 0 0 14px transparent; scale: 1; }
 }
 .bs-pick {
   position: fixed; left: 0; top: 0; z-index: 2147483001; display: none; pointer-events: none; box-sizing: border-box;
-  border-radius: 3px; outline: 2px solid var(--bs-accent); outline-offset: 1px;
-  background: color-mix(in srgb, var(--bs-accent) 10%, transparent);
+  border-radius: 4px; outline: 2px solid var(--bs-accent); outline-offset: 1px;
+  background: color-mix(in oklab, var(--bs-accent) 10%, transparent);
 }
 .bs-pick[data-on] { display: block; }
 .bs-pick span {
-  position: absolute; left: -3px; bottom: calc(100% + 5px); padding: 2px 6px; border-radius: 3px; white-space: nowrap;
-  background: var(--bs-accent); color: #fff; font: 600 11px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  position: absolute; left: -3px; bottom: calc(100% + 6px); padding: 2px 6px; border-radius: 4px; white-space: nowrap;
+  background: var(--bs-accent); color: var(--bs-accent-fg); font: 500 12px/16px var(--bs-font-ui);
 }
 body[data-mode="pin"], body[data-mode="pin"] * { cursor: crosshair !important; }
 body[data-mode="pin"] .bs-pin { cursor: pointer !important; }
