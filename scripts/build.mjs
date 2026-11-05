@@ -46,6 +46,21 @@ const nodeEntry = (entry, out) => () =>
     logLevel: "error",
   });
 
+/** Inlined into every canvas document, live and exported, so it carries its own React. */
+const canvasRuntime = () =>
+  build({
+    entryPoints: [`${root}/src/canvas/runtime.tsx`],
+    outfile: `${root}/dist/canvas/runtime.js`,
+    bundle: true,
+    format: "iife",
+    platform: "browser",
+    target: "chrome130",
+    jsx: "automatic",
+    minify: true,
+    define: { "process.env.NODE_ENV": '"production"' },
+    logLevel: "error",
+  });
+
 /** Electron loads main as CommonJS, where import.meta is empty, so the modules that find the package root get a shim. */
 const electronMain = () =>
   build({
@@ -63,6 +78,7 @@ const electronMain = () =>
 
 export const targets = {
   "check-worker": checkWorker,
+  canvas: canvasRuntime,
   server: nodeEntry("src/server/headless.ts", "dist/server/headless.js"),
   cli: nodeEntry("src/cli/main.ts", "dist/cli/main.js"),
   electron: electronMain,

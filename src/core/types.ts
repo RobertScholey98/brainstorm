@@ -552,6 +552,8 @@ export type HostToFrame =
       readonly frames: readonly CanvasFrame[];
       /** Keyed by BlockId. */
       readonly props: Readonly<Record<string, Props>>;
+      /** The block whose controls are open, outlined in the canvas. */
+      readonly selected: BlockId | null;
     }
   | { readonly kind: "mode"; readonly mode: CanvasMode }
   | { readonly kind: "pins"; readonly pins: readonly CanvasPin[] };

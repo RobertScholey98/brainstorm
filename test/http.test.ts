@@ -98,4 +98,13 @@ describe("http", () => {
     controller.abort();
     expect(text).toContain(`event: session\ndata: {"session":"${id}"}\n\n`);
   });
+
+  test("serves the canvas page with its CSP and no token", async () => {
+    const res = await fetch(`${base()}/canvas`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-security-policy")).toBe(
+      "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'",
+    );
+    expect(await res.text()).toContain('<script type="application/json" id="brainstorm-boot">{"mode":"live","messages":[]}</script>');
+  });
 });

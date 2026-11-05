@@ -259,10 +259,11 @@ Each actor writes its own rows:
 ## Canvas
 
 - **Frame.** `/canvas` serves `buildCanvasDocument(null, "live")` with the CSP header `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'`. Anything that renders in the canvas therefore renders from disk. The runtime reports `securitypolicyviolation` to the host.
-- **Host to frame.** `modules` sends `{ blockId, hash, compiled, css }[]`, only for new hashes. `state` sends `{ frames: { slot, title, frame, blockId }[], props: Record<BlockId, props> }`. `mode` is `view` or `pin`. `pins` sends `{ id, pin, status }[]`.
-- **Frame to host.** The messages are `ready`, `picked { pin }`, `pin_clicked { id }`, `select_block { blockId }`, `pin_placement { placed, detached }` and `block_error { blockId, message }`.
-- **Module cache.** It is keyed by hash, so a regenerate remounts only changed blocks. Each block has its own error boundary.
+- **Host to frame.** `modules` sends `{ blockId, hash, compiled, css }[]`, only for block and hash pairs the frame hasn't had. `state` sends `{ frames: { slot, title, frame, blockId }[], props: Record<BlockId, props>, selected: BlockId | null }`; `selected` outlines the block whose controls are open. `mode` is `view` or `pin`. `pins` sends `{ id, pin, status }[]`. On every `ready` the host resends everything, so a reloaded frame recovers.
+- **Frame to host.** The messages are `ready`, `picked { pin }`, `pin_clicked { id }`, `select_block { blockId }` (a pointer-down anywhere in a frame), `pin_placement { placed, detached }`, `block_error { blockId, message }` and `csp_violation { directive, blockedUri }`. Each side accepts messages only from the other's window: the host checks `event.source` against the iframe, because the frame's origin is `null`.
+- **Module cache.** It is keyed by hash, so a regenerate remounts only changed blocks. A block's CSS is one `<style>` wrapped in `@scope ([data-bid="<id>"])`, replaced when its hash changes. Each block has its own error boundary, which retries when the block's props change, so a control value that broke a render can be undone.
 - **Layout.** Each slot renders its active variant inside a frame of the manifest's width, titled with the slot title. Frames are laid out in manifest order.
+- **Export.** `buildCanvasDocument(payload, "export")` inlines `payload: HostToFrame[]` as JSON, and the runtime replays it in order as if a host had sent it, with nothing posted back. The document carries the CSP as a meta tag too, so a file opened from disk runs under the same policy.
 - **Pins** are drawn inside the frame, anchored to `[data-bid="b"] [data-part="p"]`, and follow layout changes.
 
 ## Renderer

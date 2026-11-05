@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
+import { buildCanvasDocument, CANVAS_CSP } from "../canvas/document";
 import type { Brainstorm } from "../core/brainstorm";
 import { zBranded } from "../core/parse";
 import {
@@ -269,6 +270,11 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
       if (req.method === "GET" && url.pathname === "/v1/ui/events") {
         return authorized(req, "ui") ? openEvents(req, res) : refuse(res, "a UI token is required");
+      }
+      if (req.method === "GET" && url.pathname === "/canvas") {
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": CANVAS_CSP, "cache-control": "no-store" });
+        res.end(buildCanvasDocument(null, "live"));
+        return;
       }
       if (req.method === "GET" && url.pathname === "/") {
         res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
