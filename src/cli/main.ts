@@ -26,6 +26,7 @@ import {
   type ThreadId,
   type ValidateResult,
 } from "../core/types";
+import { changedText, scopeText } from "../core/machines";
 import { ownedByPull, withBase, workingCopySession } from "../core/workingCopy";
 
 const MAX_FILES = 300;
@@ -219,7 +220,6 @@ function failureLines(error: Failure): string[] {
   }
 }
 
-const changedText = (changed: readonly string[]) => (changed.length === 0 ? "no blocks changed" : `changed ${changed.join(", ")}`);
 const iterationText = (i: IterationSummary) => `iteration ${i.n} · ${i.blocks.length} block${i.blocks.length === 1 ? "" : "s"} · ${changedText(i.changed)}`;
 const feedbackLine = (f: Feedback) =>
   `  #${f.id} ${f.pin.blockId}${f.pin.part === null ? "" : ` [${f.pin.part}]`}: ${f.text}${f.status.state === "addressed" ? ` (addressed in ${f.status.in})` : ""}`;
@@ -234,7 +234,7 @@ function contextLines(c: AgentContext): string[] {
     ...(r === null
       ? ["request: none open"]
       : [
-          `request ${r.n} · base ${r.base ?? "none"} · scope: ${r.scope.kind === "blocks" ? r.scope.blocks.join(", ") : r.scope.kind}${r.freetext === null ? "" : ` · freetext: ${JSON.stringify(r.freetext)}`}`,
+          `request ${r.n} · base ${r.base ?? "none"} · scope: ${scopeText(r.scope)}${r.freetext === null ? "" : ` · freetext: ${JSON.stringify(r.freetext)}`}`,
           ...r.feedback.map(feedbackLine),
           ...r.overrides.map((o) => `  override ${o.blockId} ${o.prop} = ${JSON.stringify(o.value)}`),
         ]),
@@ -265,9 +265,14 @@ const str = (flags: Flags, name: string): string | undefined => {
   return typeof v === "string" ? v : undefined;
 };
 
-function threadFrom(flags: Flags): ThreadId | Failure {
+/** `--thread`, else `$T3CODE_THREAD_ID`. Without either, a required thread is a usage error and an optional one is null. */
+function threadFrom(flags: Flags, options: { required: true }): ThreadId | Failure;
+function threadFrom(flags: Flags, options: { required: false }): ThreadId | null | Failure;
+function threadFrom(flags: Flags, { required }: { required: boolean }): ThreadId | null | Failure {
   const raw = str(flags, "thread") ?? process.env.T3CODE_THREAD_ID;
-  if (raw === undefined || raw === "") return usage("this command needs a thread; pass --thread <id> or set T3CODE_THREAD_ID");
+  if (raw === undefined || raw === "") {
+    return required ? usage("this command needs a thread; pass --thread <id> or set T3CODE_THREAD_ID") : null;
+  }
   return parseThreadId(raw) ?? usage(`"${raw}" is not a T3 thread id`);
 }
 
@@ -294,7 +299,7 @@ const COMMANDS: Record<string, Command> = {
     async run({ flags }) {
       const title = str(flags, "title");
       if (title === undefined || title.trim() === "") return failed(usage("session new needs --title <t>"));
-      const thread = threadFrom(flags);
+      const thread = threadFrom(flags, { required: true });
       if (isFailure(thread)) return failed(thread);
       const briefFlag = str(flags, "brief");
       const brief = briefFlag === "-" ? (await readStdin()).trim() : (briefFlag ?? "");
@@ -320,7 +325,7 @@ const COMMANDS: Record<string, Command> = {
     options: threadOption,
     positionals: [],
     async run({ flags }) {
-      const thread = threadFrom(flags);
+      const thread = threadFrom(flags, { required: true });
       if (isFailure(thread)) return failed(thread);
       const result = await call<SessionListing[]>("GET", `/v1/agent/sessions?thread=${thread}`);
       return {
@@ -340,7 +345,7 @@ const COMMANDS: Record<string, Command> = {
     options: threadOption,
     positionals: ["id|title"],
     async run({ flags, positionals }) {
-      const thread = threadFrom(flags);
+      const thread = threadFrom(flags, { required: true });
       if (isFailure(thread)) return failed(thread);
       const result = await call<AttachResult>("POST", "/v1/agent/attach", { ref: positionals[0], thread });
       return {
@@ -360,9 +365,8 @@ const COMMANDS: Record<string, Command> = {
     async run({ flags, positionals }) {
       const session = sessionFrom(positionals[0]);
       if (isFailure(session)) return failed(session);
-      const raw = str(flags, "thread") ?? process.env.T3CODE_THREAD_ID;
-      const thread = raw === undefined || raw === "" ? null : parseThreadId(raw);
-      if (raw !== undefined && raw !== "" && thread === null) return failed(usage(`"${raw}" is not a T3 thread id`));
+      const thread = threadFrom(flags, { required: false });
+      if (isFailure(thread)) return failed(thread);
       const result = await call<AgentContext>("GET", `/v1/agent/sessions/${session}/context${thread === null ? "" : `?thread=${thread}`}`);
       return { result, lines: result.ok ? contextLines(result.data) : [] };
     },
@@ -388,7 +392,7 @@ const COMMANDS: Record<string, Command> = {
     async run({ flags, positionals }) {
       const session = sessionFrom(positionals[0]);
       if (isFailure(session)) return failed(session);
-      const thread = threadFrom(flags);
+      const thread = threadFrom(flags, { required: true });
       if (isFailure(thread)) return failed(thread);
       const files = readCopy(copyDir(flags, "from", session));
       if (!files.ok) return { result: files, lines: [] };
@@ -412,7 +416,7 @@ const COMMANDS: Record<string, Command> = {
     async run({ flags, positionals }) {
       const session = sessionFrom(positionals[0]);
       if (isFailure(session)) return failed(session);
-      const thread = threadFrom(flags);
+      const thread = threadFrom(flags, { required: true });
       if (isFailure(thread)) return failed(thread);
       const addresses: FeedbackId[] = [];
       for (const raw of (str(flags, "addresses") ?? "").split(",").filter((s) => s.trim() !== "")) {
