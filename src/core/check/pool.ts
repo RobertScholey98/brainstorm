@@ -7,10 +7,6 @@ export type PoolOutcome<R> =
 
 type Pending<J, R> = { readonly job: J; readonly resolve: (outcome: PoolOutcome<R>) => void };
 
-/**
- * Runs one job per worker at a time. A worker that times out or crashes is terminated and dropped, and the next job
- * spawns a fresh one. Idle workers are unref'd so they never keep the process alive.
- */
 export function createPool<J, R>(options: { file: URL; size: number; timeoutMs: number }) {
   const idle: Worker[] = [];
   const queue: Pending<J, R>[] = [];

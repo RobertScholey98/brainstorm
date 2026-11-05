@@ -25,7 +25,7 @@ const RESERVED_PROP_NAMES = new Set(["key", "ref"]);
 
 const label = z.string().min(1);
 
-// Field schemas per prop type, plus the cross-field rule each type adds. GUIDE.md is generated from this table.
+// GUIDE.md is generated from this table.
 export const PROP_TYPES = {
   data: {
     fields: z.strictObject({ type: z.literal("data"), description: z.string().optional(), sample: z.json() }),

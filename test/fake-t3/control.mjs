@@ -1,5 +1,4 @@
-// Moves fake T3 threads the way the real ones move, by editing the state file fake-t3.mjs reads: a run picks up the
-// queued messages, may wait for an answer, and ends completed or failed. Field names follow docs/t3-cli.md.
+// Field names follow docs/t3-cli.md, so threads move through runs the way real T3 threads do.
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 
 export function fakeT3(statePath) {
@@ -27,7 +26,6 @@ export function fakeT3(statePath) {
       update((s) => {
         s.threads[id] = { status: "completed", activeRunId: null, latestRunId: null, pendingRequestCount: 0, messages: [], ...fields };
       }),
-    /** The agent takes every queued message into a new active run. */
     startRun: (id) =>
       update((s) => {
         const t = thread(s, id);

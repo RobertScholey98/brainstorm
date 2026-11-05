@@ -22,7 +22,6 @@ export function zBranded<I, T>(base: z.ZodType<I>, parse: (raw: I) => T | null, 
   });
 }
 
-/** Parses with zod and turns every zod issue into an Issue under one code. */
 export function parseWith<T>(
   schema: z.ZodType<T>,
   value: unknown,

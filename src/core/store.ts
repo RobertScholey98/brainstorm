@@ -26,7 +26,6 @@ import type {
   VariantKey,
 } from "./types";
 
-// Each entry upgrades the schema by one PRAGMA user_version step. Never edit a shipped entry; append a new one.
 const MIGRATIONS: readonly string[] = [
   `
   CREATE TABLE project(id TEXT PRIMARY KEY, repo_path TEXT, created_at TEXT NOT NULL);
@@ -62,7 +61,6 @@ const OPEN_REQUEST = `state IN ('sending','sent','send_failed')`;
 
 type Row = Record<string, unknown>;
 
-/** What a stored content hash holds besides the files. */
 export type StoredContent = {
   readonly hash: ContentHash;
   readonly files: BlockFiles;
@@ -239,7 +237,6 @@ export class Store {
     this.#run("UPDATE project SET name = ? WHERE id = ?", name, id);
   }
 
-  /** Inserts the session and its first attachment together. */
   createSession(session: SessionSummary, thread: ThreadId): void {
     this.tx(() => {
       this.#run(
@@ -259,7 +256,7 @@ export class Store {
     return row === undefined ? null : toSession(row);
   }
 
-  /** Oldest first, each with its open attachment and latest activity. `project: null` lists every project's sessions. */
+  /** `project: null` lists every project's sessions. */
   sessions(project: ProjectId | null): SessionListing[] {
     return this.#all(
       `SELECT s.id, s.project_id, p.name AS project_name, s.title, s.brief, s.created_at, a.thread_id, a.lost_at,
@@ -280,7 +277,6 @@ export class Store {
     return toAttachment(row);
   }
 
-  /** Detaches the current thread and attaches `thread`, in one transaction. */
   reattach(session: SessionId, thread: ThreadId, at: string): void {
     this.tx(() => {
       this.#run("UPDATE attachment SET detached_at = ? WHERE session_id = ? AND detached_at IS NULL", at, session);
@@ -302,7 +298,6 @@ export class Store {
     return row === undefined ? null : toIteration(row);
   }
 
-  /** In block id order. */
   iterationBlocks(session: SessionId, n: IterationN): IterationBlock[] {
     return this.#all("SELECT block_id, hash FROM iteration_block WHERE session_id = ? AND n = ? ORDER BY block_id", session, n).map(
       (r) => ({ id: str(r.block_id) as BlockId, hash: str(r.hash) as ContentHash }),
@@ -330,7 +325,6 @@ export class Store {
     };
   }
 
-  /** The agent's commit: content, iteration, blocks, address events and the request's fulfilment, all or nothing. */
   insertIteration(input: {
     session: SessionId;
     iteration: StoredIteration;
@@ -422,7 +416,7 @@ export class Store {
     );
   }
 
-  /** Includes deleted rows, so callers can tell deleted from unknown. In id order. */
+  /** Includes deleted rows, so callers can tell deleted from unknown. */
   feedback(session: SessionId): FeedbackRecord[] {
     const events = new Map<number, FeedbackEvent[]>();
     for (const r of this.#all("SELECT * FROM feedback_event WHERE session_id = ? ORDER BY feedback_id, seq", session)) {
@@ -519,7 +513,6 @@ export class Store {
     });
   }
 
-  /** Moves a request to `sending`, `sent`, `send_failed` or `withdrawn`. `fulfilled` is written only by a commit. */
   setRequestState(
     session: SessionId,
     n: RequestN,

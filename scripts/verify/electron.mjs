@@ -1,4 +1,3 @@
-// Shared by the verify scripts that drive the real Electron app through Playwright.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,7 +14,6 @@ export function build() {
   execFileSync(process.execPath, [join(root, "scripts", "build.mjs")], { cwd: root, stdio: "inherit" });
 }
 
-/** A temp BRAINSTORM_HOME with the fake T3 thread, and a fresh screenshot directory. */
 export function workspace(name) {
   const home = mkdtempSync(join(tmpdir(), `bs-${name}-`));
   const shots = join(root, "test-results", name);
@@ -47,7 +45,6 @@ export function checks() {
   };
 }
 
-/** Launches the app on `home` and returns it once its server has written api.json. Errors in the window are collected. */
 export async function launch(home, env) {
   const startedAt = Date.now();
   const app = await _electron.launch({ args: [root], env, cwd: root });
@@ -65,7 +62,6 @@ export async function launch(home, env) {
   return { app, window, errors, api };
 }
 
-/** The canvas iframe's Frame, for evaluating inside its document. */
 export async function canvasFrame(window) {
   await window.waitForSelector("iframe[title=Canvas]");
   for (;;) {
@@ -75,14 +71,12 @@ export async function canvasFrame(window) {
   }
 }
 
-/** Opens a brainstorm from the home sidebar, the way Rob does, and returns the canvas frame. */
 export async function openSession(window, id) {
   await window.click(`[data-session="${id}"]`);
   await window.waitForSelector('[data-sidebar-panel="session"]');
   return canvasFrame(window);
 }
 
-/** A block's root element inside the canvas, found through the host-stamped wrapper. */
 export const inBlock = (blockId, part) => `div[data-bid="${blockId}"] [data-part="${part}"]`;
 
 export async function shot(window, shots, name) {

@@ -266,7 +266,6 @@ let lastPlacement: { readonly placed: readonly FeedbackId[]; readonly detached: 
 /** The rendered marker for each pin, kept by its ref so the layout loop never searches the document for one. */
 const markers = new Map<FeedbackId, HTMLElement>();
 
-/** The nearest data-part inside the block under `target`, or the whole block when there is none. */
 function pickTarget(target: EventTarget | null): Target | null {
   if (!(target instanceof Element)) return null;
   const section = target.closest(".bs-frame");

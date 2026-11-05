@@ -20,7 +20,6 @@ export class FakeBridge implements AgentBridge {
   readonly sent: { thread: ThreadId; message: string }[] = [];
   sendMode: "deliver" | "fail" | "deliver_then_fail" | "hang" = "deliver";
   snapshotFails = false;
-  /** How many times anything asked for a snapshot. */
   snapshotCalls = 0;
   #held: (() => void)[] = [];
 
@@ -49,7 +48,6 @@ export class FakeBridge implements AgentBridge {
     return t;
   }
 
-  /** The agent picks up every queued message in a new run. */
   startRun(id: ThreadId, run: string, pendingRequestCount = 0): void {
     const t = this.thread(id);
     const runId = run as RunId;

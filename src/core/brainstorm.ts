@@ -69,7 +69,6 @@ import {
 import { blockFile, emitWorkingCopy, readStoredBlock, scanWorkingCopy } from "./workingCopy";
 
 const SNAPSHOT_MESSAGES = 30;
-/** How long view() trusts a failed or missing snapshot before asking T3 again. */
 const UNREACHABLE_TTL_MS = 10_000;
 
 export type BrainstormOptions = {
@@ -122,12 +121,10 @@ type Prepared =
 /** The part of a parsed block that depends only on its content, so it can be shared by every block with that hash. */
 type Loaded = { readonly draft: Pick<BlockDraft, "title" | "props" | "controls">; readonly content: StoredContent };
 
-/** The last snapshot T3 gave for a thread, and when we last asked. */
 type Seen = { readonly snapshot: ThreadSnapshot | null; readonly checkedAt: number };
 
 const summaryOf = ({ id, projectId, title, brief, createdAt }: SessionSummary): SessionSummary => ({ id, projectId, title, brief, createdAt });
 
-/** The one facade over Brainstorm's rules. The store owns SQL, the bridge owns T3, and this class owns policy. */
 export class Brainstorm {
   readonly #store: Store;
   readonly #bridge: AgentBridge;
@@ -168,7 +165,6 @@ export class Brainstorm {
     return () => this.#listeners.delete(listener);
   }
 
-  /** Tells listeners once per session per microtask, however many writes the current step made. */
   #emit(session: SessionId): void {
     if (this.#emitting.has(session)) return;
     this.#emitting.add(session);
@@ -177,8 +173,6 @@ export class Brainstorm {
       for (const listener of this.#listeners) listener(session);
     });
   }
-
-  // ---- agent commands
 
   async newSession(input: {
     title: string;
@@ -244,7 +238,6 @@ export class Brainstorm {
     });
   }
 
-  /** An exact id, then a case-insensitive exact title, then a unique case-insensitive substring, in the caller's project first. */
   #match(ref: string, project: ProjectId): Result<SessionSummary> {
     const all = this.#store.sessions(null);
     const byId = all.find((s) => s.id === ref);
@@ -483,8 +476,6 @@ export class Brainstorm {
     return { issues, contents };
   }
 
-  // ---- Rob's side
-
   async view(id: SessionId): Promise<Result<SessionView>> {
     const session = this.#store.session(id);
     if (session === null) return fail(notFound("session", `no session ${id}`));
@@ -505,7 +496,6 @@ export class Brainstorm {
     });
   }
 
-  /** The latest iteration as Rob sees it, with every override classified against its schemas. */
   #current(id: SessionId, latest: StoredIteration | null): { iteration: IterationView | null; overrides: SessionView["overrides"] } {
     const blocks = latest === null ? [] : this.#store.iterationBlocks(id, latest.n);
     const overrides = classifyOverrides(this.#schemas(blocks), this.#store.overrides(id));
@@ -721,7 +711,6 @@ export class Brainstorm {
     );
   }
 
-  /** Writes the latest iteration, with Rob's overrides and variant choices, as one offline HTML file. */
   async exportHtml(id: SessionId): Promise<Result<ExportResult>> {
     if (this.#store.session(id) === null) return fail(notFound("session", `no session ${id}`));
     const latest = this.#store.latestIteration(id);
@@ -734,9 +723,6 @@ export class Brainstorm {
     return ok({ path, file });
   }
 
-  // ---- tracker
-
-  /** Polls the attached thread of every session with a sent request. Overlapping ticks are skipped. */
   async tick(): Promise<void> {
     if (this.#ticking) return;
     this.#ticking = true;
@@ -747,13 +733,11 @@ export class Brainstorm {
     }
   }
 
-  /** view() asks T3 only about a thread it has never seen, or one that failed or went missing at least the TTL ago. */
   #shouldPoll(thread: ThreadId): boolean {
     const seen = this.#seen.get(thread);
     return seen === undefined || (seen.snapshot === null && this.#clockMs() - seen.checkedAt >= UNREACHABLE_TTL_MS);
   }
 
-  /** Snapshots the attached thread, tells listeners if anything Rob sees changed, and returns the attachment after. */
   async #poll(id: SessionId): Promise<Attachment> {
     const before = this.#store.attachment(id);
     const snapshotBefore = JSON.stringify(this.#seen.get(before.threadId)?.snapshot ?? null);
@@ -770,7 +754,6 @@ export class Brainstorm {
     this.#seen.set(thread, { snapshot, checkedAt: this.#clockMs() });
   }
 
-  /** Snapshots a thread, caches it, and records loss or recovery when it is the session's attached thread. */
   async #snapshot(id: SessionId, thread: ThreadId): Promise<SnapshotResult> {
     const result = await this.#bridge.snapshot(thread, { messages: SNAPSHOT_MESSAGES });
     const attachment = this.#store.attachment(id);
@@ -805,8 +788,6 @@ export class Brainstorm {
       this.#emit(request.session);
     }
   }
-
-  // ---- reads
 
   async #resolveThread(thread: ThreadId): Promise<Result<ThreadInfo>> {
     const result = await this.#bridge.snapshot(thread, { messages: SNAPSHOT_MESSAGES });
@@ -902,7 +883,6 @@ function stale(base: IterationN | null, latest: IterationN): Failure {
   };
 }
 
-/** Overrides that applied to the previous iteration and don't apply to this one. */
 function droppedOverrides(
   overrides: readonly Override[],
   before: ReadonlyMap<BlockId, PropsSchema>,
@@ -921,7 +901,6 @@ function droppedOverrides(
     );
 }
 
-/** Feedback pinned to something the previous iteration rendered and this one doesn't. */
 function lostPins(
   feedback: readonly Feedback[],
   before: ReadonlyMap<BlockId, readonly PartName[]>,

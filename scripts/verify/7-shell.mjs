@@ -1,6 +1,3 @@
-// Proves the app shell on the seeded demo: the home sidebar groups every brainstorm under its project's name, a
-// click swaps in that brainstorm's sidebar and the back control returns home, a frame wider than the canvas scrolls
-// inside the canvas and never under the Inspector, the page never scrolls sideways, and no Radix is bundled.
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -33,7 +30,6 @@ function gitRepo(name) {
   return { repo, git };
 }
 
-/** A one-slot session in the demo's project, whose frame is wider than the canvas column. */
 function wideSession() {
   const id = newSession("Start a task", DEMO_THREAD, gitRepo("chores").repo);
   const work = join(home, "work", id);
@@ -45,7 +41,6 @@ function wideSession() {
   return id;
 }
 
-/** A repo named kitchen, with the session started from a worktree folder of it, as an agent in T3 would. */
 function kitchenWorktree() {
   const { git } = gitRepo("kitchen");
   const worktree = join(home, "repos", "t3-9f2e11aa");

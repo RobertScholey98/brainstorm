@@ -1,5 +1,3 @@
-// Proves v0.1 item 2 on the real Electron app: blocks render in the sandboxed canvas frame, each slot's variant
-// switch swaps its block, and switching variants keeps another block's override, in the canvas and in the view.
 import { seedDemo } from "../seed-demo.mjs";
 import { build, checks, inBlock, launch, openSession, shot, workspace } from "./electron.mjs";
 

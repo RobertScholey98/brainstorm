@@ -150,10 +150,6 @@ const sameToken = (given: string, expected: string) => timingSafeEqual(digest(gi
 
 export type HttpOptions = { readonly service: Brainstorm; readonly agentToken: string; readonly uiToken: string; readonly version: string };
 
-/**
- * The HTTP adapter over the service: Host and Origin checks, bearer tokens, JSON bodies parsed into domain types, and
- * Failure codes mapped to statuses. Returns the request listener and a closer for open event streams.
- */
 export function createHttpHandler(options: HttpOptions, port: () => number) {
   const { service } = options;
   const streams = new Set<ServerResponse>();

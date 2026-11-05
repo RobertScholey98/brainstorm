@@ -5,8 +5,6 @@ export type NonEmpty<T> = readonly [T, ...T[]];
 
 export type Json = null | boolean | number | string | readonly Json[] | { readonly [key: string]: Json };
 
-// Ids. Each parser is the only place its brand is minted.
-
 export type SessionId = Brand<string, "SessionId">;
 export type ProjectId = Brand<string, "ProjectId">;
 export type ThreadId = Brand<string, "ThreadId">;
@@ -197,8 +195,6 @@ export type IterationContents = {
   readonly blocks: readonly StoredBlock[];
 };
 
-// Issues. Severity is a property of the code, never chosen per call site.
-
 const ISSUE_SEVERITY = {
   invalid_json: "error",
   invalid_manifest: "error",
@@ -256,7 +252,7 @@ export function issue(
 
 export const isError = (i: Issue): boolean => i.severity === "error";
 
-/** What a boundary parser returns. `issues` on failure holds every error and warning found. */
+/** `issues` on failure holds every error and warning found. */
 export type Parsed<T> =
   | { readonly ok: true; readonly value: T; readonly warnings: readonly Issue[] }
   | { readonly ok: false; readonly issues: readonly Issue[] };
@@ -315,7 +311,6 @@ export type FeedbackStatus =
   | { readonly state: "addressed"; readonly in: IterationN }
   | { readonly state: "confirmed"; readonly addressedIn: IterationN; readonly at: string };
 
-/** What Rob can do to one feedback item. `FEEDBACK_ACTIONS` says which apply in each status. */
 export type FeedbackAction = "confirm" | "reopen" | "edit" | "delete";
 
 export type Feedback = {
@@ -328,7 +323,6 @@ export type Feedback = {
   readonly status: FeedbackStatus;
 };
 
-/** A `described` request has no block list, so its free text is required. */
 export type RequestBody =
   | {
       readonly scope: { readonly kind: "all" } | { readonly kind: "blocks"; readonly blocks: NonEmpty<BlockId> };
@@ -396,7 +390,6 @@ export interface AgentBridge {
   snapshot(thread: ThreadId, options: { readonly messages: number }): Promise<SnapshotResult>;
 }
 
-/** Where a sent request's marker message stands in its thread. */
 export type Observation =
   | { readonly kind: "not_seen" }
   | { readonly kind: "queued" }
@@ -533,7 +526,6 @@ export type IterationView = Omit<IterationSummary, "slots" | "blocks"> & {
   readonly blocks: readonly BlockView[];
 };
 
-/** Whether Rob may send a new request, and if not, why. */
 export type Regenerate = { readonly ok: true } | { readonly ok: false; readonly reason: "no_iteration" | "request_open" | "thread_lost" };
 
 export type SessionView = {
@@ -561,7 +553,6 @@ export type CanvasFrame = {
   readonly blockId: BlockId;
 };
 
-/** The canvas frames for an iteration: each slot showing its active variant, in manifest order. */
 export function framesOf(slots: readonly SlotView[]): CanvasFrame[] {
   return slots.map((s) => ({ slot: s.id, title: s.title, frame: s.frame, blockId: blockIdOf(s.id, s.active) }));
 }

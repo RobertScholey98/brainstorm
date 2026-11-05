@@ -32,7 +32,6 @@ function requestBody(scope: RequestScope | null, text: string): RequestBody | nu
   return { scope, freetext };
 }
 
-/** Regenerate opens the request form, or, when the gate is shut, stays disabled with the reason as its tooltip. */
 export function Regenerate({
   view,
   selected,

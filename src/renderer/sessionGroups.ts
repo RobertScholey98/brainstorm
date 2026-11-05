@@ -4,7 +4,6 @@ export type ProjectGroup = { readonly projectId: ProjectId; readonly label: stri
 
 const newestFirst = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
 
-/** The home sidebar's groups, one per project. Groups and the rows in them both run from the most recent activity. */
 export function groupByProject(sessions: readonly SessionListing[]): ProjectGroup[] {
   const groups = new Map<ProjectId, SessionListing[]>();
   for (const s of [...sessions].sort((a, b) => newestFirst(a.activeAt, b.activeAt))) {

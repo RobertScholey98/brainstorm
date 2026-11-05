@@ -35,12 +35,10 @@ export function canAppend(status: FeedbackStatus, kind: FeedbackEventKind): bool
   return LEGAL_EVENTS[status.state].includes(kind);
 }
 
-/** The open feedback a request in this scope carries. */
 export function requestFeedback(feedback: readonly Feedback[], scope: RequestScope): Feedback[] {
   return feedback.filter((f) => f.status.state === "open" && (scope.kind !== "blocks" || scope.blocks.includes(f.pin.blockId)));
 }
 
-/** Whether Rob may send a new request, checked in this order. */
 export function regenerateGate(state: { readonly hasIteration: boolean; readonly open: Request | null; readonly attachment: Attachment }): Regenerate {
   if (!state.hasIteration) return { ok: false, reason: "no_iteration" };
   if (state.open !== null) return { ok: false, reason: "request_open" };
@@ -48,13 +46,12 @@ export function regenerateGate(state: { readonly hasIteration: boolean; readonly
   return { ok: true };
 }
 
-/** Regenerate's tooltip when the gate is shut. `open` is the open request's number. */
-export function blockedMessage(reason: Extract<Regenerate, { ok: false }>["reason"], open: RequestN | undefined): string {
+export function blockedMessage(reason: Extract<Regenerate, { ok: false }>["reason"], openRequest: RequestN | undefined): string {
   switch (reason) {
     case "no_iteration":
       return "Regenerate needs a first iteration";
     case "request_open":
-      return `Request ${open} is still open. Withdraw it to send another.`;
+      return `Request ${openRequest} is still open. Withdraw it to send another.`;
     case "thread_lost":
       return "This session's thread is gone. Take it over from a T3 thread first.";
   }

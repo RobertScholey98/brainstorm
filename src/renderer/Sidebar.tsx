@@ -21,7 +21,6 @@ import { markdownText } from "./markdownSubset";
 import { CopyPhrase } from "./Regenerate";
 import { groupByProject } from "./sessionGroups";
 
-/** The sidebar's frame. It holds `HomePanel` until a brainstorm is open, then that brainstorm's `SessionPanel`. */
 export function AppSidebar({ children }: { children: ReactNode }) {
   return (
     <Sidebar variant="inset" collapsible="offcanvas">

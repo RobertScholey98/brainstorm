@@ -32,7 +32,6 @@ export class PendingOverrides {
     for (const l of this.#listeners) l();
   }
 
-  /** Server props with this block's pending edits on top. */
   effective(blockId: BlockId, server: Props): Props {
     const edits = this.#edits.get(blockId);
     if (edits === undefined || edits.size === 0) return server;
@@ -69,7 +68,6 @@ export class PendingOverrides {
     void this.#send({ kind: "clear_override", blockId, prop });
   }
 
-  /** Drops every sent edit that the server's view now shows. */
   settle(view: SessionView): void {
     for (const block of view.iteration?.blocks ?? []) {
       const edits = this.#edits.get(block.id);

@@ -34,7 +34,6 @@ import { SessionBar, TopBar } from "./TopBar";
 
 const NOTICE_MS = 6000;
 
-/** What a click in the canvas does: select, pick an element to pin, or nothing while a comment is being written. */
 type CanvasInteraction =
   | { readonly kind: "view" }
   | { readonly kind: "picking" }

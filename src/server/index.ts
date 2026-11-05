@@ -29,7 +29,6 @@ export type RunningServer = {
 
 const token = () => randomBytes(32).toString("base64url");
 
-/** Starts the HTTP API, the tracker and the check pool, then writes api.json. Electron and headless both call this. */
 export async function startServer(options: ServerOptions = {}): Promise<RunningServer> {
   const home = options.home ?? brainstormHome();
   mkdirSync(join(home, "exports"), { recursive: true });

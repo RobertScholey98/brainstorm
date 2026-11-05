@@ -14,10 +14,7 @@ export type CanvasDocumentMode = "live" | "export";
 
 export type CanvasPayload = readonly HostToFrame[];
 
-/**
- * What a host would send for this iteration, for an export: every variant's module (so the in-page switcher can show
- * any of them), each slot's variants, and the frames on Rob's choices with every block's effective props.
- */
+/** Every variant's module goes in, not just the ones showing, so the in-page switcher can show any of them. */
 export function exportPayload(iteration: IterationView): CanvasPayload {
   const variants = (slot: IterationView["slots"][number]) =>
     slot.variants.flatMap((v) => iteration.blocks.filter((b) => b.id === blockIdOf(slot.id, v)).map((b) => ({ blockId: b.id, title: b.title })));
@@ -35,7 +32,6 @@ export function exportPayload(iteration: IterationView): CanvasPayload {
 
 let runtime: string | null = null;
 
-/** The HTML for /canvas (`live`, payload null) and for an export file (`export`, payload inlined). */
 export function buildCanvasDocument(payload: CanvasPayload | null, mode: CanvasDocumentMode): string {
   runtime ??= readFileSync(builtFile("canvas/runtime.js"), "utf8");
   const boot = JSON.stringify({ mode, messages: payload ?? [] }).replaceAll("<", "\\u003c");

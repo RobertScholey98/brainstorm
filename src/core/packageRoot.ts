@@ -8,7 +8,6 @@ export function packageRoot(): URL {
   }
 }
 
-/** A file under dist/, which scripts/build.mjs writes. */
 export function builtFile(path: string): URL {
   const file = new URL(`dist/${path}`, packageRoot());
   if (!existsSync(file)) throw new Error(`${file.pathname} is missing; run npm run build`);

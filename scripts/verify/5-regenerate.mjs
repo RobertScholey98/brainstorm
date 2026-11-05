@@ -1,6 +1,3 @@
-// Proves v0.1 item 5 on the real Electron app: Regenerate sends the [brainstorm] message to the T3 thread, an agent
-// running the real CLI commits only the block in scope, and the canvas swaps that block alone. Then it drives every
-// request phase through the fake T3 and checks the top bar's text and actions for each.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";

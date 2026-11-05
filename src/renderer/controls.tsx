@@ -33,10 +33,7 @@ type Bound<T extends AppearanceType> = {
   readonly label: string;
 };
 
-/**
- * The appearance prop a control binds, with its current value (the default when the state holds none of its type)
- * and its label. Range, step, unit and options always come from the spec, never from the control.
- */
+/** Range, step, unit and options always come from the spec, never from the control, so a control can't disagree with its prop. */
 function useBound<T extends AppearanceType>({ props, bindings }: ControlProps, type: T): Bound<T> | null {
   const scope = useContext(ControlScopeContext);
   const [value, setValue] = useBoundProp<AppearanceValue>(props.value as AppearanceValue | undefined, bindings?.value);

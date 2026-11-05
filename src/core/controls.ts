@@ -17,7 +17,6 @@ import {
 
 const SEGMENTED_MAX_OPTIONS = 3;
 
-// One table drives the catalog, the binding check, derivation and the vocabulary text.
 const CONTROLS = {
   Slider: { binds: "number", description: "a slider over the prop's min, max and step, showing its unit" },
   Select: { binds: "enum", description: "a dropdown of the prop's options" },
@@ -62,7 +61,7 @@ export const controlCatalog = defineCatalog(reactSchema, {
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
-/** Parses controls.json against the catalog and the block's props. Pointers are into controls.json. */
+/** Issue pointers are into controls.json. */
 export function validateControls(raw: unknown, props: PropsSchema): Parsed<ControlsSpec> {
   const invalid = (message: string, path: string[] = []) =>
     ({ ok: false, issues: [issue("invalid_controls", message, { pointer: toPointer(path) })] }) as const;
@@ -155,7 +154,6 @@ export function validateControls(raw: unknown, props: PropsSchema): Parsed<Contr
 
 const DERIVED_ROOT = "section";
 
-/** What an absent controls.json means: one Section, one control per appearance prop in schema order. */
 export function deriveControls(props: PropsSchema, title: string): ControlsSpec {
   const elements: Record<string, SectionElement | ControlElement> = {};
   const children = props.appearance.map((prop) => {
@@ -166,7 +164,6 @@ export function deriveControls(props: PropsSchema, title: string): ControlsSpec 
   return { root: DERIVED_ROOT, elements: { [DERIVED_ROOT]: { type: "Section", props: { title }, children }, ...elements } };
 }
 
-/** The agent-facing reference for controls.json, generated from the catalog table. */
 export function controlVocabulary(): string {
   const derivedFor = (type: AppearanceType) =>
     type === "enum" ? `Segmented with up to ${SEGMENTED_MAX_OPTIONS} options, otherwise ${DERIVED_KIND.enum}` : DERIVED_KIND[type];

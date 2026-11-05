@@ -1,6 +1,3 @@
-// Proves v0.1 item 3 on the real Electron app: control changes repaint the canvas and are saved as overrides; they
-// survive a restart and a regenerate that keeps the prop; a regenerate that drops the prop flags it to Rob and warns
-// the agent.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";

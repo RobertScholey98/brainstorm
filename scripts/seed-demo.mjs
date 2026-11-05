@@ -23,7 +23,6 @@ const BRIEF =
   "Give one chore an owner by spinning, and make the result stick. A cyberpunk phone app for a shared flat: " +
   "the pick has to feel fair, the person picked has to accept it, and the crew has to see how it was decided.";
 
-/** The environment the CLI and the app need to reach the fake T3 thread for this home. */
 export function demoEnv(home, extra = {}) {
   const statePath = join(home, "fake-t3.json");
   mkdirSync(home, { recursive: true });
@@ -58,7 +57,6 @@ function must(step, r) {
   return r.json.data;
 }
 
-/** Creates the session and commits its first iteration. Returns the session id and the working copy it left behind. */
 export function seedDemo(home, extraEnv = {}) {
   const env = demoEnv(home, extraEnv);
   const session = must("session new", brainstorm(env, ["session", "new", "--title", "Chore roulette", "--brief", BRIEF, "--json"])).session.id;

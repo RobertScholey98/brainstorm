@@ -6,7 +6,6 @@ import type { BlockId, ExportResult, RobAction, SessionView } from "../core/type
 import { ExportButton } from "./Export";
 import { Regenerate, RequestStatus } from "./Regenerate";
 
-/** The main panel's bar: the sidebar toggle while the sidebar is hidden, the panel's heading, then any notice and actions. */
 export function TopBar({ notice, actions, children }: { notice: string | null; actions?: ReactNode; children: ReactNode }) {
   const { state, isMobile } = useSidebar();
   return (
@@ -30,7 +29,6 @@ export function TopBar({ notice, actions, children }: { notice: string | null; a
   );
 }
 
-/** An open brainstorm's bar: its title, iteration and request, then Regenerate and Export. */
 export function SessionBar({
   view,
   notice,

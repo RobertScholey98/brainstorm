@@ -52,8 +52,6 @@ type Output = { readonly result: Result<unknown>; readonly lines: readonly strin
 const usage = (message: string): Failure => ({ code: "usage", message });
 const failed = (error: Failure): Output => ({ result: { ok: false, error }, lines: [] });
 
-// ---- the app connection
-
 const repoRoot = (): string => resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 async function healthy(api: ApiInfo): Promise<boolean> {
@@ -66,7 +64,6 @@ async function healthy(api: ApiInfo): Promise<boolean> {
   }
 }
 
-/** Starts the app detached: the Electron window, or the headless server when BRAINSTORM_APP=headless. */
 function launch(home: string): void {
   const root = repoRoot();
   const log = openSync(join(home, "server.log"), "a");
@@ -81,7 +78,6 @@ function launch(home: string): void {
   closeSync(log);
 }
 
-/** Reads api.json and checks /health; when either fails, starts the app and waits for a healthy one. */
 async function connect(): Promise<ApiInfo | Failure> {
   const home = brainstormHome();
   const current = readApi(home);
@@ -142,8 +138,6 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
   }
 }
 
-// ---- the working copy on disk
-
 function readCopy(root: string): Result<FileMap> {
   if (!existsSync(root) || !statSync(root).isDirectory()) {
     return { ok: false, error: usage(`there is no working copy at ${root}; run brainstorm pull <session> first`) };
@@ -186,7 +180,6 @@ function pruneEmptyDirs(dir: string, root: string): void {
   if (dir !== root && readdirSync(dir).length === 0) rmdirSync(dir);
 }
 
-/** Refuses a directory that holds anything but this session's copy, then replaces what pull owns. */
 function writePull(root: string, session: SessionId, files: FileMap): Failure | null {
   if (existsSync(root)) {
     const existing = readCopy(root);
@@ -200,8 +193,6 @@ function writePull(root: string, session: SessionId, files: FileMap): Failure | 
   writeFiles(root, files);
   return null;
 }
-
-// ---- text output
 
 function issueLine(i: Issue): string {
   const where = i.file === null ? "brainstorm" : `${i.file}${i.loc === null ? "" : `:${i.loc.line}:${i.loc.column}`}${i.pointer === null ? "" : `#${i.pointer}`}`;
@@ -250,8 +241,6 @@ function contextLines(c: AgentContext): string[] {
   ];
 }
 
-// ---- commands
-
 type Flags = { readonly [name: string]: string | boolean | undefined };
 type Parsed = { readonly flags: Flags; readonly positionals: readonly string[] };
 type Command = {
@@ -265,7 +254,6 @@ const str = (flags: Flags, name: string): string | undefined => {
   return typeof v === "string" ? v : undefined;
 };
 
-/** `--thread`, else `$T3CODE_THREAD_ID`. Without either, a required thread is a usage error and an optional one is null. */
 function threadFrom(flags: Flags, options: { required: true }): ThreadId | Failure;
 function threadFrom(flags: Flags, options: { required: false }): ThreadId | null | Failure;
 function threadFrom(flags: Flags, { required }: { required: boolean }): ThreadId | null | Failure {

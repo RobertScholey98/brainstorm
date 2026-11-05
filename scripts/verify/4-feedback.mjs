@@ -1,6 +1,3 @@
-// Proves v0.1 item 4 on the real Electron app: clicking an element with data-part pins a comment to it, the pin follows
-// the element through a regenerate that moves it, and the comment moves through open, addressed, confirmed and back
-// to open. A regenerate that drops the part detaches the pin and warns the agent.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";

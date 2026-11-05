@@ -1,5 +1,3 @@
-// Reruns the v0.1 live check against real T3: a real agent studies a tiny task with /ux-brainstorm, Rob's Regenerate
-// reaches its thread, a second thread takes the session over by title, and both requests come back as iterations.
 // It starts real agent runs, so it is not part of npm test. `--preflight` checks the prerequisites and stops.
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";

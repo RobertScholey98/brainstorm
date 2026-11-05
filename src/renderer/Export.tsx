@@ -4,10 +4,7 @@ import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitl
 import { Spinner } from "@/components/ui/spinner";
 import type { ExportResult } from "../core/types";
 
-/**
- * Opening the popover runs the export; it shows the file once it's written, or closes if it failed. Each open or
- * close starts a new attempt, so an export that finishes after its popover closed changes nothing.
- */
+/** Each open or close starts a new attempt, so an export that finishes after its popover closed changes nothing. */
 export function ExportButton({ disabled, exportHtml }: { disabled: boolean; exportHtml: () => Promise<ExportResult | null> }) {
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState<ExportResult | null>(null);

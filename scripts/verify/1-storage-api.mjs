@@ -1,5 +1,3 @@
-// Proves v0.1 item 1 on the real artifact: the built `brainstorm` CLI, run as a child process against a temp
-// BRAINSTORM_HOME and the fake T3, starts the headless server itself and drives every command in the contract.
 import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

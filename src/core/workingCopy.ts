@@ -311,7 +311,6 @@ const manifestJson = (files: FileMap): Record<string, unknown> | null => {
     : null;
 };
 
-/** The session a directory's manifest names, or null when it has no readable manifest. */
 export function workingCopySession(files: FileMap): SessionId | null {
   const session = manifestJson(files)?.session;
   return typeof session === "string" ? parseSessionId(session) : null;
@@ -323,7 +322,6 @@ export function withBase(files: FileMap, base: IterationN): FileMap {
   return manifest === null ? {} : { [MANIFEST]: JSON.stringify({ ...manifest, base }, null, 2) + "\n" };
 }
 
-/** The working-copy path of one of a block's files, for issues that point at it. */
 export function blockFile(id: BlockId, key: keyof BlockFiles): string {
   return `slots/${id}/${FILE_NAME_OF[key]}`;
 }

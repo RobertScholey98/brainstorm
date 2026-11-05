@@ -1,5 +1,3 @@
-// Proves v0.1 item 6: Export writes the current iteration with Rob's overrides and variant choices as one file, which
-// opens from disk in plain Chromium with the app and server stopped, network blocked, and no console errors.
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
