@@ -2,6 +2,7 @@ import { JSONUIProvider, Renderer } from "@json-render/react";
 import type { Spec } from "@json-render/core";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
 import { HEX_COLOR_PATTERN } from "../core/props";
 import type { AppearanceValue, BlockView, InapplicableOverride, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
 import { ControlScopeContext, controlRegistry, createBlockStore } from "./controls";
@@ -89,9 +90,11 @@ function BlockControls({
         <div className="text-xs font-medium text-fg-muted">{slot?.title ?? block.slot}</div>
         <h2 className="truncate pt-0.5 text-sm font-semibold">{block.title}</h2>
         {error !== null && (
-          <p role="alert" className="mt-2 rounded-md bg-danger/10 px-2 py-2 text-xs text-danger">
-            This block failed to render: {error}
-          </p>
+          <div className="pt-2">
+            <Callout tone="danger" role="alert" heading="This block failed to render">
+              <p>The error shows in its frame on the canvas.</p>
+            </Callout>
+          </div>
         )}
       </header>
       {block.props.appearance.length === 0 ? (
@@ -117,16 +120,14 @@ function Inapplicable({
   onDismiss: (o: InapplicableOverride) => void;
 }) {
   return (
-    <section role="status" aria-label="Adjustments that no longer apply" className="border-b bg-warning-subtle px-4 py-3" data-banner="inapplicable">
-      <h2 className="text-sm font-semibold text-warning">
-        {items.length === 1 ? "An adjustment no longer applies" : `${items.length} adjustments no longer apply`}
-      </h2>
-      <ul className="grid gap-2 pt-2">
+    <section aria-label="Adjustments that no longer apply" className="px-3 pt-3" data-banner="inapplicable">
+      <Callout tone="warning" role="status" heading={items.length === 1 ? "An adjustment no longer applies" : `${items.length} adjustments no longer apply`}>
+      <ul className="grid gap-1">
         {items.map((item) => {
           const { override: o, reason } = item;
           const title = blocks.find((b) => b.id === o.blockId)?.title ?? o.blockId;
           return (
-            <li key={`${o.blockId}/${o.prop}`} className="flex items-start gap-2 text-xs/snug" data-override={`${o.blockId}:${o.prop}`}>
+            <li key={`${o.blockId}/${o.prop}`} className="flex items-start gap-2" data-override={`${o.blockId}:${o.prop}`}>
               {isHex(o.value) && (
                 <span aria-hidden className="mt-0.5 size-3 shrink-0 rounded-sm inset-ring inset-ring-fg/15" style={{ background: o.value }} />
               )}
@@ -136,13 +137,14 @@ function Inapplicable({
                 </span>{" "}
                 on {title}: {WHY[reason]}.
               </span>
-              <Button variant="ghost" size="xs" className="ml-auto text-warning hover:bg-warning/10 hover:text-warning" onClick={() => onDismiss(item)}>
+              <Button variant="ghost" size="xs" className="-my-0.5 ml-auto" onClick={() => onDismiss(item)}>
                 Dismiss
               </Button>
             </li>
           );
         })}
       </ul>
+      </Callout>
     </section>
   );
 }

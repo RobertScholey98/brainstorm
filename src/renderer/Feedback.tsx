@@ -2,7 +2,10 @@ import { MessageSquarePlus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
+import { overlaySurface } from "@/components/ui/overlay";
 import { Textarea } from "@/components/ui/textarea";
 import type { Placement } from "./CanvasHost";
 
@@ -71,7 +74,7 @@ export function FeedbackPanel({
       <header className="flex items-center gap-2 px-4 pt-3 pb-2">
         <h2 className="text-sm font-semibold">Feedback</h2>
         <span className="text-xs tabular-nums text-fg-muted">{feedback.length > 0 ? feedback.length : ""}</span>
-        <Button variant={picking ? "default" : "outline"} size="sm" className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
+        <Button variant={picking ? "default" : "outline"} className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
           <MessageSquarePlus data-icon="inline-start" aria-hidden />
           {picking ? "Picking…" : "Pin comment"}
         </Button>
@@ -237,11 +240,11 @@ export function TextEditor({
     <div className="grid gap-2">
       <Textarea ref={area} rows={3} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} className="resize-none" />
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-fg-muted">Ctrl+Enter</span>
-        <Button variant="ghost" size="sm" className="ml-auto" onClick={onCancel}>
+        <Kbd>Ctrl+Enter</Kbd>
+        <Button variant="ghost" className="ml-auto" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" disabled={text.trim() === "" || busy} onClick={() => void submit()}>
+        <Button disabled={text.trim() === "" || busy} onClick={() => void submit()}>
           {submitLabel}
         </Button>
       </div>
@@ -274,7 +277,8 @@ export function PinComposer({
       role="dialog"
       aria-label="New comment"
       data-composer
-      className="absolute z-raised grid gap-2 rounded-xl bg-raised p-3 text-sm text-fg shadow-lg ring-1 ring-fg/10 animate-in fade-in-0 zoom-in-95 duration-100"
+      data-open=""
+      className={cn(overlaySurface(), "absolute z-popover grid gap-2 p-3 text-sm")}
       style={{ left, top, width: COMPOSER_WIDTH }}
     >
       <span aria-hidden className="absolute size-2 rounded-full bg-accent ring-2 ring-card" style={{ left: at.x - left - 4, top: at.y - top - 4 }} />

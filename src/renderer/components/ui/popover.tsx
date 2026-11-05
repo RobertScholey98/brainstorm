@@ -2,6 +2,8 @@ import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 import { cn } from "cn"
 
+import { overlaySurface } from "@/components/ui/overlay"
+
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
 }
@@ -10,14 +12,17 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
 }
 
+const WIDTH = { sm: "w-popover-sm", md: "w-popover-md" } as const
+
+/** Every popover is one of two widths, with 12 px padding and a 12 px gap between its parts. */
 function PopoverContent({
-  className,
+  size = "sm",
   align = "center",
   alignOffset = 0,
   side = "bottom",
-  sideOffset = 4,
+  sideOffset = 6,
   ...props
-}: PopoverPrimitive.Popup.Props &
+}: Omit<PopoverPrimitive.Popup.Props, "className"> & { size?: keyof typeof WIDTH } &
   Pick<
     PopoverPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
@@ -29,14 +34,12 @@ function PopoverContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
+        collisionPadding={8}
         className="isolate z-popover"
       >
         <PopoverPrimitive.Popup
           data-slot="popover-content"
-          className={cn(
-            "z-popover flex w-popover-sm origin-(--transform-origin) flex-col gap-2 rounded-lg bg-raised p-2 text-sm text-fg shadow-md ring-1 ring-fg/10 outline-hidden duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-            className
-          )}
+          className={cn(overlaySurface(), "flex max-w-(--available-width) flex-col gap-3 p-3 text-sm", WIDTH[size])}
           {...props}
         />
       </PopoverPrimitive.Positioner>
@@ -44,44 +47,35 @@ function PopoverContent({
   )
 }
 
-function PopoverHeader({ className, ...props }: React.ComponentProps<"div">) {
+function PopoverHeader({ heading, description }: { heading: React.ReactNode; description?: React.ReactNode }) {
   return (
-    <div
-      data-slot="popover-header"
-      className={cn("flex flex-col gap-0.5 text-sm", className)}
-      {...props}
-    />
+    <div data-slot="popover-header" className="grid gap-0.5">
+      <PopoverPrimitive.Title data-slot="popover-title" className="text-sm font-semibold">
+        {heading}
+      </PopoverPrimitive.Title>
+      {description !== undefined && (
+        <PopoverPrimitive.Description data-slot="popover-description" className="text-xs text-fg-muted">
+          {description}
+        </PopoverPrimitive.Description>
+      )}
+    </div>
   )
 }
 
-function PopoverTitle({ className, ...props }: PopoverPrimitive.Title.Props) {
+/** A hint on the left, then the actions: the dismiss before the primary. */
+function PopoverFooter({ hint, children }: { hint?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <PopoverPrimitive.Title
-      data-slot="popover-title"
-      className={cn("font-medium", className)}
-      {...props}
-    />
-  )
-}
-
-function PopoverDescription({
-  className,
-  ...props
-}: PopoverPrimitive.Description.Props) {
-  return (
-    <PopoverPrimitive.Description
-      data-slot="popover-description"
-      className={cn("text-fg-muted", className)}
-      {...props}
-    />
+    <div data-slot="popover-footer" className="-mx-3 -mb-3 flex items-center gap-2 border-t px-3 py-2">
+      {hint !== undefined && <span className="min-w-0 truncate text-xs text-fg-muted">{hint}</span>}
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">{children}</span>
+    </div>
   )
 }
 
 export {
   Popover,
   PopoverContent,
-  PopoverDescription,
+  PopoverFooter,
   PopoverHeader,
-  PopoverTitle,
   PopoverTrigger,
 }

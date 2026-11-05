@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, ExternalLink, Unlink } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
+import { Callout } from "@/components/ui/callout";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Sidebar,
@@ -14,6 +15,7 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { Hint } from "@/components/ui/tooltip";
 import { takeoverPhrase } from "../core/machines";
 import { blockIdOf, type BlockId, type BlockView, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
 import { Mark } from "./Mark";
@@ -28,7 +30,7 @@ export function AppSidebar({ children }: { children: ReactNode }) {
       <SidebarHeader className="flex-row items-center gap-2 px-3 pt-2 pb-1">
         <Mark size={20} />
         <span className="text-sm font-semibold">Brainstorm</span>
-        <SidebarTrigger className="ml-auto text-fg-muted" />
+        <SidebarTrigger className="ml-auto" />
       </SidebarHeader>
       {children}
     </Sidebar>
@@ -57,21 +59,18 @@ export function HomePanel({ sessions, onSession }: { sessions: readonly SessionL
                 <SidebarMenu>
                   {group.sessions.map((s) => (
                     <SidebarMenuItem key={s.id}>
-                      <SidebarMenuButton
-                        className="h-auto flex-col items-start gap-0.5 py-1.5"
-                        onClick={() => onSession(s.id)}
-                        data-session={s.id}
-                        data-lost={s.lost || undefined}
-                      >
-                        <span className="w-full truncate">{s.title}</span>
-                        <span className="flex w-full items-center gap-1.5 text-xs text-fg-muted">
-                          <span className="tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
-                          {s.lost && (
-                            <span className="flex items-center gap-1" title="The T3 thread this brainstorm was attached to is gone" data-session-lost>
-                              <Unlink aria-hidden className="size-3!" />
-                              Thread lost
-                            </span>
-                          )}
+                      <SidebarMenuButton size="tall" onClick={() => onSession(s.id)} data-session={s.id} data-lost={s.lost || undefined}>
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="truncate">{s.title}</span>
+                          <span className="flex items-center gap-1.5 text-xs text-fg-muted">
+                            <span className="tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
+                            {s.lost && (
+                              <span className="flex items-center gap-1" data-session-lost>
+                                <Unlink aria-hidden className="size-3!" />
+                                Thread lost
+                              </span>
+                            )}
+                          </span>
                         </span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -111,7 +110,7 @@ export function SessionPanel({
       <SidebarGroup className="gap-1 pb-1">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={onHome} className="text-fg-muted" data-back>
+            <SidebarMenuButton tone="quiet" onClick={onHome} data-back>
               <ChevronLeft aria-hidden />
               <span>All brainstorms</span>
             </SidebarMenuButton>
@@ -147,8 +146,7 @@ function ThreadSection({ view }: { view: SessionView }) {
       <SidebarMenu>
         <SidebarMenuItem>
           <SidebarMenuButton
-            className="h-auto items-start py-1.5"
-            title={view.attachment.threadId}
+            size="tall"
             {...(view.thread === null
               ? { disabled: true }
               : { render: <a href={view.thread.link} target="_blank" rel="noreferrer" /> })}
@@ -166,9 +164,10 @@ function ThreadSection({ view }: { view: SessionView }) {
         </SidebarMenuItem>
       </SidebarMenu>
       {showTakeover && (
-        <div className="mx-2 mt-1 grid gap-2 rounded-lg bg-warning-subtle p-2 text-xs/relaxed" data-takeover>
-          <p className="text-warning">In a T3 thread on this project, say: {takeoverPhrase(view.session.title)}</p>
-          <CopyPhrase title={view.session.title} />
+        <div className="px-2 pt-1" data-takeover>
+          <Callout tone="warning" heading="Not attached to a thread" actions={<CopyPhrase title={view.session.title} />}>
+            <p>In a T3 thread on this project, say: {takeoverPhrase(view.session.title)}</p>
+          </Callout>
         </div>
       )}
     </SidebarGroup>
@@ -196,7 +195,6 @@ function SlotSection({
           render={<button type="button" onClick={onSlot} />}
           className="w-full cursor-pointer gap-2 hover:bg-hover data-[selected]:text-fg"
           data-selected={selected || undefined}
-          title="Show this slot's controls"
         >
           <span className="truncate">{slot.title}</span>
           <span className="ml-auto shrink-0 font-normal tabular-nums">
@@ -214,7 +212,6 @@ function SlotSection({
                   aria-checked={active}
                   isActive={active}
                   onClick={() => onVariant(variant)}
-                  title={active || !block?.about ? undefined : markdownText(block.about)}
                   data-variant={variant}
                 >
                   <span className="min-w-0 flex-1 truncate">{block?.title ?? variant}</span>

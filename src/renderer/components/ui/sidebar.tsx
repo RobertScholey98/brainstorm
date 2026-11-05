@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
+  Hint,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -254,24 +255,26 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, state } = useSidebar()
 
   return (
-    <Button
-      data-sidebar="trigger"
-      data-slot="sidebar-trigger"
-      variant="ghost"
-      size="icon-sm"
-      className={cn(className)}
-      onClick={(event) => {
-        onClick?.(event)
-        toggleSidebar()
-      }}
-      {...props}
-    >
-      <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
-    </Button>
+    <Hint label={state === "expanded" ? "Hide the sidebar" : "Show the sidebar"} shortcut="Ctrl+B">
+      <Button
+        data-sidebar="trigger"
+        data-slot="sidebar-trigger"
+        variant="ghost"
+        size="icon"
+        className={cn("text-fg-muted", className)}
+        onClick={(event) => {
+          onClick?.(event)
+          toggleSidebar()
+        }}
+        {...props}
+      >
+        <PanelLeftIcon />
+        <span className="sr-only">Toggle Sidebar</span>
+      </Button>
+    </Hint>
   )
 }
 
@@ -481,10 +484,13 @@ const sidebarMenuButtonVariants = cva(
         outline:
           "bg-card shadow-[0_0_0_1px_var(--border)] hover:bg-hover hover:text-fg hover:shadow-[0_0_0_1px_var(--hover)]",
       },
+      tone: {
+        default: "",
+        quiet: "text-fg-muted",
+      },
       size: {
         default: "h-8 text-sm",
-        sm: "h-7 text-xs",
-        lg: "h-12 text-sm group-data-[collapsible=icon]:p-0!",
+        tall: "h-auto items-start py-1.5 text-sm",
       },
     },
     defaultVariants: {
@@ -498,6 +504,7 @@ function SidebarMenuButton({
   render,
   isActive = false,
   variant = "default",
+  tone = "default",
   size = "default",
   tooltip,
   className,
@@ -512,7 +519,7 @@ function SidebarMenuButton({
     defaultTagName: "button",
     props: mergeProps<"button">(
       {
-        className: cn(sidebarMenuButtonVariants({ variant, size }), className),
+        className: cn(sidebarMenuButtonVariants({ variant, tone, size }), className),
       },
       props
     ),

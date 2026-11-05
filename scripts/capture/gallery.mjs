@@ -53,7 +53,7 @@ const SHOTS = [
   ["state-pick-mode", "canvas", "Pin mode: the hint pill over the canvas and the highlight on the hovered headline"],
   ["state-pin-composer", "canvas", "The pin composer over the canvas with a comment typed"],
   ["state-tooltip", "canvas", "A tooltip on an ordinary control"],
-  ["state-notice", "canvas", "The top bar notice after an action fails because Brainstorm's server didn't answer"],
+  ["state-notice", "canvas", "The failure toast after an action fails because Brainstorm's server didn't answer"],
   ["feedback-list", "canvas", "Feedback with open, addressed and confirmed comments, and comment 1 focused from its pin"],
   ["phase-sending", "phases", "Request phase: sending to T3, with Regenerate already disabled"],
   ["phase-queued", "phases", "Request phase: queued in T3"],
@@ -531,14 +531,14 @@ function scenes(page, home, env, t3, sessions) {
       await capture(page, "state-notice", {
         each: async (c) => {
           // The notice hides 6 s after it last changed, and the same message twice doesn't restart that.
-          await page.waitForSelector("[data-topbar] [role=alert]", { state: "detached", timeout: 8000 });
+          await page.waitForSelector("[data-slot=toast]", { state: "detached", timeout: 8000 });
           await page.click('button[data-variant="reel"]');
-          await page.waitForSelector("[data-topbar] [role=alert]");
+          await page.waitForSelector("[data-slot=toast]");
           await park(page, c);
         },
       });
       await page.unroute("**/v1/ui/sessions/*/actions");
-      await page.waitForSelector("[data-topbar] [role=alert]", { state: "detached", timeout: 8000 });
+      await page.waitForSelector("[data-slot=toast]", { state: "detached", timeout: 8000 });
 
       let release;
       const written = new Promise((r) => (release = r));

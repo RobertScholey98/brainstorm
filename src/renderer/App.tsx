@@ -1,8 +1,12 @@
 import { Lightbulb, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
+import { overlaySurface } from "@/components/ui/overlay";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { Toast } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   blockIdOf,
@@ -85,7 +89,7 @@ export function App({ api }: { api: Api }) {
           <Shell
             sidebar={<HomePanel sessions={sessions} onSession={setSessionId} />}
             bar={
-              <TopBar notice={notice}>
+              <TopBar>
                 <h1 className="pl-1 text-sm font-medium">All brainstorms</h1>
               </TopBar>
             }
@@ -101,12 +105,12 @@ export function App({ api }: { api: Api }) {
             sessionId={sessionId}
             title={sessions.find((s) => s.id === sessionId)?.title ?? ""}
             revision={revision}
-            notice={notice}
             showNotice={setNotice}
             onHome={() => setSessionId(null)}
           />
         )}
       </SidebarProvider>
+      {notice !== null && <Toast message={notice} />}
     </TooltipProvider>
   );
 }
@@ -129,7 +133,6 @@ function SessionWorkspace({
   sessionId,
   title,
   revision,
-  notice,
   showNotice,
   onHome,
 }: {
@@ -137,7 +140,6 @@ function SessionWorkspace({
   sessionId: SessionId;
   title: string;
   revision: number;
-  notice: string | null;
   showNotice: (message: string) => void;
   onHome: () => void;
 }) {
@@ -260,7 +262,7 @@ function SessionWorkspace({
           onVariant={onVariant}
         />
       }
-      bar={<SessionBar view={view} notice={notice} selected={selectedBlock?.id ?? null} send={send} exportHtml={exportHtml} />}
+      bar={<SessionBar view={view} selected={selectedBlock?.id ?? null} send={send} exportHtml={exportHtml} />}
     >
       <section ref={canvasArea} className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Canvas" data-canvas-region>
         {iteration === null ? (
@@ -282,15 +284,11 @@ function SessionWorkspace({
           />
         )}
         {interaction.kind === "picking" && (
-          <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center" data-pick-hint>
-            <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-inverse py-1.5 pr-1.5 pl-3 text-xs text-inverse-fg shadow-lg">
+          <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center" data-pick-hint>
+            <div data-open="" className={cn(overlaySurface(), "pointer-events-auto flex items-center gap-2 py-1 pr-1 pl-3 text-sm")}>
               Click an element to pin a comment
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setInteraction({ kind: "view" })}
-                className="rounded-full bg-inverse-fg/15 px-2 text-inverse-fg hover:bg-inverse-fg/25 hover:text-inverse-fg dark:hover:bg-inverse-fg/25"
-              >
+              <Kbd>Esc</Kbd>
+              <Button variant="ghost" size="xs" onClick={() => setInteraction({ kind: "view" })}>
                 Cancel
               </Button>
             </div>

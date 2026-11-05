@@ -19,8 +19,8 @@ export function createApi(token: string): Api {
     try {
       const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
       return (await res.json()) as Result<T>;
-    } catch (e) {
-      return { ok: false, error: { code: "unavailable", message: `Brainstorm's server didn't answer: ${(e as Error).message}` } };
+    } catch {
+      return { ok: false, error: { code: "unavailable", message: "Couldn't reach Brainstorm's server. Check that Brainstorm is still running, then try again." } };
     }
   }
 

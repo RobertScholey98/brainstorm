@@ -6,45 +6,35 @@ import type { BlockId, ExportResult, RobAction, SessionView } from "../core/type
 import { ExportButton } from "./Export";
 import { Regenerate, RequestStatus } from "./Regenerate";
 
-export function TopBar({ notice, actions, children }: { notice: string | null; actions?: ReactNode; children: ReactNode }) {
+export function TopBar({ actions, children }: { actions?: ReactNode; children: ReactNode }) {
   const { state, isMobile } = useSidebar();
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b px-3" data-topbar>
       {(state === "collapsed" || isMobile) && (
         <>
-          <SidebarTrigger className="text-fg-muted" />
+          <SidebarTrigger />
           <Separator orientation="vertical" className="h-4 self-center" />
         </>
       )}
       {children}
-      <div className="ml-auto flex shrink-0 items-center gap-2">
-        {notice !== null && (
-          <span role="alert" className="max-w-md truncate text-xs text-danger" title={notice}>
-            {notice}
-          </span>
-        )}
-        {actions}
-      </div>
+      <div className="ml-auto flex shrink-0 items-center gap-2">{actions}</div>
     </header>
   );
 }
 
 export function SessionBar({
   view,
-  notice,
   selected,
   send,
   exportHtml,
 }: {
   view: SessionView | null;
-  notice: string | null;
   selected: BlockId | null;
   send: (action: RobAction) => Promise<SessionView | null>;
   exportHtml: () => Promise<ExportResult | null>;
 }) {
   return (
     <TopBar
-      notice={notice}
       actions={
         view !== null && (
           <>
@@ -58,7 +48,7 @@ export function SessionBar({
         <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
           <h1 className="shrink-0 truncate text-sm font-semibold">{view.session.title}</h1>
           {view.iteration !== null && (
-            <Badge variant="secondary" className="shrink-0 tabular-nums" data-iteration>
+            <Badge variant="secondary" data-iteration>
               Iteration {view.iteration.n}
             </Badge>
           )}

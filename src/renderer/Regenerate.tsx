@@ -2,21 +2,20 @@ import { AlertTriangle, Check, CircleHelp, Clock, MessageSquare, Undo2 } from "l
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Separator } from "@/components/ui/separator";
+import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
+import { Segmented } from "@/components/ui/segmented";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Hint } from "@/components/ui/tooltip";
 import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
 import type { BlockId, BlockView, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
 type ScopeKind = RequestBody["scope"]["kind"];
 
-const SCOPES: readonly { kind: ScopeKind; label: string }[] = [
-  { kind: "all", label: "Everything" },
-  { kind: "blocks", label: "Selected blocks" },
-  { kind: "described", label: "Describe it" },
+const SCOPES: readonly { value: ScopeKind; label: string }[] = [
+  { value: "all", label: "Everything" },
+  { value: "blocks", label: "Selected blocks" },
+  { value: "described", label: "Describe it" },
 ];
 
 function scopeOf(kind: ScopeKind, chosen: readonly BlockId[]): RequestScope | null {
@@ -45,20 +44,22 @@ export function Regenerate({
   const gate = view.regenerate;
   if (!gate.ok) {
     return (
-      <Tooltip>
-        <TooltipTrigger render={<span tabIndex={0} />}>
-          <Button variant="accent" size="sm" disabled data-regenerate-toggle>
+      <Hint label={blockedMessage(gate.reason, view.request?.request.n)}>
+        <span tabIndex={0} data-regenerate-blocked>
+          <Button variant="accent" disabled data-regenerate-toggle>
             Regenerate
           </Button>
-        </TooltipTrigger>
-        <TooltipContent>{blockedMessage(gate.reason, view.request?.request.n)}</TooltipContent>
-      </Tooltip>
+        </span>
+      </Hint>
     );
   }
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button variant="accent" size="sm" title="Send a request to the T3 thread" data-regenerate-toggle />}>Regenerate</PopoverTrigger>
-      <PopoverContent align="end" className="w-popover-md gap-3 p-3" data-regenerate-menu>
+      <Hint label="Send a request to the T3 thread">
+        <PopoverTrigger render={<Button variant="accent" data-regenerate-toggle />}>Regenerate</PopoverTrigger>
+      </Hint>
+      <PopoverContent size="md" align="end" data-regenerate-menu>
+        <PopoverHeader heading="Regenerate" description="Ask the agent for a new iteration." />
         <RegenerateForm view={view} selected={selected} onClose={() => setOpen(false)} send={send} />
       </PopoverContent>
     </Popover>
@@ -106,21 +107,7 @@ function RegenerateForm({
 
   return (
     <>
-      <ToggleGroup
-        variant="outline"
-        size="sm"
-        spacing={0}
-        className="w-full"
-        value={[kind]}
-        onValueChange={(v) => v[0] !== undefined && setKind(v[0] as ScopeKind)}
-        aria-label="Scope"
-      >
-        {SCOPES.map((s) => (
-          <ToggleGroupItem key={s.kind} value={s.kind} className="flex-1" data-scope={s.kind}>
-            {s.label}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+      <Segmented value={kind} onValueChange={setKind} options={SCOPES} itemData="scope" aria-label="Scope" />
 
       {kind === "blocks" && (
         <div className="grid max-h-picker gap-2 overflow-y-auto" data-block-choices>
@@ -157,25 +144,25 @@ function RegenerateForm({
         {attached.map((f) => (
           <p key={f.id} className="flex gap-1.5 text-sm/snug" data-attached={f.id}>
             <span className="shrink-0 font-semibold tabular-nums text-accent">#{f.id}</span>
-            <span className="min-w-0 truncate" title={f.text}>
-              {f.text}
-            </span>
+            <Hint label={f.text}>
+              <span className="min-w-0 truncate">{f.text}</span>
+            </Hint>
             <span className="ml-auto shrink-0 text-fg-muted">{f.pin.part ?? "whole block"}</span>
           </p>
         ))}
       </div>
 
-      <Separator />
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs text-fg-muted">Goes to the attached T3 thread</span>
-        <Button variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
+      <PopoverFooter hint="Goes to the attached T3 thread">
+        <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
-        <Button variant="accent" size="sm" disabled={body === null || sending} onClick={() => void submit()} data-send>
-          {sending && <Spinner data-icon="inline-start" />}
-          {sending ? "Sending…" : "Send"}
-        </Button>
-      </div>
+        <Hint label="Send" shortcut="Ctrl+Enter">
+          <Button variant="accent" disabled={body === null || sending} onClick={() => void submit()} data-send>
+            {sending && <Spinner data-icon="inline-start" />}
+            {sending ? "Sending…" : "Send"}
+          </Button>
+        </Hint>
+      </PopoverFooter>
     </>
   );
 }
@@ -235,7 +222,7 @@ export function RequestStatus({ view, send }: { view: SessionView; send: (action
   return (
     <div className="flex min-w-0 items-center gap-2 text-sm" data-request-phase={phase.phase}>
       <PhaseIcon phase={phase.phase} />
-      <span className="truncate text-fg-muted" title={request.message} data-request-message>
+      <span className="truncate text-fg-muted" data-request-message>
         {request.message}
       </span>
       {phase.actions.length > 0 && (
@@ -290,7 +277,7 @@ export function CopyPhrase({ title }: { title: string }) {
 
 function ActionButton({ action, onClick, children }: { action: RequestPhaseAction; onClick: () => void; children: ReactNode }) {
   return (
-    <Button variant="outline" size="xs" className="w-fit" onClick={onClick} data-request-action={action}>
+    <Button variant="outline" size="xs" onClick={onClick} data-request-action={action}>
       {children}
     </Button>
   );

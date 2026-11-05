@@ -8,7 +8,8 @@ import { Select as SelectRoot, SelectContent, SelectGroup, SelectItem, SelectTri
 import { Slider as SliderBar } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Segmented as SegmentedControl } from "@/components/ui/segmented";
+import { Hint } from "@/components/ui/tooltip";
 import { controlCatalog } from "../core/controls";
 import { HEX_COLOR_PATTERN } from "../core/props";
 import type { AppearanceProp, AppearanceType, AppearanceValue, BlockView, PropName } from "../core/types";
@@ -55,19 +56,15 @@ function Row({ bound, trailing, children }: { bound: Pick<Bound<AppearanceType>,
   const overridden = scope.overridden.has(spec.name);
   return (
     <div className="grid gap-1.5" data-control={spec.name} data-overridden={overridden || undefined}>
-      <div className="flex min-h-6 items-center gap-1">
+      <div className="flex h-6 items-center gap-1.5">
+        {overridden && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-fg" data-overridden-mark />}
         <span className="truncate text-sm font-medium">{label}</span>
         {overridden && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-fg-muted"
-            title={`Reset ${label} to the block's default`}
-            aria-label={`Reset ${label}`}
-            onClick={() => scope.reset(spec.name)}
-          >
-            <RotateCcw aria-hidden />
-          </Button>
+          <Hint label="Reset to the agent's value">
+            <Button variant="ghost" size="icon-xs" aria-label={`Reset ${label}`} onClick={() => scope.reset(spec.name)}>
+              <RotateCcw aria-hidden />
+            </Button>
+          </Hint>
         )}
         <span className="ml-auto flex items-center">{trailing}</span>
       </div>
@@ -116,7 +113,7 @@ function Select(control: ControlProps) {
   return (
     <Row bound={bound}>
       <SelectRoot items={items} value={value} onValueChange={(v) => v !== null && setValue(v)}>
-        <SelectTrigger className="w-full" size="sm" aria-label={label}>
+        <SelectTrigger className="w-full" aria-label={label}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -139,22 +136,7 @@ function Segmented(control: ControlProps) {
   const { spec, value, setValue, label } = bound;
   return (
     <Row bound={bound}>
-      <ToggleGroup
-        variant="outline"
-        size="sm"
-        spacing={0}
-        className="w-full"
-        value={[value]}
-        // A segmented control always has one option on, so a press on the current one changes nothing.
-        onValueChange={(v) => v[0] !== undefined && setValue(v[0] as string)}
-        aria-label={label}
-      >
-        {spec.options.map((o) => (
-          <ToggleGroupItem key={o} value={o} className="flex-1">
-            {o}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+      <SegmentedControl value={value} onValueChange={setValue} options={spec.options.map((o) => ({ value: o, label: o }))} aria-label={label} />
     </Row>
   );
 }
@@ -197,7 +179,7 @@ function ColourField({ bound }: { bound: Bound<"color"> }) {
   };
   return (
     <Row bound={bound}>
-      <div className="flex h-7 items-center gap-2 rounded-lg border border-border-strong pr-2 pl-1 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 dark:bg-border-strong/30">
+      <div className="flex h-7 items-center gap-2 rounded-md border border-border-strong pr-2 pl-1 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 dark:bg-border-strong/30">
         <input
           type="color"
           aria-label={`${label} colour`}
