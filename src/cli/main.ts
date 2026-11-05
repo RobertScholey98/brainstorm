@@ -95,7 +95,9 @@ async function connect(): Promise<ApiInfo | Failure> {
     owner = true;
   } catch {
     // Another CLI is starting the app. A lock older than the start timeout is left over from a crash.
-    if (Date.now() - statSync(lock).mtimeMs > START_TIMEOUT_MS) {
+    // A lock that vanished meanwhile means its owner finished starting, so waiting below finds the app.
+    const held = statSync(lock, { throwIfNoEntry: false });
+    if (held !== undefined && Date.now() - held.mtimeMs > START_TIMEOUT_MS) {
       writeFileSync(lock, String(process.pid));
       owner = true;
     }
