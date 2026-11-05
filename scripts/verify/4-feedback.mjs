@@ -105,6 +105,10 @@ try {
   check("the list shows it addressed in iteration 2", await itemText(window, 1, "meta"), "Assignment card · headline · Addressed in 2");
   await shot(window, shots, "4-addressed");
 
+  await window.click('[data-feedback="1"] [data-feedback-text]');
+  await canvas.waitForSelector(`${PIN}.bs-pulse`);
+  check("clicking the comment in the list pulses its pin", await canvas.$eval(PIN, (el) => el.classList.contains("bs-pulse")), true);
+
   await canvas.click(PIN);
   await window.waitForSelector('[data-feedback="1"][data-focused]');
   check("clicking the pin focuses its comment in the list", await window.isVisible('[data-feedback="1"][data-focused]'), true);
