@@ -129,7 +129,13 @@ function parseBody<T>(schema: z.ZodType<T>, raw: unknown): Result<T> {
   return usage(parsed.error.issues.map((i) => `${i.path.length > 0 ? `${i.path.join(".")}: ` : ""}${i.message}`).join("; "));
 }
 
-const sessionFrom = (raw: string): SessionId | null => parseSessionId(decodeURIComponent(raw));
+const decodeSegment = (raw: string): string | null => {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+};
 
 type Auth = "agent" | "ui" | "none";
 type Route = {
@@ -155,7 +161,10 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
   const withSession =
     (fn: (id: SessionId, input: { query: URLSearchParams; body: unknown }) => Promise<Result<unknown>>) =>
     async ({ params, query, body }: { params: string[]; query: URLSearchParams; body: unknown }) => {
-      const id = sessionFrom(params[0] ?? "");
+      const raw = params[0] ?? "";
+      const decoded = decodeSegment(raw);
+      if (decoded === null) return usage(`"${raw}" is not a valid URL path segment`);
+      const id = parseSessionId(decoded);
       return id === null
         ? ({ ok: false, error: { code: "not_found", entity: "session", message: `"${params[0]}" is not a session id` } } as const)
         : fn(id, { query, body });

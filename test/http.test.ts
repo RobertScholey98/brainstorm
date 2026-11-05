@@ -73,6 +73,10 @@ describe("http", () => {
     expect((await call("POST", "/v1/agent/attach", agentToken, { ref: id, thread: T3 })).body.error.code).toBe("wrong_project");
     expect((await call("POST", "/v1/agent/attach", agentToken, { ref: id, thread: T3 })).status).toBe(409);
     expect((await call("GET", "/v1/ui/sessions/s_nothere1", server.uiToken)).status).toBe(404);
+    expect(await call("GET", "/v1/ui/sessions/s_%zz", server.uiToken)).toEqual({
+      status: 400,
+      body: { ok: false, error: { code: "usage", message: '"s_%zz" is not a valid URL path segment' } },
+    });
     expect(await call("POST", `/v1/ui/sessions/${id}/actions`, server.uiToken, { kind: "regenerate", scope: { kind: "described" }, freetext: null })).toEqual({
       status: 400,
       body: { ok: false, error: { code: "usage", message: "freetext: a described request needs freetext" } },
