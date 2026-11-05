@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import { packageRoot } from "../core/packageRoot";
 
 /** What the CLI needs to reach a running server. The UI token is never written to disk. */
 export type ApiInfo = {
@@ -43,11 +44,7 @@ export function writeApi(home: string, info: ApiInfo): void {
   renameSync(`${file}.${process.pid}.tmp`, file);
 }
 
-/** The package version, found from the package root so it resolves from src/ and from dist/. */
 export function packageVersion(): string {
-  for (let dir = new URL(".", import.meta.url); ; dir = new URL("..", dir)) {
-    const file = new URL("package.json", dir);
-    if (existsSync(file)) return String((JSON.parse(readFileSync(file, "utf8")) as { version?: unknown }).version ?? "0.0.0");
-    if (dir.pathname === new URL("..", dir).pathname) return "0.0.0";
-  }
+  const pkg = JSON.parse(readFileSync(new URL("package.json", packageRoot()), "utf8")) as { version?: unknown };
+  return String(pkg.version ?? "0.0.0");
 }

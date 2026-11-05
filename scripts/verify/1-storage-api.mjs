@@ -31,8 +31,8 @@ const env = {
   BRAINSTORM_T3_CLI: join(root, "test", "fake-t3", "t3.cmd"),
   BRAINSTORM_FAKE_T3_STATE: statePath,
   T3CODE_THREAD_ID: T1,
+  BRAINSTORM_APP: "headless",
 };
-delete env.BRAINSTORM_APP;
 
 function cli(args, { thread: as = T1, input = "", cwd = work } = {}) {
   const r = spawnSync(process.execPath, [join(root, "bin", "brainstorm.mjs"), ...args], {

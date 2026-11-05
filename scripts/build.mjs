@@ -46,10 +46,26 @@ const nodeEntry = (entry, out) => () =>
     logLevel: "error",
   });
 
+/** Electron loads main as CommonJS, where import.meta is empty, so the modules that find the package root get a shim. */
+const electronMain = () =>
+  build({
+    entryPoints: [`${root}/src/electron/main.ts`],
+    outfile: `${root}/dist/electron/main.cjs`,
+    bundle: true,
+    format: "cjs",
+    platform: "node",
+    target: "node22",
+    packages: "external",
+    define: { "import.meta.url": "__import_meta_url" },
+    banner: { js: 'const __import_meta_url = require("node:url").pathToFileURL(__filename).href;' },
+    logLevel: "error",
+  });
+
 export const targets = {
   "check-worker": checkWorker,
   server: nodeEntry("src/server/headless.ts", "dist/server/headless.js"),
   cli: nodeEntry("src/cli/main.ts", "dist/cli/main.js"),
+  electron: electronMain,
 };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

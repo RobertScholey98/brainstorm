@@ -65,16 +65,18 @@ async function healthy(api: ApiInfo): Promise<boolean> {
   }
 }
 
-/** Starts the app detached. Headless until the Electron unit makes the window the default. */
+/** Starts the app detached: the Electron window, or the headless server when BRAINSTORM_APP=headless. */
 function launch(home: string): void {
   const root = repoRoot();
   const log = openSync(join(home, "server.log"), "a");
-  const [command, args] =
-    process.env.BRAINSTORM_APP === "electron"
-      ? [createRequire(join(root, "package.json"))("electron") as string, [root]]
-      : [process.execPath, ["--disable-warning=ExperimentalWarning", join(root, "dist", "server", "headless.js")]];
+  const headless = process.env.BRAINSTORM_APP === "headless";
+  const [command, args] = headless
+    ? [process.execPath, ["--disable-warning=ExperimentalWarning", join(root, "dist", "server", "headless.js")]]
+    : [createRequire(join(root, "package.json"))("electron") as string, [root]];
+  // An agent running inside an Electron host such as T3 can inherit this, which would make electron run as plain node.
+  const { ELECTRON_RUN_AS_NODE: _, ...env } = process.env;
   // stdout carries the UI URL with its token, which must never reach disk; only stderr is logged.
-  spawn(command, args, { detached: true, stdio: ["ignore", "ignore", log], windowsHide: true, env: process.env }).unref();
+  spawn(command, args, { detached: true, stdio: ["ignore", "ignore", log], windowsHide: headless, env }).unref();
   closeSync(log);
 }
 

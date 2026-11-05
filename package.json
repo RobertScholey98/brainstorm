@@ -4,6 +4,7 @@
   "private": true,
   "description": "A local design canvas attached to a T3 Code thread",
   "type": "module",
+  "main": "dist/electron/main.cjs",
   "engines": {
     "node": ">=22.18"
   },

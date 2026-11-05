@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
 import { availableParallelism } from "node:os";
+import { builtFile } from "../packageRoot";
 import { classifyOverrides, resolveProps } from "../props";
 import { issue, isError, parsePartName, type BlockDraft, type BlockId, type ContentHash, type Issue, type NonEmpty, type Override, type PartName } from "../types";
 import { createPool } from "./pool";
@@ -19,24 +19,12 @@ export type Checker = {
   close(): Promise<void>;
 };
 
-/** Built by scripts/build.mjs; found from the package root so it resolves from src/ under vitest and from dist/. */
-function workerFile(): URL {
-  for (let dir = new URL(".", import.meta.url); ; dir = new URL("..", dir)) {
-    if (existsSync(new URL("package.json", dir))) {
-      const file = new URL("dist/check/worker.cjs", dir);
-      if (!existsSync(file)) throw new Error(`${file.pathname} is missing; run npm run build`);
-      return file;
-    }
-    if (dir.pathname === new URL("..", dir).pathname) throw new Error("no package.json above the check module");
-  }
-}
-
 const BROWSER_GLOBALS = /^(window|document|navigator|location|localStorage|sessionStorage) is not defined$/;
 
 export function createChecker(options: { size?: number; timeoutMs?: number } = {}): Checker {
   const timeoutMs = options.timeoutMs ?? CHECK_TIMEOUT_MS;
   const pool = createPool<CheckJob, CheckOutcome>({
-    file: workerFile(),
+    file: builtFile("check/worker.cjs"),
     size: options.size ?? Math.max(1, Math.min(4, availableParallelism() - 1)),
     timeoutMs,
   });
