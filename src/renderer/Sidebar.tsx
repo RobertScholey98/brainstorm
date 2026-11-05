@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 import { takeoverPhrase } from "../core/machines";
 import { blockIdOf, type BlockId, type BlockView, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
+import { Mark } from "./Mark";
 import { Markdown } from "./Markdown";
 import { markdownText } from "./markdownSubset";
 import { CopyPhrase } from "./Regenerate";
@@ -25,9 +26,7 @@ export function AppSidebar({ children }: { children: ReactNode }) {
   return (
     <Sidebar variant="inset" collapsible="offcanvas">
       <SidebarHeader className="flex-row items-center gap-2 px-3 pt-2 pb-1">
-        <span aria-hidden className="grid size-6 place-items-center rounded-md bg-inverse text-xs font-semibold text-inverse-fg">
-          B
-        </span>
+        <Mark size={20} />
         <span className="text-sm font-semibold">Brainstorm</span>
         <SidebarTrigger className="ml-auto text-fg-muted" />
       </SidebarHeader>

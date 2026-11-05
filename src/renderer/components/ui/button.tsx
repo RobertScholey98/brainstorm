@@ -8,6 +8,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-inverse text-inverse-fg hover:bg-inverse/80",
+        accent: "bg-accent text-accent-fg hover:bg-accent-hover",
         outline:
           "border-border bg-card hover:bg-muted hover:text-fg aria-expanded:bg-muted aria-expanded:text-fg dark:border-border-strong dark:bg-border-strong/30 dark:hover:bg-border-strong/50",
         secondary:

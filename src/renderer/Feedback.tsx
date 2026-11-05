@@ -21,10 +21,11 @@ const GROUPS: readonly { state: FeedbackStatus["state"]; title: string }[] = [
   { state: "confirmed", title: "Confirmed" },
 ];
 
-const STATUS_DOT: Record<FeedbackStatus["state"], string> = {
-  open: "bg-accent",
-  addressed: "bg-accent",
-  confirmed: "bg-success",
+/** Pins are the accent's; status shows by form, as on the canvas: filled, outlined, then neutral. */
+const PIN_FORM: Record<FeedbackStatus["state"], string> = {
+  open: "bg-accent text-accent-fg",
+  addressed: "bg-card text-accent inset-ring-2 inset-ring-accent",
+  confirmed: "bg-muted text-fg-muted",
 };
 
 function statusLine(status: FeedbackStatus): string | null {
@@ -150,12 +151,12 @@ function FeedbackItem({
       data-status={f.status.state}
       data-place={place}
       data-focused={focused || undefined}
-      className="group relative mx-2 rounded-lg px-2 py-2 hover:bg-hover/60 data-[focused]:bg-hover"
+      className="group relative mx-2 rounded-lg px-2 py-2 hover:bg-hover/60 data-[focused]:bg-selected"
     >
       <div className="flex gap-2">
         <span
           aria-hidden
-          className={`mt-px grid h-4.5 min-w-4.5 shrink-0 place-items-center rounded-full rounded-bl-sm px-1 text-2xs font-semibold tabular-nums text-card ${STATUS_DOT[f.status.state]}`}
+          className={`mt-px grid h-4.5 min-w-4.5 shrink-0 place-items-center rounded-full rounded-bl-sm px-1 text-2xs font-semibold tabular-nums ${PIN_FORM[f.status.state]}`}
         >
           {f.id}
         </span>

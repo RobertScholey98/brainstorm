@@ -47,7 +47,7 @@ export function Regenerate({
     return (
       <Tooltip>
         <TooltipTrigger render={<span tabIndex={0} />}>
-          <Button size="sm" disabled data-regenerate-toggle>
+          <Button variant="accent" size="sm" disabled data-regenerate-toggle>
             Regenerate
           </Button>
         </TooltipTrigger>
@@ -57,7 +57,7 @@ export function Regenerate({
   }
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button size="sm" title="Send a request to the T3 thread" data-regenerate-toggle />}>Regenerate</PopoverTrigger>
+      <PopoverTrigger render={<Button variant="accent" size="sm" title="Send a request to the T3 thread" data-regenerate-toggle />}>Regenerate</PopoverTrigger>
       <PopoverContent align="end" className="w-popover-md gap-3 p-3" data-regenerate-menu>
         <RegenerateForm view={view} selected={selected} onClose={() => setOpen(false)} send={send} />
       </PopoverContent>
@@ -171,7 +171,7 @@ function RegenerateForm({
         <Button variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
           Cancel
         </Button>
-        <Button size="sm" disabled={body === null || sending} onClick={() => void submit()} data-send>
+        <Button variant="accent" size="sm" disabled={body === null || sending} onClick={() => void submit()} data-send>
           {sending && <Spinner data-icon="inline-start" />}
           {sending ? "Sending…" : "Send"}
         </Button>
@@ -205,9 +205,9 @@ function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
     case "queued":
       return <Clock className={`${cls} text-fg-muted`} aria-hidden />;
     case "asking":
-      return <CircleHelp className={`${cls} text-warning`} aria-hidden />;
+      return <CircleHelp className={`${cls} text-info`} aria-hidden />;
     case "no_change":
-      return <MessageSquare className={`${cls} text-warning`} aria-hidden />;
+      return <MessageSquare className={`${cls} text-info`} aria-hidden />;
     case "fulfilled":
       return <Check className={`${cls} text-success`} aria-hidden />;
     case "withdrawn":
