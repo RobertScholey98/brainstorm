@@ -14,4 +14,7 @@ npm install
 npm run build      # esbuild bundles into dist/
 npm test           # vitest
 npm run typecheck
+npm run verify:1   # the built CLI and headless server against a fake T3
 ```
+
+`npm install` builds `dist/` and exposes the `brainstorm` command (`npm link` puts it on PATH). Run `brainstorm --help` for the commands.

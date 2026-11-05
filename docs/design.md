@@ -31,7 +31,7 @@ This is the contract every implementation unit builds against. The product spec 
 
 **Window security.** `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true` and no preload. Electron loads `http://127.0.0.1:<port>/#ui=<uiToken>`. `setWindowOpenHandler` opens links externally and denies new windows. `will-navigate` is blocked off the app origin.
 
-**API security.** The server binds 127.0.0.1 only on a random port. It rejects a `Host` other than `127.0.0.1:<port>` or `localhost:<port>`, and an `Origin` that is present and not its own (that also rejects the canvas frame's `null`). `/v1/agent/*` needs `Authorization: Bearer <agentToken>`, and `/v1/ui/*` needs `Bearer <uiToken>`. The tokens are separate, so an agent can't set overrides or confirm feedback. Compare tokens in constant time. `GET /health` needs no token.
+**API security.** The server binds 127.0.0.1 only on a random port. It rejects a `Host` other than `127.0.0.1:<port>` or `localhost:<port>`, and an `Origin` that is present and not its own (that also rejects the canvas frame's `null`). `/v1/agent/*` needs `Authorization: Bearer <agentToken>`, and `/v1/ui/*` needs `Bearer <uiToken>`. The tokens are separate, so an agent can't set overrides or confirm feedback. Compare tokens in constant time. `GET /health` needs no token. `/v1/ui/events` needs the bearer header too, so the renderer reads it with `fetch`, not `EventSource`.
 
 **App data.** `BRAINSTORM_HOME` overrides the default `%APPDATA%\brainstorm\`. It holds:
 - `brainstorm.db`
@@ -134,11 +134,11 @@ brainstorm session list    [--thread <id>]                 # sessions in the thr
 brainstorm session attach  <id|title> [--thread <id>]
 brainstorm context         <session> [--thread <id>]
 brainstorm pull            <session> [--out <dir>]          # default .brainstorm/<session>
-brainstorm validate        <session> [--from <dir>]
+brainstorm validate        <session> [--from <dir>] [--thread <id>]
 brainstorm commit          <session> [--from <dir>] [--thread <id>] [--addresses 4,7] [--note <text>]
 ```
 
-- **Startup.** The CLI reads `api.json` and checks `/health`. If that fails, it starts the app (`electron <repoRoot>`, detached, resolved from the CLI's own install path, or `node dist/server/headless.js` when `BRAINSTORM_HEADLESS=1`), then waits up to 20 s for a fresh `api.json` with a healthy server.
+- **Startup.** The CLI reads `api.json` and checks `/health` (which must report the pid in `api.json`). If that fails, it starts the app detached behind a `start.lock`, resolved from the CLI's own install path, then waits up to 20 s for a fresh `api.json` with a healthy server. Until the Electron unit lands the app is `node dist/server/headless.js`; `BRAINSTORM_APP=electron` runs `electron <repoRoot>` instead. Only the server's stderr goes to `server.log`, because its stdout carries the UI token.
 - **`--thread`** defaults to `$T3CODE_THREAD_ID`. A command that needs a thread and has none fails with a `usage` error that names the variable.
 - **`pull`** refuses a non-empty directory unless its `brainstorm.json` names the same session. It then replaces `slots/` wholesale and rewrites `brainstorm.json` and `GUIDE.md`.
 - **`commit`** reads every file under the directory (cap 300 files and 4 MB, skipping `node_modules` and `.git`). On success it rewrites `base` in the directory's `brainstorm.json`.
@@ -147,13 +147,14 @@ Rules the server enforces:
 - `session new` resolves the thread through the bridge and creates the `project` row from `thread.projectId` if new. The session is created attached to that thread.
 - `attach` resolves the caller's thread. It refuses a thread whose `projectId` differs from the session's (`wrong_project`), and for a title that matches more than one session it returns `ambiguous_title` with candidates. Matching is an exact id, then a case-insensitive exact title, then a unique case-insensitive substring. The old attachment row gets `detached_at`.
 - `commit` and `validate` from a thread other than the attached one fail with `thread_not_attached`, naming the owning thread.
-- `commit` is one transaction, as follows:
+- `commit` writes in one transaction, as follows. `validate` runs steps 1 to 5 and writes nothing.
   1. Check the owner.
-  2. Run `parseWorkingCopy`, then check every new content hash in the worker. Every error comes back in one `validation_failed`.
+  2. Run `parseWorkingCopy`. Its failure still checks the blocks that did parse, so every error comes back in one `validation_failed`.
   3. Diff by hash against the latest iteration.
-  4. If there's no change and `--addresses` adds nothing, return the latest iteration with `created: false`. That's an idempotent replay.
-  5. Otherwise insert the iteration and its blocks, append `address` events, and fulfil the open request.
-  6. Return the warnings (`override_dropped`, `pin_lost`, `duplicate_part`, `out_of_scope`, `not_addressed`, `uncontrolled_prop`).
+  4. If there's no change and `--addresses` adds nothing, return the latest iteration with `created: false`. That's an idempotent replay, and it comes before the base check, so a replay converges even when the CLI died before rewriting `base`.
+  5. Refuse a stale base, then check every new content hash in the worker. Every error comes back in one `validation_failed`.
+  6. In one transaction, re-check the owner and the latest iteration (the check awaited the worker), insert the iteration and its blocks, append `address` events, and fulfil the open request.
+  7. Return the warnings (`override_dropped`, `pin_lost`, `duplicate_part`, `out_of_scope`, `not_addressed`, `uncontrolled_prop`).
 
 ### Context
 
@@ -281,7 +282,7 @@ The registry implements our catalog with shadcn components where their props fit
 
 ## Verification harness
 
-- **Fake T3.** `test/fake-t3/t3.cmd` plus `fake-t3.mjs` drive threads from a JSON state file named in `BRAINSTORM_FAKE_T3_STATE`. Each thread has `projectId`, `status`, `activeRunId`, `pendingRequestCount`, `messages` and `missing`. `send` appends messages and records them. A `fail` flag forces exit 1. Its JSON mirrors the real shapes recorded in `docs/t3-cli.md`.
+- **Fake T3.** `test/fake-t3/t3.cmd` plus `fake-t3.mjs` drive threads from a JSON state file named in `BRAINSTORM_FAKE_T3_STATE`. Each thread has `projectId`, `status`, `activeRunId`, `pendingRequestCount`, `messages` and `missing`. `send` appends messages and records them. A `fail` flag forces exit 1: `true` for every command, or a list such as `["send"]`. Its JSON mirrors the real shapes recorded in `docs/t3-cli.md`.
 - **Unit tests** use `vitest` on `src/core` against literal expected values.
 - **Verify scripts.** `npm run verify:<n>` (`scripts/verify/<n>-*.mjs`) starts the real artifact with a temp `BRAINSTORM_HOME`. That's the headless server plus the real CLI for item 1, and Playwright `_electron` for the app items. Each script prints `VERIFIED` or exits non-zero with what failed.
 - **Live checks** against real T3 are recorded in the decision trail with thread links.
