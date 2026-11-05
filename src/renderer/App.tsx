@@ -23,10 +23,10 @@ import {
 import { takeoverPhrase } from "../core/machines";
 import type { Api } from "./api";
 import { CanvasHost, type Placement } from "./CanvasHost";
+import { ExportButton } from "./Export";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { Inspector } from "./Inspector";
 import { PendingOverrides } from "./overrides";
-import { ExportButton } from "./Export";
 import { CopyPhrase, isOpen, RegenerateMenu, RequestStatus } from "./Regenerate";
 import { Sidebar } from "./Sidebar";
 
@@ -167,18 +167,18 @@ export function App({ api }: { api: Api }) {
 
   const onPicked = useCallback(
     (pin: Pin, at: { x: number; y: number }) => {
-      setSelectedSlot((blocks.find((b) => b.id === pin.blockId)?.slot ?? null) as SlotId | null);
+      onSelectBlock(pin.blockId);
       setInteraction({ kind: "composing", pin, at });
     },
-    [blocks],
+    [onSelectBlock],
   );
   const onPinClicked = useCallback(
     (id: FeedbackId) => {
       const f = feedback.find((x) => x.id === id);
-      if (f !== undefined) setSelectedSlot((blocks.find((b) => b.id === f.pin.blockId)?.slot ?? null) as SlotId | null);
+      if (f !== undefined) onSelectBlock(f.pin.blockId);
       setFocusedFeedback(id);
     },
-    [feedback, blocks],
+    [feedback, onSelectBlock],
   );
   const openFeedback = (f: Feedback) => {
     const block = blocks.find((b) => b.id === f.pin.blockId);

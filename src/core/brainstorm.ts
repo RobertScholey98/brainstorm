@@ -58,7 +58,6 @@ const SNAPSHOT_MESSAGES = 30;
 
 export type BrainstormOptions = {
   readonly dbPath: string;
-  /** Where exportHtml writes. */
   readonly exportsDir: string;
   readonly bridge: AgentBridge;
   readonly checker: Checker;

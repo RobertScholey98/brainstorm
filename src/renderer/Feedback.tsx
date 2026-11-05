@@ -215,7 +215,6 @@ function ItemButton({ primary, onClick, children }: { primary?: boolean; onClick
   );
 }
 
-/** A textarea that submits on Ctrl+Enter and cancels on Escape. */
 export function TextEditor({
   initial,
   placeholder,
@@ -281,7 +280,6 @@ export function TextEditor({
 const COMPOSER_WIDTH = 280;
 const COMPOSER_HEIGHT = 150;
 
-/** Anchored where Rob clicked in the canvas, kept inside the canvas area. */
 export function PinComposer({
   pin,
   at,

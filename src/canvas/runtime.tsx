@@ -124,7 +124,8 @@ function receive(message: HostToFrame): void {
       setState({ pins: message.pins });
       return;
     case "pulse":
-      pulse(message.id);
+      // A pulse can arrive just before its block renders, so the layout loop runs it once the pin is placed.
+      wantedPulse = message.id;
       return;
     case "variants":
       setState({ variants: message.slots });
@@ -317,11 +318,6 @@ function layoutPins(): void {
     lastPlacement = placement;
     post({ kind: "pin_placement", placed, detached });
   }
-}
-
-/** Waits for the pin to be placed, since a pulse can arrive just before its block renders. */
-function pulse(id: FeedbackId): void {
-  wantedPulse = id;
 }
 
 const highlight = document.createElement("div");
