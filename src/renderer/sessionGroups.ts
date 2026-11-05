@@ -1,0 +1,23 @@
+import type { ProjectId, SessionListing } from "../core/types";
+
+export type ProjectGroup = { readonly projectId: ProjectId; readonly label: string; readonly sessions: readonly SessionListing[] };
+
+const newestFirst = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
+
+/**
+ * The home sidebar's groups: one per project, labelled with the newest session's project name that isn't null.
+ * Groups and the rows in them both run from the most recent activity.
+ */
+export function groupByProject(sessions: readonly SessionListing[]): ProjectGroup[] {
+  const groups = new Map<ProjectId, SessionListing[]>();
+  for (const s of [...sessions].sort((a, b) => newestFirst(a.activeAt, b.activeAt))) {
+    const rows = groups.get(s.projectId);
+    if (rows === undefined) groups.set(s.projectId, [s]);
+    else rows.push(s);
+  }
+  return [...groups].map(([projectId, rows]) => ({
+    projectId,
+    label: [...rows].sort((a, b) => newestFirst(a.createdAt, b.createdAt)).find((s) => s.projectName !== null)?.projectName ?? "Other project",
+    sessions: rows,
+  }));
+}

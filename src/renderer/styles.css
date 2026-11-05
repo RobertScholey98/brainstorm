@@ -7,97 +7,120 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--foreground);
-  --color-popover: var(--card);
+  --color-popover: var(--popover);
   --color-popover-foreground: var(--foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--muted);
+  --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--hover);
+  --color-accent: var(--accent);
   --color-accent-foreground: var(--foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);
-  --color-ring: var(--primary);
-  --color-panel: var(--panel);
-  --color-warning: var(--warning);
-  --color-warning-surface: var(--warning-surface);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--primary);
+  --color-sidebar-primary-foreground: var(--primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--foreground);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--ring);
+  --color-canvas: var(--canvas);
+  --color-open: var(--open);
   --color-addressed: var(--addressed);
   --color-confirmed: var(--confirmed);
+  --color-attached: var(--attached);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* The app background is the sidebar's colour; the main panel is a lighter inset card on it. */
 :root {
   color-scheme: light;
+  --radius: 0.625rem;
   --background: #ffffff;
-  --panel: #f7f7f8;
-  --foreground: #1d1e22;
+  --foreground: #1b1b1a;
   --card: #ffffff;
-  --muted: #eef0f2;
-  --muted-foreground: #6a6f78;
-  --hover: #e9ebee;
-  --border: #e2e4e8;
-  --input: #d9dce1;
-  --primary: #3b63e6;
-  --primary-foreground: #ffffff;
+  --popover: #ffffff;
+  --primary: #1f1f1e;
+  --primary-foreground: #fafaf9;
+  --secondary: #f2f2f0;
+  --muted: #f2f2f0;
+  --muted-foreground: #6e6e6a;
+  --accent: #efefec;
   --destructive: #c4352b;
-  --warning: #8a5300;
-  --warning-surface: #fff5df;
+  --border: #e6e5e1;
+  --input: #dad9d4;
+  --ring: #a3a29d;
+  --sidebar: #f6f5f2;
+  --sidebar-foreground: #2b2b29;
+  --sidebar-accent: #e9e8e4;
+  /* The canvas frame paints its own background; this matches it so the region never flashes white. */
+  --canvas: #ebecef;
+  /* Feedback colours match the canvas pins, which the frame draws with the same values. */
+  --open: #3b63e6;
   --addressed: #c77c00;
   --confirmed: #2a9563;
+  --attached: #2fa36b;
+  --warning: #8a5300;
+  --warning-surface: #fff5df;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --background: #1b1c20;
-    --panel: #17181b;
-    --foreground: #e7e8eb;
-    --card: #202126;
-    --muted: #26282d;
-    --muted-foreground: #979ca6;
-    --hover: #2a2c31;
-    --border: #2c2e34;
-    --input: #383a41;
-    --primary: #7593ff;
-    --primary-foreground: #0f1013;
+    --background: #262624;
+    --foreground: #ecebe8;
+    --card: #262624;
+    --popover: #2e2e2b;
+    --primary: #ecebe8;
+    --primary-foreground: #1f1f1d;
+    --secondary: #33332f;
+    --muted: #33332f;
+    --muted-foreground: #a3a29c;
+    --accent: #363632;
     --destructive: #ff8a7f;
-    --warning: #f2b860;
-    --warning-surface: #33280f;
+    --border: #3a3a36;
+    --input: #4a4a45;
+    --ring: #77766f;
+    --sidebar: #1c1c1a;
+    --sidebar-foreground: #dcdbd6;
+    --sidebar-accent: #2c2c29;
+    --canvas: #121316;
+    --open: #7593ff;
     --addressed: #e9a23b;
     --confirmed: #4cc38a;
+    --attached: #4cc38a;
+    --warning: #f2b860;
+    --warning-surface: #33280f;
   }
 }
 
-html {
-  font-size: 14px;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-}
-
-body {
-  margin: 0;
-  background: var(--panel);
-  color: var(--foreground);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  overflow: hidden;
-}
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--input) transparent;
-}
-
-:focus-visible {
-  outline-color: var(--primary);
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: var(--input) transparent;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-sidebar text-foreground antialiased;
+    margin: 0;
+    font-family: var(--font-sans);
+    overflow: hidden;
+  }
 }

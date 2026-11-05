@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { seedDemo } from "../seed-demo.mjs";
-import { build, canvasFrame, checks, inBlock, launch, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-6");
@@ -28,7 +28,7 @@ try {
   });
   await window.setViewportSize({ width: 1440, height: 900 });
   const { session } = seedDemo(home, env);
-  const canvas = await canvasFrame(window);
+  const canvas = await openSession(window, session);
   await canvas.waitForSelector(inBlock("wheel/neon", "screen"));
 
   await window.click('button[data-variant="receipt"]');

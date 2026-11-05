@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, canvasFrame, checks, inBlock, launch, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-5");
@@ -39,7 +39,7 @@ try {
   });
   await window.setViewportSize({ width: 1440, height: 900 });
   const { session } = seedDemo(home, env);
-  const canvas = await canvasFrame(window);
+  const canvas = await openSession(window, session);
   await canvas.waitForSelector(inBlock("wheel/neon", "screen"));
   await canvas.waitForSelector(inBlock("result/card", "card"));
 

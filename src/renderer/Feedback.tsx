@@ -1,7 +1,9 @@
 import { MessageSquarePlus } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import type { Placement } from "./CanvasHost";
 
 /** Where a pin is on the canvas. Only the frame can tell placed from detached; the rest the view knows. */
@@ -20,7 +22,7 @@ const GROUPS: readonly { state: FeedbackStatus["state"]; title: string }[] = [
 ];
 
 const STATUS_DOT: Record<FeedbackStatus["state"], string> = {
-  open: "bg-primary",
+  open: "bg-open",
   addressed: "bg-addressed",
   confirmed: "bg-confirmed",
 };
@@ -64,23 +66,17 @@ export function FeedbackPanel({
   send: (action: RobAction) => Promise<unknown>;
 }) {
   return (
-    <section className="border-t border-border" aria-label="Feedback" data-feedback-panel>
+    <section className="border-t" aria-label="Feedback" data-feedback-panel>
       <header className="flex items-center gap-2 px-4 pt-3 pb-2">
-        <h2 className="text-[12px] font-semibold">Feedback</h2>
-        <span className="text-[12px] tabular-nums text-muted-foreground">{feedback.length > 0 ? feedback.length : ""}</span>
-        <button
-          type="button"
-          aria-pressed={picking}
-          data-pick-toggle
-          onClick={onPickToggle}
-          className="ml-auto flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium text-foreground hover:bg-accent aria-pressed:bg-primary aria-pressed:text-primary-foreground"
-        >
-          <MessageSquarePlus className="size-3.5" aria-hidden />
+        <h2 className="text-[13px] font-semibold">Feedback</h2>
+        <span className="text-xs tabular-nums text-muted-foreground">{feedback.length > 0 ? feedback.length : ""}</span>
+        <Button variant={picking ? "default" : "outline"} size="sm" className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
+          <MessageSquarePlus data-icon="inline-start" aria-hidden />
           {picking ? "Picking…" : "Pin comment"}
-        </button>
+        </Button>
       </header>
       {feedback.length === 0 ? (
-        <p className="px-4 pb-4 text-[12px] leading-relaxed text-muted-foreground">
+        <p className="px-4 pb-4 text-[13px]/relaxed text-muted-foreground">
           Pin a comment to an element in the canvas. The agent sees it with your next Regenerate.
         </p>
       ) : (
@@ -89,7 +85,7 @@ export function FeedbackPanel({
           if (items.length === 0) return null;
           return (
             <div key={state} className="pb-2" data-group={state}>
-              <h3 className="px-4 pt-1 pb-1 text-[11px] font-medium text-muted-foreground">
+              <h3 className="px-4 pt-1 pb-1 text-xs font-medium text-muted-foreground">
                 {title} <span className="tabular-nums">{items.length}</span>
               </h3>
               <ul className="grid">
@@ -154,7 +150,7 @@ function FeedbackItem({
       data-status={f.status.state}
       data-place={place}
       data-focused={focused || undefined}
-      className="group relative mx-2 rounded-md px-2 py-2 hover:bg-accent/60 data-[focused]:bg-accent"
+      className="group relative mx-2 rounded-lg px-2 py-2 hover:bg-accent/60 data-[focused]:bg-accent"
     >
       <div className="flex gap-2.5">
         <span
@@ -175,47 +171,31 @@ function FeedbackItem({
               }}
             />
           ) : (
-            <button type="button" onClick={onOpen} className="block w-full text-left text-[12.5px] leading-snug whitespace-pre-wrap" data-feedback-text>
+            <button type="button" onClick={onOpen} className="block w-full text-left text-[13px]/snug whitespace-pre-wrap" data-feedback-text>
               {f.text}
             </button>
           )}
-          <p className="pt-1 text-[11.5px] leading-snug text-muted-foreground" data-feedback-meta>
+          <p className="pt-1 text-xs/snug text-muted-foreground" data-feedback-meta>
             {block?.title ?? f.pin.blockId} · {f.pin.part ?? "whole block"}
             {line !== null && <span data-feedback-status> · {line}</span>}
           </p>
           {place !== "placed" && (
-            <p className="pt-0.5 text-[11.5px] leading-snug text-warning" data-feedback-place>
+            <p className="pt-0.5 text-xs/snug text-warning" data-feedback-place>
               {PLACE_NOTE[place]}
             </p>
           )}
           {!editing && (
             <div className="flex gap-1 pt-1.5 empty:hidden">
               {FEEDBACK_ACTIONS[f.status.state].map((action) => (
-                <ItemButton key={action} primary={action === "confirm"} onClick={() => run(action)}>
+                <Button key={action} variant={action === "confirm" ? "default" : "outline"} size="xs" onClick={() => run(action)}>
                   {ACTION_LABEL[action]}
-                </ItemButton>
+                </Button>
               ))}
             </div>
           )}
         </div>
       </div>
     </li>
-  );
-}
-
-function ItemButton({ primary, onClick, children }: { primary?: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        primary
-          ? "h-6 rounded-[5px] bg-primary px-2 text-[11.5px] font-medium text-primary-foreground hover:opacity-90"
-          : "h-6 rounded-[5px] px-2 text-[11.5px] font-medium text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)] hover:bg-background hover:text-foreground"
-      }
-    >
-      {children}
-    </button>
   );
 }
 
@@ -254,35 +234,22 @@ export function TextEditor({
   };
   return (
     <div className="grid gap-2">
-      <textarea
-        ref={area}
-        rows={3}
-        value={text}
-        placeholder={placeholder}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={onKey}
-        className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-[12.5px] leading-snug outline-none placeholder:text-muted-foreground focus:border-primary"
-      />
+      <Textarea ref={area} rows={3} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} className="resize-none" />
       <div className="flex items-center gap-1.5">
-        <span className="text-[11px] text-muted-foreground">Ctrl+Enter</span>
-        <button type="button" onClick={onCancel} className="ml-auto h-7 rounded-md px-2.5 text-[12px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground">
+        <span className="text-xs text-muted-foreground">Ctrl+Enter</span>
+        <Button variant="ghost" size="sm" className="ml-auto" onClick={onCancel}>
           Cancel
-        </button>
-        <button
-          type="button"
-          disabled={text.trim() === "" || busy}
-          onClick={() => void submit()}
-          className="h-7 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground disabled:opacity-45"
-        >
+        </Button>
+        <Button size="sm" disabled={text.trim() === "" || busy} onClick={() => void submit()}>
           {submitLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );
 }
 
-const COMPOSER_WIDTH = 280;
-const COMPOSER_HEIGHT = 150;
+const COMPOSER_WIDTH = 300;
+const COMPOSER_HEIGHT = 180;
 
 export function PinComposer({
   pin,
@@ -306,11 +273,11 @@ export function PinComposer({
       role="dialog"
       aria-label="New comment"
       data-composer
-      className="absolute z-10 grid gap-2 rounded-lg border border-border bg-background p-3 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.35)]"
+      className="absolute z-10 grid gap-2 rounded-xl bg-popover p-3 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10 animate-in fade-in-0 zoom-in-95 duration-100"
       style={{ left, top, width: COMPOSER_WIDTH }}
     >
-      <span aria-hidden className="absolute size-2 rounded-full bg-primary ring-2 ring-background" style={{ left: at.x - left - 4, top: at.y - top - 4 }} />
-      <p className="truncate text-[11.5px] text-muted-foreground">
+      <span aria-hidden className="absolute size-2 rounded-full bg-open ring-2 ring-background" style={{ left: at.x - left - 4, top: at.y - top - 4 }} />
+      <p className="truncate text-xs text-muted-foreground">
         <span className="font-medium text-foreground">{pin.part ?? "Whole block"}</span> in {block?.title ?? pin.blockId}
       </p>
       <TextEditor initial="" placeholder="What should change here?" submitLabel="Pin comment" onSubmit={onSave} onCancel={onCancel} />

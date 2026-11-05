@@ -1,5 +1,13 @@
-import { AlertTriangle, Check, CircleHelp, Clock, Loader2, MessageSquare, Undo2 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AlertTriangle, Check, CircleHelp, Clock, MessageSquare, Undo2 } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { requestFeedback, takeoverPhrase } from "../core/machines";
 import type { BlockId, BlockView, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
@@ -24,7 +32,42 @@ function requestBody(scope: RequestScope | null, text: string): RequestBody | nu
   return { scope, freetext };
 }
 
-export function RegenerateMenu({
+/** Regenerate opens the request form, or, when the gate is shut, stays disabled with the reason as its tooltip. */
+export function Regenerate({
+  view,
+  blocked,
+  selected,
+  send,
+}: {
+  view: SessionView;
+  blocked: string | null;
+  selected: BlockId | null;
+  send: (action: RobAction) => Promise<SessionView | null>;
+}) {
+  const [open, setOpen] = useState(false);
+  if (blocked !== null) {
+    return (
+      <Tooltip>
+        <TooltipTrigger render={<span tabIndex={0} />}>
+          <Button size="sm" disabled data-regenerate-toggle>
+            Regenerate
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{blocked}</TooltipContent>
+      </Tooltip>
+    );
+  }
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={<Button size="sm" title="Send a request to the T3 thread" data-regenerate-toggle />}>Regenerate</PopoverTrigger>
+      <PopoverContent align="end" className="w-[380px] gap-3 p-3" data-regenerate-menu>
+        <RegenerateForm view={view} selected={selected} onClose={() => setOpen(false)} send={send} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function RegenerateForm({
   view,
   selected,
   onClose,
@@ -41,20 +84,6 @@ export function RegenerateMenu({
   const [chosen, setChosen] = useState<ReadonlySet<BlockId>>(new Set(selected === null ? [] : [selected]));
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const panel = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    const onDown = (e: PointerEvent) => {
-      if (!panel.current?.contains(e.target as Node) && !(e.target as Element).closest?.("[data-regenerate-toggle]")) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("pointerdown", onDown);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("pointerdown", onDown);
-    };
-  }, [onClose]);
 
   const scope = scopeOf(
     kind,
@@ -78,34 +107,28 @@ export function RegenerateMenu({
   };
 
   return (
-    <div
-      ref={panel}
-      role="dialog"
-      aria-label="Regenerate"
-      data-regenerate-menu
-      className="absolute top-[calc(100%+6px)] right-0 z-30 grid w-[360px] gap-3 rounded-lg border border-border bg-background p-3 text-[12px] shadow-[0_16px_40px_-16px_rgb(0_0_0/0.4)]"
-    >
-      <div role="radiogroup" aria-label="Scope" className="flex rounded-md bg-muted p-0.5">
+    <>
+      <ToggleGroup
+        variant="outline"
+        size="sm"
+        spacing={0}
+        className="w-full"
+        value={[kind]}
+        onValueChange={(v) => v[0] !== undefined && setKind(v[0] as ScopeKind)}
+        aria-label="Scope"
+      >
         {SCOPES.map((s) => (
-          <button
-            key={s.kind}
-            type="button"
-            role="radio"
-            aria-checked={kind === s.kind}
-            data-scope={s.kind}
-            onClick={() => setKind(s.kind)}
-            className="h-7 flex-1 rounded-[5px] font-medium text-muted-foreground aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-[0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.08)]"
-          >
+          <ToggleGroupItem key={s.kind} value={s.kind} className="flex-1" data-scope={s.kind}>
             {s.label}
-          </button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
 
       {kind === "blocks" && (
         <div className="grid max-h-[220px] gap-2 overflow-y-auto" data-block-choices>
           {slots.map((slot) => (
             <fieldset key={slot.id} className="grid gap-0.5">
-              <legend className="pb-0.5 text-[11px] font-medium text-muted-foreground">{slot.title}</legend>
+              <legend className="pb-0.5 text-xs font-medium text-muted-foreground">{slot.title}</legend>
               {blocks
                 .filter((b) => b.slot === slot.id)
                 .map((b) => (
@@ -115,10 +138,10 @@ export function RegenerateMenu({
           ))}
         </div>
       )}
-      {kind === "all" && <p className="leading-relaxed text-muted-foreground">The agent may change any block, in every slot.</p>}
-      {kind === "described" && <p className="leading-relaxed text-muted-foreground">Say what to change. The agent works out which blocks that means.</p>}
+      {kind === "all" && <p className="text-muted-foreground">The agent may change any block, in every slot.</p>}
+      {kind === "described" && <p className="text-muted-foreground">Say what to change. The agent works out which blocks that means.</p>}
 
-      <textarea
+      <Textarea
         rows={3}
         value={text}
         aria-label="Free text"
@@ -126,16 +149,16 @@ export function RegenerateMenu({
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && void submit()}
         placeholder={kind === "described" ? "Describe what to change" : "Anything to add? (optional)"}
-        className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-[12.5px] leading-snug outline-none placeholder:text-muted-foreground focus:border-primary"
+        className="resize-none"
       />
 
       <div className="grid gap-1" data-attached-feedback>
-        <h3 className="text-[11px] font-medium text-muted-foreground">
+        <h3 className="text-xs font-medium text-muted-foreground">
           {attached.length === 0 ? "No open feedback in scope" : `Open feedback sent with it (${attached.length})`}
         </h3>
         {attached.map((f) => (
-          <p key={f.id} className="flex gap-1.5 leading-snug" data-attached={f.id}>
-            <span className="shrink-0 font-semibold tabular-nums text-primary">#{f.id}</span>
+          <p key={f.id} className="flex gap-1.5 text-[13px]/snug" data-attached={f.id}>
+            <span className="shrink-0 font-semibold tabular-nums text-open">#{f.id}</span>
             <span className="min-w-0 truncate" title={f.text}>
               {f.text}
             </span>
@@ -144,46 +167,41 @@ export function RegenerateMenu({
         ))}
       </div>
 
-      <div className="flex items-center gap-1.5 border-t border-border pt-3">
-        <span className="text-[11px] text-muted-foreground">Goes to the attached T3 thread</span>
-        <button type="button" onClick={onClose} className="ml-auto h-7 rounded-md px-2.5 font-medium text-muted-foreground hover:bg-accent hover:text-foreground">
+      <Separator />
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">Goes to the attached T3 thread</span>
+        <Button variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
           Cancel
-        </button>
-        <button
-          type="button"
-          disabled={body === null || sending}
-          onClick={() => void submit()}
-          data-send
-          className="flex h-7 items-center gap-1.5 rounded-md bg-primary px-3 font-medium text-primary-foreground disabled:opacity-45"
-        >
-          {sending && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
+        </Button>
+        <Button size="sm" disabled={body === null || sending} onClick={() => void submit()} data-send>
+          {sending && <Spinner data-icon="inline-start" />}
           {sending ? "Sending…" : "Send"}
-        </button>
+        </Button>
       </div>
-    </div>
+    </>
   );
 }
 
 function BlockChoice({ block, showing, checked, onToggle }: { block: BlockView; showing: boolean; checked: boolean; onToggle: () => void }) {
   return (
-    <label className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-accent" data-choice={block.id}>
-      <input type="checkbox" checked={checked} onChange={onToggle} className="size-3.5 accent-[var(--primary)]" />
-      <span className="truncate text-[12.5px]">{block.title}</span>
-      <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{showing ? "showing" : block.variant}</span>
+    <label className="flex h-8 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-accent" data-choice={block.id}>
+      <Checkbox checked={checked} onCheckedChange={onToggle} />
+      <span className="truncate">{block.title}</span>
+      <span className="ml-auto shrink-0 text-xs text-muted-foreground">{showing ? "showing" : block.variant}</span>
     </label>
   );
 }
 
 function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
-  const cls = "size-3.5 shrink-0";
+  const cls = "size-4 shrink-0";
   switch (phase) {
     case "sending":
-      return <Loader2 className={`${cls} animate-spin text-primary`} aria-hidden data-progress />;
+      return <Spinner className={`${cls} text-open`} aria-hidden data-progress />;
     case "working":
       return (
-        <span aria-hidden className="relative grid size-3.5 shrink-0 place-items-center" data-progress>
-          <span className="absolute size-2 animate-ping rounded-full bg-primary/60" />
-          <span className="size-2 rounded-full bg-primary" />
+        <span aria-hidden className="relative grid size-4 shrink-0 place-items-center" data-progress>
+          <span className="absolute size-2 animate-ping rounded-full bg-open/60" />
+          <span className="size-2 rounded-full bg-open" />
         </span>
       );
     case "queued":
@@ -217,9 +235,9 @@ export function RequestStatus({ view, send }: { view: SessionView; send: (action
   if (request === null) return null;
   const { phase } = request;
   return (
-    <div className="flex min-w-0 items-center gap-2" data-request-phase={phase.phase}>
+    <div className="flex min-w-0 items-center gap-2 text-[13px]" data-request-phase={phase.phase}>
       <PhaseIcon phase={phase.phase} />
-      <span className="truncate" title={request.message} data-request-message>
+      <span className="truncate text-muted-foreground" title={request.message} data-request-message>
         {request.message}
       </span>
       {phase.actions.length > 0 && (
@@ -238,20 +256,20 @@ function PhaseAction({ action, view, send }: { action: RequestPhaseAction; view:
   switch (action) {
     case "retry":
     case "resend":
-      return <BarButton action={action} onClick={() => void send({ kind: "retry_request" })}>{label}</BarButton>;
+      return <ActionButton action={action} onClick={() => void send({ kind: "retry_request" })}>{label}</ActionButton>;
     case "withdraw":
-      return <BarButton action={action} onClick={() => void send({ kind: "withdraw_request" })}>{label}</BarButton>;
+      return <ActionButton action={action} onClick={() => void send({ kind: "withdraw_request" })}>{label}</ActionButton>;
     case "open_thread":
       return view.thread === null ? null : (
-        <a
-          href={view.thread.link}
-          target="_blank"
-          rel="noreferrer"
+        <Button
+          variant="outline"
+          size="xs"
+          nativeButton={false}
+          render={<a href={view.thread.link} target="_blank" rel="noreferrer" />}
           data-request-action={action}
-          className="flex h-6 items-center rounded-[5px] px-2 text-[12px] font-medium text-foreground shadow-[inset_0_0_0_1px_var(--border)] hover:bg-accent"
         >
           {label}
-        </a>
+        </Button>
       );
     case "copy_phrase":
       return <CopyPhrase title={view.session.title} />;
@@ -266,24 +284,16 @@ export function CopyPhrase({ title }: { title: string }) {
     return () => clearTimeout(t);
   }, [copied]);
   return (
-    <BarButton
-      action="copy_phrase"
-      onClick={() => void navigator.clipboard.writeText(takeoverPhrase(title)).then(() => setCopied(true))}
-    >
+    <ActionButton action="copy_phrase" onClick={() => void navigator.clipboard.writeText(takeoverPhrase(title)).then(() => setCopied(true))}>
       {copied ? "Copied" : ACTION_LABEL.copy_phrase}
-    </BarButton>
+    </ActionButton>
   );
 }
 
-function BarButton({ action, onClick, children }: { action: RequestPhaseAction; onClick: () => void; children: ReactNode }) {
+function ActionButton({ action, onClick, children }: { action: RequestPhaseAction; onClick: () => void; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-request-action={action}
-      className="h-6 rounded-[5px] px-2 text-[12px] font-medium text-foreground shadow-[inset_0_0_0_1px_var(--border)] hover:bg-accent"
-    >
+    <Button variant="outline" size="xs" className="w-fit" onClick={onClick} data-request-action={action}>
       {children}
-    </button>
+    </Button>
   );
 }

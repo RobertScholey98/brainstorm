@@ -1,6 +1,7 @@
 import { JSONUIProvider, Renderer } from "@json-render/react";
 import type { Spec } from "@json-render/core";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { HEX_COLOR_PATTERN } from "../core/props";
 import type { AppearanceValue, BlockView, InapplicableOverride, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
 import { ControlScopeContext, controlRegistry, createBlockStore } from "./controls";
@@ -36,10 +37,10 @@ export function Inspector({
 }) {
   const blocks = view.iteration?.blocks ?? [];
   return (
-    <aside className="flex min-h-0 flex-col overflow-y-auto border-l border-border bg-background" aria-label="Inspector">
+    <aside className="flex min-h-0 w-[300px] shrink-0 flex-col overflow-y-auto border-l bg-background" aria-label="Inspector">
       {view.overrides.inapplicable.length > 0 && <Inapplicable items={view.overrides.inapplicable} blocks={blocks} onDismiss={onDismiss} />}
       {block === null || props === null ? (
-        <p className="px-4 py-4 text-[12px] text-muted-foreground">Select a frame to adjust it.</p>
+        <p className="px-4 py-4 text-[13px] text-muted-foreground">Select a frame to adjust it.</p>
       ) : (
         <BlockControls key={block.id} view={view} block={block} props={props} error={error} onSet={onSet} onReset={onReset} />
       )}
@@ -84,17 +85,17 @@ function BlockControls({
 
   return (
     <div data-block={block.id}>
-      <header className="border-b border-border px-4 pt-3 pb-3">
-        <div className="text-[11px] font-medium text-muted-foreground">{slot?.title ?? block.slot}</div>
-        <h2 className="truncate pt-0.5 text-[14px] font-semibold">{block.title}</h2>
+      <header className="border-b px-4 pt-3.5 pb-3">
+        <div className="text-xs font-medium text-muted-foreground">{slot?.title ?? block.slot}</div>
+        <h2 className="truncate pt-0.5 text-sm font-semibold">{block.title}</h2>
         {error !== null && (
-          <p role="alert" className="mt-2 rounded-md bg-destructive/10 px-2.5 py-2 text-[12px] text-destructive">
+          <p role="alert" className="mt-2 rounded-md bg-destructive/10 px-2.5 py-2 text-xs text-destructive">
             This block failed to render: {error}
           </p>
         )}
       </header>
       {block.props.appearance.length === 0 ? (
-        <p className="px-4 py-4 text-[12px] text-muted-foreground">This block has no adjustable settings.</p>
+        <p className="px-4 py-4 text-[13px] text-muted-foreground">This block has no adjustable settings.</p>
       ) : (
         <ControlScopeContext.Provider value={scope}>
           <JSONUIProvider registry={controlRegistry} store={store}>
@@ -116,8 +117,8 @@ function Inapplicable({
   onDismiss: (o: InapplicableOverride) => void;
 }) {
   return (
-    <section role="status" aria-label="Adjustments that no longer apply" className="border-b border-border bg-warning-surface px-4 py-3" data-banner="inapplicable">
-      <h2 className="text-[12px] font-semibold text-warning">
+    <section role="status" aria-label="Adjustments that no longer apply" className="border-b bg-warning-surface px-4 py-3" data-banner="inapplicable">
+      <h2 className="text-[13px] font-semibold text-warning">
         {items.length === 1 ? "An adjustment no longer applies" : `${items.length} adjustments no longer apply`}
       </h2>
       <ul className="grid gap-2 pt-2">
@@ -125,7 +126,7 @@ function Inapplicable({
           const { override: o, reason } = item;
           const title = blocks.find((b) => b.id === o.blockId)?.title ?? o.blockId;
           return (
-            <li key={`${o.blockId}/${o.prop}`} className="flex items-start gap-2 text-[12px] leading-snug" data-override={`${o.blockId}:${o.prop}`}>
+            <li key={`${o.blockId}/${o.prop}`} className="flex items-start gap-2 text-xs/snug" data-override={`${o.blockId}:${o.prop}`}>
               {isHex(o.value) && (
                 <span aria-hidden className="mt-0.5 size-3 shrink-0 rounded-[3px] shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" style={{ background: o.value }} />
               )}
@@ -135,13 +136,9 @@ function Inapplicable({
                 </span>{" "}
                 on {title}: {WHY[reason]}.
               </span>
-              <button
-                type="button"
-                onClick={() => onDismiss(item)}
-                className="ml-auto shrink-0 rounded-sm px-1.5 py-0.5 font-medium text-warning hover:bg-warning/10"
-              >
+              <Button variant="ghost" size="xs" className="ml-auto text-warning hover:bg-warning/10 hover:text-warning" onClick={() => onDismiss(item)}>
                 Dismiss
-              </button>
+              </Button>
             </li>
           );
         })}

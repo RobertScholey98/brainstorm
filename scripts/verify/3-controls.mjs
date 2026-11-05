@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";
-import { build, canvasFrame, checks, inBlock, launch, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-3");
@@ -26,8 +26,8 @@ async function neonState(window, canvas) {
   };
 }
 
-async function openNeon(window) {
-  const canvas = await canvasFrame(window);
+async function openNeon(window, session) {
+  const canvas = await openSession(window, session);
   await canvas.waitForSelector(inBlock("wheel/neon", "screen"));
   await canvas.click(inBlock("wheel/neon", "chore"));
   await window.waitForSelector('[data-block="wheel/neon"]');
@@ -38,7 +38,7 @@ let run = await launch(home, env);
 const { session, work } = seedDemo(home, env);
 try {
   await run.window.setViewportSize({ width: 1440, height: 900 });
-  let canvas = await openNeon(run.window);
+  let canvas = await openNeon(run.window, session);
   check("the neon wheel starts at its defaults", await neonState(run.window, canvas), {
     panel: { spinSeconds: "2.4", accent: "#ff2bd6" },
     canvas: { transition: "transform 2.4s cubic-bezier(0.12, 0.7, 0.14, 1)", accent: "#ff2bd6" },
@@ -63,7 +63,7 @@ try {
   await run.app.close();
   run = await launch(home, env);
   await run.window.setViewportSize({ width: 1440, height: 900 });
-  canvas = await openNeon(run.window);
+  canvas = await openNeon(run.window, session);
   check("both values survive a restart, in the panel and the canvas", await neonState(run.window, canvas), adjusted);
   await shot(run.window, shots, "2-restarted");
 

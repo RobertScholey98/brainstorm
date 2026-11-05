@@ -5,7 +5,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { build, checks, launch, root, shot } from "./electron.mjs";
+import { build, checks, launch, openSession, root, shot } from "./electron.mjs";
 
 const POLL_MS = 15_000;
 const DEADLINE = Date.now() + 30 * 60_000;
@@ -141,7 +141,8 @@ try {
     return s?.latest === 1 ? s : undefined;
   });
   check("the agent's session has the title and iteration 1", { title: session.title, latest: session.latest }, { title, latest: 1 });
-  await window.waitForSelector(`text=${title}`, { timeout: 30_000 });
+  await window.waitForSelector(`[data-session="${session.id}"]`, { timeout: 30_000 });
+  await openSession(window, session.id);
   await shot(window, shots, "1-session");
 
   const freetext = "make the confirmation easier to notice";

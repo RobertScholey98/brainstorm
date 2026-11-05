@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";
-import { build, canvasFrame, checks, inBlock, launch, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-4");
@@ -32,7 +32,7 @@ const { app, window, errors } = await launch(home, env);
 try {
   await window.setViewportSize({ width: 1440, height: 900 });
   const { session, work } = seedDemo(home, env);
-  const canvas = await canvasFrame(window);
+  const canvas = await openSession(window, session);
   await canvas.waitForSelector(HEADLINE);
 
   await window.click("[data-pick-toggle]");

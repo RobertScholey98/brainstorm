@@ -1,7 +1,7 @@
 // Proves v0.1 item 2 on the real Electron app: blocks render in the sandboxed canvas frame, each slot's variant
 // switch swaps its block, and switching variants keeps another block's override, in the canvas and in the view.
 import { seedDemo } from "../seed-demo.mjs";
-import { build, canvasFrame, checks, inBlock, launch, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-2");
@@ -11,12 +11,12 @@ const { app, window, errors, api } = await launch(home, env);
 try {
   await window.setViewportSize({ width: 1440, height: 900 });
   const { session } = seedDemo(home, env);
-  const canvas = await canvasFrame(window);
+  const canvas = await openSession(window, session);
   await canvas.waitForSelector(inBlock("wheel/neon", "screen"));
   await canvas.waitForSelector(inBlock("result/card", "card"));
   await shot(window, shots, "1-seeded");
 
-  check("the session the agent created is open", (await window.textContent("header"))?.includes("Chore roulette"), true);
+  check("the session the agent created is open", (await window.textContent("[data-topbar] h1"))?.trim() === "Chore roulette", true);
   check(
     "each slot renders its first variant inside the host's data-bid wrapper",
     await canvas.$$eval("#canvas > .bs-frame", (frames) =>

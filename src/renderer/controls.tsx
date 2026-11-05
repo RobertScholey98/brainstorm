@@ -243,8 +243,8 @@ function Section({ props, children }: BaseComponentProps<{ title: string | null 
   // A derived spec titles its one section with the block title, which the panel header already shows.
   const title = props.title === scope?.block.title ? null : props.title;
   return (
-    <section className="grid gap-3.5 border-b border-border px-4 pt-3.5 pb-4 last:border-b-0">
-      {title !== null && <h3 className="text-[12px] font-semibold text-foreground">{title}</h3>}
+    <section className="grid gap-4 border-b px-4 pt-4 pb-5 last:border-b-0">
+      {title !== null && <h3 className="text-xs font-semibold text-muted-foreground">{title}</h3>}
       {children}
     </section>
   );

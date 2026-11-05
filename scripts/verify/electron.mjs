@@ -75,6 +75,13 @@ export async function canvasFrame(window) {
   }
 }
 
+/** Opens a brainstorm from the home sidebar, the way Rob does, and returns the canvas frame. */
+export async function openSession(window, id) {
+  await window.click(`[data-session="${id}"]`);
+  await window.waitForSelector('[data-sidebar-panel="session"]');
+  return canvasFrame(window);
+}
+
 /** A block's root element inside the canvas, found through the host-stamped wrapper. */
 export const inBlock = (blockId, part) => `div[data-bid="${blockId}"] [data-part="${part}"]`;
 
