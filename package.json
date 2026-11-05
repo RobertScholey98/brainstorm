@@ -20,6 +20,7 @@
     "verify:4": "node scripts/verify/4-feedback.mjs",
     "verify:5": "node scripts/verify/5-regenerate.mjs",
     "verify:6": "node scripts/verify/6-export.mjs",
+    "verify:7": "node scripts/verify/7-shell.mjs",
     "verify:live": "node scripts/verify/live-t3.mjs"
   },
   "dependencies": {
