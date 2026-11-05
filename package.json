@@ -19,7 +19,8 @@
     "verify:3": "node scripts/verify/3-controls.mjs",
     "verify:4": "node scripts/verify/4-feedback.mjs",
     "verify:5": "node scripts/verify/5-regenerate.mjs",
-    "verify:6": "node scripts/verify/6-export.mjs"
+    "verify:6": "node scripts/verify/6-export.mjs",
+    "verify:live": "node scripts/verify/live-t3.mjs"
   },
   "dependencies": {
     "@json-render/core": "0.22.0",
