@@ -1,6 +1,7 @@
 // A stand-in for `t3 thread …`, driven by the JSON file named in BRAINSTORM_FAKE_T3_STATE:
 // { "fail": false | true | ["send", "show", "list"],
 //   "failAfter": ["send"],  commands that do their work and then exit 1, as when the CLI loses the reply
+//   "hold": ["send"],  commands that wait, before doing anything, until they are no longer listed
 //   "threads": { "<threadId>": { "projectId", "title", "status", "activeRunId", "latestRunId",
 //                               "pendingRequestCount", "messages": [{ "role", "runId", "text" }], "missing" } },
 //   "sent": [{ "thread", "message" }] }
@@ -24,6 +25,7 @@ const fail = (message) => {
 };
 
 const [group, command, ...rest] = process.argv.slice(2);
+while (load().hold?.includes(command)) await new Promise((r) => setTimeout(r, 100));
 const flags = new Map();
 const positionals = [];
 for (let i = 0; i < rest.length; i++) {

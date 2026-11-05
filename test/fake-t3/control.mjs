@@ -40,5 +40,6 @@ export function fakeT3(statePath) {
     setMissing: (id, missing) => update((s) => void (thread(s, id).missing = missing)),
     setFail: (fail) => update((s) => void (s.fail = fail)),
     setFailAfter: (failAfter) => update((s) => void (s.failAfter = failAfter)),
+    setHold: (hold) => update((s) => void (s.hold = hold)),
   };
 }

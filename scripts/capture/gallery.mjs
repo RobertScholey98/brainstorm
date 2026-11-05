@@ -1,0 +1,736 @@
+// Captures every screen and state of the app for a design review round:
+//
+//   npm run capture -- --round <n>
+//
+// Writes design-review/round-<n>/app/<theme>/<width>/<NN-name>.png, a manifest.json reviewers read, and contact
+// sheets at 1440 for a quick check that every shot settled. The round folder is rebuilt from scratch on every run.
+import { execFileSync } from "node:child_process";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { parseArgs } from "node:util";
+import { chromium } from "playwright";
+import { fakeT3 } from "../../test/fake-t3/control.mjs";
+import { brainstorm, DEMO_THREAD, demoEnv } from "../seed-demo.mjs";
+import { build, canvasFrame, inBlock, launch, root } from "../verify/electron.mjs";
+
+const { values } = parseArgs({ options: { round: { type: "string" } } });
+const round = Number(values.round);
+if (values.round === undefined || !Number.isInteger(round) || round < 0) {
+  console.error("usage: npm run capture -- --round <n>");
+  process.exit(1);
+}
+
+const COMBOS = [
+  { theme: "light", width: 1440, height: 900 },
+  { theme: "dark", width: 1440, height: 900 },
+  { theme: "light", width: 1100, height: 720 },
+  { theme: "dark", width: 1100, height: 720 },
+];
+const SETTLE_MS = 10_000;
+const PHASE_MS = 20_000;
+
+const SHOTS = [
+  ["home-empty", "empty", "Home on a fresh install: no brainstorms in the sidebar, and the empty state says how to start one"],
+  ["home", "home", "Home with three project groups (chores, kitchen, Other project), a lost thread, and a long title that truncates"],
+  ["home-collapsed-group", "home", "Home with the kitchen project group collapsed"],
+  ["sidebar-collapsed", "canvas", "The Chore roulette brainstorm with the sidebar collapsed, so the toggle sits in the top bar"],
+  ["state-hover-row", "home", "Home with the pointer over the Chore roulette session row"],
+  ["session", "canvas", "The Chore roulette brainstorm as it opens: two slots, the first frame selected, its controls in the Inspector"],
+  ["session-multi-slot", "views", "A brainstorm with three slots and several variants each, where the showing variants carry long about text"],
+  ["session-wide-frame", "views", "A 980 px frame wider than the canvas, scrolled halfway across"],
+  ["session-block-error", "views", "A block that throws in the canvas: the frame shows the failure, and the Inspector names the error"],
+  ["session-no-iteration", "views", "A brainstorm whose agent hasn't committed yet: waiting state, Regenerate and Export disabled"],
+  ["inspector-overridden", "inspector", "The Inspector on the assignment card with the headline, accent and name size overridden"],
+  ["inspector-inapplicable", "inspector", "The Inspector banner for an override that no longer applies, after the agent removed the card's accent"],
+  ["state-regenerate-open-all", "canvas", "The Regenerate popover with Everything selected, free text typed and one open comment attached"],
+  ["state-regenerate-open-blocks", "canvas", "The Regenerate popover with Selected blocks, the block checklist and free text"],
+  ["state-regenerate-open-described", "canvas", "The Regenerate popover with Describe it and its required free text"],
+  ["state-regenerate-blocked", "phases", "Regenerate disabled while request 1 is open, with its tooltip showing"],
+  ["state-export-open", "canvas", "The Export popover while the file is still being written"],
+  ["state-export-done", "canvas", "The Export popover once the file is written, with its path and Show in folder"],
+  ["state-pick-mode", "canvas", "Pin mode: the hint pill over the canvas and the highlight on the hovered headline"],
+  ["state-pin-composer", "canvas", "The pin composer over the canvas with a comment typed"],
+  ["state-tooltip", "canvas", "A tooltip on an ordinary control"],
+  ["state-notice", "canvas", "The top bar notice after an action fails because Brainstorm's server didn't answer"],
+  ["feedback-list", "canvas", "Feedback with open, addressed and confirmed comments, and comment 1 focused from its pin"],
+  ["phase-sending", "phases", "Request phase: sending to T3, with Regenerate already disabled"],
+  ["phase-queued", "phases", "Request phase: queued in T3"],
+  ["phase-working", "phases", "Request phase: the agent is working"],
+  ["phase-asking", "phases", "Request phase: the agent is asking something in T3"],
+  ["phase-run-failed", "phases", "Request phase: the agent's run failed, with Retry and Withdraw"],
+  ["phase-send-failed", "phases", "Request phase: the send failed, with the error and Retry"],
+  ["phase-no-change", "phases", "Request phase: the agent replied without changing the design"],
+  ["phase-fulfilled", "phases", "Request phase: fulfilled, naming the new iteration and the block that changed"],
+  ["phase-withdrawn", "phases", "Request phase: withdrawn"],
+  ["phase-thread-lost", "phases", "Request phase: the thread is gone, with the takeover phrase and Copy phrase"],
+  ["session-unattached", "phases", "The lost-thread session once its request is withdrawn: the sidebar shows the takeover phrase and Copy phrase"],
+  ["phase-previous-thread", "phases", "Request phase: sent to the previous thread after another thread took the session over"],
+].map(([name, scene, about], i) => ({ name, scene, about, file: `${String(i + 1).padStart(2, "0")}-${name}` }));
+const byName = new Map(SHOTS.map((s) => [s.name, s]));
+/** name -> { status: "captured" } | { status: "missing" | "partial", reason } */
+const outcomes = new Map();
+
+const out = join(root, "design-review", `round-${round}`);
+const comboDir = (c) => join(out, "app", c.theme, String(c.width));
+rmSync(out, { recursive: true, force: true });
+for (const c of COMBOS) mkdirSync(comboDir(c), { recursive: true });
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const shotOf = (name) => {
+  const shot = byName.get(name);
+  if (shot === undefined) throw new Error(`no shot named ${name} in the registry`);
+  return shot;
+};
+
+function missing(name, reason) {
+  const shot = shotOf(name);
+  for (const c of COMBOS) writeFileSync(join(comboDir(c), `${shot.file}.missing.txt`), `${reason}\n`);
+  outcomes.set(name, { status: "missing", reason });
+  console.log(`MISSING ${shot.file}: ${reason}`);
+}
+
+const RUNNING_ANIMATIONS = () =>
+  document
+    .getAnimations()
+    .filter((a) => a.playState === "running" && a.effect?.getComputedTiming().iterations !== Infinity)
+    .map((a) => a.animationName || a.transitionProperty || "animation");
+
+const inFrames = (page, fn) => Promise.all(page.frames().map((f) => f.evaluate(fn).catch(() => null)));
+
+/** Null once no finite animation or transition is running in any frame, else what still is at the deadline. */
+async function untilStill(page, deadline = Date.now() + SETTLE_MS) {
+  for (;;) {
+    const running = (await inFrames(page, RUNNING_ANIMATIONS)).flat().filter(Boolean);
+    if (running.length === 0) return null;
+    if (Date.now() > deadline) return `animations still running after ${SETTLE_MS / 1000} s: ${[...new Set(running)].join(", ")}`;
+    await sleep(50);
+  }
+}
+
+/** Null once the page is settled, else why it never did. */
+async function settle(page, { keepFocus }) {
+  const deadline = Date.now() + SETTLE_MS;
+  await inFrames(page, () => document.fonts.ready.then(() => null));
+  let clearSince = Date.now();
+  while (Date.now() - clearSince < 1000) {
+    if (Date.now() > deadline) return "a loading skeleton kept showing";
+    if (await page.evaluate(() => document.querySelector("[data-slot=skeleton], .animate-pulse") !== null)) clearSince = Date.now();
+    await sleep(100);
+  }
+  if (!keepFocus) await inFrames(page, () => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+  const moving = await untilStill(page, deadline);
+  if (moving !== null) return moving;
+  await inFrames(page, () => Promise.race([new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))), new Promise((r) => setTimeout(r, 500))]));
+  return null;
+}
+
+/** Moves the pointer onto the top bar's empty middle, where nothing reacts to hover. */
+const park = (page, c) => page.mouse.move(Math.round(c.width * 0.55), 24);
+
+async function setCombo(page, c) {
+  await page.setViewportSize({ width: c.width, height: c.height });
+  await page.emulateMedia({ colorScheme: c.theme });
+}
+
+/** Shoots the current state in every theme and width. `each` re-enters anything a resize or a parked pointer undoes. */
+async function capture(page, name, { keepFocus = false, each } = {}) {
+  const shot = shotOf(name);
+  const problems = [];
+  for (const c of COMBOS) {
+    await setCombo(page, c);
+    await park(page, c);
+    // A hover or click aimed while the layout is still moving lands on where an element was.
+    await untilStill(page);
+    if (each !== undefined) await each(c);
+    const unsettled = await settle(page, { keepFocus });
+    if (unsettled === null) {
+      await page.screenshot({ path: join(comboDir(c), `${shot.file}.png`) });
+    } else {
+      writeFileSync(join(comboDir(c), `${shot.file}.missing.txt`), `Never settled: ${unsettled}\n`);
+      problems.push(`${c.theme} ${c.width}: never settled (${unsettled})`);
+    }
+  }
+  await setCombo(page, COMBOS[0]);
+  outcomes.set(name, problems.length === 0 ? { status: "captured" } : { status: problems.length === COMBOS.length ? "missing" : "partial", reason: problems.join("; ") });
+  console.log(`${problems.length === 0 ? "shot   " : "PARTIAL"} ${shot.file}${problems.length === 0 ? "" : `: ${problems.join("; ")}`}`);
+}
+
+function must(step, r) {
+  if (r.code !== 0 || r.json?.ok !== true) throw new Error(`${step} failed (exit ${r.code}): ${r.stdout}${r.stderr}`);
+  return r.json.data;
+}
+
+/** The fake T3's environment for a home, minus ELECTRON_RUN_AS_NODE, which would start Electron as plain Node. */
+const appEnv = (home) => (({ ELECTRON_RUN_AS_NODE: _, ...rest }) => rest)(demoEnv(home));
+
+async function start(home, env) {
+  const run = await launch(home, env);
+  // The window is real and on screen, so the desk's own pointer would otherwise leave hover states in the shots.
+  await run.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setIgnoreMouseEvents(true));
+  await setCombo(run.window, COMBOS[0]);
+  return run;
+}
+
+const demo = (slot, variant) => join(root, "scripts", "demo", "chore-roulette", "slots", slot, variant);
+
+const LONG_ABOUT = {
+  neon: [
+    "**Hypothesis:** a loud, arcade-style wheel makes the draw feel like a game the whole flat watches, so nobody argues with the result afterwards, even when it lands on the same person twice in one week.",
+    "**Tradeoff:** the neon look is fun on the first spin and tiring by the tenth. It also hides how the odds are weighted, which is the part people actually distrust.",
+    "**Try:** the calmer palette, a shorter spin, and turning the glow down to see whether it still feels fair without the theatre.",
+  ].join("\n\n"),
+  card: [
+    "**Hypothesis:** the result sticks when the person picked has to accept it in front of everyone, with one swap a week as the only way out and the points shown before and after.",
+    "**Tradeoff:** one swap is a guess. Too strict and people stop opening the app; too loose and the bins never go out on time.",
+    "**Try:** the compact density on smaller phones, a calmer stamp word, and a headline that names the chore instead of the wheel.",
+  ].join("\n\n"),
+  ledger: [
+    "**Hypothesis:** a running points ledger answers \"why me again?\" before anyone asks it, because the history is right there under the result.",
+    "**Tradeoff:** a ledger invites point-scoring between flatmates, and it is one more thing to read on a small screen.",
+  ].join("\n\n"),
+};
+
+function gitRepo(home, name) {
+  const repo = join(home, "repos", name);
+  mkdirSync(repo, { recursive: true });
+  const git = (...args) => execFileSync("git", args, { cwd: repo, stdio: "ignore" });
+  git("init", "-q");
+  git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init");
+  return { repo, git };
+}
+
+/**
+ * Creates a session the way an agent does: session new, then pull, write the blocks and commit when it has slots.
+ * Each variant copies a demo block (`from`) and then writes `files` over it.
+ */
+function seed(home, env, { title, thread, project, brief, slots, note = "First pass" }) {
+  const args = ["session", "new", "--title", title, "--thread", thread, "--project", project, ...(brief ? ["--brief", brief] : []), "--json"];
+  const id = must(`session new ${title}`, brainstorm(env, args)).session.id;
+  if (slots === undefined) return { id };
+  const work = join(home, "work", id);
+  must(`pull ${title}`, brainstorm(env, ["pull", id, "--out", work, "--json"]));
+  for (const slot of slots) {
+    for (const [variant, { from, files = {} }] of Object.entries(slot.variants)) {
+      const dir = join(work, "slots", slot.id, variant);
+      if (from !== undefined) cpSync(from, dir, { recursive: true });
+      mkdirSync(dir, { recursive: true });
+      for (const [file, text] of Object.entries(files)) writeFileSync(join(dir, file), text);
+    }
+  }
+  const manifest = JSON.parse(readFileSync(join(work, "brainstorm.json"), "utf8"));
+  const shape = slots.map(({ id: slotId, title: slotTitle, frame }) => ({ id: slotId, title: slotTitle, frame }));
+  writeFileSync(join(work, "brainstorm.json"), `${JSON.stringify({ ...manifest, slots: shape }, null, 2)}\n`);
+  must(`commit ${title}`, brainstorm(env, ["commit", id, "--from", work, "--thread", thread, "--note", note, "--json"]));
+  return { id, work };
+}
+
+let agentCopies = 0;
+/** The agent pulls a fresh copy, edits one file and commits it. */
+function agentCommit(home, env, session, { file, from, to, args = [] }) {
+  const copy = join(home, "agent", String(++agentCopies));
+  must("agent pull", brainstorm(env, ["pull", session, "--out", copy, "--json"]));
+  const path = join(copy, ...file.split("/"));
+  const text = readFileSync(path, "utf8");
+  if (!text.includes(from)) throw new Error(`${file} no longer contains ${JSON.stringify(from)}`);
+  writeFileSync(path, text.replace(from, to));
+  return must("agent commit", brainstorm(env, ["commit", session, "--from", copy, ...args, "--json"]));
+}
+
+function retitled(slot, variant, title) {
+  const json = JSON.parse(readFileSync(join(demo(slot, variant), "block.json"), "utf8"));
+  return JSON.stringify({ ...json, title }, null, 2);
+}
+
+const BROKEN_BLOCK = `import { useEffect } from "react";
+
+export default function RotaPreview({ label }) {
+  useEffect(() => {
+    const rota = undefined;
+    document.title = String(rota.members.length);
+  }, []);
+  return (
+    <div data-part="screen" style={{ padding: 24, fontFamily: "system-ui" }}>
+      {label}
+    </div>
+  );
+}
+`;
+const BROKEN_JSON = JSON.stringify(
+  { title: "Rota preview", props: { data: {}, appearance: { label: { type: "text", label: "Label", default: "This week" } } } },
+  null,
+  2,
+);
+
+const KITCHEN_THREAD = "c0ffee00-0000-4000-8000-00000000c4a2";
+const LOOSE_THREAD = "c0ffee00-0000-4000-8000-00000000c4a3";
+const LIST_THREAD = "c0ffee00-0000-4000-8000-00000000c4a4";
+const TAKEOVER_THREAD = "33333333-3333-4333-8333-333333333333";
+const LONG_TITLE = "Onboarding a new flatmate into the rota, the shared shopping list and the bills split all at once";
+
+function seedAll(home, env, t3) {
+  t3.addThread(KITCHEN_THREAD, { projectId: "kitchen-proj", title: "Kitchen rota study" });
+  t3.addThread(LOOSE_THREAD, { projectId: "loose-proj", title: "Loose notes" });
+  t3.addThread(LIST_THREAD, { projectId: "loose-proj", title: "Shopping list sketch" });
+  const chores = gitRepo(home, "chores").repo;
+  const { git } = gitRepo(home, "kitchen");
+  const kitchen = join(home, "repos", "t3-9f2e11aa");
+  git("worktree", "add", "-q", kitchen);
+  const loose = join(home, "not-a-repo");
+  mkdirSync(loose, { recursive: true });
+
+  const demoSlots = [
+    { id: "wheel", title: "The wheel", frame: { width: 390, height: 760 }, variants: { neon: { from: demo("wheel", "neon") }, reel: { from: demo("wheel", "reel") }, terminal: { from: demo("wheel", "terminal") } } },
+    { id: "result", title: "The result", frame: { width: 390 }, variants: { card: { from: demo("result", "card") }, receipt: { from: demo("result", "receipt") } } },
+  ];
+  const brief =
+    "Give one chore an owner by spinning, and make the result stick. A cyberpunk phone app for a shared flat: " +
+    "the pick has to feel fair, the person picked has to accept it, and the crew has to see how it was decided.";
+
+  const sessions = {};
+  sessions.loose = seed(home, env, { title: "Loose notes", thread: LOOSE_THREAD, project: loose }).id;
+  sessions.list = seed(home, env, { title: "Shopping list sketch", thread: LIST_THREAD, project: loose }).id;
+  seed(home, env, {
+    title: LONG_TITLE,
+    thread: KITCHEN_THREAD,
+    project: kitchen,
+    slots: [{ id: "result", title: "The result", frame: { width: 390 }, variants: { card: { from: demo("result", "card") } } }],
+  });
+  sessions.kitchen = seed(home, env, { title: "Kitchen rota", thread: KITCHEN_THREAD, project: kitchen, slots: demoSlots });
+  sessions.broken = seed(home, env, {
+    title: "Rota preview",
+    thread: DEMO_THREAD,
+    project: chores,
+    slots: [
+      { id: "preview", title: "Preview", frame: { width: 390, height: 320 }, variants: { broken: { files: { "block.tsx": BROKEN_BLOCK, "block.json": BROKEN_JSON } } } },
+      { id: "result", title: "The result", frame: { width: 390 }, variants: { card: { from: demo("result", "card") } } },
+    ],
+  }).id;
+  sessions.wide = seed(home, env, {
+    title: "Start a task",
+    thread: DEMO_THREAD,
+    project: chores,
+    slots: [{ id: "result", title: "Wide frame", frame: { width: 980, height: 600 }, variants: { card: { from: demo("result", "card") } } }],
+  }).id;
+  sessions.multi = seed(home, env, {
+    title: "Rota handover",
+    thread: DEMO_THREAD,
+    project: chores,
+    slots: [
+      {
+        id: "wheel",
+        title: "The wheel",
+        frame: { width: 390, height: 760 },
+        variants: {
+          neon: { from: demo("wheel", "neon"), files: { "about.md": LONG_ABOUT.neon } },
+          reel: { from: demo("wheel", "reel") },
+          terminal: { from: demo("wheel", "terminal") },
+        },
+      },
+      {
+        id: "result",
+        title: "The result",
+        frame: { width: 390 },
+        variants: { card: { from: demo("result", "card"), files: { "about.md": LONG_ABOUT.card } }, receipt: { from: demo("result", "receipt") } },
+      },
+      {
+        id: "history",
+        title: "The history",
+        frame: { width: 390 },
+        variants: {
+          ledger: { from: demo("result", "receipt"), files: { "about.md": LONG_ABOUT.ledger, "block.json": retitled("result", "receipt", "Points ledger") } },
+          stamp: { from: demo("result", "card"), files: { "block.json": retitled("result", "card", "Stamp history") } },
+        },
+      },
+    ],
+  }).id;
+  sessions.roulette = seed(home, env, { title: "Chore roulette", thread: DEMO_THREAD, project: chores, brief, slots: demoSlots, note: "Three wheels and two results" });
+  return sessions;
+}
+
+const HEADLINE = inBlock("result/card", "headline");
+
+function scenes(page, home, env, t3, sessions) {
+  const phase = (name) => page.waitForSelector(`[data-request-phase="${name}"]`, { timeout: PHASE_MS });
+
+  async function goHome() {
+    await page.keyboard.press("Escape");
+    if ((await page.$("[data-back]")) !== null) await page.click("[data-back]");
+    await page.waitForSelector('[data-sidebar-panel="home"]');
+  }
+
+  /** Opens a session from home and returns its canvas frame, or null when it has no iteration yet. */
+  async function open(id, waitFor) {
+    await goHome();
+    await page.click(`[data-session="${id}"]`);
+    await page.waitForSelector('[data-sidebar-panel="session"]');
+    if (waitFor === undefined) return null;
+    const canvas = await canvasFrame(page);
+    for (const selector of waitFor) await canvas.waitForSelector(selector);
+    return canvas;
+  }
+
+  async function ensurePicking() {
+    if ((await page.getAttribute("[data-pick-toggle]", "aria-pressed")) !== "true") await page.click("[data-pick-toggle]");
+    await page.waitForSelector("[data-pick-hint]");
+  }
+
+  async function pinComment(canvas, selector, text) {
+    await ensurePicking();
+    await canvas.click(selector);
+    await page.waitForSelector("[data-composer]");
+    await page.keyboard.type(text);
+  }
+
+  async function openRegenerate(scope, freetext) {
+    if ((await page.$("[data-regenerate-menu]")) === null) await page.click("[data-regenerate-toggle]");
+    await page.click(`[data-regenerate-menu] [data-scope="${scope}"]`);
+    if (freetext !== undefined) await page.fill("[data-regenerate-menu] [data-freetext]", freetext);
+  }
+
+  async function regenerate(scope, freetext) {
+    await openRegenerate(scope, freetext);
+    await page.click("[data-regenerate-menu] [data-send]");
+  }
+
+  return {
+    async home() {
+      await page.waitForSelector(`[data-session="${sessions.roulette.id}"]`);
+      await open(sessions.loose);
+      await page.waitForSelector('[data-thread="lost"]', { timeout: PHASE_MS });
+      await goHome();
+      await page.waitForSelector(`[data-session="${sessions.loose}"] [data-session-lost]`);
+      await capture(page, "home");
+
+      await page.click('[data-project="kitchen-proj"] [data-project-label]');
+      await page.waitForSelector(`[data-session="${sessions.kitchen.id}"]`, { state: "detached" });
+      await capture(page, "home-collapsed-group");
+      await page.click('[data-project="kitchen-proj"] [data-project-label]');
+      await page.waitForSelector(`[data-session="${sessions.kitchen.id}"]`);
+
+      await capture(page, "state-hover-row", { each: () => page.hover(`[data-session="${sessions.roulette.id}"]`) });
+    },
+
+    async views() {
+      await open(sessions.multi, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card"), inBlock("history/ledger", "footer")]);
+      await capture(page, "session-multi-slot");
+
+      const wide = await open(sessions.wide, [inBlock("result/card", "card")]);
+      await capture(page, "session-wide-frame", {
+        each: () => wide.evaluate(() => scrollTo(Math.round((document.documentElement.scrollWidth - innerWidth) / 2), 0)),
+      });
+
+      await open(sessions.broken, [".bs-failure", inBlock("result/card", "card")]);
+      await page.waitForSelector('aside[aria-label=Inspector] [role="alert"]');
+      await capture(page, "session-block-error");
+
+      await open(sessions.list);
+      await page.waitForSelector("[data-regenerate-toggle][disabled]");
+      await capture(page, "session-no-iteration");
+    },
+
+    async inspector() {
+      const { id, work } = sessions.kitchen;
+      const canvas = await open(id, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card")]);
+      await canvas.click(inBlock("result/card", "chore"));
+      await page.waitForSelector('[data-block="result/card"]');
+      await page.click('[data-control="headline"] input');
+      await page.keyboard.press("Control+A");
+      await page.keyboard.type("Fate has spoken");
+      await page.keyboard.press("Enter");
+      await page.click('[data-control="accent"] input[type="text"]');
+      await page.keyboard.press("Control+A");
+      await page.keyboard.type("#ff2bd6");
+      await page.keyboard.press("Enter");
+      await page.focus('[data-control="nameSize"] input[type="range"]');
+      for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowRight");
+      for (const prop of ["headline", "accent", "nameSize"]) await page.waitForSelector(`[data-control="${prop}"][data-overridden]`);
+      await capture(page, "inspector-overridden");
+
+      const card = join(work, "slots", "result", "card");
+      const json = JSON.parse(readFileSync(join(card, "block.json"), "utf8"));
+      delete json.props.appearance.accent;
+      writeFileSync(join(card, "block.json"), JSON.stringify(json, null, 2));
+      const tsx = readFileSync(join(card, "block.tsx"), "utf8");
+      const signature = "headline, accent, nameSize";
+      if (!tsx.includes(signature)) throw new Error("the card block no longer takes accent as expected");
+      writeFileSync(join(card, "block.tsx"), tsx.replace(signature, "headline, nameSize").replace("  const [state, setState]", '  const accent = "#00f0ff";\n  const [state, setState]'));
+      must("drop the card's accent", brainstorm(env, ["commit", id, "--from", work, "--thread", KITCHEN_THREAD, "--note", "Fix the card accent to cyan", "--json"]));
+      await page.waitForSelector('[data-banner="inapplicable"] [data-override="result/card:accent"]', { timeout: PHASE_MS });
+      await capture(page, "inspector-inapplicable");
+    },
+
+    async canvas() {
+      const { id } = sessions.roulette;
+      const canvas = await open(id, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card")]);
+      await capture(page, "session");
+
+      await page.click('[data-slot="sidebar"] [data-sidebar="trigger"]');
+      await page.waitForSelector('[data-slot="sidebar"][data-state="collapsed"]');
+      await capture(page, "sidebar-collapsed");
+      await page.click('[data-topbar] [data-sidebar="trigger"]');
+      await page.waitForSelector('[data-slot="sidebar"][data-state="expanded"]');
+      await untilStill(page);
+
+      await ensurePicking();
+      await capture(page, "state-pick-mode", {
+        each: async () => {
+          await canvas.hover(HEADLINE);
+          await canvas.waitForSelector(".bs-pick[data-on]");
+        },
+      });
+
+      const firstComment = "Make the headline louder; right now it reads like a footnote";
+      await capture(page, "state-pin-composer", {
+        keepFocus: true,
+        each: async () => {
+          if ((await page.$("[data-composer]")) !== null) await page.click('[data-composer] button:has-text("Cancel")');
+          await pinComment(canvas, HEADLINE, firstComment);
+        },
+      });
+      await page.click('[data-composer] button:has-text("Pin comment")');
+      await page.waitForSelector('[data-feedback="1"][data-status="open"]');
+      await pinComment(canvas, inBlock("wheel/neon", "spin-button"), "The spin button is too quiet next to the wheel");
+      await page.keyboard.press("Control+Enter");
+      await page.waitForSelector('[data-feedback="2"]');
+      await pinComment(canvas, inBlock("result/card", "chore"), "The chore should read bigger than the winner's name");
+      await page.keyboard.press("Control+Enter");
+      await page.waitForSelector('[data-feedback="3"]');
+      agentCommit(home, env, id, {
+        file: "slots/wheel/neon/block.tsx",
+        from: "Odds lean towards whoever has done least.",
+        to: "Every spin is weighted by chores done.",
+        args: ["--addresses", "2,3", "--note", "Louder spin, bigger chore"],
+      });
+      await page.waitForSelector('[data-feedback="3"][data-status="addressed"]', { timeout: PHASE_MS });
+      await page.click('[data-feedback="3"] button:has-text("Confirm")');
+      await page.waitForSelector('[data-feedback="3"][data-status="confirmed"]');
+      await canvas.click('.bs-pin[data-pin="1"]');
+      await page.waitForSelector('[data-feedback="1"][data-focused]');
+      await capture(page, "feedback-list", {
+        each: () => page.$eval("[data-feedback-panel]", (el) => el.scrollIntoView({ block: "end" })),
+      });
+
+      await openRegenerate("all", "Make the whole flow feel calmer, especially the spin");
+      await capture(page, "state-regenerate-open-all", { keepFocus: true });
+      await openRegenerate("blocks", "Keep the stamp, rework the layout");
+      await capture(page, "state-regenerate-open-blocks", { keepFocus: true });
+      await openRegenerate("described", "Try a calmer palette on every screen that shows the winner");
+      await capture(page, "state-regenerate-open-described", { keepFocus: true });
+      await page.click('[data-regenerate-menu] button:has-text("Cancel")');
+      await page.waitForSelector("[data-regenerate-menu]", { state: "detached" });
+
+      missing(
+        "state-tooltip",
+        "Blocked Regenerate is the app's only styled tooltip (see state-regenerate-blocked). Every other hint is a native title attribute, which the OS draws outside the page, so no screenshot can show it.",
+      );
+
+      // An aborted request is how the renderer meets a server that isn't answering, the case its notice is for.
+      await page.route("**/v1/ui/sessions/*/actions", (route) => route.abort());
+      await capture(page, "state-notice", {
+        each: async (c) => {
+          // The notice hides 6 s after it last changed, and the same message twice doesn't restart that.
+          await page.waitForSelector("[data-topbar] [role=alert]", { state: "detached", timeout: 8000 });
+          await page.click('button[data-variant="reel"]');
+          await page.waitForSelector("[data-topbar] [role=alert]");
+          await park(page, c);
+        },
+      });
+      await page.unroute("**/v1/ui/sessions/*/actions");
+      await page.waitForSelector("[data-topbar] [role=alert]", { state: "detached", timeout: 8000 });
+
+      let release;
+      const written = new Promise((r) => (release = r));
+      await page.route("**/v1/ui/sessions/*/export", async (route) => {
+        await written;
+        await route.continue();
+      });
+      await page.click("[data-export]");
+      await page.waitForSelector('[data-slot="popover-content"]:has-text("Writing the file")');
+      await capture(page, "state-export-open", { keepFocus: true });
+      release();
+      await page.waitForSelector("[data-exported]");
+      await capture(page, "state-export-done", { keepFocus: true });
+      await page.click('[data-exported] button:has-text("Done")');
+      await page.waitForSelector("[data-exported]", { state: "detached" });
+      await page.unroute("**/v1/ui/sessions/*/export");
+    },
+
+    async phases() {
+      const { id } = sessions.roulette;
+      const canvas = await open(id, [inBlock("wheel/neon", "screen")]);
+
+      t3.setHold(["send"]);
+      await regenerate("all", "Make the spin feel less random");
+      await phase("sending");
+      await capture(page, "phase-sending", { keepFocus: true });
+      t3.setHold([]);
+      await phase("queued");
+      await page.waitForSelector("[data-regenerate-menu]", { state: "detached" });
+      await capture(page, "phase-queued");
+      await capture(page, "state-regenerate-blocked", {
+        each: async () => {
+          await page.hover('[data-slot="tooltip-trigger"]');
+          await page.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
+        },
+      });
+
+      t3.startRun(DEMO_THREAD);
+      await phase("working");
+      await capture(page, "phase-working");
+      t3.ask(DEMO_THREAD);
+      await phase("asking");
+      await capture(page, "phase-asking");
+      t3.endRun(DEMO_THREAD, "failed");
+      await phase("run_failed");
+      await capture(page, "phase-run-failed");
+
+      await page.click('[data-request-action="retry"]');
+      await phase("queued");
+      t3.startRun(DEMO_THREAD);
+      await phase("working");
+      t3.endRun(DEMO_THREAD, "completed");
+      await phase("no_change");
+      await capture(page, "phase-no-change");
+      await page.click('[data-request-action="withdraw"]');
+      await phase("withdrawn");
+      await capture(page, "phase-withdrawn");
+
+      await regenerate("blocks");
+      await phase("queued");
+      t3.startRun(DEMO_THREAD);
+      await phase("working");
+      agentCommit(home, env, id, {
+        file: "slots/result/card/block.tsx",
+        from: "{chore.name}",
+        to: "{chore.name.toUpperCase()}",
+        args: ["--note", "Shout the chore"],
+      });
+      t3.endRun(DEMO_THREAD, "completed");
+      await phase("fulfilled");
+      await canvas.waitForSelector(inBlock("result/card", "card"));
+      await capture(page, "phase-fulfilled");
+
+      t3.setFailAfter(["send"]);
+      await regenerate("described", "Try a calmer palette everywhere");
+      await phase("send_failed");
+      await capture(page, "phase-send-failed");
+      t3.setFailAfter([]);
+      await page.click('[data-request-action="retry"]');
+      await phase("queued");
+
+      t3.addThread(TAKEOVER_THREAD, { projectId: "chore-roulette", title: "Takeover thread" });
+      must("take the session over", brainstorm(env, ["session", "attach", "Chore roulette", "--thread", TAKEOVER_THREAD, "--json"]));
+      await phase("previous_thread");
+      await capture(page, "phase-previous-thread");
+      await page.click('[data-request-action="resend"]');
+      await phase("queued");
+      t3.setMissing(TAKEOVER_THREAD, true);
+      await phase("thread_lost");
+      await capture(page, "phase-thread-lost");
+      await page.click('[data-request-action="withdraw"]');
+      await page.waitForSelector("[data-takeover]");
+      await capture(page, "session-unattached");
+    },
+  };
+}
+
+/** Runs one scene; when it stops, every shot it hadn't reached yet is missing, with the scene's error as the reason. */
+async function runScene(name, fn) {
+  try {
+    await fn();
+  } catch (e) {
+    const reason = `the ${name} scene stopped before this state: ${e.message.split("\n")[0]}`;
+    console.log(`scene ${name} stopped: ${e.message}`);
+    for (const shot of SHOTS) if (shot.scene === name && !outcomes.has(shot.name)) missing(shot.name, reason);
+  }
+}
+
+const consoleNotes = [];
+const firstLine = (label) => (e) => `${label}: ${e.split("\n")[0]}`;
+
+build();
+
+const emptyHome = mkdtempSync(join(tmpdir(), "bs-capture-empty-"));
+const emptyEnv = appEnv(emptyHome);
+{
+  const run = await start(emptyHome, emptyEnv);
+  try {
+    await runScene("empty", async () => {
+      await run.window.waitForSelector("[data-home-empty]");
+      await capture(run.window, "home-empty");
+    });
+    consoleNotes.push(...run.errors.map(firstLine("empty home")));
+  } finally {
+    await run.app.close();
+  }
+}
+
+const home = mkdtempSync(join(tmpdir(), "bs-capture-"));
+const env = appEnv(home);
+const t3 = fakeT3(env.BRAINSTORM_FAKE_T3_STATE);
+let run = await start(home, env);
+try {
+  const sessions = seedAll(home, env, t3);
+  // The app remembers each thread it has already found, so only a fresh app notices one that vanished.
+  t3.setMissing(LOOSE_THREAD, true);
+  consoleNotes.push(...run.errors.map(firstLine("seeding")));
+  await run.app.close();
+  run = await start(home, env);
+  for (const [name, fn] of Object.entries(scenes(run.window, home, env, t3, sessions))) {
+    await runScene(name, fn);
+    await run.window.keyboard.press("Escape").catch(() => {});
+  }
+  consoleNotes.push(...run.errors.map(firstLine("scenes")));
+} finally {
+  await run.app.close();
+}
+
+for (const shot of SHOTS) {
+  if (outcomes.has(shot.name)) continue;
+  missing(shot.name, "the capture script never reached this state");
+}
+
+const manifest = {
+  round,
+  capturedAt: new Date().toISOString(),
+  sizes: COMBOS.map((c) => `${c.theme} ${c.width}x${c.height}`),
+  layout: "app/<theme>/<width>/<file>.png, or <file>.missing.txt saying why the shot isn't there",
+  consoleNotes,
+  shots: SHOTS.map((s) => ({ file: s.file, name: s.name, about: s.about, ...outcomes.get(s.name) })),
+};
+writeFileSync(join(out, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+
+async function contactSheet(theme) {
+  const dir = comboDir({ theme, width: 1440 });
+  const tiles = SHOTS.map((s) => {
+    const png = join(dir, `${s.file}.png`);
+    const body = existsSync(png)
+      ? `<img src="data:image/png;base64,${readFileSync(png).toString("base64")}">`
+      : `<div class="gap">${(outcomes.get(s.name)?.reason ?? "missing").replace(/[<&]/g, (c) => (c === "<" ? "&lt;" : "&amp;"))}</div>`;
+    return `<figure>${body}<figcaption>${s.file}</figcaption></figure>`;
+  }).join("");
+  const [bg, fg, muted] = theme === "dark" ? ["#151515", "#eee", "#333"] : ["#fafafa", "#111", "#ddd"];
+  const html = `<!doctype html><style>
+    body { margin: 0; padding: 16px; background: ${bg}; color: ${fg}; font: 13px system-ui; }
+    main { display: grid; grid-template-columns: repeat(5, 352px); gap: 16px; }
+    figure { margin: 0; }
+    img, .gap { display: block; width: 352px; height: 220px; outline: 1px solid ${muted}; }
+    .gap { box-sizing: border-box; padding: 12px; font-size: 11px; overflow: hidden; background: repeating-linear-gradient(45deg, transparent 0 8px, ${muted} 8px 9px); }
+    figcaption { padding-top: 4px; font-weight: 600; }
+  </style><main>${tiles}</main>`;
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 5 * 352 + 4 * 16 + 32, height: 800 } });
+    await page.setContent(html);
+    await page.screenshot({ path: join(out, `contact-${theme}-1440.png`), fullPage: true });
+  } finally {
+    await browser.close();
+  }
+}
+await contactSheet("light");
+await contactSheet("dark");
+
+const captured = SHOTS.filter((s) => outcomes.get(s.name)?.status === "captured").length;
+console.log(`\n${captured} of ${SHOTS.length} shots captured in each of ${COMBOS.length} sizes, in ${out}`);
+for (const note of consoleNotes) console.log(`console: ${note}`);
