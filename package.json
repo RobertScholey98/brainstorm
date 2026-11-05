@@ -12,7 +12,8 @@
     "prepare": "node scripts/build.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "verify:1": "node scripts/verify/1-storage-api.mjs"
+    "verify:1": "node scripts/verify/1-storage-api.mjs",
+    "lint:skill": "node scripts/lint-skill.mjs"
   },
   "dependencies": {
     "@json-render/core": "0.22.0",
