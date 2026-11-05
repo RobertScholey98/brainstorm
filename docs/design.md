@@ -120,7 +120,7 @@ A json-render spec over a fixed catalog (`src/core/controls.ts`, `defineCatalog`
 | `Text` | same | `text` |
 
 - Range, step, unit and options always come from the prop spec, never from the control, so a slider can't disagree with its prop.
-- Validation runs `validateSpec`, then `catalog.validate` (normalize every element to `children: []` first), then the binding check. That check requires every `$bindState` to target an appearance prop, with a control kind that matches the prop type.
+- Validation runs `validateSpec`, then `catalog.validate` (normalize every element to `children: []` first), then each element's props against the catalog's own zod schemas (`catalog.validate` checks only structure and type names), then the binding check. That check requires every `$bindState` to target an appearance prop, with a control kind that matches the prop type.
 - An explicit spec that leaves an appearance prop without a control gets an `uncontrolled_prop` warning.
 - Absent `controls.json` means `deriveControls(schema)` makes one `Section` titled with the block title, holding one control per appearance prop in schema order (enum with up to 3 options → `Segmented`, otherwise `Select`).
 
@@ -244,7 +244,8 @@ Each actor writes its own rows:
   - `controls.ts`: catalog, `validateControls`, `deriveControls`, `controlVocabulary`
   - `workingCopy.ts`
   - `machines.ts`
-  - `check/`: the worker pool plus `checkBlocks(drafts, overridesByBlock) → Map<hash, artifacts | issues>`
+  - `check/`: the worker pool plus `checkBlocks(drafts, overridesByBlock) → Map<hash, artifacts | issues>`. Results are keyed by content hash, and `parts` come from the defaults render, so stored artifacts don't depend on Rob's overrides at check time.
+  - The three boundary parsers (`parsePropsSchema`, `validateControls`, `parseWorkingCopy`) return `Parsed<T>`: `{ ok: true, value, warnings }` or `{ ok: false, issues }`.
   - `store.ts`: SQL only, private to the service
   - `brainstorm.ts`: the `Brainstorm` service. It has one method per agent command (`newSession`, `listSessions`, `attach`, `context`, `pull`, `validate`, `commit`), plus `view(sessionId)`, `act(sessionId, RobAction) → SessionView`, `exportHtml(sessionId) → { path }`, `tick()` for the tracker poll, and `subscribe(listener)`.
   - `bridge/t3.ts`: the only file that knows the `t3` CLI. It runs `cmd.exe /d /s /c <t3.cmd> …` with the message on stdin, and checks thread ids against `^[0-9a-f-]{36}$`. The path comes from `BRAINSTORM_T3_CLI`, then `T3CODE_CLI_PATH`, then `%USERPROFILE%\.t3\bin\t3.cmd`.

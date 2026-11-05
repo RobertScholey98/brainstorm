@@ -11,7 +11,7 @@ Observed on 2026-11-05 against `%USERPROFILE%\.t3\bin\t3.cmd`. `src/core/bridge/
   "messages": [ { "role": "user", "runId": "run:thread:…:ordinal:1", "text": "…" } ] }
 ```
 
-Fields used: `thread.projectId`, `thread.title`, `thread.link`, `thread.status` (seen: `running`, `completed`, `failed`), `thread.activeRunId` (null when idle), `thread.pendingRequestCount` (> 0 means the agent is waiting for an answer), and `messages[].role`, `runId` and `text`.
+Fields used: `thread.projectId`, `thread.title`, `thread.link`, `thread.status` (seen: `running`, `completed`, `failed`), `thread.activeRunId` (null when idle), `thread.latestRunId` (tells a finished run from a message queued as the next turn), `thread.pendingRequestCount` (> 0 means the agent is waiting for an answer), and `messages[].role`, `runId` and `text`.
 
 A missing or deleted thread exits 1 and prints `Thread <id> is no longer available.`
 
