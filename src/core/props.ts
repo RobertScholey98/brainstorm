@@ -29,7 +29,7 @@ const label = z.string().min(1);
 export const PROP_TYPES = {
   data: {
     fields: z.strictObject({ type: z.literal("data"), description: z.string().optional(), sample: z.json() }),
-    rule: "what the block shows; `sample` is any JSON value and is what the block receives in Brainstorm. Not controllable.",
+    rule: "What the block shows. `sample` is any JSON value; the block receives it in Brainstorm. Not controllable.",
   },
   number: {
     fields: z.strictObject({
