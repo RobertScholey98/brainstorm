@@ -56,7 +56,7 @@ async function markSheet(page) {
     body { margin: 0; padding: 24px; background: #8a8a8a; width: max-content; font: 600 13px "Segoe UI Variable Text", system-ui; }
     .row { display: flex; gap: 16px; margin-bottom: 16px; } .cell { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-radius: 8px; }
   </style>${rows.join("")}`);
-  await page.screenshot({ path: join(out, "mark.png"), fullPage: true });
+  await page.locator("body").screenshot({ path: join(out, "mark.png") });
   console.log("wrote mark.png");
 }
 
