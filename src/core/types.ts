@@ -287,6 +287,7 @@ export type Failure =
     }
   | { readonly code: "thread_missing"; readonly message: string; readonly thread: ThreadId }
   | { readonly code: "request_open"; readonly message: string; readonly n: RequestN }
+  | { readonly code: "thread_lost"; readonly message: string; readonly thread: ThreadId }
   | { readonly code: "invalid_action"; readonly message: string }
   | { readonly code: "internal"; readonly message: string };
 
@@ -308,6 +309,9 @@ export type FeedbackStatus =
   | { readonly state: "open"; readonly previouslyAddressedIn: IterationN | null }
   | { readonly state: "addressed"; readonly in: IterationN }
   | { readonly state: "confirmed"; readonly addressedIn: IterationN; readonly at: string };
+
+/** What Rob can do to one feedback item. `FEEDBACK_ACTIONS` says which apply in each status. */
+export type FeedbackAction = "confirm" | "reopen" | "edit" | "delete";
 
 export type Feedback = {
   readonly id: FeedbackId;
@@ -520,6 +524,9 @@ export type IterationView = Omit<IterationSummary, "slots" | "blocks"> & {
   readonly blocks: readonly BlockView[];
 };
 
+/** Whether Rob may send a new request, and if not, why. */
+export type Regenerate = { readonly ok: true } | { readonly ok: false; readonly reason: "no_iteration" | "request_open" | "thread_lost" };
+
 export type SessionView = {
   readonly session: SessionSummary;
   readonly attachment: Attachment;
@@ -528,6 +535,7 @@ export type SessionView = {
   readonly overrides: { readonly applicable: readonly Override[]; readonly inapplicable: readonly InapplicableOverride[] };
   readonly feedback: readonly Feedback[];
   readonly request: { readonly request: Request; readonly phase: RequestPhase; readonly message: string } | null;
+  readonly regenerate: Regenerate;
 };
 
 export type CanvasModule = {

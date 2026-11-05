@@ -27,7 +27,7 @@ import { ExportButton } from "./Export";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { Inspector } from "./Inspector";
 import { PendingOverrides } from "./overrides";
-import { CopyPhrase, isOpen, RegenerateMenu, RequestStatus } from "./Regenerate";
+import { CopyPhrase, RegenerateMenu, RequestStatus } from "./Regenerate";
 import { Sidebar } from "./Sidebar";
 
 const NOTICE_MS = 6000;
@@ -300,15 +300,7 @@ function TopBar({
   const closeMenu = useCallback(() => setMenu(false), []);
   const lost = view?.attachment.lostAt != null;
   const threadName = view?.thread?.title ?? (view === null ? null : `thread ${view.attachment.threadId.slice(0, 8)}`);
-  const open = view !== null && isOpen(view);
-  const regenerateBlocked =
-    view === null || view.iteration === null
-      ? "Regenerate needs a first iteration"
-      : open
-        ? `Request ${view.request?.request.n} is still open. Withdraw it to send another.`
-        : lost
-          ? "This session's thread is gone. Take it over from a T3 thread first."
-          : null;
+  const regenerateBlocked = view === null ? "Regenerate needs a first iteration" : blockedReason(view);
   // A lost thread with a request in flight already says so, with the phrase, in the request status.
   const showTakeover = lost && view?.request?.phase.phase !== "thread_lost";
   return (
@@ -368,6 +360,18 @@ function TopBar({
       </div>
     </header>
   );
+}
+
+function blockedReason(view: SessionView): string | null {
+  if (view.regenerate.ok) return null;
+  switch (view.regenerate.reason) {
+    case "no_iteration":
+      return "Regenerate needs a first iteration";
+    case "request_open":
+      return `Request ${view.request?.request.n} is still open. Withdraw it to send another.`;
+    case "thread_lost":
+      return "This session's thread is gone. Take it over from a T3 thread first.";
+  }
 }
 
 function EmptyCanvas({ view, hasSessions }: { view: SessionView | null; hasSessions: boolean }) {

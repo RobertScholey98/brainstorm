@@ -254,7 +254,9 @@ Each actor writes its own rows:
 - `src/server/headless.ts`: starts the server with no window and prints the UI URL.
 - `src/canvas/runtime.tsx` is bundled with React into `dist/canvas/runtime.js`. `buildCanvasDocument(payload, mode: "live" | "export")` returns the HTML for `/canvas` and for an export file, so the two can't drift.
 
-`RobAction` is `set_override | clear_override | dismiss_inapplicable | select_variant | add_feedback | edit_feedback | delete_feedback (open only) | confirm_feedback | reopen_feedback | regenerate { scope, freetext } | retry_request | withdraw_request | check_thread`.
+`RobAction` is `set_override | clear_override | dismiss_inapplicable | select_variant | add_feedback | edit_feedback | delete_feedback | confirm_feedback | reopen_feedback | regenerate { scope, freetext } | retry_request | withdraw_request | check_thread`.
+
+`FEEDBACK_ACTIONS` in `machines.ts` maps each feedback status to what Rob may do: open to edit and delete, addressed to confirm and reopen, confirmed to reopen. `act` refuses anything else, and the feedback list draws its buttons from the same table. `regenerateGate` decides `SessionView.regenerate`: no iteration, then an open request, then a lost attachment each block it, and `regenerate` refuses the same cases (`not_found`, `request_open`, `thread_lost`). `requestFeedback(feedback, scope)` is the one rule for which open feedback a request carries.
 
 ## Canvas
 
@@ -277,7 +279,7 @@ The renderer is Vite, React 19, Tailwind v4, `@json-render/react` and `@json-ren
 Selection is a slot, not a block, so switching a slot's variant keeps the controls on that slot. A pointer-down in a frame selects its slot.
 
 The top bar shows the session, its iteration, the attached thread and the request phase, a Regenerate menu, and Export.
-- **Regenerate menu.** Everything, Selected blocks (a checkbox per block, grouped by slot, defaulting to the selected one) or Describe it (free text required). Each takes optional free text and lists the open feedback in scope before sending, by the same rule the service applies. Regenerate is disabled while a request is open or the session is unattached, and its tooltip says why.
+- **Regenerate menu.** Everything, Selected blocks (a checkbox per block, grouped by slot, defaulting to the selected one) or Describe it (free text required). Each takes optional free text and lists the open feedback in scope before sending, through the service's own `requestFeedback`. Regenerate is disabled unless `view.regenerate.ok`, and its tooltip says why.
 - **Request status.** The phase's icon, `phaseMessage` copy and that row's actions. Sending spins and working pulses; queued, asking and the end states are static, so asking never looks like endless progress. Retry and Resend send `retry_request`, Withdraw `withdraw_request`, Open thread is a link to `thread.link` that the window-open handler sends to the browser, and Copy phrase copies `takeoverPhrase(title)`.
 - **Unattached.** A lost attachment shows "Unattached" with the takeover phrase and Copy phrase, also when no request is open.
 

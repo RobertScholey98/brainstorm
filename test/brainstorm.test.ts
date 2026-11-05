@@ -285,6 +285,66 @@ describe("commit", () => {
   });
 });
 
+describe("Rob's actions", () => {
+  test("feedback actions follow its status: an addressed item can't be edited or deleted", async () => {
+    const { service } = await withIteration();
+    data(await service.act(S, { kind: "add_feedback", pin: { blockId: NEON, part: null }, text: "louder" }));
+    data(await service.act(S, { kind: "edit_feedback", id: 1 as FeedbackId, text: "much louder" }));
+    data(await service.commit({ session: S, thread: T1, files: copy(1, { "wheel/neon": { tsx: neonTsx.replace("Spin", "SPIN"), json: neonJson } }), addresses: [1 as FeedbackId], note: null }));
+    expect(await service.act(S, { kind: "edit_feedback", id: 1 as FeedbackId, text: "quieter" })).toEqual({
+      ok: false,
+      error: { code: "invalid_action", message: "feedback #1 is addressed, so it can't be edited" },
+    });
+    expect(await service.act(S, { kind: "delete_feedback", id: 1 as FeedbackId })).toEqual({
+      ok: false,
+      error: { code: "invalid_action", message: "feedback #1 is addressed, so it can't be deleted" },
+    });
+    data(await service.act(S, { kind: "confirm_feedback", id: 1 as FeedbackId }));
+    expect(await service.act(S, { kind: "confirm_feedback", id: 1 as FeedbackId })).toEqual({
+      ok: false,
+      error: { code: "invalid_action", message: "feedback #1 is confirmed, so it can't be confirmed" },
+    });
+    expect(data(await service.view(S)).feedback.map((f) => [f.text, f.status.state])).toEqual([["much louder", "confirmed"]]);
+  });
+
+  test("view.regenerate says why Regenerate is blocked, and regenerate refuses the same cases", async () => {
+    const { service, bridge } = await setup();
+    data(await service.newSession({ title: "Chore wheel", brief: "Pick who does chores", thread: T1, projectPath: null }));
+    expect(data(await service.view(S)).regenerate).toEqual({ ok: false, reason: "no_iteration" });
+    expect(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null })).toEqual({
+      ok: false,
+      error: { code: "not_found", entity: "iteration", message: `${S} has no iteration to regenerate yet` },
+    });
+
+    data(await service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: null }));
+    expect(data(await service.view(S)).regenerate).toEqual({ ok: true });
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null }));
+    expect(data(await service.view(S)).regenerate).toEqual({ ok: false, reason: "request_open" });
+    data(await service.act(S, { kind: "withdraw_request" }));
+
+    bridge.thread(T1).missing = true;
+    await service.act(S, { kind: "check_thread" });
+    expect(data(await service.view(S)).regenerate).toEqual({ ok: false, reason: "thread_lost" });
+    expect(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null })).toEqual({
+      ok: false,
+      error: {
+        code: "thread_lost",
+        message: `thread ${T1} is gone; take the session over from a T3 thread on this project first`,
+        thread: T1,
+      },
+    });
+    expect(bridge.sent.length).toBe(1);
+  });
+
+  test("a request carries the open feedback in its scope", async () => {
+    const { service, bridge } = await withIteration();
+    data(await service.act(S, { kind: "add_feedback", pin: { blockId: NEON, part: null }, text: "louder" }));
+    data(await service.act(S, { kind: "add_feedback", pin: { blockId: SHEET, part: null }, text: "bigger" }));
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "blocks", blocks: [SHEET] }, freetext: null }));
+    expect(bridge.sent.map((m) => m.message.split("\n")[0])).toEqual([`[brainstorm] session ${S} · request 1 · scope: result/sheet · feedback: #2`]);
+  });
+});
+
 describe("attach", () => {
   test("refuses a thread from another project", async () => {
     const { service } = await withIteration();

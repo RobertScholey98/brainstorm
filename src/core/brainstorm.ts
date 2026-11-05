@@ -4,7 +4,17 @@ import { join } from "node:path";
 import { buildCanvasDocument, exportPayload } from "../canvas/document";
 import type { Checker } from "./check";
 import { controlVocabulary } from "./controls";
-import { canAppend, foldFeedback, formatRequestMessage, observeRequest, phaseMessage, requestPhase } from "./machines";
+import {
+  canAppend,
+  FEEDBACK_ACTIONS,
+  foldFeedback,
+  formatRequestMessage,
+  observeRequest,
+  phaseMessage,
+  regenerateGate,
+  requestFeedback,
+  requestPhase,
+} from "./machines";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { Store, type FeedbackRecord, type IterationBlock, type StoredContent, type StoredIteration } from "./store";
 import {
@@ -22,6 +32,7 @@ import {
   type ExportResult,
   type Failure,
   type Feedback,
+  type FeedbackAction,
   type FeedbackId,
   type FileMap,
   type Issue,
@@ -471,6 +482,7 @@ export class Brainstorm {
       overrides,
       feedback: this.#feedback(id),
       request: request === null ? null : this.#requestView(session, request),
+      regenerate: regenerateGate({ hasIteration: latest !== null, open: this.#store.openRequest(id), attachment }),
     });
   }
 
@@ -571,25 +583,30 @@ export class Brainstorm {
         this.#store.insertFeedback(id, { pin: action.pin, text: action.text, createdIn: latest.n, at: this.#now() });
         return null;
       }
-      case "edit_feedback": {
-        if (feedback(action.id) === undefined) return noFeedback(action.id);
-        this.#store.editFeedback(id, action.id, action.text);
-        return null;
-      }
-      case "delete_feedback": {
-        const f = feedback(action.id);
-        if (f === undefined) return noFeedback(action.id);
-        if (f.status.state !== "open") return invalid(`feedback #${action.id} is ${f.status.state}; only open feedback can be deleted`);
-        this.#store.deleteFeedback(id, action.id, this.#now());
-        return null;
-      }
+      case "edit_feedback":
+      case "delete_feedback":
       case "confirm_feedback":
       case "reopen_feedback": {
         const f = feedback(action.id);
         if (f === undefined) return noFeedback(action.id);
-        const kind = action.kind === "confirm_feedback" ? "confirm" : "reopen";
-        if (!canAppend(f.status, kind)) return invalid(`feedback #${action.id} is ${f.status.state}, so it can't be ${kind}ed`);
-        this.#store.appendFeedbackEvent(id, action.id, { kind, at: this.#now() });
+        const verb = FEEDBACK_VERB[action.kind];
+        if (!FEEDBACK_ACTIONS[f.status.state].includes(verb.action)) {
+          return invalid(`feedback #${action.id} is ${f.status.state}, so it can't be ${verb.past}`);
+        }
+        switch (action.kind) {
+          case "edit_feedback":
+            this.#store.editFeedback(id, action.id, action.text);
+            break;
+          case "delete_feedback":
+            this.#store.deleteFeedback(id, action.id, this.#now());
+            break;
+          case "confirm_feedback":
+            this.#store.appendFeedbackEvent(id, action.id, { kind: "confirm", at: this.#now() });
+            break;
+          case "reopen_feedback":
+            this.#store.appendFeedbackEvent(id, action.id, { kind: "reopen", at: this.#now() });
+            break;
+        }
         return null;
       }
       case "regenerate":
@@ -615,16 +632,30 @@ export class Brainstorm {
     blocks: readonly IterationBlock[],
   ): Promise<Failure | null> {
     const open = this.#store.openRequest(id);
-    if (open !== null) return { code: "request_open", message: `request ${open.n} is still open; withdraw it first`, n: open.n };
+    const attachment = this.#store.attachment(id);
+    const gate = regenerateGate({ hasIteration: latest !== null, open, attachment });
+    if (!gate.ok) {
+      switch (gate.reason) {
+        case "no_iteration":
+          return notFound("iteration", `${id} has no iteration to regenerate yet`);
+        case "request_open": {
+          const n = open!.n;
+          return { code: "request_open", message: `request ${n} is still open; withdraw it first`, n };
+        }
+        case "thread_lost":
+          return {
+            code: "thread_lost",
+            message: `thread ${attachment.threadId} is gone; take the session over from a T3 thread on this project first`,
+            thread: attachment.threadId,
+          };
+      }
+    }
     if (body.scope.kind === "blocks") {
       const missing = body.scope.blocks.find((b) => !blocks.some((x) => x.id === b));
       if (missing !== undefined) return notFound("block", `${missing} is not in the latest iteration of ${id}`);
     }
-    const scope = body.scope;
-    const feedbackIds = this.#feedback(id)
-      .filter((f) => f.status.state === "open" && (scope.kind !== "blocks" || scope.blocks.includes(f.pin.blockId)))
-      .map((f) => f.id);
-    const thread = this.#store.attachment(id).threadId;
+    const feedbackIds = requestFeedback(this.#feedback(id), body.scope).map((f) => f.id);
+    const thread = attachment.threadId;
     const n = this.#store.insertRequest(id, { body, feedbackIds, base: latest?.n ?? null, threadId: thread, at: this.#now() });
     this.#emit(id);
     await this.#send(id, n, thread);
@@ -796,6 +827,16 @@ export class Brainstorm {
 }
 
 const invalid = (message: string): Failure => ({ code: "invalid_action", message });
+
+const FEEDBACK_VERB: Record<
+  "edit_feedback" | "delete_feedback" | "confirm_feedback" | "reopen_feedback",
+  { readonly action: FeedbackAction; readonly past: string }
+> = {
+  edit_feedback: { action: "edit", past: "edited" },
+  delete_feedback: { action: "delete", past: "deleted" },
+  confirm_feedback: { action: "confirm", past: "confirmed" },
+  reopen_feedback: { action: "reopen", past: "reopened" },
+};
 
 /** yyyyMMdd-HHmmss in local time, which is what Rob reads in Explorer. */
 function fileStamp(d: Date): string {

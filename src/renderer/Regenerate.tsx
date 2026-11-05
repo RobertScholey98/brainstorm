@@ -1,7 +1,7 @@
 import { AlertTriangle, Check, CircleHelp, Clock, Loader2, MessageSquare, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { takeoverPhrase } from "../core/machines";
-import type { BlockId, BlockView, Feedback, RequestBody, RequestPhase, RequestPhaseAction, RobAction, SessionView } from "../core/types";
+import { requestFeedback, takeoverPhrase } from "../core/machines";
+import type { BlockId, BlockView, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
 type ScopeKind = RequestBody["scope"]["kind"];
 
@@ -11,27 +11,17 @@ const SCOPES: readonly { kind: ScopeKind; label: string }[] = [
   { kind: "described", label: "Describe it" },
 ];
 
-/** The open feedback a request in this scope carries, the same rule the service applies when it records the request. */
-const inScope = (feedback: readonly Feedback[], kind: ScopeKind, chosen: ReadonlySet<BlockId>) =>
-  feedback.filter((f) => f.status.state === "open" && (kind !== "blocks" || chosen.has(f.pin.blockId)));
-
-function requestBody(kind: ScopeKind, chosen: readonly BlockId[], text: string): RequestBody | null {
-  const freetext = text.trim() === "" ? null : text.trim();
-  switch (kind) {
-    case "all":
-      return { scope: { kind: "all" }, freetext };
-    case "blocks": {
-      const [first, ...rest] = chosen;
-      return first === undefined ? null : { scope: { kind: "blocks", blocks: [first, ...rest] }, freetext };
-    }
-    case "described":
-      return freetext === null ? null : { scope: { kind: "described" }, freetext };
-  }
+function scopeOf(kind: ScopeKind, chosen: readonly BlockId[]): RequestScope | null {
+  if (kind !== "blocks") return { kind };
+  const [first, ...rest] = chosen;
+  return first === undefined ? null : { kind, blocks: [first, ...rest] };
 }
 
-export function isOpen(view: SessionView): boolean {
-  const state = view.request?.request.state.state;
-  return state === "sending" || state === "sent" || state === "send_failed";
+function requestBody(scope: RequestScope | null, text: string): RequestBody | null {
+  const freetext = text.trim() === "" ? null : text.trim();
+  if (scope === null) return null;
+  if (scope.kind === "described") return freetext === null ? null : { scope, freetext };
+  return { scope, freetext };
 }
 
 export function RegenerateMenu({
@@ -66,9 +56,12 @@ export function RegenerateMenu({
     };
   }, [onClose]);
 
-  const ordered = blocks.filter((b) => chosen.has(b.id)).map((b) => b.id);
-  const body = requestBody(kind, ordered, text);
-  const attached = inScope(view.feedback, kind, chosen);
+  const scope = scopeOf(
+    kind,
+    blocks.filter((b) => chosen.has(b.id)).map((b) => b.id),
+  );
+  const body = requestBody(scope, text);
+  const attached = scope === null ? [] : requestFeedback(view.feedback, scope);
   const toggle = (id: BlockId) =>
     setChosen((c) => {
       const next = new Set(c);

@@ -1,6 +1,7 @@
 import { MessageSquarePlus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { BlockId, BlockView, Feedback, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
+import { FEEDBACK_ACTIONS } from "../core/machines";
+import type { BlockId, BlockView, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
 import type { Placement } from "./CanvasHost";
 
 /** Where a pin is on the canvas. Only the frame can tell placed from detached; the rest the view knows. */
@@ -34,6 +35,8 @@ function statusLine(status: FeedbackStatus): string | null {
       return `Confirmed · addressed in ${status.addressedIn}`;
   }
 }
+
+const ACTION_LABEL: Record<FeedbackAction, string> = { confirm: "Confirm", reopen: "Reopen", edit: "Edit", delete: "Delete" };
 
 const PLACE_NOTE: Record<Exclude<PinPlace, "placed">, string> = {
   detached: "Detached: its element is gone",
@@ -131,7 +134,18 @@ function FeedbackItem({
     if (focused) item.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [focused]);
   const line = statusLine(f.status);
-  const act = (action: RobAction) => () => void send(action);
+  const run = (action: FeedbackAction) => {
+    switch (action) {
+      case "edit":
+        return setEditing(true);
+      case "delete":
+        return void send({ kind: "delete_feedback", id: f.id });
+      case "confirm":
+        return void send({ kind: "confirm_feedback", id: f.id });
+      case "reopen":
+        return void send({ kind: "reopen_feedback", id: f.id });
+    }
+  };
 
   return (
     <li
@@ -176,21 +190,11 @@ function FeedbackItem({
           )}
           {!editing && (
             <div className="flex gap-1 pt-1.5 empty:hidden">
-              {f.status.state === "addressed" && (
-                <>
-                  <ItemButton primary onClick={act({ kind: "confirm_feedback", id: f.id })}>
-                    Confirm
-                  </ItemButton>
-                  <ItemButton onClick={act({ kind: "reopen_feedback", id: f.id })}>Reopen</ItemButton>
-                </>
-              )}
-              {f.status.state === "confirmed" && <ItemButton onClick={act({ kind: "reopen_feedback", id: f.id })}>Reopen</ItemButton>}
-              {f.status.state === "open" && (
-                <>
-                  <ItemButton onClick={() => setEditing(true)}>Edit</ItemButton>
-                  <ItemButton onClick={act({ kind: "delete_feedback", id: f.id })}>Delete</ItemButton>
-                </>
-              )}
+              {FEEDBACK_ACTIONS[f.status.state].map((action) => (
+                <ItemButton key={action} primary={action === "confirm"} onClick={() => run(action)}>
+                  {ACTION_LABEL[action]}
+                </ItemButton>
+              ))}
             </div>
           )}
         </div>

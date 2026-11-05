@@ -46,6 +46,7 @@ const STATUS: Record<FailureCode, number> = {
   wrong_project: 409,
   ambiguous_title: 409,
   request_open: 409,
+  thread_lost: 409,
   validation_failed: 422,
   invalid_action: 422,
   unavailable: 503,

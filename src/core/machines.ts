@@ -3,13 +3,17 @@ import {
   parseSessionId,
   type Attachment,
   type BlockId,
+  type Feedback,
+  type FeedbackAction,
   type FeedbackEvent,
   type FeedbackEventKind,
   type FeedbackStatus,
   type Observation,
+  type Regenerate,
   type Request,
   type RequestN,
   type RequestPhase,
+  type RequestScope,
   type SessionId,
   type ThreadSnapshot,
 } from "./types";
@@ -20,8 +24,28 @@ const LEGAL_EVENTS: { readonly [S in FeedbackStatus["state"]]: readonly Feedback
   confirmed: ["reopen"],
 };
 
+/** What Rob may do to feedback in each status, in the order the feedback list shows them. */
+export const FEEDBACK_ACTIONS: { readonly [S in FeedbackStatus["state"]]: readonly FeedbackAction[] } = {
+  open: ["edit", "delete"],
+  addressed: ["confirm", "reopen"],
+  confirmed: ["reopen"],
+};
+
 export function canAppend(status: FeedbackStatus, kind: FeedbackEventKind): boolean {
   return LEGAL_EVENTS[status.state].includes(kind);
+}
+
+/** The open feedback a request in this scope carries. */
+export function requestFeedback(feedback: readonly Feedback[], scope: RequestScope): Feedback[] {
+  return feedback.filter((f) => f.status.state === "open" && (scope.kind !== "blocks" || scope.blocks.includes(f.pin.blockId)));
+}
+
+/** Whether Rob may send a new request, checked in this order. */
+export function regenerateGate(state: { readonly hasIteration: boolean; readonly open: Request | null; readonly attachment: Attachment }): Regenerate {
+  if (!state.hasIteration) return { ok: false, reason: "no_iteration" };
+  if (state.open !== null) return { ok: false, reason: "request_open" };
+  if (state.attachment.lostAt !== null) return { ok: false, reason: "thread_lost" };
+  return { ok: true };
 }
 
 const lastAddressedIn = (status: FeedbackStatus) =>
@@ -99,7 +123,7 @@ export function phaseMessage(phase: RequestPhase, context: { title: string; chan
     case "no_change":
       return "The agent replied in T3 without changing the design";
     case "fulfilled":
-      return `Iteration ${phase.iteration} · ${context.changed.length > 0 ? `changed ${context.changed.join(", ")}` : "no blocks changed"}`;
+      return `Iteration ${phase.iteration} · ${changedText(context.changed)}`;
     case "withdrawn":
       return "Withdrawn";
   }
@@ -131,13 +155,16 @@ const MARKER = /\[brainstorm\] session (\S+) · request (\d+)/;
 
 type RequestMessageFields = Pick<Request, "session" | "n" | "scope" | "freetext" | "feedbackIds">;
 
+export const scopeText = (scope: RequestScope): string => (scope.kind === "blocks" ? scope.blocks.join(", ") : scope.kind);
+
+export const changedText = (changed: readonly string[]): string =>
+  changed.length === 0 ? "no blocks changed" : `changed ${changed.join(", ")}`;
+
 export function formatRequestMessage(request: RequestMessageFields): string {
-  const scope =
-    request.scope.kind === "all" ? "all" : request.scope.kind === "described" ? "described" : request.scope.blocks.join(", ");
   const segments = [
     `[brainstorm] session ${request.session}`,
     `request ${request.n}`,
-    `scope: ${scope}`,
+    `scope: ${scopeText(request.scope)}`,
     ...(request.feedbackIds.length > 0 ? [`feedback: ${request.feedbackIds.map((id) => `#${id}`).join(" ")}`] : []),
     ...(request.freetext !== null ? [`freetext: ${JSON.stringify(request.freetext)}`] : []),
   ];
