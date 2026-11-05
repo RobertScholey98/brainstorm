@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import { zBranded } from "../parse";
 import {
   parseProjectId,
   parseRunId,
@@ -22,22 +23,14 @@ export function resolveT3Cli(env: NodeJS.ProcessEnv = process.env): string {
   return env.BRAINSTORM_T3_CLI || env.T3CODE_CLI_PATH || join(env.USERPROFILE ?? homedir(), ".t3", "bin", "t3.cmd");
 }
 
-/** A zod string that mints a brand through its parser, so the parser stays the only place the brand is made. */
-const branded = <T>(parse: (raw: string) => T | null, what: string) =>
-  z.string().transform((raw, ctx): T => {
-    const value = parse(raw);
-    if (value === null) ctx.addIssue({ code: "custom", message: `not a ${what}` });
-    return value as T;
-  });
-
-const runIdOrNull = branded(parseRunId, "run id")
+const runIdOrNull = zBranded(z.string(), parseRunId, "run id")
   .nullable()
   .optional()
   .transform((v) => v ?? null);
 
 const threadShape = z.object({
-  threadId: branded(parseThreadId, "thread id"),
-  projectId: branded(parseProjectId, "project id"),
+  threadId: zBranded(z.string(), parseThreadId, "thread id"),
+  projectId: zBranded(z.string(), parseProjectId, "project id"),
   title: z.string(),
   link: z.string(),
   status: z.string(),

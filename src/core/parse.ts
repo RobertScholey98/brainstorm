@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 import { issue, type Issue, type IssueCode } from "./types";
 
 export function toPointer(path: readonly PropertyKey[]): string {
@@ -12,6 +12,15 @@ const errorMap = (iss: { input?: unknown; path?: PropertyKey[]; code?: string })
   }
   return undefined;
 };
+
+/** A zod schema that mints a brand through its parser, so the parser stays the only place the brand is made. */
+export function zBranded<I, T>(base: z.ZodType<I>, parse: (raw: I) => T | null, what: string) {
+  return base.transform((raw, ctx): T => {
+    const value = parse(raw);
+    if (value === null) ctx.addIssue({ code: "custom", message: `${JSON.stringify(raw)} is not a ${what}` });
+    return value as T;
+  });
+}
 
 /** Parses with zod and turns every zod issue into an Issue under one code. */
 export function parseWith<T>(

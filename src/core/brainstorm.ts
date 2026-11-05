@@ -30,6 +30,7 @@ import {
   type PartName,
   type ProjectId,
   type PropsSchema,
+  type PullResult,
   type Request,
   type RequestBody,
   type RequestN,
@@ -268,7 +269,7 @@ export class Brainstorm {
     });
   }
 
-  async pull(id: SessionId): Promise<Result<FileMap>> {
+  async pull(id: SessionId): Promise<Result<PullResult>> {
     if (this.#store.session(id) === null) return fail(notFound("session", `no session ${id}`));
     const latest = this.#store.latestIteration(id);
     const contents: IterationContents | null =
@@ -279,7 +280,7 @@ export class Brainstorm {
             slots: latest.slots,
             blocks: this.#store.iterationBlocks(id, latest.n).map((b) => ({ id: b.id, files: this.#store.content(b.hash).files })),
           };
-    return ok(emitWorkingCopy(id, contents));
+    return ok({ files: emitWorkingCopy(id, contents), iteration: latest?.n ?? null });
   }
 
   async validate(input: Omit<CommitInput, "note">): Promise<Result<ValidateResult>> {

@@ -451,6 +451,8 @@ export type AttachResult = {
 /** `created: false` is an idempotent replay: nothing changed, and `iteration` is the latest one. */
 export type CommitResult = { readonly iteration: IterationSummary; readonly created: boolean; readonly warnings: readonly Issue[] };
 
+export type PullResult = { readonly files: FileMap; readonly iteration: IterationN | null };
+
 export type ValidateResult = {
   readonly changed: readonly BlockId[];
   readonly removed: readonly BlockId[];

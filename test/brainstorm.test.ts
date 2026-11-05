@@ -107,7 +107,8 @@ describe("commit", () => {
         iteration: { n: 1, threadId: T1, note: "first cut", createdAt: AT, slots: SLOTS, blocks: [SHEET, NEON], changed: [SHEET, NEON] },
       },
     });
-    const pulled = data(await service.pull(S));
+    const { files: pulled, iteration } = data(await service.pull(S));
+    expect(iteration).toBe(1);
     expect(Object.keys(pulled).sort()).toEqual([
       ".gitignore",
       "GUIDE.md",
@@ -199,7 +200,7 @@ describe("commit", () => {
         },
       ],
     });
-    expect(data(await service.pull(S))["slots/wheel/neon/block.tsx"]).toBe(neonTsx);
+    expect(data(await service.pull(S)).files["slots/wheel/neon/block.tsx"]).toBe(neonTsx);
   });
 
   test("a commit from a thread that isn't attached names the owner", async () => {
