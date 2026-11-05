@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, ExternalLink, Unlink } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Sidebar,
@@ -21,27 +21,8 @@ import { markdownText } from "./markdownSubset";
 import { CopyPhrase } from "./Regenerate";
 import { groupByProject } from "./sessionGroups";
 
-/** The sidebar shows every brainstorm until one is open, then that brainstorm's thread and slots. */
-export function AppSidebar({
-  sessions,
-  view,
-  current,
-  onSession,
-  onHome,
-  selectedSlot,
-  onSlot,
-  onVariant,
-}: {
-  sessions: readonly SessionListing[];
-  view: SessionView | null;
-  current: SessionId | null;
-  onSession: (id: SessionId) => void;
-  onHome: () => void;
-  selectedSlot: SlotId | null;
-  onSlot: (slot: SlotId) => void;
-  onVariant: (slot: SlotId, variant: VariantKey) => void;
-}) {
-  const listing = sessions.find((s) => s.id === current) ?? null;
+/** The sidebar's frame. It holds `HomePanel` until a brainstorm is open, then that brainstorm's `SessionPanel`. */
+export function AppSidebar({ children }: { children: ReactNode }) {
   return (
     <Sidebar variant="inset" collapsible="offcanvas">
       <SidebarHeader className="flex-row items-center gap-2 px-3 pt-2.5 pb-1">
@@ -51,24 +32,12 @@ export function AppSidebar({
         <span className="text-sm font-semibold">Brainstorm</span>
         <SidebarTrigger className="ml-auto text-muted-foreground" />
       </SidebarHeader>
-      {current === null ? (
-        <HomePanel key="home" sessions={sessions} onSession={onSession} />
-      ) : (
-        <SessionPanel
-          key={current}
-          title={view?.session.title ?? listing?.title ?? ""}
-          view={view}
-          onHome={onHome}
-          selectedSlot={selectedSlot}
-          onSlot={onSlot}
-          onVariant={onVariant}
-        />
-      )}
+      {children}
     </Sidebar>
   );
 }
 
-function HomePanel({ sessions, onSession }: { sessions: readonly SessionListing[]; onSession: (id: SessionId) => void }) {
+export function HomePanel({ sessions, onSession }: { sessions: readonly SessionListing[]; onSession: (id: SessionId) => void }) {
   const groups = useMemo(() => groupByProject(sessions), [sessions]);
   return (
     <SidebarContent className="animate-in fade-in-0 slide-in-from-left-3 duration-200" data-sidebar-panel="home">
@@ -119,7 +88,7 @@ function HomePanel({ sessions, onSession }: { sessions: readonly SessionListing[
   );
 }
 
-function SessionPanel({
+export function SessionPanel({
   title,
   view,
   onHome,

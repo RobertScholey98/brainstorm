@@ -1,5 +1,5 @@
 import { Lightbulb, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -28,8 +28,8 @@ import { CanvasHost, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { Inspector } from "./Inspector";
 import { PendingOverrides } from "./overrides";
-import { AppSidebar } from "./Sidebar";
-import { TopBar } from "./TopBar";
+import { AppSidebar, HomePanel, SessionPanel } from "./Sidebar";
+import { SessionBar, TopBar } from "./TopBar";
 
 const NOTICE_MS = 6000;
 
@@ -44,16 +44,8 @@ const NO_PLACEMENT: Placement = { placed: new Set(), detached: new Set() };
 export function App({ api }: { api: Api }) {
   const [sessions, setSessions] = useState<readonly SessionListing[]>([]);
   const [sessionId, setSessionId] = useState<SessionId | null>(null);
-  const [view, setView] = useState<SessionView | null>(null);
-  // Selection is a slot, so switching variants keeps the controls on the slot's new block.
-  const [selectedSlot, setSelectedSlot] = useState<SlotId | null>(null);
-  const [blockErrors, setBlockErrors] = useState<ReadonlyMap<BlockId, string>>(new Map());
+  const [revision, setRevision] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
-  const [interaction, setInteraction] = useState<CanvasInteraction>({ kind: "view" });
-  const [placement, setPlacement] = useState<Placement>(NO_PLACEMENT);
-  const [focusedFeedback, setFocusedFeedback] = useState<FeedbackId | null>(null);
-  const [pulse, setPulse] = useState<{ id: FeedbackId; seq: number } | null>(null);
-  const canvasArea = useRef<HTMLElement>(null);
 
   const current = useRef<SessionId | null>(null);
   current.current = sessionId;
@@ -63,65 +55,123 @@ export function App({ api }: { api: Api }) {
     setTimeout(() => setNotice((n) => (n === message ? null : n)), NOTICE_MS);
   }, []);
 
-  const send = useCallback(
-    async (action: RobAction): Promise<SessionView | null> => {
-      const id = current.current;
-      if (id === null) return null;
-      const result = await api.act(id, action);
-      if (!result.ok) {
-        showNotice(result.error.message);
-        return null;
-      }
-      if (current.current === id) setView(result.data);
-      return result.data;
-    },
-    [api, showNotice],
-  );
-  const pending = useMemo(() => new PendingOverrides(send), [send]);
-  const pendingVersion = useSyncExternalStore(pending.subscribe, pending.version);
-  useEffect(() => {
-    if (view !== null) pending.settle(view);
-  }, [pending, view]);
-
-  const refresh = useCallback(async () => {
+  const refreshList = useCallback(async () => {
     const list = await api.sessions();
-    if (!list.ok) return showNotice(list.error.message);
-    setSessions(list.data);
-    const id = current.current;
-    if (id === null) return;
-    const next = await api.view(id);
-    if (!next.ok) return showNotice(next.error.message);
-    if (current.current === id) setView(next.data);
+    if (list.ok) setSessions(list.data);
+    else showNotice(list.error.message);
   }, [api, showNotice]);
 
   useEffect(() => {
     const controller = new AbortController();
-    void refresh();
     void api.events(
       (id) => {
-        if (id === current.current) void refresh();
-        else void api.sessions().then((list) => list.ok && setSessions(list.data));
+        void refreshList();
+        if (id === current.current) setRevision((r) => r + 1);
       },
-      () => void refresh(),
+      () => {
+        void refreshList();
+        setRevision((r) => r + 1);
+      },
       controller.signal,
     );
     return () => controller.abort();
-  }, [api, refresh]);
+  }, [api, refreshList]);
 
-  /** Opens a session, or with null goes back to the list of every brainstorm. */
-  const select = (id: SessionId | null) => {
-    if (id === sessionId) return;
-    pending.clear();
-    setView(null);
-    setSelectedSlot(null);
-    setBlockErrors(new Map());
-    setInteraction({ kind: "view" });
-    setPlacement(NO_PLACEMENT);
-    setFocusedFeedback(null);
-    setSessionId(id);
-    current.current = id;
-    void refresh();
-  };
+  return (
+    <TooltipProvider>
+      <SidebarProvider className="h-svh min-h-0 overflow-hidden" style={{ "--sidebar-width": "18rem" } as CSSProperties}>
+        {sessionId === null ? (
+          <Shell
+            sidebar={<HomePanel sessions={sessions} onSession={setSessionId} />}
+            bar={
+              <TopBar notice={notice}>
+                <h1 className="pl-1 text-sm font-medium">All brainstorms</h1>
+              </TopBar>
+            }
+          >
+            <section className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Canvas" data-canvas-region>
+              <HomeEmpty hasSessions={sessions.length > 0} />
+            </section>
+          </Shell>
+        ) : (
+          <SessionWorkspace
+            key={sessionId}
+            api={api}
+            sessionId={sessionId}
+            title={sessions.find((s) => s.id === sessionId)?.title ?? ""}
+            revision={revision}
+            notice={notice}
+            showNotice={showNotice}
+            onHome={() => setSessionId(null)}
+          />
+        )}
+      </SidebarProvider>
+    </TooltipProvider>
+  );
+}
+
+function Shell({ sidebar, bar, children }: { sidebar: ReactNode; bar: ReactNode; children: ReactNode }) {
+  return (
+    <>
+      <AppSidebar>{sidebar}</AppSidebar>
+      <SidebarInset className="min-h-0 min-w-0 overflow-hidden ring-1 ring-border/70">
+        {bar}
+        <div className="flex min-h-0 flex-1">{children}</div>
+      </SidebarInset>
+    </>
+  );
+}
+
+/** One open brainstorm. It is keyed by session, so everything here starts fresh when another one opens. */
+function SessionWorkspace({
+  api,
+  sessionId,
+  title,
+  revision,
+  notice,
+  showNotice,
+  onHome,
+}: {
+  api: Api;
+  sessionId: SessionId;
+  title: string;
+  revision: number;
+  notice: string | null;
+  showNotice: (message: string) => void;
+  onHome: () => void;
+}) {
+  const [view, setView] = useState<SessionView | null>(null);
+  // Selection is a slot, so switching variants keeps the controls on the slot's new block.
+  const [selectedSlot, setSelectedSlot] = useState<SlotId | null>(null);
+  const [blockErrors, setBlockErrors] = useState<ReadonlyMap<BlockId, string>>(new Map());
+  const [interaction, setInteraction] = useState<CanvasInteraction>({ kind: "view" });
+  const [placement, setPlacement] = useState<Placement>(NO_PLACEMENT);
+  const [focusedFeedback, setFocusedFeedback] = useState<FeedbackId | null>(null);
+  const [pulse, setPulse] = useState<{ id: FeedbackId; seq: number } | null>(null);
+  const canvasArea = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    void api.view(sessionId).then((next) => (next.ok ? setView(next.data) : showNotice(next.error.message)));
+  }, [api, sessionId, revision, showNotice]);
+
+  const send = useCallback(
+    async (action: RobAction): Promise<SessionView | null> => {
+      const result = await api.act(sessionId, action);
+      if (!result.ok) {
+        showNotice(result.error.message);
+        return null;
+      }
+      setView(result.data);
+      return result.data;
+    },
+    [api, sessionId, showNotice],
+  );
+  const pending = useMemo(() => new PendingOverrides(send), [send]);
+  const pendingVersion = useSyncExternalStore(pending.subscribe, pending.version);
+  useEffect(() => () => pending.clear(), [pending]);
+  useEffect(() => {
+    if (view !== null) pending.settle(view);
+  }, [pending, view]);
 
   const iteration = view?.iteration ?? null;
   const slots = iteration?.slots ?? [];
@@ -190,100 +240,93 @@ export function App({ api }: { api: Api }) {
   };
 
   const exportHtml = async () => {
-    const result = sessionId === null ? null : await api.exportHtml(sessionId);
-    if (result?.ok === false) showNotice(result.error.message);
-    return result?.ok ? result.data : null;
+    const result = await api.exportHtml(sessionId);
+    if (!result.ok) showNotice(result.error.message);
+    return result.ok ? result.data : null;
   };
 
   return (
-    <TooltipProvider>
-      <SidebarProvider className="h-svh min-h-0 overflow-hidden" style={{ "--sidebar-width": "18rem" } as CSSProperties}>
-        <AppSidebar
-          sessions={sessions}
+    <Shell
+      sidebar={
+        <SessionPanel
+          title={view?.session.title ?? title}
           view={view}
-          current={sessionId}
-          onSession={select}
-          onHome={() => select(null)}
+          onHome={onHome}
           selectedSlot={slot?.id ?? null}
           onSlot={setSelectedSlot}
           onVariant={onVariant}
         />
-        <SidebarInset className="min-h-0 min-w-0 overflow-hidden ring-1 ring-border/70">
-          <TopBar view={view} home={sessionId === null} notice={notice} selected={selectedBlock?.id ?? null} send={send} exportHtml={exportHtml} />
-          <div className="flex min-h-0 flex-1">
-            <section ref={canvasArea} className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Canvas" data-canvas-region>
-              {sessionId === null ? (
-                <HomeEmpty hasSessions={sessions.length > 0} />
-              ) : iteration === null ? (
-                <WaitingEmpty loading={view === null} />
-              ) : (
-                <CanvasHost
-                  blocks={blocks}
-                  frames={frames}
-                  props={frameProps}
-                  selected={selectedBlock?.id ?? null}
-                  mode={interaction.kind === "picking" ? "pin" : "view"}
-                  pins={pins}
-                  pulse={pulse}
-                  onSelect={onSelectBlock}
-                  onBlockError={onBlockError}
-                  onPicked={onPicked}
-                  onPinClicked={onPinClicked}
-                  onPlacement={setPlacement}
-                />
-              )}
-              {interaction.kind === "picking" && (
-                <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center" data-pick-hint>
-                  <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-primary py-1.5 pr-1.5 pl-3.5 text-xs text-primary-foreground shadow-lg">
-                    Click an element to pin a comment
-                    <button
-                      type="button"
-                      onClick={() => setInteraction({ kind: "view" })}
-                      className="h-6 rounded-full bg-primary-foreground/15 px-2.5 font-medium hover:bg-primary-foreground/25"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-              {interaction.kind === "composing" && (
-                <PinComposer
-                  key={JSON.stringify(interaction)}
-                  pin={interaction.pin}
-                  at={interaction.at}
-                  block={blocks.find((b) => b.id === interaction.pin.blockId) ?? null}
-                  bounds={{ width: canvasArea.current?.clientWidth ?? 0, height: canvasArea.current?.clientHeight ?? 0 }}
-                  onSave={(text) => saveComment(interaction.pin, text)}
-                  onCancel={() => setInteraction({ kind: "view" })}
-                />
-              )}
-            </section>
-            {view !== null && (
-              <Inspector
-                view={view}
-                block={selectedBlock}
-                props={selectedBlock === null ? null : (frameProps[selectedBlock.id] ?? null)}
-                error={selectedBlock === null ? null : (blockErrors.get(selectedBlock.id) ?? null)}
-                onSet={onSet}
-                onReset={onReset}
-                onDismiss={onDismiss}
+      }
+      bar={<SessionBar view={view} notice={notice} selected={selectedBlock?.id ?? null} send={send} exportHtml={exportHtml} />}
+    >
+      <section ref={canvasArea} className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Canvas" data-canvas-region>
+        {iteration === null ? (
+          <WaitingEmpty loading={view === null} />
+        ) : (
+          <CanvasHost
+            blocks={blocks}
+            frames={frames}
+            props={frameProps}
+            selected={selectedBlock?.id ?? null}
+            mode={interaction.kind === "picking" ? "pin" : "view"}
+            pins={pins}
+            pulse={pulse}
+            onSelect={onSelectBlock}
+            onBlockError={onBlockError}
+            onPicked={onPicked}
+            onPinClicked={onPinClicked}
+            onPlacement={setPlacement}
+          />
+        )}
+        {interaction.kind === "picking" && (
+          <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center" data-pick-hint>
+            <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-primary py-1.5 pr-1.5 pl-3.5 text-xs text-primary-foreground shadow-lg">
+              Click an element to pin a comment
+              <button
+                type="button"
+                onClick={() => setInteraction({ kind: "view" })}
+                className="h-6 rounded-full bg-primary-foreground/15 px-2.5 font-medium hover:bg-primary-foreground/25"
               >
-                <FeedbackPanel
-                  feedback={feedback}
-                  blocks={blocks}
-                  place={(f) => pinPlace(f, blocks, activeBlocks, placement)}
-                  picking={interaction.kind === "picking"}
-                  focused={focusedFeedback}
-                  onPickToggle={() => setInteraction((i) => (i.kind === "picking" ? { kind: "view" } : { kind: "picking" }))}
-                  onOpen={openFeedback}
-                  send={send}
-                />
-              </Inspector>
-            )}
+                Cancel
+              </button>
+            </div>
           </div>
-        </SidebarInset>
-      </SidebarProvider>
-    </TooltipProvider>
+        )}
+        {interaction.kind === "composing" && (
+          <PinComposer
+            key={JSON.stringify(interaction)}
+            pin={interaction.pin}
+            at={interaction.at}
+            block={blocks.find((b) => b.id === interaction.pin.blockId) ?? null}
+            bounds={{ width: canvasArea.current?.clientWidth ?? 0, height: canvasArea.current?.clientHeight ?? 0 }}
+            onSave={(text) => saveComment(interaction.pin, text)}
+            onCancel={() => setInteraction({ kind: "view" })}
+          />
+        )}
+      </section>
+      {view !== null && (
+        <Inspector
+          view={view}
+          block={selectedBlock}
+          props={selectedBlock === null ? null : (frameProps[selectedBlock.id] ?? null)}
+          error={selectedBlock === null ? null : (blockErrors.get(selectedBlock.id) ?? null)}
+          onSet={onSet}
+          onReset={onReset}
+          onDismiss={onDismiss}
+        >
+          <FeedbackPanel
+            feedback={feedback}
+            blocks={blocks}
+            place={(f) => pinPlace(f, blocks, activeBlocks, placement)}
+            picking={interaction.kind === "picking"}
+            focused={focusedFeedback}
+            onPickToggle={() => setInteraction((i) => (i.kind === "picking" ? { kind: "view" } : { kind: "picking" }))}
+            onOpen={openFeedback}
+            send={send}
+          />
+        </Inspector>
+      )}
+    </Shell>
   );
 }
 
