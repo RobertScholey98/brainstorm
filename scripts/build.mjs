@@ -73,6 +73,7 @@ async function renderer() {
     base: "/",
     configFile: false,
     plugins: [react(), tailwindcss()],
+    resolve: { alias: { "@": `${root}/src/renderer` } },
     build: { outDir: `${root}/dist/renderer`, emptyOutDir: true, modulePreload: { polyfill: false }, chunkSizeWarningLimit: 1024 },
     logLevel: "warn",
   });

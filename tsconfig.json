@@ -12,7 +12,8 @@
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": { "@/*": ["./src/renderer/*"] }
   },
   "include": ["src", "test", "vitest.config.ts"],
   "exclude": ["src/canvas/runtime.tsx", "src/renderer"]
