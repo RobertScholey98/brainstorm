@@ -6,7 +6,7 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "nod
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, canvasFrame, checks, launch, root, shot, workspace } from "./electron.mjs";
+import { build, checks, launch, openSession, root, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("shell");
@@ -94,8 +94,7 @@ try {
   await window.click('[data-project="kitchen-proj"] [data-project-label]');
   await window.waitForSelector(`[data-session="${kitchen}"]`);
 
-  await window.click(`[data-session="${wide}"]`);
-  await window.waitForSelector('[data-sidebar-panel="session"]');
+  const canvas = await openSession(window, wide);
   check(
     "clicking a brainstorm swaps the sidebar to it",
     [await window.$('[data-sidebar-panel="home"]'), (await window.textContent("[data-session-title]"))?.trim(), (await window.textContent("[data-topbar] h1"))?.trim()],
@@ -111,7 +110,6 @@ try {
     ["All brainstorms", "Attached", ["card"]],
   );
 
-  const canvas = await canvasFrame(window);
   await canvas.waitForSelector('[data-bid="result/card"]');
   const box = (selector) =>
     window.$eval(selector, (el) => {
@@ -163,8 +161,7 @@ try {
   await window.waitForSelector('[data-sidebar-panel="home"]');
   check("the back control returns home", [await window.isVisible("[data-home-empty]"), await window.$("iframe[title=Canvas]")], [true, null]);
 
-  await window.click(`[data-session="${roulette}"]`);
-  await (await canvasFrame(window)).waitForSelector('[data-bid="wheel/neon"]');
+  await (await openSession(window, roulette)).waitForSelector('[data-bid="wheel/neon"]');
   await window.emulateMedia({ colorScheme: "dark" });
   await window.waitForTimeout(400);
   await shot(window, shots, "session-dark");
