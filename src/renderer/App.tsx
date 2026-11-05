@@ -51,16 +51,17 @@ export function App({ api }: { api: Api }) {
   const current = useRef<SessionId | null>(null);
   current.current = sessionId;
 
-  const showNotice = useCallback((message: string) => {
-    setNotice(message);
-    setTimeout(() => setNotice((n) => (n === message ? null : n)), NOTICE_MS);
-  }, []);
+  useEffect(() => {
+    if (notice === null) return;
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const refreshList = useCallback(async () => {
     const list = await api.sessions();
     if (list.ok) setSessions(list.data);
-    else showNotice(list.error.message);
-  }, [api, showNotice]);
+    else setNotice(list.error.message);
+  }, [api]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -102,7 +103,7 @@ export function App({ api }: { api: Api }) {
             title={sessions.find((s) => s.id === sessionId)?.title ?? ""}
             revision={revision}
             notice={notice}
-            showNotice={showNotice}
+            showNotice={setNotice}
             onHome={() => setSessionId(null)}
           />
         )}
