@@ -65,7 +65,7 @@ function applyCss(m: CanvasModule): void {
   }
   if (style === undefined) {
     style = document.createElement("style");
-    style.dataset.bid = m.blockId;
+    style.dataset.blockCss = m.blockId;
     document.head.append(style);
     styles.set(m.blockId, style);
   }
@@ -215,6 +215,7 @@ const CHROME_CSS = `
   }
 }
 html, body { margin: 0; min-height: 100%; }
+html { scrollbar-width: thin; scrollbar-color: var(--bs-dot) transparent; }
 body {
   background-color: var(--bs-canvas);
   background-image: radial-gradient(var(--bs-dot) 1px, transparent 1.2px);
