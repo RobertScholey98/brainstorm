@@ -1,5 +1,6 @@
 import { Lightbulb, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -284,13 +285,14 @@ function SessionWorkspace({
           <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center" data-pick-hint>
             <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-primary py-1.5 pr-1.5 pl-3.5 text-xs text-primary-foreground shadow-lg">
               Click an element to pin a comment
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => setInteraction({ kind: "view" })}
-                className="h-6 rounded-full bg-primary-foreground/15 px-2.5 font-medium hover:bg-primary-foreground/25"
+                className="rounded-full bg-primary-foreground/15 px-2.5 text-primary-foreground hover:bg-primary-foreground/25 hover:text-primary-foreground dark:hover:bg-primary-foreground/25"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         )}
