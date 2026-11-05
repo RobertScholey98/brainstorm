@@ -1,0 +1,116 @@
+# Design climb brief: Brainstorm app UI
+
+Rob agreed this brief on 2026-11-05. A fresh session can run the climb from this file and the `hillclimb-ui` skill alone.
+
+## Goal
+
+Brainstorm is a tool Rob keeps open all day beside T3 Code and the Claude desktop app. It should follow their layout and interaction patterns. Seen side by side, it must beat both on every design measure below.
+
+## Measures
+
+Reviewers score each area out of 10:
+
+1. **Shell.** The sidebar, top bar, main card and the frame around them.
+2. **Navigation and lists.** Home project groups, session rows, the brainstorm panel, the variant lists.
+3. **Canvas chrome.** Frame labels and sizes, the selected-frame ring, pins, pick mode, scrolling. Agent-written block content is out of scope.
+4. **Inspector and controls.** Every control type, its labels, values and overridden state.
+5. **Overlays.** The Regenerate and Export popovers, the pin composer, tooltips and notices.
+6. **Feedback.** Open, addressed and confirmed items and their actions.
+7. **States.** Empty, loading and error states, every request phase, the lost thread, and block compile errors.
+8. **Dark mode.** Parity, contrast, surfaces.
+9. **Self-consistency.** One meaning per colour, one style per component, one scale per property.
+10. **Fitness for all-day use.** Density, hierarchy, keyboard reach, calm.
+
+Each sheet puts Brainstorm beside one exemplar, Claude desktop or T3 Code. For each sheet, reviewers also give Brainstorm and the exemplar a score on the same areas, using only what the sheet shows.
+
+## The bar
+
+A round passes when all of these hold:
+
+- Every council member scores every area **9.5 or higher**.
+- Every member says they are completely happy.
+- No member lists a blocker or a major.
+- On every comparison sheet, every member scores Brainstorm above the exemplar in every area the sheet shows, and names Brainstorm the better of the pair.
+
+Sign-off then repeats the round on a random sample with a fresh council and no findings log.
+
+## What sets the look
+
+- **Layout and patterns** come from Claude desktop and T3 Code. That means the sidebar with project groups, the inset main card, quiet chrome and dense lists.
+- **Brand layer.** Brainstorm has its own restrained signature: one accent hue and one mark. The accent means "Brainstorm and the agent" and is used only for:
+  - selection
+  - the Regenerate action
+  - agent activity
+  - pins
+
+  Everything else is neutral. The hue and the mark are chosen in the foundation phase and shown to Rob at the checkpoint.
+- The exemplars set the bar for polish and consistency, not the look. Don't drift toward their greys where the accent has a job.
+
+## Scope
+
+- **In.** Every screen and state of the Electron app's own UI:
+  - home, both empty and populated
+  - the brainstorm panel
+  - the top bar and every request phase
+  - the canvas chrome, the Inspector, feedback and the overlays
+  - the collapsed sidebar
+
+  Cover light and dark, at 1440×900 and at the smallest supported window, 1100×720.
+- **Out.**
+  - The content of agent-written blocks.
+  - The exported HTML file's own page, except where it reuses the shell's components.
+  - The CLI.
+
+## Behaviour changes allowed
+
+Change behaviour only where the UX falls short of the exemplars' patterns. Log each change in the findings log before it lands. These are pre-approved:
+
+- Going back to all brainstorms keeps the open brainstorm's canvas until another is chosen.
+- Thread status stays current while a session is open, so the lost marker shows without a restart.
+- Keyboard shortcuts:
+  - toggle the sidebar
+  - open Regenerate
+  - send from the composer and the Regenerate box
+  - Escape closes overlays
+  - move up and down the session and variant lists
+- Resizable sidebar and Inspector widths, remembered per viewer.
+- Real loading states and empty states wherever data can be missing.
+
+Anything else a reviewer asks for that changes behaviour goes to Rob first.
+
+## Constraints
+
+- The stack:
+  - Electron 44
+  - React 19
+  - Tailwind 4
+  - shadcn with Base UI primitives (base-nova)
+  - lucide icons
+- The renderer has no preload, and its CSP allows no remote fonts. Any font must ship in the bundle.
+- The canvas iframe's contract with blocks doesn't change.
+- No Radix in the renderer bundle. `verify:7` checks this.
+
+## Enforcement
+
+The climb's deliverable is a design system, not hand-tuned screens:
+
+- Tokens for both themes.
+- Closed scales for type, spacing, radius, shadow and z-index.
+- Kit components with typed props.
+- A design lint (`npm run lint:design`) with a test per rule that fails on:
+  - off-scale classes
+  - arbitrary values
+  - raw colours in the renderer
+- The capture script is part of the repo and reruns unchanged each round.
+
+## Where it lands
+
+The climb lands on branch `consistent-skill-html`, kept local, with one commit per component family. Rounds live in `design-review/round-<n>/`, which is gitignored. The score table for every round is committed in `docs/design-system/scores.md`.
+
+## Checkpoint
+
+There is one checkpoint with Rob, after the foundation phase: tokens, scales, accent and mark. He sees before and after shots of home, the brainstorm panel and one overlay, in both themes.
+
+## Council
+
+The council is Claude Opus 5.5, GPT-6.1 Sol and Claude Sonnet 5.5, all at high reasoning and all read-only. Each round's brief follows the `hillclimb-ui` reviewer template and carries the findings log.
