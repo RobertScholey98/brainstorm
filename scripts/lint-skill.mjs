@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -21,6 +21,8 @@ const mdFiles = [];
 const walk = (dir) => { for (const e of readdirSync(dir, { withFileTypes: true })) { const p = join(dir, e.name); if (e.isDirectory()) walk(p); else if (p.endsWith(".md")) mdFiles.push(p); } };
 walk(skill);
 
+// brainstorm --help runs the built CLI, which npm test doesn't build.
+execFileSync(process.execPath, [join(repo, "scripts", "build.mjs"), "cli"], { stdio: "inherit" });
 const help = spawnSync(process.execPath, [join(repo, "bin", "brainstorm.mjs"), "--help"], { encoding: "utf8" });
 expect(help.status === 0, `brainstorm --help exits 0, got ${help.status}`);
 const cliBlock = help.stdout.split(/\r?\n/).filter((l) => /^\s+brainstorm /.test(l)).join("\n");
