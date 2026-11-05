@@ -1,0 +1,151 @@
+import { JSONUIProvider, Renderer } from "@json-render/react";
+import type { Spec } from "@json-render/core";
+import { useEffect, useMemo, useRef } from "react";
+import type { AppearanceValue, BlockView, InapplicableOverride, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
+import { ControlScopeContext, controlRegistry, createBlockStore } from "./controls";
+
+const WHY: Record<OverrideMismatch, string> = {
+  prop_removed: "the block no longer has this setting",
+  type_changed: "the setting changed type",
+  out_of_range: "the value is outside the new range",
+  option_removed: "that option was removed",
+  block_removed: "the block was removed",
+};
+
+const isHex = (value: AppearanceValue): value is string => typeof value === "string" && /^#[0-9a-f]{6}$/.test(value);
+
+export function Inspector({
+  view,
+  block,
+  props,
+  error,
+  onSet,
+  onReset,
+  onDismiss,
+}: {
+  view: SessionView;
+  block: BlockView | null;
+  props: Props | null;
+  error: string | null;
+  onSet: (block: BlockView, prop: PropName, value: AppearanceValue) => void;
+  onReset: (block: BlockView, prop: PropName) => void;
+  onDismiss: (o: InapplicableOverride) => void;
+}) {
+  const blocks = view.iteration?.blocks ?? [];
+  return (
+    <aside className="flex min-h-0 flex-col overflow-y-auto border-l border-border bg-background" aria-label="Inspector">
+      {view.overrides.inapplicable.length > 0 && <Inapplicable items={view.overrides.inapplicable} blocks={blocks} onDismiss={onDismiss} />}
+      {block === null || props === null ? (
+        <p className="px-4 py-4 text-[12px] text-muted-foreground">Select a frame to adjust it.</p>
+      ) : (
+        <BlockControls key={block.id} view={view} block={block} props={props} error={error} onSet={onSet} onReset={onReset} />
+      )}
+      <section className="mt-auto border-t border-border px-4 py-3" aria-label="Feedback">
+        <h2 className="text-[12px] font-semibold">Feedback</h2>
+        <p className="pt-1 text-[12px] leading-relaxed text-muted-foreground">Pinned comments will show here.</p>
+      </section>
+    </aside>
+  );
+}
+
+function BlockControls({
+  view,
+  block,
+  props,
+  error,
+  onSet,
+  onReset,
+}: {
+  view: SessionView;
+  block: BlockView;
+  props: Props;
+  error: string | null;
+  onSet: (block: BlockView, prop: PropName, value: AppearanceValue) => void;
+  onReset: (block: BlockView, prop: PropName) => void;
+}) {
+  const appearance = useMemo(
+    () => Object.fromEntries(block.props.appearance.map((p) => [p.name, props[p.name]])) as Record<string, unknown>,
+    [block, props],
+  );
+  const handlers = useRef({ onSet, block });
+  handlers.current = { onSet, block };
+  const store = useMemo(() => createBlockStore(appearance, (prop, value) => handlers.current.onSet(handlers.current.block, prop, value)), [block.id]);
+  useEffect(() => store.sync(appearance), [store, appearance]);
+
+  const scope = useMemo(
+    () => ({
+      block,
+      overridden: new Set<string>(view.overrides.applicable.filter((o) => o.blockId === block.id).map((o) => o.prop)),
+      reset: (prop: PropName) => onReset(block, prop),
+    }),
+    [block, view.overrides.applicable, onReset],
+  );
+  const slot = view.iteration?.slots.find((s) => s.id === block.slot);
+
+  return (
+    <div data-block={block.id}>
+      <header className="border-b border-border px-4 pt-3 pb-3">
+        <div className="text-[11px] font-medium text-muted-foreground">{slot?.title ?? block.slot}</div>
+        <h2 className="truncate pt-0.5 text-[14px] font-semibold">{block.title}</h2>
+        {error !== null && (
+          <p role="alert" className="mt-2 rounded-md bg-destructive/10 px-2.5 py-2 text-[12px] text-destructive">
+            This block failed to render: {error}
+          </p>
+        )}
+      </header>
+      {block.props.appearance.length === 0 ? (
+        <p className="px-4 py-4 text-[12px] text-muted-foreground">This block has no adjustable settings.</p>
+      ) : (
+        <ControlScopeContext.Provider value={scope}>
+          <JSONUIProvider registry={controlRegistry} store={store}>
+            <Renderer spec={block.controls as unknown as Spec} registry={controlRegistry} />
+          </JSONUIProvider>
+        </ControlScopeContext.Provider>
+      )}
+    </div>
+  );
+}
+
+function Inapplicable({
+  items,
+  blocks,
+  onDismiss,
+}: {
+  items: readonly InapplicableOverride[];
+  blocks: readonly BlockView[];
+  onDismiss: (o: InapplicableOverride) => void;
+}) {
+  return (
+    <section role="status" aria-label="Adjustments that no longer apply" className="border-b border-border bg-warning-surface px-4 py-3" data-banner="inapplicable">
+      <h2 className="text-[12px] font-semibold text-warning">
+        {items.length === 1 ? "An adjustment no longer applies" : `${items.length} adjustments no longer apply`}
+      </h2>
+      <ul className="grid gap-2 pt-2">
+        {items.map((item) => {
+          const { override: o, reason } = item;
+          const title = blocks.find((b) => b.id === o.blockId)?.title ?? o.blockId;
+          return (
+            <li key={`${o.blockId}/${o.prop}`} className="flex items-start gap-2 text-[12px] leading-snug" data-override={`${o.blockId}:${o.prop}`}>
+              {isHex(o.value) && (
+                <span aria-hidden className="mt-0.5 size-3 shrink-0 rounded-[3px] shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" style={{ background: o.value }} />
+              )}
+              <span className="min-w-0">
+                <span className="font-medium">
+                  {o.prop} = {isHex(o.value) ? o.value.toUpperCase() : String(o.value)}
+                </span>{" "}
+                on {title}: {WHY[reason]}.
+              </span>
+              <button
+                type="button"
+                onClick={() => onDismiss(item)}
+                className="ml-auto shrink-0 rounded-sm px-1.5 py-0.5 font-medium text-warning hover:bg-warning/10"
+              >
+                Dismiss
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}

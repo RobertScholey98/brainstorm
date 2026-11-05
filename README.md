@@ -11,7 +11,7 @@ Node 22.18 or later.
 
 ```
 npm install
-npm run build      # esbuild bundles into dist/
+npm run build      # esbuild and Vite build dist/
 npm test           # vitest
 npm run typecheck
 npm run verify:1   # the built CLI and headless server against a fake T3

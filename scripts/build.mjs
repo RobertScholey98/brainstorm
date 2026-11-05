@@ -61,6 +61,23 @@ const canvasRuntime = () =>
     logLevel: "error",
   });
 
+/** The app's window: Vite with React and Tailwind, configured here so there's no config file to typecheck. */
+async function renderer() {
+  const [{ build: viteBuild }, { default: react }, { default: tailwindcss }] = await Promise.all([
+    import("vite"),
+    import("@vitejs/plugin-react"),
+    import("@tailwindcss/vite"),
+  ]);
+  await viteBuild({
+    root: `${root}/src/renderer`,
+    base: "/",
+    configFile: false,
+    plugins: [react(), tailwindcss()],
+    build: { outDir: `${root}/dist/renderer`, emptyOutDir: true, modulePreload: { polyfill: false }, chunkSizeWarningLimit: 1024 },
+    logLevel: "warn",
+  });
+}
+
 /** Electron loads main as CommonJS, where import.meta is empty, so the modules that find the package root get a shim. */
 const electronMain = () =>
   build({
@@ -82,6 +99,7 @@ export const targets = {
   server: nodeEntry("src/server/headless.ts", "dist/server/headless.js"),
   cli: nodeEntry("src/cli/main.ts", "dist/cli/main.js"),
   electron: electronMain,
+  renderer,
 };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

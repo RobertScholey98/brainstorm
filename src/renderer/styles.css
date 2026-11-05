@@ -1,0 +1,120 @@
+@import "tailwindcss";
+@source "../../node_modules/@json-render/shadcn/dist";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--muted);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--hover);
+  --color-accent-foreground: var(--foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--primary);
+  --color-panel: var(--panel);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+:root {
+  color-scheme: light;
+  --background: #ffffff;
+  --panel: #f7f7f8;
+  --foreground: #1d1e22;
+  --card: #ffffff;
+  --muted: #eef0f2;
+  --muted-foreground: #6a6f78;
+  --hover: #e9ebee;
+  --border: #e2e4e8;
+  --input: #d9dce1;
+  --primary: #3b63e6;
+  --primary-foreground: #ffffff;
+  --destructive: #c4352b;
+  --warning: #8a5300;
+  --warning-surface: #fff5df;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --background: #1b1c20;
+    --panel: #17181b;
+    --foreground: #e7e8eb;
+    --card: #202126;
+    --muted: #26282d;
+    --muted-foreground: #979ca6;
+    --hover: #2a2c31;
+    --border: #2c2e34;
+    --input: #383a41;
+    --primary: #7593ff;
+    --primary-foreground: #0f1013;
+    --destructive: #ff8a7f;
+    --warning: #f2b860;
+    --warning-surface: #33280f;
+  }
+}
+
+html {
+  font-size: 14px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--panel);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* shadcn's Select always renders its Label; the registry draws its own label row instead. */
+[data-slot="label"]:empty {
+  display: none;
+}
+
+.segmented [data-slot="toggle-group"] {
+  display: flex;
+  width: 100%;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--muted);
+}
+.segmented [data-slot="toggle-group-item"] {
+  flex: 1;
+  height: 26px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.segmented [data-slot="toggle-group-item"][data-state="on"] {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--input) transparent;
+}
+
+:focus-visible {
+  outline-color: var(--primary);
+}

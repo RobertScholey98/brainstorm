@@ -269,13 +269,17 @@ Each actor writes its own rows:
 ## Renderer
 
 The renderer is Vite, React 19, Tailwind v4, `@json-render/react` and `@json-render/shadcn`. It has three columns:
-- **Left.** Session list, then slots, each with a variant switch showing the variant title, with `about.md` on hover or expand.
+- **Left.** Session list, then slots, each with a variant switch showing the variant title. The active variant shows its `about.md` expanded, and the others show it on hover.
 - **Centre.** The canvas iframe.
-- **Right.** Controls for the selected block, one json-render `Renderer` per block over a custom `StateStore`. Its `set` updates the frame immediately and sends a debounced `set_override` (250 ms). Below the controls, the inapplicable-override banner and the feedback list.
+- **Right.** The inapplicable-override banner with Dismiss on top, because it covers the whole session, removed blocks included, and so can't depend on the selection. Then the controls for the selected block: one json-render `Renderer` per block over a custom `StateStore` whose values are the block's effective appearance props. Its `set` repaints the frame at once and sends `set_override` 250 ms after the last change. A pending edit is dropped once a view agrees with it, or when the server refuses it. A control with an override shows a reset button, which sends `clear_override`. The feedback list sits below.
 
-The top bar shows the attached thread and request phase, a Regenerate menu (everything, selected blocks, free text), and Export.
+Selection is a slot, not a block, so switching a slot's variant keeps the controls on that slot. A pointer-down in a frame selects its slot.
 
-The registry implements our catalog with shadcn components where their props fit (`Slider`, `Select`, `Switch`, `Input`, `ToggleGroup`). `Colour` is a native `<input type=color>` with a hex field.
+The top bar shows the session, its iteration, the attached thread and the request phase, a Regenerate menu (everything, selected blocks, free text), and Export.
+
+The renderer reads the UI token from `location.hash`, strips it from the URL and history, and keeps it in a closure in `api.ts`. It refetches the session list and the `SessionView` on each event from `/v1/ui/events`, and again whenever the stream reconnects. The server serves the built renderer at `/` and `/assets/*` only, under `default-src 'self'` (styles may be inline).
+
+The registry implements our catalog with shadcn components where their props fit (`Slider`, `Select`, `Switch`, `Input`, `Textarea`, `ToggleGroup`), each wrapped in one label row. `Colour` is a native `<input type=color>` with a hex field that commits only a complete `#rrggbb`. A derived spec's Section title repeats the block title, which the panel header already shows, so it is hidden.
 
 ## Export
 

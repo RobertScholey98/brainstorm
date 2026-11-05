@@ -107,4 +107,10 @@ describe("http", () => {
     );
     expect(await res.text()).toContain('<script type="application/json" id="brainstorm-boot">{"mode":"live","messages":[]}</script>');
   });
+
+  test("serves only the renderer's own files", async () => {
+    expect((await fetch(`${base()}/assets/..%2F..%2Fpackage.json`)).status).toBe(404);
+    expect((await fetch(`${base()}/assets/worker.cjs`)).status).toBe(404);
+    expect((await fetch(`${base()}/dist/check/worker.cjs`)).status).toBe(400);
+  });
 });

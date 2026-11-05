@@ -1,7 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import { buildCanvasDocument, CANVAS_CSP } from "../canvas/document";
+import { packageRoot } from "../core/packageRoot";
 import type { Brainstorm } from "../core/brainstorm";
 import { zBranded } from "../core/parse";
 import {
@@ -21,6 +23,16 @@ import {
 } from "../core/types";
 
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
+
+const RENDERER_CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'";
+const ASSET_TYPES: Record<string, string> = {
+  js: "text/javascript; charset=utf-8",
+  css: "text/css; charset=utf-8",
+  svg: "image/svg+xml",
+  png: "image/png",
+  woff2: "font/woff2",
+};
 const HEARTBEAT_MS = 15_000;
 
 const STATUS: Record<FailureCode, number> = {
@@ -276,11 +288,7 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
         res.end(buildCanvasDocument(null, "live"));
         return;
       }
-      if (req.method === "GET" && url.pathname === "/") {
-        res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-        res.end("<!doctype html><title>Brainstorm</title><p>Brainstorm is running. The window is not built yet.</p>");
-        return;
-      }
+      if (req.method === "GET" && (url.pathname === "/" || url.pathname.startsWith("/assets/"))) return serveRenderer(res, url.pathname);
 
       for (const route of routes) {
         const match = route.path.exec(url.pathname);
@@ -303,6 +311,28 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       streams.clear();
     },
   };
+}
+
+/** The built renderer: index.html at /, and Vite's hashed files under /assets/. Nothing else under dist/ is reachable. */
+function serveRenderer(res: ServerResponse, pathname: string): void {
+  const name = pathname === "/" ? "index.html" : /^\/assets\/([\w.-]+)$/.exec(pathname)?.[1];
+  const type = name === "index.html" ? "text/html; charset=utf-8" : ASSET_TYPES[name?.split(".").pop() ?? ""];
+  let body: Buffer;
+  try {
+    if (name === undefined || type === undefined) throw new Error("not a renderer file");
+    body = readFileSync(new URL(`dist/renderer/${name === "index.html" ? "" : "assets/"}${name}`, packageRoot()));
+  } catch {
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    res.end(pathname === "/" ? "The renderer isn't built; run npm run build." : "Not found.");
+    return;
+  }
+  res.writeHead(200, {
+    "content-type": type,
+    "content-security-policy": RENDERER_CSP,
+    "x-content-type-options": "nosniff",
+    "cache-control": name === "index.html" ? "no-store" : "max-age=31536000, immutable",
+  });
+  res.end(body);
 }
 
 class BodyError extends Error {}
