@@ -22,7 +22,8 @@ export type FeedbackId = Brand<number, "FeedbackId">;
 export type ContentHash = Brand<string, "ContentHash">;
 
 export const SESSION_ID_PATTERN = /^s_[0-9a-z]{6,16}$/;
-export const THREAD_ID_PATTERN = /^[0-9a-f-]{36}$/;
+// T3 prefixes threads that agents create, e.g. "mcp:<uuid>".
+export const THREAD_ID_PATTERN = /^(?:[a-z]+:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const SLOT_ID_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
 export const PROP_NAME_PATTERN = /^[a-z][A-Za-z0-9]*$/;
 const CONTENT_HASH_PATTERN = /^[0-9a-f]{64}$/;

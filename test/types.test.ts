@@ -20,6 +20,8 @@ describe("id parsers", () => {
     expect(parseSessionId("s_8f2k3a")).toBe("s_8f2k3a");
     expect(parseSessionId("8f2k3a")).toBe(null);
     expect(parseThreadId("8ee90f34-1111-2222-3333-444455556666")).toBe("8ee90f34-1111-2222-3333-444455556666");
+    expect(parseThreadId("mcp:833a9162-66b6-45ad-b0e4-305ca0d76671")).toBe("mcp:833a9162-66b6-45ad-b0e4-305ca0d76671");
+    expect(parseThreadId("mcp:833a9162 &calc")).toBe(null);
     expect(parseThreadId("not-a-thread")).toBe(null);
     expect(parseIterationN(3)).toBe(3);
     expect(parseIterationN(0)).toBe(null);
