@@ -1,4 +1,6 @@
 import { blockIdOf, type BlockView, type SessionId, type SessionListing, type SlotId, type SlotView, type VariantKey } from "../core/types";
+import { Markdown } from "./Markdown";
+import { markdownText } from "./markdownSubset";
 
 export function Sidebar({
   sessions,
@@ -95,7 +97,7 @@ function SlotSection({
                 aria-checked={active}
                 data-variant={variant}
                 onClick={() => onVariant(variant)}
-                title={active ? undefined : (block?.about ?? undefined)}
+                title={active || !block?.about ? undefined : markdownText(block.about)}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent aria-checked:hover:bg-transparent"
               >
                 <span
@@ -112,12 +114,7 @@ function SlotSection({
               </button>
               {active && block?.about && (
                 <div className="grid gap-1.5 pt-0.5 pr-2 pb-2.5 pl-7.5 text-[12px] leading-[1.45] text-muted-foreground" data-about>
-                  {block.about
-                    .trim()
-                    .split(/\n\s*\n/)
-                    .map((paragraph, i) => (
-                      <p key={i}>{paragraph}</p>
-                    ))}
+                  <Markdown source={block.about} />
                 </div>
               )}
             </div>
