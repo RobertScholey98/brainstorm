@@ -44,7 +44,13 @@ const showShape = z.object({
   messages: z.array(z.object({ role: z.string(), runId: runIdOrNull, text: z.string() })),
 });
 
-const STATUSES: readonly ThreadStatus[] = ["running", "completed", "failed"];
+/** T3 reports an idle thread whose run finished as `waiting`, which Brainstorm reads as completed. */
+const STATUSES: ReadonlyMap<string, ThreadStatus> = new Map([
+  ["running", "running"],
+  ["completed", "completed"],
+  ["waiting", "completed"],
+  ["failed", "failed"],
+]);
 
 function toSnapshot(raw: z.infer<typeof showShape>): ThreadSnapshot {
   const t = raw.thread;
@@ -54,7 +60,7 @@ function toSnapshot(raw: z.infer<typeof showShape>): ThreadSnapshot {
       projectId: t.projectId,
       title: t.title,
       link: t.link,
-      status: STATUSES.find((s) => s === t.status) ?? "unknown",
+      status: STATUSES.get(t.status) ?? "unknown",
       activeRunId: t.activeRunId,
       latestRunId: t.latestRunId,
       pendingRequestCount: t.pendingRequestCount,

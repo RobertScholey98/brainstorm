@@ -57,6 +57,17 @@ describe("t3 bridge", () => {
     });
   });
 
+  test("reads waiting, an idle thread whose run finished, as completed, and an unseen status as unknown", async () => {
+    const status = async (raw: string) => {
+      writeState({ threads: { [thread]: { ...readState().threads[thread], status: raw, activeRunId: null } } });
+      const result = await bridge.snapshot(thread, { messages: 30 });
+      return result.kind === "found" ? result.snapshot.thread.status : result.kind;
+    };
+    expect(await status("waiting")).toBe("completed");
+    expect(await status("completed")).toBe("completed");
+    expect(await status("archiving")).toBe("unknown");
+  });
+
   test("a missing thread is missing, and any other failure is failed", async () => {
     expect(await bridge.snapshot("00000000-0000-0000-0000-000000000000" as ThreadId, { messages: 30 })).toEqual({ kind: "missing" });
     writeState({ ...readState(), fail: true });
