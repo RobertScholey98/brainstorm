@@ -15,7 +15,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { takeoverPhrase } from "../core/machines";
-import { blockIdOf, type BlockView, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
+import { blockIdOf, type BlockId, type BlockView, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
 import { Markdown } from "./Markdown";
 import { markdownText } from "./markdownSubset";
 import { CopyPhrase } from "./Regenerate";
@@ -91,6 +91,8 @@ export function HomePanel({ sessions, onSession }: { sessions: readonly SessionL
 export function SessionPanel({
   title,
   view,
+  slots,
+  blocks,
   onHome,
   selectedSlot,
   onSlot,
@@ -98,13 +100,14 @@ export function SessionPanel({
 }: {
   title: string;
   view: SessionView | null;
+  slots: readonly SlotView[];
+  blocks: readonly BlockView[];
   onHome: () => void;
   selectedSlot: SlotId | null;
   onSlot: (slot: SlotId) => void;
   onVariant: (slot: SlotId, variant: VariantKey) => void;
 }) {
-  const slots = view?.iteration?.slots ?? [];
-  const blocks = view?.iteration?.blocks ?? [];
+  const byId = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
   return (
     <SidebarContent className="animate-in fade-in-0 slide-in-from-right-3 duration-200" data-sidebar-panel="session">
       <SidebarGroup className="gap-1 pb-1">
@@ -125,7 +128,7 @@ export function SessionPanel({
         <SlotSection
           key={slot.id}
           slot={slot}
-          blocks={blocks}
+          blocks={byId}
           selected={slot.id === selectedSlot}
           onSlot={() => onSlot(slot.id)}
           onVariant={(v) => onVariant(slot.id, v)}
@@ -182,7 +185,7 @@ function SlotSection({
   onVariant,
 }: {
   slot: SlotView;
-  blocks: readonly BlockView[];
+  blocks: ReadonlyMap<BlockId, BlockView>;
   selected: boolean;
   onSlot: () => void;
   onVariant: (variant: VariantKey) => void;
@@ -204,7 +207,7 @@ function SlotSection({
         </SidebarGroupLabel>
         <SidebarMenu role="radiogroup" aria-label={`${slot.title} variant`}>
           {slot.variants.map((variant) => {
-            const block = blocks.find((b) => b.id === blockIdOf(slot.id, variant));
+            const block = blocks.get(blockIdOf(slot.id, variant));
             const active = variant === slot.active;
             return (
               <SidebarMenuItem key={variant}>

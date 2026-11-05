@@ -251,6 +251,8 @@ function SessionWorkspace({
         <SessionPanel
           title={view?.session.title ?? title}
           view={view}
+          slots={slots}
+          blocks={blocks}
           onHome={onHome}
           selectedSlot={slot?.id ?? null}
           onSlot={setSelectedSlot}
