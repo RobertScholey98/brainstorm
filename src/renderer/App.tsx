@@ -297,7 +297,7 @@ function TopBar({
   const closeMenu = useCallback(() => setMenu(false), []);
   const lost = view?.attachment.lostAt != null;
   const threadName = view?.thread?.title ?? (view === null ? null : `thread ${view.attachment.threadId.slice(0, 8)}`);
-  const regenerateBlocked = view === null ? "Regenerate needs a first iteration" : blockedReason(view);
+  const regenerateBlocked = blockedReason(view);
   // A lost thread with a request in flight already says so, with the phrase, in the request status.
   const showTakeover = lost && view?.request?.phase.phase !== "thread_lost";
   return (
@@ -359,13 +359,14 @@ function TopBar({
   );
 }
 
-function blockedReason(view: SessionView): string | null {
-  if (view.regenerate.ok) return null;
-  switch (view.regenerate.reason) {
+function blockedReason(view: SessionView | null): string | null {
+  const gate = view?.regenerate ?? { ok: false, reason: "no_iteration" };
+  if (gate.ok) return null;
+  switch (gate.reason) {
     case "no_iteration":
       return "Regenerate needs a first iteration";
     case "request_open":
-      return `Request ${view.request?.request.n} is still open. Withdraw it to send another.`;
+      return `Request ${view?.request?.request.n} is still open. Withdraw it to send another.`;
     case "thread_lost":
       return "This session's thread is gone. Take it over from a T3 thread first.";
   }
