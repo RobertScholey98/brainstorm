@@ -25,10 +25,15 @@ async function phase(name) {
 
 /** The header controls a hint covers once it has settled in place, by their labels. */
 async function coveredBy(trigger) {
-  await window.mouse.move(120, 600);
-  await window.waitForSelector('[data-slot="tooltip-content"]', { state: "detached" });
-  await window.hover(trigger);
-  await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
+  // Right after a popover closes, the first entry sometimes opens no hint; the check is where a hint lands, so it re-enters.
+  for (let attempt = 0; ; attempt += 1) {
+    await window.mouse.move(120, 600);
+    await window.waitForSelector('[data-slot="tooltip-content"]', { state: "detached" });
+    await window.hover(trigger);
+    const shown = await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible", timeout: 3000 }).catch(() => null);
+    if (shown !== null) break;
+    if (attempt === 2) return "the hint never opened";
+  }
   const covered = await settled(() =>
     window.evaluate(() => {
       const shown = document.querySelector('[data-slot="tooltip-content"]');
@@ -193,7 +198,8 @@ try {
   await regenerate("all");
   await window.click("[data-regenerate-menu] [data-send]");
   check("queued", await phase("queued"), { message: "Queued in T3", actions: ["open_thread", "withdraw"] });
-  const withdrawAt = () => window.$eval('[data-request-action="withdraw"]', (el) => Math.round(el.getBoundingClientRect().left));
+  const withdrawAt = () =>
+    window.$$eval('[data-phase-actions] :is([data-request-action="open_thread"], [data-request-action="withdraw"])', (els) => els.map((el) => Math.round(el.getBoundingClientRect().left)).join());
   const at = [await withdrawAt()];
   check(
     "the request's actions sit in the header's right cluster, a divider in the separator tone between them and Regenerate",
@@ -233,15 +239,21 @@ try {
   check("asking", await phase("asking"), { message: "The agent is asking something in T3", actions: ["open_thread", "withdraw"] });
   check("asking shows no spinner", await window.$("[data-request-phase] [data-progress]"), null);
   at.push(await withdrawAt());
-  check("Withdraw stays at one x from queued through working to asking, whatever the label's length", new Set(at).size, 1);
   await shot(window, shots, "4-asking");
 
   t3.endRun(DEMO_THREAD, "failed");
   check("run failed", await phase("run_failed"), {
-    message: "The agent's run failed in T3. Open the thread to see why, or Retry to send the request again.",
-    actions: ["retry", "withdraw"],
+    message: "The agent's run failed in T3. Open the thread to see why, or Retry.",
+    actions: ["retry", "open_thread", "withdraw"],
   });
-  check("run failed links to the thread from its strip", await window.isVisible('[data-request-detail] [data-request-action="open_thread"]'), true);
+  at.push(await withdrawAt());
+  const stripLines = () =>
+    window.$eval("[data-request-detail] [data-request-message]", (p) => [p.closest("[data-request-detail]").querySelector("[data-request-action]") === null, Math.round(p.getBoundingClientRect().height / parseFloat(getComputedStyle(p).lineHeight))]);
+  const failedStrip = [await stripLines()];
+  await window.setViewportSize({ width: 1100, height: 720 });
+  failedStrip.push(await settled(stripLines));
+  await window.setViewportSize({ width: 1440, height: 900 });
+  check("run failed's strip carries only its text, on one line at 1440 and at 1100", failedStrip, [[true, 1], [true, 1]]);
   await shot(window, shots, "5-run-failed");
   const beforeRetry = t3.sent().length;
   await window.click('[data-request-action="retry"]');
@@ -250,7 +262,9 @@ try {
   t3.startRun(DEMO_THREAD);
   await phase("working");
   t3.endRun(DEMO_THREAD, "completed");
-  check("no change", await phase("no_change"), { message: "The agent replied in T3 without changing the design", actions: ["retry", "withdraw"] });
+  check("no change", await phase("no_change"), { message: "The agent replied in T3 without changing the design", actions: ["retry", "open_thread", "withdraw"] });
+  at.push(await withdrawAt());
+  check("Open thread and Withdraw keep one x from queued through working, asking, run failed and no change", new Set(at).size, 1);
   await window.click('[data-request-action="withdraw"]');
   check("Withdraw closes the request", await phase("withdrawn"), { message: "Request withdrawn", actions: [] });
 
@@ -259,7 +273,7 @@ try {
   await window.click("[data-regenerate-menu] [data-send]");
   check("send failed", await phase("send_failed"), {
     message: "Couldn't send: fake t3 failure: the reply was lost. The request is saved.",
-    actions: ["retry", "withdraw"],
+    actions: ["retry", "open_thread", "withdraw"],
   });
   await shot(window, shots, "6-send-failed");
   t3.setFailAfter([]);
@@ -271,7 +285,7 @@ try {
   t3.addThread(TAKEOVER, { projectId: "chore-roulette", title: "Takeover thread" });
   const attached = brainstorm(env, ["session", "attach", "Chore roulette", "--thread", TAKEOVER, "--json"]);
   check("a new thread takes the session over through the CLI", [attached.code, attached.json?.data?.previous], [0, DEMO_THREAD]);
-  check("previous thread", await phase("previous_thread"), { message: "Another thread took this brainstorm over. Resend sends the request to it.", actions: ["resend", "withdraw"] });
+  check("previous thread", await phase("previous_thread"), { message: "Another thread took this brainstorm over. Resend sends the request to it.", actions: ["resend", "open_thread", "withdraw"] });
   await shot(window, shots, "7-previous-thread");
   await window.click('[data-request-action="resend"]');
   check("Resend sends it to the new thread", [await phase("queued"), markers(TAKEOVER, 3)], [{ message: "Queued in T3", actions: ["open_thread", "withdraw"] }, 1]);
@@ -295,7 +309,8 @@ try {
   check("Copy phrase puts the takeover phrase on the clipboard", await app.evaluate(({ clipboard }) => clipboard.readText()), phrase);
   await shot(window, shots, "8-thread-lost");
   await window.click('[data-request-action="withdraw"]');
-  await phase("withdrawn");
+  await window.waitForSelector('[data-thread-lost][data-request-phase="withdrawn"]', { timeout: PHASE_MS });
+  check("once withdrawn, the bar still names the lost thread, not the withdrawal", (await window.textContent("[data-thread-lost]"))?.trim(), "Thread lost");
   check(
     "with no request open, the top bar still offers the takeover phrase",
     await window.$eval("[data-takeover]", (el) => [...el.querySelectorAll("p")].map((p) => p.textContent).concat(el.querySelector("button")?.innerText.trim())),

@@ -13,6 +13,7 @@ import {
   type Request,
   type RequestN,
   type RequestPhase,
+  type RequestPhaseAction,
   type RequestScope,
   type SessionId,
   type ThreadSnapshot,
@@ -77,12 +78,19 @@ export function foldFeedback(events: readonly FeedbackEvent[]): FeedbackStatus {
   return events.reduce<FeedbackStatus>(apply, { state: "open", previouslyAddressedIn: null });
 }
 
+/**
+ * An open request's actions follow one order: the phase's own step (Retry, Resend or Copy phrase), then Open thread
+ * whenever the thread can still be reached, then Withdraw. The bar holds them right to left from Regenerate, so Open
+ * thread and Withdraw keep one x across every phase that has them.
+ */
 export function requestPhase(request: Request, attachment: Attachment, observation: Observation | null): RequestPhase {
+  const open = (step: readonly RequestPhaseAction[]): readonly RequestPhaseAction[] =>
+    attachment.lostAt === null ? [...step, "open_thread", "withdraw"] : [...step, "withdraw"];
   switch (request.state.state) {
     case "sending":
       return { phase: "sending", actions: [] };
     case "send_failed":
-      return { phase: "send_failed", error: request.state.error, actions: ["retry", "withdraw"] };
+      return { phase: "send_failed", error: request.state.error, actions: open(["retry"]) };
     case "fulfilled":
       return { phase: "fulfilled", iteration: request.state.iteration, actions: [] };
     case "withdrawn":
@@ -90,19 +98,17 @@ export function requestPhase(request: Request, attachment: Attachment, observati
     case "sent":
       break;
   }
-  if (request.threadId !== attachment.threadId) return { phase: "previous_thread", actions: ["resend", "withdraw"] };
-  if (attachment.lostAt !== null) return { phase: "thread_lost", actions: ["copy_phrase", "withdraw"] };
+  if (request.threadId !== attachment.threadId) return { phase: "previous_thread", actions: open(["resend"]) };
+  if (attachment.lostAt !== null) return { phase: "thread_lost", actions: open(["copy_phrase"]) };
   switch (observation?.kind) {
     case undefined:
     case "not_seen":
     case "queued":
-      return { phase: "queued", actions: ["open_thread", "withdraw"] };
+      return { phase: "queued", actions: open([]) };
     case "running":
-      return observation.pendingRequestCount > 0
-        ? { phase: "asking", actions: ["open_thread", "withdraw"] }
-        : { phase: "working", actions: ["open_thread", "withdraw"] };
+      return observation.pendingRequestCount > 0 ? { phase: "asking", actions: open([]) } : { phase: "working", actions: open([]) };
     case "ended":
-      return observation.failed ? { phase: "run_failed", actions: ["retry", "withdraw"] } : { phase: "no_change", actions: ["retry", "withdraw"] };
+      return { phase: observation.failed ? "run_failed" : "no_change", actions: open(["retry"]) };
   }
 }
 

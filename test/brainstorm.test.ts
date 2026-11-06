@@ -460,13 +460,13 @@ describe("request phases", () => {
 
     bridge.endRun(T1, "failed");
     await service.tick();
-    expect(await phase(service)).toEqual({ phase: "run_failed", actions: ["retry", "withdraw"], message: "The agent's run failed in T3" });
+    expect(await phase(service)).toEqual({ phase: "run_failed", actions: ["retry", "open_thread", "withdraw"], message: "The agent's run failed in T3" });
 
     bridge.endRun(T1, "completed");
     await service.tick();
     expect(await phase(service)).toEqual({
       phase: "no_change",
-      actions: ["retry", "withdraw"],
+      actions: ["retry", "open_thread", "withdraw"],
       message: "The agent replied in T3 without changing the design",
     });
 
@@ -485,7 +485,7 @@ describe("request phases", () => {
     data(await service.act(S, { kind: "regenerate", scope: { kind: "described" }, freetext: "fewer colours" }));
     expect(await phase(service)).toEqual({
       phase: "send_failed",
-      actions: ["retry", "withdraw"],
+      actions: ["retry", "open_thread", "withdraw"],
       message: "Couldn't send: t3 did not answer within 15 s. The request is saved.",
     });
     expect(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null })).toEqual({
@@ -509,7 +509,7 @@ describe("request phases", () => {
     const { service, bridge } = await withIteration();
     data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null }));
     data(await service.attach({ ref: S, thread: T2 }));
-    expect(await phase(service)).toEqual({ phase: "previous_thread", actions: ["resend", "withdraw"], message: "Sent to the previous thread" });
+    expect(await phase(service)).toEqual({ phase: "previous_thread", actions: ["resend", "open_thread", "withdraw"], message: "Sent to the previous thread" });
     data(await service.act(S, { kind: "retry_request" }));
     expect(bridge.sent.map((s) => s.thread)).toEqual([T1, T2]);
     expect(await phase(service)).toEqual({ phase: "queued", actions: ["open_thread", "withdraw"], message: "Queued in T3" });
@@ -540,7 +540,7 @@ describe("request phases", () => {
     const restarted = await open();
     expect(await phase(restarted)).toEqual({
       phase: "send_failed",
-      actions: ["retry", "withdraw"],
+      actions: ["retry", "open_thread", "withdraw"],
       message: "Couldn't send: Brainstorm stopped before the send finished. The request is saved.",
     });
     bridge.release();

@@ -125,15 +125,19 @@ describe("requestPhase, one test per design.md row", () => {
   test("send_failed", () => {
     expect(seen({ state: "send_failed", error: "t3 exited 1" }, attached, null)).toEqual({
       phase: "send_failed",
-      actions: ["retry", "withdraw"],
+      actions: ["retry", "open_thread", "withdraw"],
       message: "Couldn't send: t3 exited 1. The request is saved.",
     });
+  });
+
+  test("send_failed to a lost thread offers no way to open it", () => {
+    expect(seen({ state: "send_failed", error: "thread not found" }, lost, null).actions).toEqual(["retry", "withdraw"]);
   });
 
   test("sent, request thread is not the attached thread", () => {
     expect(seen(sent, attached, { kind: "running", pendingRequestCount: 0 }, threadB)).toEqual({
       phase: "previous_thread",
-      actions: ["resend", "withdraw"],
+      actions: ["resend", "open_thread", "withdraw"],
       message: "Sent to the previous thread",
     });
   });
@@ -173,7 +177,7 @@ describe("requestPhase, one test per design.md row", () => {
   test("sent, marker's run ended and the thread failed", () => {
     expect(seen(sent, attached, { kind: "ended", failed: true })).toEqual({
       phase: "run_failed",
-      actions: ["retry", "withdraw"],
+      actions: ["retry", "open_thread", "withdraw"],
       message: "The agent's run failed in T3",
     });
   });
@@ -181,7 +185,7 @@ describe("requestPhase, one test per design.md row", () => {
   test("sent, marker's run ended with no commit", () => {
     expect(seen(sent, attached, { kind: "ended", failed: false })).toEqual({
       phase: "no_change",
-      actions: ["retry", "withdraw"],
+      actions: ["retry", "open_thread", "withdraw"],
       message: "The agent replied in T3 without changing the design",
     });
   });

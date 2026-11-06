@@ -117,10 +117,10 @@ export function SessionBar({
           </h1>
         </nav>
         {view !== null && view.iteration !== null && <Badge data-iteration>Iteration {view.iteration.n}</Badge>}
-        {view !== null && view.request !== null && (
+        {view !== null && (view.request !== null || view.attachment.lostAt !== null) && (
           <>
             <Separator orientation="vertical" className="h-4 self-center" />
-            <RequestStatus view={view} send={send} />
+            <RequestStatus view={view} />
           </>
         )}
       </div>

@@ -257,7 +257,7 @@ type Tone = "danger" | "warning" | "info";
  */
 const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; readonly tone: Tone; readonly note?: string; readonly own?: RequestPhaseAction }>> = {
   send_failed: { label: "Send failed", tone: "danger" },
-  run_failed: { label: "Run failed", tone: "danger", note: "The agent's run failed in T3. Open the thread to see why, or Retry to send the request again." },
+  run_failed: { label: "Run failed", tone: "danger", note: "The agent's run failed in T3. Open the thread to see why, or Retry." },
   thread_lost: { label: "Thread lost", tone: "warning", note: "This brainstorm's thread is gone. In a T3 thread on this project, say:", own: "copy_phrase" },
   previous_thread: { label: "Sent to the previous thread", tone: "warning", note: "Another thread took this brainstorm over. Resend sends the request to it." },
   no_change: { label: "No change", tone: "info" },
@@ -273,8 +273,19 @@ const TONE_TEXT: Partial<Record<RequestPhase["phase"], string>> = {
   no_change: "text-info",
 };
 
-export function RequestStatus({ view, send }: { view: SessionView; send: (action: RobAction) => Promise<unknown> }) {
+export function RequestStatus({ view }: { view: SessionView }) {
   const request = view.request;
+  // A lost thread stays named once its request closes, since nothing can be sent until it is taken over.
+  if (view.attachment.lostAt !== null && (request === null || request.phase.actions.length === 0)) {
+    return (
+      <div className="grid-phase grid items-center gap-2 text-sm" data-request-phase={request?.phase.phase} data-thread-lost>
+        <PhaseIcon phase="thread_lost" />
+        <span className={`truncate font-medium ${TONE_TEXT.thread_lost}`} data-request-label>
+          {DETAIL.thread_lost?.label}
+        </span>
+      </div>
+    );
+  }
   if (request === null) return null;
   const { phase } = request;
   const detail = DETAIL[phase.phase];
@@ -324,13 +335,7 @@ export function RequestDetail({ view }: { view: SessionView }) {
       tone={detail.tone}
       layout="strip"
       role="status"
-      actions={
-        detail.own === "copy_phrase" ? (
-          <TakeoverPhrase title={view.session.title} />
-        ) : view.request.phase.phase === "run_failed" && view.thread !== null ? (
-          <OpenThread view={view} />
-        ) : undefined
-      }
+      actions={detail.own === "copy_phrase" ? <TakeoverPhrase title={view.session.title} /> : undefined}
       data-request-detail
     >
       <p className="select-text" data-request-message>
