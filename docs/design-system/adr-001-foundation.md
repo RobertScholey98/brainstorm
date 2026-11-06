@@ -204,3 +204,7 @@ The lint gains three rules, each tested in `test/design-lint.test.ts`.
 | `hover` | `fg` at 6% | `fg` at 8% |
 | type `title` | none | 22/28 px |
 | scrollbar track | runs end to end | 12 px short of each end |
+
+### Round 4: a hint row, and the scroll edges (2026-11-06)
+
+- **A hint row.** Every Claude reviewer found the blocked Regenerate's hint opening over Open thread and Withdraw, the controls it told Rob to use (U4's fix, reopened as T2). The root was the anchor: a hint opened left of its own control, and in the header's right cluster every control but the first has controls on its left, so Export's hint covered Regenerate and the Inspector toggle's covered Export too. The kit's `HintAnchor` names a row of controls whose hints open off the whole row. The header's right cluster provides it, so all its hints open left of the cluster, over the breadcrumb, and a popover resets it for the hints inside. The blocked hint also shrank to "Withdraw request 1 to send another". `verify:5` hovers each right-cluster control in the queued phase at 1440 and 1100 and fails a hint that overlaps any header control.

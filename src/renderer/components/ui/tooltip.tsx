@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactElement, ReactNode } from "react"
+import { createContext, useContext, type ReactElement, type ReactNode, type RefObject } from "react"
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 import { cn } from "cn"
 
@@ -34,16 +34,18 @@ function TooltipContent({
   sideOffset = 6,
   align = "center",
   alignOffset = 0,
+  anchor,
   children,
   ...props
 }: TooltipPrimitive.Popup.Props &
   Pick<
     TooltipPrimitive.Positioner.Props,
-    "align" | "alignOffset" | "side" | "sideOffset"
+    "align" | "alignOffset" | "side" | "sideOffset" | "anchor"
   >) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Positioner
+        anchor={anchor}
         align={align}
         alignOffset={alignOffset}
         side={side}
@@ -68,6 +70,12 @@ function TooltipContent({
 }
 
 /**
+ * A row of controls whose hints open off the whole row, not off their own control, so a hint never covers the
+ * control beside the one it labels. The window header's right cluster provides it; a popover resets it.
+ */
+const HintAnchor = createContext<RefObject<Element | null> | null>(null)
+
+/**
  * A styled hint on one control, with its keyboard shortcut when it has one. The renderer uses this instead of a native
  * `title`, which the OS draws outside the theme; `npm run lint:design` fails a `title` hint.
  *
@@ -88,10 +96,11 @@ function Hint({
   disabled?: boolean
   children: ReactElement
 }) {
+  const row = useContext(HintAnchor)
   return (
     <Tooltip disabled={disabled}>
       <TooltipTrigger render={children} />
-      <TooltipContent side={side}>
+      <TooltipContent side={side} anchor={row ?? undefined}>
         <span>{label}</span>
         {shortcut !== undefined && <Kbd tone="inverse">{shortcut}</Kbd>}
       </TooltipContent>
@@ -99,4 +108,4 @@ function Hint({
   )
 }
 
-export { Hint, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+export { Hint, HintAnchor, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }

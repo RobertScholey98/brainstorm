@@ -1,10 +1,10 @@
 import { ChevronRight, PanelRight } from "lucide-react";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { Hint } from "@/components/ui/tooltip";
+import { Hint, HintAnchor } from "@/components/ui/tooltip";
 import type { BlockId, ExportResult, RobAction, SessionView } from "../core/types";
 import { ExportButton } from "./Export";
 import { Mark } from "./Mark";
@@ -19,6 +19,7 @@ export type PanelToggle = { readonly open: boolean; readonly onToggle: () => voi
  */
 export function TopBar({ actions, panel, children }: { actions?: ReactNode; panel?: PanelToggle; children?: ReactNode }) {
   const { state, isMobile } = useSidebar();
+  const cluster = useRef<HTMLDivElement>(null);
   return (
     <header className="titlebar-inset flex h-12 shrink-0 items-center gap-3 pl-1" data-topbar data-drag-region>
       {/* With the sidebar away, its toggle and the mark move here, so the window still says whose it is. */}
@@ -29,15 +30,25 @@ export function TopBar({ actions, panel, children }: { actions?: ReactNode; pane
         </>
       )}
       {children}
-      <div className="ml-auto flex shrink-0 items-center gap-2">
-        {actions}
-        {panel !== undefined && (
-          <Hint label={panel.open ? "Collapse the Inspector" : "Show the Inspector"} side="left">
-            <Button variant="ghost" size="icon" aria-label="Inspector" aria-pressed={panel.open} onClick={panel.onToggle} data-inspector-toggle>
-              <PanelRight aria-hidden />
-            </Button>
-          </Hint>
-        )}
+      {/* Its hints open left of the whole cluster, over the breadcrumb, so none covers a neighbouring control. */}
+      <div ref={cluster} className="ml-auto flex shrink-0 items-center gap-2" data-header-actions>
+        <HintAnchor.Provider value={cluster}>
+          {actions}
+          {panel !== undefined && (
+            <Hint label={panel.open ? "Collapse the Inspector" : "Show the Inspector"} side="left">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Inspector"
+                aria-pressed={panel.open}
+                onClick={panel.onToggle}
+                data-inspector-toggle
+              >
+                <PanelRight aria-hidden />
+              </Button>
+            </Hint>
+          )}
+        </HintAnchor.Provider>
       </div>
     </header>
   );

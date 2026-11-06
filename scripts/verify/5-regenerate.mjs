@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, showBoard, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, settled, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-5");
@@ -21,6 +21,27 @@ async function phase(name) {
     message: (await window.textContent("[data-request-message]"))?.trim(),
     actions: await window.$$eval("[data-phase-actions] [data-request-action]", (els) => els.map((e) => e.dataset.requestAction)),
   };
+}
+
+/** The header controls a hint covers once it has settled in place, by their labels. */
+async function coveredBy(trigger) {
+  await window.mouse.move(120, 600);
+  await window.waitForSelector('[data-slot="tooltip-content"]', { state: "detached" });
+  await window.hover(trigger);
+  await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
+  const covered = await settled(() =>
+    window.evaluate(() => {
+      const shown = document.querySelector('[data-slot="tooltip-content"]');
+      if (shown === null) return "the hint closed";
+      const hint = shown.getBoundingClientRect();
+      const over = (r) => hint.left < r.right && hint.right > r.left && hint.top < r.bottom && hint.bottom > r.top;
+      return [...document.querySelectorAll('[data-topbar] :is(button, a, [tabindex="0"])')]
+        .filter((c) => c.getClientRects().length > 0 && over(c.getBoundingClientRect()))
+        .map((c) => c.textContent.trim() || c.getAttribute("aria-label"));
+    }),
+  );
+  await window.mouse.move(120, 600);
+  return covered;
 }
 
 async function regenerate(scope, freetext) {
@@ -186,6 +207,15 @@ try {
     }),
     [true, true, true],
   );
+  const headerHints = async () => {
+    const covered = [];
+    for (const trigger of ["[data-regenerate-blocked]", "[data-export]", "[data-inspector-toggle]"]) covered.push(await coveredBy(trigger));
+    return covered;
+  };
+  check("no header hint covers a header control, the blocked Regenerate's least of all", await headerHints(), [[], [], []]);
+  await window.setViewportSize({ width: 1100, height: 720 });
+  check("nor at 1100", await headerHints(), [[], [], []]);
+  await window.setViewportSize({ width: 1440, height: 900 });
   await window.click('[data-request-action="open_thread"]');
   await window.waitForTimeout(300);
   check("Open thread opens the thread's link outside the app", await app.evaluate(() => globalThis.opened), [`https://app.t3.codes/threads/fake/${DEMO_THREAD}`]);

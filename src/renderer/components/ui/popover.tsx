@@ -3,6 +3,7 @@ import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 import { cn } from "cn"
 
 import { overlaySurface } from "@/components/ui/overlay"
+import { HintAnchor } from "@/components/ui/tooltip"
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
@@ -29,20 +30,23 @@ function PopoverContent({
   >) {
   return (
     <PopoverPrimitive.Portal>
-      <PopoverPrimitive.Positioner
-        align={align}
-        alignOffset={alignOffset}
-        side={side}
-        sideOffset={sideOffset}
-        collisionPadding={8}
-        className="isolate z-popover"
-      >
-        <PopoverPrimitive.Popup
-          data-slot="popover-content"
-          className={cn(overlaySurface(), "flex max-h-(--available-height) max-w-(--available-width) flex-col gap-3 overflow-y-auto p-3 text-sm", WIDTH[size])}
-          {...props}
-        />
-      </PopoverPrimitive.Positioner>
+      {/* A hint inside a popover opens off its own control, even when the popover's trigger sits in a hint row. */}
+      <HintAnchor.Provider value={null}>
+        <PopoverPrimitive.Positioner
+          align={align}
+          alignOffset={alignOffset}
+          side={side}
+          sideOffset={sideOffset}
+          collisionPadding={8}
+          className="isolate z-popover"
+        >
+          <PopoverPrimitive.Popup
+            data-slot="popover-content"
+            className={cn(overlaySurface(), "flex max-h-(--available-height) max-w-(--available-width) flex-col gap-3 overflow-y-auto p-3 text-sm", WIDTH[size])}
+            {...props}
+          />
+        </PopoverPrimitive.Positioner>
+      </HintAnchor.Provider>
     </PopoverPrimitive.Portal>
   )
 }
