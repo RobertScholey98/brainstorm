@@ -163,7 +163,8 @@ function BlockControls({
 
   return (
     <div data-block={block.id}>
-      <header className="sticky top-0 z-sticky border-b bg-card px-4 pt-3 pb-3">
+      {/* Stuck 1 px high: at a fractional scroll offset, a top-0 header leaves a 1 px row of the content above it showing. */}
+      <header className="sticky -top-px z-sticky border-b bg-card px-4 pt-3 pb-3">
         <div className="text-xs font-medium text-fg-muted">{slot?.title ?? block.slot}</div>
         <h2 className="truncate pt-0.5 text-sm font-semibold">{block.title}</h2>
         {error !== null && (

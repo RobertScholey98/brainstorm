@@ -48,7 +48,7 @@ export function HomeOverview({
                 </li>
               ))
             : sorted.map((s) => (
-                <li key={s.id} className="grid">
+                <li key={s.id} className="grid min-w-0">
                   <OverviewCard session={s} now={now} onOpen={() => onSession(s.id)} />
                 </li>
               ))}
@@ -64,7 +64,7 @@ function OverviewCard({ session: s, now, onOpen }: { session: SessionListing; no
     <button
       type="button"
       onClick={onOpen}
-      className="flex flex-col gap-1.5 rounded-lg bg-card p-4 text-left shadow-xs ring-1 ring-border transition-shadow outline-none hover:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex min-w-0 flex-col gap-1.5 rounded-lg bg-card p-4 text-left shadow-xs ring-1 ring-border transition-shadow outline-none hover:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring"
       data-overview-session={s.id}
       data-lost={s.lost || undefined}
     >
