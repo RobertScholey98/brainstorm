@@ -77,7 +77,7 @@ function OverviewCard({ session: s, now, onOpen }: { session: SessionListing; no
       </span>
       <span className="truncate text-base font-semibold">{s.title}</span>
       <span className={`line-clamp-2 text-sm ${brief === "" ? "text-fg-muted italic" : "text-fg-muted"}`}>{brief === "" ? "No brief" : brief}</span>
-      <span className="flex items-center gap-1 pt-1 text-xs text-fg-muted">
+      <span className="flex flex-wrap items-center gap-x-1 gap-y-0.5 pt-1 text-xs whitespace-nowrap text-fg-muted">
         <span className="tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
         <span aria-hidden>·</span>
         <span>{ago(s.activeAt, now)}</span>
