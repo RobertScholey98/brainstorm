@@ -183,7 +183,7 @@ describe("commit", () => {
           loc: null,
           pointer: null,
           message:
-            "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json,about.md}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
+            "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
         },
         {
           severity: "error",

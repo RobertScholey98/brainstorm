@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -109,7 +109,6 @@ const blocks = {
   "slots/wheel/neon/block.tsx": neonTsx,
   "slots/wheel/neon/block.json": neonJson,
   "slots/wheel/neon/block.css": ".wheel { color: var(--accent); }\n",
-  "slots/wheel/neon/about.md": "Loud and fast: tests whether energy makes chores feel fair.\n",
   "slots/result/sheet/block.tsx": sheetTsx,
   "slots/result/sheet/block.json": sheetJson,
 };
@@ -209,6 +208,27 @@ try {
     ],
   });
 
+  const noted = join(work, "noted");
+  cpSync(fresh, noted, { recursive: true });
+  writeFileSync(join(noted, "slots", "wheel", "neon", "about.md"), "**Hypothesis.** Loud and fast makes chores feel fair.\n");
+  const withNote = cliJson(["commit", S, "--from", noted]);
+  check("a variant note from an older skill fails the commit and tells the agent to stop writing them", [withNote.code, withNote.result.error.code, withNote.result.error.issues], [
+    1,
+    "validation_failed",
+    [
+      {
+        severity: "error",
+        code: "unexpected_file",
+        file: "slots/wheel/neon/about.md",
+        loc: null,
+        pointer: null,
+        message:
+          "Brainstorm no longer reads variant notes, so delete about.md and write no more. Rob judges the designs on the canvas himself; keep each variant's hypothesis in its design, not in a note.",
+      },
+    ],
+  ]);
+  check("pull writes no variant notes", readdirSync(join(fresh, "slots", "wheel", "neon")).sort(), ["block.css", "block.json", "block.tsx"]);
+
   const bad = join(work, "bad");
   cpSync(fresh, bad, { recursive: true });
   writeFileSync(join(bad, "slots", "wheel", "neon", "block.tsx"), "export default function Wheel() { return <div>; }\n");
@@ -272,7 +292,7 @@ try {
   check("the new owner commits iteration 2", lines(cli(["commit", S, "--from", fresh, "--note", "framed the sheet"], { thread: T2 }).stdout), [
     "iteration 2 · 2 blocks · changed result/sheet; created",
   ]);
-  writeFileSync(join(copy, "slots", "wheel", "neon", "about.md"), "Edited on a stale copy.\n");
+  writeFileSync(join(copy, "slots", "wheel", "neon", "block.css"), ".wheel { color: red; }\n");
   const stale = cliJson(["commit", S], { thread: T2 });
   check("a copy based on an older iteration is stale", [stale.code, stale.result.error.code, stale.result.error.base, stale.result.error.latest], [1, "stale_working_copy", 1, 2]);
 

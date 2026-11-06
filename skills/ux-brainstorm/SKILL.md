@@ -18,7 +18,7 @@ Every branch runs `brainstorm` commands. Read [the Brainstorm loop](references/b
 ## Working contract
 
 - One study covers one coherent user task or decision, not a department of the app.
-- Build on the user's accepted choices, corrections and scope. Earlier recommendations the user never accepted are not the baseline.
+- Build on the user's accepted choices, corrections and scope. Earlier designs the user never accepted are not the baseline.
 - Improve the experience before its appearance: remove unnecessary decisions, infer safely, choose understandable defaults, sequence necessary questions, and give occasional controls a home.
 - Preserve necessary capabilities and safety boundaries. Name every proposed behavior change and its consequence. Leave permissions, ownership, destructive actions and review gates as they are unless the study is about them.
 - Every branch ends with a one-line reply: that line is the whole message, and the detail lives on the canvas and in the session brief.
@@ -28,11 +28,11 @@ Every branch runs `brainstorm` commands. Read [the Brainstorm loop](references/b
 
 1. **Establish the task.** Read [the UX method](references/ux-method.md). Use the conversation before asking, and ask only about choices that materially change the experience. Inspect the product's flow, source, terminology and references from entry point to completion or recovery. A past prototype is not automatically the accepted design. For a broad request, name a short sequence of task studies and start the first.
 2. **Write the task brief.** Cover who arrives and why, the desired outcome, what they must understand, unavoidable decisions, known defaults, occasional needs, observable success and relevant failures. Add the decision ledger: each existing input, control and piece of information classified as remove, infer, default, defer or ask now, with why and where any retained capability lives. Label evidence as observed, inferred from source, user-reported or proposed. Never invent research or measured improvements. This brief becomes the session brief.
-3. **Choose the hypotheses.** Default to five meaningfully different hypotheses for the task's main decision, or the number the user asked for. Each differs in decisions, sequencing, entry point, interaction model or where the capability lives. If the obvious approach only supports two, use the rest to reconsider the paradigm within the accepted constraints. Say so plainly rather than padding when a full set is indefensible.
+3. **Choose the hypotheses.** Default to five meaningfully different hypotheses for the task's main decision, or the number the user asked for. Each differs in decisions, sequencing, entry point, interaction model or where the capability lives. If the obvious approach only supports two, use the rest to reconsider the paradigm within the accepted constraints. Say so plainly rather than padding when a full set is indefensible. The hypotheses shape the designs. Never write them up for Rob: he judges the variants on the canvas himself, so no variant carries a note, a rationale or a ranking.
 4. **Start the session.** Check `T3CODE_THREAD_ID` is set (`$env:T3CODE_THREAD_ID` in PowerShell). If it is empty, tell the user in one line that a Brainstorm session must start inside a T3 thread, and stop. Otherwise run `session new` with the brief on stdin, `pull`, and read the generated `GUIDE.md`.
 5. **Build the blocks.** Map the hypotheses onto slots and variants as the loop reference describes. Copy the product's real look from the repo. Each variant implements the task through its useful outcome, including the failure and recovery states that distinguish its hypothesis. [The worked example](references/example/slots/start-dialog/missing-only/) is one valid variant.
 6. **Commit until it succeeds.** Run `commit`. Fix every error it lists and commit again until it succeeds, then fix any warning you caused. The commit only proves each block compiles and renders with its defaults, so trace every variant's path to its outcome and through its failure state in the code as well.
-7. **Reply in one line.** Name the session, its slots and variant counts, and the variant you recommend. The whole reply looks like `Session s_x "Pin a comment": 1 slot, 3 variants; I recommend pick-and-widen.`
+7. **Reply in one line.** Name the session, its slots and their variant counts. The whole reply looks like `Session s_x "Pin a comment": 1 slot, 3 variants.`
 
 ## Handle a request
 

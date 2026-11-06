@@ -39,7 +39,7 @@ const SHOTS = [
   ["sidebar-collapsed", "canvas", "The Chore roulette brainstorm with the sidebar collapsed, so the toggle sits in the top bar"],
   ["state-hover-row", "home", "Home with the pointer over the Chore roulette session row"],
   ["session", "canvas", "The Chore roulette brainstorm as it opens: on the stage, the first slot alone under the slot tabs, its controls in the Inspector"],
-  ["session-multi-slot", "views", "A brainstorm with three slots and several variants each, where the showing variants carry long about text"],
+  ["session-multi-slot", "views", "All slots on a brainstorm with three slots and several variants each; the sidebar lists each slot's variants, with no notes under them"],
   ["session-wide-frame", "views", "All slots: the 980 px frame beside a phone frame, both scaled to fit one row, with the zoom in the canvas bar"],
   ["session-block-error", "views", "A block that throws in the canvas: the frame shows the failure, and the Inspector names the error"],
   ["session-no-iteration", "views", "A brainstorm whose agent hasn't committed yet: waiting state, Regenerate and Export disabled"],
@@ -94,7 +94,6 @@ const SHOTS = [
   ["stage-wide-frame", "views", "The 980 px frame on the stage, scaled to fit with its zoom in the canvas bar and no sideways scroll"],
   ["stage-desktop-frame", "views", "A 1440 px frame on the stage, scaled to fit"],
   ["stage-tabs-focus", "canvas", "Keyboard focus on a slot tab in the canvas bar"],
-  ["about-more-open", "views", "A long variant note opened with More, so it reads Less"],
   ["inspector-rail", "canvas", "The Inspector collapsed to its rail, with the feedback count"],
   ["feedback-delete-confirm", "canvas", "Delete on a feedback item asking in place, with Cancel focused"],
   ["prefs-restored", "restart", "After a restart: the wider sidebar and Inspector, and the board, come back as Rob left them"],
@@ -236,23 +235,6 @@ async function start(home, env) {
 
 const demo = (slot, variant) => join(root, "scripts", "demo", "chore-roulette", "slots", slot, variant);
 
-const LONG_ABOUT = {
-  neon: [
-    "**Hypothesis:** a loud, arcade-style wheel makes the draw feel like a game the whole flat watches, so nobody argues with the result afterwards, even when it lands on the same person twice in one week.",
-    "**Tradeoff:** the neon look is fun on the first spin and tiring by the tenth. It also hides how the odds are weighted, which is the part people actually distrust.",
-    "**Try:** the calmer palette, a shorter spin, and turning the glow down to see whether it still feels fair without the theatre.",
-  ].join("\n\n"),
-  card: [
-    "**Hypothesis:** the result sticks when the person picked has to accept it in front of everyone, with one swap a week as the only way out and the points shown before and after.",
-    "**Tradeoff:** one swap is a guess. Too strict and people stop opening the app; too loose and the bins never go out on time.",
-    "**Try:** the compact density on smaller phones, a calmer stamp word, and a headline that names the chore instead of the wheel.",
-  ].join("\n\n"),
-  ledger: [
-    "**Hypothesis:** a running points ledger answers \"why me again?\" before anyone asks it, because the history is right there under the result.",
-    "**Tradeoff:** a ledger invites point-scoring between flatmates, and it is one more thing to read on a small screen.",
-  ].join("\n\n"),
-};
-
 function gitRepo(home, name) {
   const repo = join(home, "repos", name);
   mkdirSync(repo, { recursive: true });
@@ -393,7 +375,7 @@ function seedAll(home, env, t3) {
         title: "The wheel",
         frame: { width: 390, height: 760 },
         variants: {
-          neon: { from: demo("wheel", "neon"), files: { "about.md": LONG_ABOUT.neon } },
+          neon: { from: demo("wheel", "neon") },
           reel: { from: demo("wheel", "reel") },
           terminal: { from: demo("wheel", "terminal") },
         },
@@ -402,14 +384,14 @@ function seedAll(home, env, t3) {
         id: "result",
         title: "The result",
         frame: { width: 390 },
-        variants: { card: { from: demo("result", "card"), files: { "about.md": LONG_ABOUT.card } }, receipt: { from: demo("result", "receipt") } },
+        variants: { card: { from: demo("result", "card") }, receipt: { from: demo("result", "receipt") } },
       },
       {
         id: "history",
         title: "The history",
         frame: { width: 390 },
         variants: {
-          ledger: { from: demo("result", "receipt"), files: { "about.md": LONG_ABOUT.ledger, "block.json": retitled("result", "receipt", "Points ledger") } },
+          ledger: { from: demo("result", "receipt"), files: { "block.json": retitled("result", "receipt", "Points ledger") } },
           stamp: { from: demo("result", "card"), files: { "block.json": retitled("result", "card", "Stamp history") } },
         },
       },
@@ -543,9 +525,6 @@ function scenes(page, home, env, t3, sessions) {
 
       await open(sessions.multi, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card"), inBlock("history/ledger", "footer")], "board");
       await capture(page, "session-multi-slot");
-      await page.click('[data-slot-id="wheel"] [data-about-more]');
-      await capture(page, "about-more-open");
-      await page.click('[data-slot-id="wheel"] [data-about-more]');
 
       await open(sessions.wide, [inBlock("result/card", "card")], "stage");
       await page.waitForSelector("[data-canvas-zoom]");

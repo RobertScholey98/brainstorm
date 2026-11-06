@@ -507,40 +507,15 @@ try {
     ],
     [["neon", "card"], ["neon"]],
   );
-  const note = () =>
-    window.$eval('[data-slot-id="wheel"] [data-about]', (el) => {
-      const body = el.querySelector("[data-about-body]");
-      const name = el.closest("li").querySelector("[data-variant-title]");
-      return {
-        cut: body.scrollHeight > body.clientHeight,
-        more: el.querySelector("[data-about-more]")?.textContent ?? null,
-        chevron: el.querySelector("[data-about-more] svg[data-icon=inline-end]") !== null,
-        fill: el.querySelector("[data-about-more]") === null ? null : getComputedStyle(el.querySelector("[data-about-more]")).backgroundColor,
-        aligned: Math.round(body.getBoundingClientRect().left) === Math.round(name.getBoundingClientRect().left),
-        label: body.querySelector("p > strong:first-child")?.textContent ?? null,
-      };
-    });
-  await window.mouse.move(700, 20);
-  check("a long variant note shows three lines under More, starting where the variant's name does, its label bold, More with a chevron", await note(), {
-    cut: true,
-    more: "More",
-    chevron: true,
-    fill: "rgba(0, 0, 0, 0)",
-    aligned: true,
-    label: "Hypothesis:",
-  });
-  await window.click('[data-slot-id="wheel"] [data-about-more]');
-  await window.mouse.move(700, 20);
-  check("More shows the whole note in place, and Less is a disclosure with no pressed fill", await note(), {
-    cut: false,
-    more: "Less",
-    chevron: true,
-    fill: "rgba(0, 0, 0, 0)",
-    aligned: true,
-    label: "Hypothesis:",
-  });
-  await window.click('[data-slot-id="wheel"] [data-about-more]');
-  check("and Less folds it", (await note()).more, "More");
+  check(
+    "variant notes stay removed: each variant row is its button alone, and no note text reaches the sidebar",
+    await window.$$eval('[data-slot="sidebar-content"] [data-variant]', (rows) => ({
+      alone: rows.every((r) => r.closest("li").children.length === 1),
+      notes: rows.some((r) => /Hypothesis|Tradeoff|Try this|Recommended/.test(r.closest("[data-slot-id]").textContent)),
+      about: document.querySelectorAll("[data-about], [data-about-more]").length,
+    })),
+    { alone: true, notes: false, about: 0 },
+  );
   check(
     "the sidebar ends in a 32 px fade that sticks to its bottom edge, so a row cut there reads as cut",
     await window.$eval('[data-slot="sidebar-content"] [data-sidebar-fade]', (fade) => [Math.round(fade.getBoundingClientRect().height), getComputedStyle(fade).position, getComputedStyle(fade).bottom]),

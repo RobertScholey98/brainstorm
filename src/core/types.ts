@@ -171,7 +171,6 @@ export type BlockFiles = {
   readonly json: string;
   readonly css: string | null;
   readonly controls: string | null;
-  readonly about: string | null;
 };
 
 export type BlockDraft = {
@@ -511,7 +510,6 @@ export type BlockView = {
   readonly hash: ContentHash;
   readonly compiled: string;
   readonly css: string | null;
-  readonly about: string | null;
   readonly props: PropsSchema;
   readonly controls: ControlsSpec;
   readonly parts: readonly PartName[];

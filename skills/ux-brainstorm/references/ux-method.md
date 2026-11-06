@@ -59,7 +59,7 @@ Necessary capabilities still need a home. For retained uncommon controls, state 
 
 ## Design options around different UX hypotheses
 
-Write an option sentence before drawing: "For [this arrival situation], [this interaction] should make [this user decision or outcome] easier because [reason], at the cost of [tradeoff]."
+Write an option sentence for yourself before drawing: "For [this arrival situation], [this interaction] should make [this user decision or outcome] easier because [reason], at the cost of [compromise]." It steers the design and stays in your head. Rob reads the design, not the sentence.
 
 Possible dimensions include:
 
@@ -72,9 +72,9 @@ Possible dimensions include:
 
 These are exploration dimensions, not a required list of paradigms for every product. Do not generate a wizard, chat interface and command palette merely to tick boxes. Each alternative must be defensible for the same task and respect accepted constraints.
 
-Use shared fixtures and product components across A–E. Each option should expose its hypothesis, principal compromise and a short task to try. Do not make one option look more convincing by giving it better sample content or omitting its difficult states.
+Use shared fixtures and product components across A–E. Let each option's hypothesis and principal compromise show in how it behaves, including its difficult states, rather than in text written about it. Do not make one option look more convincing by giving it better sample content or omitting its difficult states.
 
-When recommending a combination, describe the resulting single interaction: which part comes from each option, how they connect, and which redundant decisions disappear. "B + D" alone is not a design specification. Treat it as recommended until the user selects it.
+When the user asks for a combination, build it as one interaction: which part comes from each option, how they connect, and which redundant decisions disappear. "B + D" alone is not a design specification.
 
 ## Worked examples from this study method
 
@@ -104,4 +104,4 @@ If the user requires transient stepped dialogs, compare five approaches within t
 
 Ask whether someone arriving with the task can identify the next useful action, understand its consequences, complete the job without workarounds, and recover without losing their work. Check that returning users can benefit from defaults while newcomers can understand them.
 
-An expert walkthrough can support a design recommendation; it does not prove usability or a percentage reduction in effort. If reporting counts of steps or choices, count a defined path honestly and explain what the count misses. Do not reward coverage, novelty, component count or visual minimalism at the expense of the task.
+An expert walkthrough can inform a design choice; it does not prove usability or a percentage reduction in effort. If reporting counts of steps or choices, count a defined path honestly and explain what the count misses. Do not reward coverage, novelty, component count or visual minimalism at the expense of the task.

@@ -1,8 +1,7 @@
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleAlert, ExternalLink, LayoutGrid } from "lucide-react";
-import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, CircleAlert, ExternalLink, LayoutGrid } from "lucide-react";
+import { useMemo, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ResizeHandle } from "@/components/ui/resize-handle";
@@ -26,8 +25,6 @@ import { Hint } from "@/components/ui/tooltip";
 import { blockIdOf, type BlockId, type BlockView, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
 import type { PaneLimits } from "./hooks/use-pane-width";
 import { Mark } from "./Mark";
-import { Markdown } from "./Markdown";
-import { parseMarkdown, withLeadLabel } from "./markdownSubset";
 import { TakeoverPhrase } from "./Regenerate";
 import { SessionStatus } from "./SessionStatus";
 import { groupByProject } from "./sessionGroups";
@@ -371,55 +368,11 @@ function SlotSection({
                   )}
                   <span className="shrink-0 text-xs font-normal text-fg-muted">{variant}</span>
                 </SidebarMenuButton>
-                {active && block?.about && <About source={block.about} />}
               </SidebarMenuItem>
             );
           })}
         </SidebarMenu>
       </SidebarGroup>
     </>
-  );
-}
-
-/**
- * A variant's note, aligned with the variant's name. Past three lines it is cut with a fade, not an ellipsis that
- * can land after a full stop, and More shows the rest in place.
- */
-function About({ source }: { source: string }) {
-  const blocks = useMemo(() => withLeadLabel(parseMarkdown(source)), [source]);
-  const [open, setOpen] = useState(false);
-  const [long, setLong] = useState(false);
-  const body = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const el = body.current;
-    if (el === null || open) return;
-    const measure = () => setLong(el.scrollHeight > el.clientHeight + 1);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [open, blocks]);
-  const id = useId();
-  return (
-    <div className="flex gap-2 px-2 pt-1.5 pb-2 text-xs/relaxed text-fg-muted" data-about>
-      {/* The row's dot column, so the note starts where the variant's name does. */}
-      <span aria-hidden className="w-1.5 shrink-0" />
-      <div className="min-w-0 flex-1">
-        <div
-          ref={body}
-          id={id}
-          className={cn("[&>*+*]:mt-1.5", !open && "max-h-about overflow-hidden", !open && long && "mask-b-from-50%")}
-          data-about-body
-        >
-          <Markdown source={source} blocks={blocks} />
-        </div>
-        {long && (
-          <Button variant="ghost" className="-ml-2" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} data-about-more>
-            {open ? "Less" : "More"}
-            {open ? <ChevronUp data-icon="inline-end" aria-hidden /> : <ChevronDown data-icon="inline-end" aria-hidden />}
-          </Button>
-        )}
-      </div>
-    </div>
   );
 }

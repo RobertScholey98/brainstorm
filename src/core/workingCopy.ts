@@ -45,7 +45,6 @@ const BLOCK_FILES = {
   "block.json": { key: "json", required: true, about: '`{ "title": "Neon wheel", "props": { "data": {…}, "appearance": {…} } }`' },
   "block.css": { key: "css", required: false, about: 'styles, served wrapped in `@scope ([data-bid="<slot>/<variant>"])`' },
   "controls.json": { key: "controls", required: false, about: "a json-render controls spec; absent means derived from the props" },
-  "about.md": { key: "about", required: false, about: "hypothesis, tradeoff and what to try, shown beside the variant switch" },
 } as const satisfies Record<string, { key: keyof BlockFiles; required: boolean; about: string }>;
 
 type BlockFileName = keyof typeof BLOCK_FILES;
@@ -55,6 +54,12 @@ const FILE_NAME_OF = Object.fromEntries(BLOCK_FILE_NAMES.map((name) => [BLOCK_FI
   BlockFileName
 >;
 const isBlockFileName = (name: string): name is BlockFileName => Object.hasOwn(BLOCK_FILES, name);
+
+/** Block files an older format read. They fail like any other unknown file, and the message tells the agent to stop. */
+const RETIRED_FILES: Readonly<Record<string, string>> = {
+  "about.md":
+    "Brainstorm no longer reads variant notes, so delete about.md and write no more. Rob judges the designs on the canvas himself; keep each variant's hypothesis in its design, not in a note.",
+};
 
 const manifestShape = z.strictObject({
   format: z.literal(1),
@@ -121,10 +126,12 @@ export function scanWorkingCopy(raw: FileMap): { readonly parsed: Parsed<Working
     const parts = path.split("/");
     const [top, slotRaw, variantRaw, name] = parts;
     if (parts.length !== 4 || top !== "slots" || !slotRaw || !variantRaw || !name || !isBlockFileName(name)) {
+      const retired = top === "slots" && name !== undefined && Object.hasOwn(RETIRED_FILES, name) ? RETIRED_FILES[name] : undefined;
       issues.push(
         issue(
           "unexpected_file",
-          `Brainstorm reads only ${MANIFEST} and slots/<slot>/<variant>/{${BLOCK_FILE_NAMES.join(",")}}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.`,
+          retired ??
+            `Brainstorm reads only ${MANIFEST} and slots/<slot>/<variant>/{${BLOCK_FILE_NAMES.join(",")}}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.`,
           { file: path },
         ),
       );
@@ -274,7 +281,6 @@ function parseBlock(dir: BlockDir, issues: Issue[], warnings: Issue[]): BlockDra
     json: jsonText,
     css: dir.files["block.css"] ?? null,
     controls: controlsText,
-    about: dir.files["about.md"] ?? null,
   };
   return {
     id: blockIdOf(dir.slot, dir.variant),

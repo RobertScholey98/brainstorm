@@ -542,7 +542,6 @@ export class Brainstorm {
       hash: content.hash,
       compiled: content.compiled,
       css: content.files.css,
-      about: content.files.about,
       props: draft.props,
       controls: draft.controls,
       parts: content.parts,

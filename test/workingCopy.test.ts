@@ -34,7 +34,6 @@ const goodCopy: FileMap = {
   "slots/wheel/neon/block.json": neonJson,
   "slots/wheel/neon/block.css": ".wheel { color: var(--accent); }\n",
   "slots/wheel/neon/controls.json": neonControls,
-  "slots/wheel/neon/about.md": "Bright and loud.\n",
   "slots/wheel/classic/block.tsx": wheelTsx,
   "slots/wheel/classic/block.json": classicJson,
   "slots/result/sheet/block.tsx": wheelTsx,
@@ -46,9 +45,8 @@ const neonFiles: BlockFiles = {
   json: neonJson,
   css: ".wheel { color: var(--accent); }\n",
   controls: neonControls,
-  about: "Bright and loud.\n",
 };
-const classicFiles: BlockFiles = { tsx: wheelTsx, json: classicJson, css: null, controls: null, about: null };
+const classicFiles: BlockFiles = { tsx: wheelTsx, json: classicJson, css: null, controls: null };
 
 const uncontrolled = (prop: string) => ({
   severity: "warning",
@@ -134,8 +132,8 @@ describe("parseWorkingCopy", () => {
     });
     const byId = (r: typeof windows) => (r.ok ? Object.fromEntries(r.value.blocks.map((b) => [b.id, b.hash])) : {});
     expect(byId(windows)["wheel/classic"]).toBe(contentHash(classicFiles));
-    expect(contentHash({ ...classicFiles, about: "" })).not.toBe(contentHash(classicFiles));
-    expect(contentHash({ ...classicFiles, css: "x", about: null })).not.toBe(contentHash({ ...classicFiles, css: null, about: "x" }));
+    expect(contentHash({ ...classicFiles, css: "" })).not.toBe(contentHash(classicFiles));
+    expect(contentHash({ ...classicFiles, css: "x", controls: null })).not.toBe(contentHash({ ...classicFiles, css: null, controls: "x" }));
   });
 
   test("every structural rule fails with an issue keyed by file", () => {
@@ -149,6 +147,7 @@ describe("parseWorkingCopy", () => {
       "notes.txt": "x",
       "slots/wheel/helper.ts": "x",
       "slots/wheel/neon/utils.ts": "x",
+      "slots/wheel/neon/about.md": "**Hypothesis.** Loud wins.",
       "slots/wheel/Neon/block.tsx": wheelTsx,
       "slots/extra/one/block.tsx": wheelTsx,
       "slots/extra/one/block.json": classicJson,
@@ -160,18 +159,23 @@ describe("parseWorkingCopy", () => {
         err(
           "unexpected_file",
           "notes.txt",
-          "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json,about.md}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
+          "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
         ),
         err("invalid_id", "slots/wheel/Neon", '"Neon" must match ^[a-z][a-z0-9-]{0,31}$'),
         err(
           "unexpected_file",
           "slots/wheel/helper.ts",
-          "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json,about.md}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
+          "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
+        ),
+        err(
+          "unexpected_file",
+          "slots/wheel/neon/about.md",
+          "Brainstorm no longer reads variant notes, so delete about.md and write no more. Rob judges the designs on the canvas himself; keep each variant's hypothesis in its design, not in a note.",
         ),
         err(
           "unexpected_file",
           "slots/wheel/neon/utils.ts",
-          "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json,about.md}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
+          "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
         ),
         err("invalid_manifest", "brainstorm.json", 'slot "wheel" is listed twice', "/slots/2/id"),
         err("invalid_id", "brainstorm.json", '"Bad" must match ^[a-z][a-z0-9-]{0,31}$', "/slots/3/id"),
@@ -299,7 +303,6 @@ describe("emitWorkingCopy", () => {
       "slots/result/sheet/block.tsx",
       "slots/wheel/classic/block.json",
       "slots/wheel/classic/block.tsx",
-      "slots/wheel/neon/about.md",
       "slots/wheel/neon/block.css",
       "slots/wheel/neon/block.json",
       "slots/wheel/neon/block.tsx",

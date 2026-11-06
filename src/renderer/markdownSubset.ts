@@ -1,20 +1,20 @@
 /**
- * The markdown subset an about.md may use: paragraphs, `-` lists, bold, italic and inline code. Anything else stays
- * literal text, and nothing is ever parsed as HTML.
+ * The markdown subset an agent writes a brief in: paragraphs, `-` lists, bold, italic and inline code. Home shows a
+ * brief as plain text, so only `markdownText` leaves this file, and nothing is ever parsed as HTML.
  */
-export type Inline =
+type Inline =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "strong"; readonly children: readonly Inline[] }
   | { readonly kind: "em"; readonly children: readonly Inline[] }
   | { readonly kind: "code"; readonly text: string };
 
-export type MarkdownBlock =
+type MarkdownBlock =
   | { readonly kind: "paragraph"; readonly inline: readonly Inline[] }
   | { readonly kind: "list"; readonly items: readonly (readonly Inline[])[] };
 
 const LIST_ITEM = /^\s*-\s+/;
 
-export function parseMarkdown(source: string): MarkdownBlock[] {
+function parseMarkdown(source: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = [];
   let paragraph: string[] = [];
   let items: string[] = [];
@@ -52,7 +52,7 @@ function closer(text: string, delimiter: string, from: number): number {
   return -1;
 }
 
-export function parseInline(text: string): Inline[] {
+function parseInline(text: string): Inline[] {
   const out: Inline[] = [];
   let plain = "";
   const push = (node: Inline) => {
@@ -97,22 +97,4 @@ export function markdownText(source: string): string {
   return parseMarkdown(source)
     .map((b) => (b.kind === "paragraph" ? inlineText(b.inline) : b.items.map((item) => `- ${inlineText(item)}`).join("\n")))
     .join("\n\n");
-}
-
-const LEAD_LABEL = /^([A-Z][A-Za-z]*(?: [A-Za-z]+){0,2}:)\s+/;
-
-/**
- * A note that opens with a short label, such as "Hypothesis:", shows it bold whether or not its author wrote the
- * asterisks, so two notes side by side never disagree on it.
- */
-export function withLeadLabel(blocks: readonly MarkdownBlock[]): MarkdownBlock[] {
-  const [first, ...rest] = blocks;
-  if (first?.kind !== "paragraph") return [...blocks];
-  const [head, ...tail] = first.inline;
-  if (head?.kind !== "text") return [...blocks];
-  const label = LEAD_LABEL.exec(head.text);
-  if (label === null) return [...blocks];
-  const after = head.text.slice(label[0].length);
-  const inline: Inline[] = [{ kind: "strong", children: [{ kind: "text", text: label[1] ?? "" }] }, { kind: "text", text: ` ${after}` }, ...tail];
-  return [{ kind: "paragraph", inline }, ...rest];
 }

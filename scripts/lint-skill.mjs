@@ -64,5 +64,18 @@ expect(!/html/i.test(yaml), "openai.yaml no longer mentions HTML");
 expect(!existsSync(join(skill, "references", "html-report.md")), "html-report.md is gone");
 for (const f of mdFiles) expect(!/html report|html-report/i.test(readFileSync(f, "utf8").replace(/replaces the old HTML report/, "")), `${f} has no stale HTML-report instruction`);
 
+// Rob judges the designs himself, so the skill designs around hypotheses but never writes notes, rationales or picks for him.
+const NOTE_WORDS = /about\.md|tradeoff|trade-off|try this|recommend/i;
+const NOTE_LABELS = /\*\*(Hypothesis|Tradeoff|Try this|Recommended)\b|^(Hypothesis|Tradeoff|Try this|Recommended)[.:]/m;
+const skillFiles = [];
+const walkAll = (dir) => { for (const e of readdirSync(dir, { withFileTypes: true })) { const p = join(dir, e.name); if (e.isDirectory()) walkAll(p); else skillFiles.push(p); } };
+walkAll(skill);
+for (const f of skillFiles) {
+  expect(!f.endsWith("about.md"), `${f}: variant notes are gone from the format`);
+  const text = readFileSync(f, "utf8");
+  const hit = NOTE_WORDS.exec(text) ?? NOTE_LABELS.exec(text);
+  expect(hit === null, `${f} writes up a variant for Rob ("${hit?.[0]}"); the designs carry their hypotheses`);
+}
+
 if (failures.length) { console.error("FAILED\n" + failures.join("\n")); process.exit(1); }
 console.log("VERIFIED");

@@ -25,8 +25,12 @@ import type {
   ThreadId,
   VariantKey,
 } from "./types";
+import { contentHash } from "./workingCopy";
 
-const MIGRATIONS: readonly string[] = [
+/** A step is SQL, or code for a change SQL can't express, such as recomputing content hashes. */
+type Migration = string | ((db: DatabaseSync) => void);
+
+const MIGRATIONS: readonly Migration[] = [
   `
   CREATE TABLE project(id TEXT PRIMARY KEY, repo_path TEXT, created_at TEXT NOT NULL);
   CREATE TABLE session(id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES project, title TEXT NOT NULL,
@@ -56,11 +60,39 @@ const MIGRATIONS: readonly string[] = [
   `,
   `ALTER TABLE project ADD COLUMN name TEXT;`,
   `CREATE TABLE ui_pref(key TEXT PRIMARY KEY, value_json TEXT NOT NULL);`,
+  dropVariantNotes,
 ];
+
+/**
+ * Variant notes left the format. A note was part of its block's content hash, so each block that had one is stored
+ * again under the hash of its files without it. Otherwise the next commit would see every such block as changed.
+ */
+function dropVariantNotes(db: DatabaseSync): void {
+  const noted = db.prepare("SELECT * FROM block_content WHERE about IS NOT NULL").all() as Row[];
+  for (const r of noted) {
+    const hash = contentHash({
+      tsx: str(r.source),
+      json: str(r.block_json),
+      css: strOrNull(r.css),
+      controls: num(r.controls_derived) === 1 ? null : strOrNull(r.controls_json),
+    });
+    db.prepare(
+      `INSERT OR IGNORE INTO block_content(hash, source, css, block_json, controls_json, controls_derived, about, compiled, parts_json)
+       SELECT ?, source, css, block_json, controls_json, controls_derived, NULL, compiled, parts_json FROM block_content WHERE hash = ?`,
+    ).run(hash, str(r.hash));
+    db.prepare("UPDATE iteration_block SET hash = ? WHERE hash = ?").run(hash, str(r.hash));
+    db.prepare("DELETE FROM block_content WHERE hash = ?").run(str(r.hash));
+  }
+  db.exec("ALTER TABLE block_content DROP COLUMN about");
+}
 
 const OPEN_REQUEST = `state IN ('sending','sent','send_failed')`;
 
 type Row = Record<string, unknown>;
+
+const str = (v: unknown): string => v as string;
+const strOrNull = (v: unknown): string | null => (v === null ? null : (v as string));
+const num = (v: unknown): number => Number(v);
 
 export type StoredContent = {
   readonly hash: ContentHash;
@@ -90,9 +122,6 @@ export type FeedbackRecord = {
   readonly history: readonly FeedbackEvent[];
 };
 
-const str = (v: unknown): string => v as string;
-const strOrNull = (v: unknown): string | null => (v === null ? null : (v as string));
-const num = (v: unknown): number => Number(v);
 
 const toSession = (r: Row): SessionSummary => ({
   id: str(r.id) as SessionId,
@@ -200,9 +229,10 @@ export class Store {
 
   #migrate(): void {
     const version = num((this.#get("PRAGMA user_version") ?? {}).user_version ?? 0);
-    MIGRATIONS.slice(version).forEach((sql, i) =>
+    MIGRATIONS.slice(version).forEach((step, i) =>
       this.tx(() => {
-        this.#db.exec(sql);
+        if (typeof step === "string") this.#db.exec(step);
+        else step(this.#db);
         this.#db.exec(`PRAGMA user_version = ${version + i + 1}`);
       }),
     );
@@ -336,7 +366,6 @@ export class Store {
         json: str(r.block_json),
         css: strOrNull(r.css),
         controls: num(r.controls_derived) === 1 ? null : strOrNull(r.controls_json),
-        about: strOrNull(r.about),
       },
       compiled: str(r.compiled),
       parts: JSON.parse(str(r.parts_json)) as PartName[],
@@ -354,15 +383,14 @@ export class Store {
     this.tx(() => {
       for (const c of input.contents) {
         this.#run(
-          `INSERT OR IGNORE INTO block_content(hash, source, css, block_json, controls_json, controls_derived, about, compiled, parts_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR IGNORE INTO block_content(hash, source, css, block_json, controls_json, controls_derived, compiled, parts_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           c.hash,
           c.files.tsx,
           c.files.css,
           c.files.json,
           c.files.controls,
           c.files.controls === null ? 1 : 0,
-          c.files.about,
           c.compiled,
           JSON.stringify(c.parts),
         );

@@ -49,14 +49,13 @@ The output names the session id (`s_…`). Use it in every later command.
   slots/<slot>/<variant>/block.json     required; title and props schema
   slots/<slot>/<variant>/block.css      optional; scoped to the block
   slots/<slot>/<variant>/controls.json  optional; absent means one control per appearance prop
-  slots/<slot>/<variant>/about.md       optional; shown beside the variant switch
 ```
 
 `GUIDE.md` is generated from the code that validates your commit. Where it and this file disagree, follow `GUIDE.md`.
 
 - `brainstorm.json` `slots` is `[{ "id": "start-dialog", "title": "Start a task", "frame": { "width": 560, "height": 520 } }]`, in canvas order. `frame.width` is 240 to 1920, and `height` is optional.
 - Slot and variant ids are kebab-case (`^[a-z][a-z0-9-]{0,31}$`). Every slot folder is listed in `slots`, and every listed slot has at least one variant.
-- Any other file is an error. A block is self-contained, so there are no shared modules or fixture files.
+- Any other file is an error. A block is self-contained, so there are no shared modules or fixture files. There are no notes beside a variant either: the design carries its hypothesis, and Rob judges it on the canvas.
 - `pull` replaces `slots/` wholesale. Always pull into a fresh copy at the start of a turn.
 
 ## Block files
@@ -76,8 +75,6 @@ The output names the session id (`s_…`). Use it in every later command.
 **`block.css`** is wrapped in `@scope ([data-bid="<slot>/<variant>"])`, so write selectors relative to the block.
 
 **`controls.json`** is optional. Leave it out unless the controls need grouping or ordering that the schema order doesn't give. An explicit spec uses `Section`, `Slider`, `Select`, `Segmented`, `Colour`, `Toggle` and `Text`, each value bound with `{ "$bindState": "/<prop>" }` to an appearance prop of the matching type. `context` prints the full vocabulary.
-
-**`about.md`** has three short paragraphs, **Hypothesis.**, **Tradeoff.** and **Try this.**, as the UX method defines them. The recommended variant opens with a **Recommended.** paragraph that gives the reason, the main compromise and what evidence would change the choice. Keep "recommended" distinct from anything Rob has selected.
 
 ## Mapping options onto blocks
 
