@@ -1,7 +1,8 @@
 import { MessageSquarePlus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { FEEDBACK_ACTIONS } from "../core/machines";
-import type { BlockId, BlockView, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
+import type { BlockId, BlockView, CanvasRect, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
+import { COMPOSER, composerPlace } from "./placement";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -252,12 +253,10 @@ export function TextEditor({
   );
 }
 
-const COMPOSER_WIDTH = 300;
-const COMPOSER_HEIGHT = 180;
-
 export function PinComposer({
   pin,
   at,
+  rect,
   block,
   bounds,
   onSave,
@@ -265,13 +264,13 @@ export function PinComposer({
 }: {
   pin: Pin;
   at: { x: number; y: number };
+  rect: CanvasRect;
   block: BlockView | null;
   bounds: { width: number; height: number };
   onSave: (text: string) => Promise<void>;
   onCancel: () => void;
 }) {
-  const left = Math.max(8, Math.min(at.x + 14, bounds.width - COMPOSER_WIDTH - 8));
-  const top = Math.max(8, Math.min(at.y + 14, bounds.height - COMPOSER_HEIGHT - 8));
+  const { left, top } = composerPlace(at, rect, bounds);
   return (
     <div
       role="dialog"
@@ -279,7 +278,7 @@ export function PinComposer({
       data-composer
       data-open=""
       className={cn(overlaySurface(), "absolute z-popover grid gap-2 p-3 text-sm")}
-      style={{ left, top, width: COMPOSER_WIDTH }}
+      style={{ left, top, width: COMPOSER.width }}
     >
       <span aria-hidden className="absolute size-2 rounded-full bg-accent ring-2 ring-card" style={{ left: at.x - left - 4, top: at.y - top - 4 }} />
       <p className="truncate text-xs text-fg-muted">

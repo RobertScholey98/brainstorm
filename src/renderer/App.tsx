@@ -14,6 +14,7 @@ import {
   type AppearanceValue,
   type BlockId,
   type BlockView,
+  type CanvasRect,
   type CanvasPin,
   type Feedback,
   type FeedbackId,
@@ -41,7 +42,7 @@ const NOTICE_MS = 6000;
 type CanvasInteraction =
   | { readonly kind: "view" }
   | { readonly kind: "picking" }
-  | { readonly kind: "composing"; readonly pin: Pin; readonly at: { readonly x: number; readonly y: number } };
+  | { readonly kind: "composing"; readonly pin: Pin; readonly at: { readonly x: number; readonly y: number }; readonly rect: CanvasRect };
 
 const NO_PLACEMENT: Placement = { placed: new Set(), detached: new Set() };
 
@@ -217,9 +218,9 @@ function SessionWorkspace({
   }, [interaction.kind]);
 
   const onPicked = useCallback(
-    (pin: Pin, at: { x: number; y: number }) => {
+    (pin: Pin, at: { x: number; y: number }, rect: CanvasRect) => {
       onSelectBlock(pin.blockId);
-      setInteraction({ kind: "composing", pin, at });
+      setInteraction({ kind: "composing", pin, at, rect });
     },
     [onSelectBlock],
   );
@@ -275,6 +276,7 @@ function SessionWorkspace({
             selected={selectedBlock?.id ?? null}
             mode={interaction.kind === "picking" ? "pin" : "view"}
             pins={pins}
+            focused={focusedFeedback}
             pulse={pulse}
             onSelect={onSelectBlock}
             onBlockError={onBlockError}
@@ -299,6 +301,7 @@ function SessionWorkspace({
             key={JSON.stringify(interaction)}
             pin={interaction.pin}
             at={interaction.at}
+            rect={interaction.rect}
             block={blocks.find((b) => b.id === interaction.pin.blockId) ?? null}
             bounds={{ width: canvasArea.current?.clientWidth ?? 0, height: canvasArea.current?.clientHeight ?? 0 }}
             onSave={(text) => saveComment(interaction.pin, text)}

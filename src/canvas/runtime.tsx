@@ -27,6 +27,7 @@ type CanvasState = {
   readonly selected: BlockId | null;
   readonly mode: CanvasMode;
   readonly pins: readonly CanvasPin[];
+  readonly focused: FeedbackId | null;
   /** Export only: each slot's variants, for the in-page switcher. */
   readonly variants: Readonly<Record<string, readonly CanvasVariant[]>>;
   /** Which content each block shows. Modules are cached by hash, so a new hash is the only thing that remounts a block. */
@@ -90,7 +91,9 @@ function applyCss(m: CanvasModule): void {
   style.textContent = `@scope ([data-bid="${m.blockId}"]) {\n${m.css}\n}`;
 }
 
-let state: CanvasState = { frames: [], props: {}, selected: null, mode: "view", pins: [], variants: {}, hashes: new Map() };
+let state: CanvasState = { frames: [], props: {}, selected: null, mode: "view", pins: [], focused: null, variants: {}, hashes: new Map() };
+/** The block Rob just pressed in the canvas. Its selection comes back from the host and needs no reveal. */
+let pressed: BlockId | null = null;
 const listeners = new Set<() => void>();
 const setState = (next: Partial<CanvasState>) => {
   state = { ...state, ...next };
@@ -113,9 +116,14 @@ function receive(message: HostToFrame): void {
       setState({ hashes });
       return;
     }
-    case "state":
+    case "state": {
+      const reveal = message.selected !== null && message.selected !== state.selected && message.selected !== pressed;
+      pressed = null;
       setState({ frames: message.frames, props: message.props, selected: message.selected });
+      // A selection made outside the canvas (the Inspector, a feedback row) scrolls its frame in only as far as needed.
+      if (reveal) requestAnimationFrame(() => document.querySelector(".bs-frame[data-selected]")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }));
       return;
+    }
     case "mode":
       document.body.dataset.mode = message.mode;
       if (message.mode !== "pin") hover = null;
@@ -123,7 +131,7 @@ function receive(message: HostToFrame): void {
       wake();
       return;
     case "pins":
-      setState({ pins: message.pins });
+      setState({ pins: message.pins, focused: message.focused });
       wake();
       return;
     case "pulse":
@@ -214,7 +222,10 @@ function Canvas() {
             className="bs-frame"
             data-slot={frame.slot}
             data-selected={selected || undefined}
-            onPointerDownCapture={() => post({ kind: "select_block", blockId: frame.blockId })}
+            onPointerDownCapture={() => {
+              pressed = frame.blockId;
+              post({ kind: "select_block", blockId: frame.blockId });
+            }}
           >
             <header className="bs-frame-title">
               <span>{frame.title}</span>
@@ -241,6 +252,7 @@ function Canvas() {
                     }}
                     data-pin={p.id}
                     data-status={p.status}
+                    data-focused={s.focused === p.id || undefined}
                     aria-label={`Feedback ${p.id}`}
                     onClick={() => post({ kind: "pin_clicked", id: p.id })}
                   >
@@ -332,7 +344,8 @@ function layoutPins(): void {
     marker.dataset.placed = "";
     if (wantedPulse === id) {
       wantedPulse = null;
-      marker.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+      // Nearest, with the pin's scroll margin, so a pin already in view doesn't pull the canvas sideways.
+      marker.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
       marker.classList.remove("bs-pulse");
       void marker.offsetWidth;
       marker.classList.add("bs-pulse");
@@ -372,13 +385,18 @@ if (live) {
         const target = type === "click" ? pickTarget(e.target) : null;
         if (target !== null) {
           const { clientX: x, clientY: y } = e as MouseEvent;
-          post({ kind: "picked", pin: target.pin, at: { x, y } });
+          const r = target.anchor.getBoundingClientRect();
+          post({ kind: "picked", pin: target.pin, at: { x, y }, rect: { x: r.left, y: r.top, width: r.width, height: r.height } });
         }
       },
       true,
     );
   }
   window.addEventListener("pointermove", (e) => (hover = state.mode === "pin" ? pickTarget(e.target) : null), true);
+  window.addEventListener("keydown", (e) => {
+    if (e.defaultPrevented || !(e.key === "Escape" || e.ctrlKey || e.metaKey)) return;
+    post({ kind: "key", key: e.key, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, alt: e.altKey });
+  });
   document.documentElement.addEventListener("pointerleave", () => (hover = null));
   wake();
 }
@@ -416,9 +434,10 @@ body {
 #canvas { display: flex; align-items: flex-start; gap: 32px; padding: 24px 24px 48px; width: max-content; }
 .bs-frame { flex: none; }
 .bs-frame-title {
-  display: flex; justify-content: space-between; gap: 12px;
-  margin: 0 2px 8px; color: var(--bs-fg-muted); font-weight: 500; cursor: default; user-select: none;
+  position: sticky; left: 8px; display: flex; gap: 8px; width: fit-content; max-width: calc(100vw - 16px);
+  margin: 0 2px 8px; color: var(--bs-fg-muted); font-weight: 500; cursor: default; user-select: none; white-space: nowrap;
 }
+.bs-frame-title > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .bs-frame-size { font-variant-numeric: tabular-nums; font-weight: 400; }
 .bs-frame[data-selected] .bs-frame-title { color: var(--bs-accent); }
 .bs-frame-body {
@@ -428,6 +447,13 @@ body {
   transition: box-shadow 120ms ease-out;
 }
 .bs-frame[data-selected] .bs-frame-body { box-shadow: 0 0 0 2px var(--bs-accent), var(--bs-elevation-sm); }
+.bs-frame-body:has(> .bs-failure) { height: auto !important; }
+.bs-edge {
+  position: fixed; top: 0; bottom: 0; z-index: 10; width: 24px; pointer-events: none; opacity: 0; transition: opacity 120ms ease-out;
+}
+.bs-edge[data-side="left"] { left: 0; background: linear-gradient(to right, var(--bs-canvas), transparent); }
+.bs-edge[data-side="right"] { right: 0; background: linear-gradient(to left, var(--bs-canvas), transparent); }
+.bs-edge[data-on] { opacity: 1; }
 .bs-failure {
   display: grid; gap: 4px; margin: 16px; padding: 12px; border-radius: 6px;
   color: var(--bs-danger); background: var(--bs-danger-subtle);
@@ -447,12 +473,13 @@ body {
   width: ${PIN_SIZE}px; height: ${PIN_SIZE}px; box-sizing: border-box; padding: 0;
   border: 2px solid var(--bs-card); border-radius: 10px 10px 10px 4px; background: var(--bs-accent); color: var(--bs-accent-fg);
   font: 600 11px/1 var(--bs-font-ui); font-variant-numeric: tabular-nums;
-  box-shadow: var(--bs-elevation-sm); cursor: pointer;
+  box-shadow: var(--bs-elevation-sm); cursor: pointer; scroll-margin: 48px;
 }
 .bs-pin[data-placed] { display: grid; }
 .bs-pin[data-status="addressed"] { background: var(--bs-card); color: var(--bs-accent); border-color: var(--bs-accent); }
 .bs-pin[data-status="confirmed"] { background: var(--bs-muted); color: var(--bs-fg-muted); }
 .bs-pin:hover { filter: brightness(1.08); }
+.bs-pin[data-focused] { box-shadow: 0 0 0 2px var(--bs-card), 0 0 0 4px var(--bs-accent), var(--bs-elevation-sm); scale: 1.1; }
 .bs-pin.bs-pulse { animation: bs-pulse 650ms ease-out 2; }
 @keyframes bs-pulse {
   0% { box-shadow: var(--bs-elevation-sm), 0 0 0 0 color-mix(in oklab, var(--bs-accent) 60%, transparent); scale: 1.25; }
@@ -489,4 +516,24 @@ window.addEventListener("message", (e: MessageEvent) => {
 for (const message of boot.messages ?? []) receive(message);
 const root = document.getElementById("canvas");
 if (root !== null) createRoot(root).render(<Canvas />);
+
+// Fades at the sides say there is more canvas to scroll to, since a frame cut by the edge looks like a broken frame.
+const edges = (["left", "right"] as const).map((side) => {
+  const edge = document.createElement("div");
+  edge.className = "bs-edge";
+  edge.dataset.side = side;
+  document.body.append(edge);
+  return edge;
+});
+const showEdges = () => {
+  const max = document.documentElement.scrollWidth - innerWidth;
+  for (const edge of edges) {
+    const on = edge.dataset.side === "left" ? scrollX > 1 : scrollX < max - 1;
+    if (on) edge.dataset.on = "";
+    else delete edge.dataset.on;
+  }
+};
+addEventListener("scroll", showEdges, { passive: true });
+addEventListener("resize", showEdges);
+if (root !== null) new ResizeObserver(showEdges).observe(root);
 post({ kind: "ready" });

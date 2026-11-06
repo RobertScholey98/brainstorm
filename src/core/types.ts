@@ -572,7 +572,8 @@ export type HostToFrame =
       readonly selected: BlockId | null;
     }
   | { readonly kind: "mode"; readonly mode: CanvasMode }
-  | { readonly kind: "pins"; readonly pins: readonly CanvasPin[] }
+  /** `focused` is the comment open in the Inspector, ringed on the canvas. */
+  | { readonly kind: "pins"; readonly pins: readonly CanvasPin[]; readonly focused: FeedbackId | null }
   /** Scrolls a pin into view and pulses it. */
   | { readonly kind: "pulse"; readonly id: FeedbackId }
   /** Export only: every variant of each slot, for the in-page switcher. Keyed by SlotId. */
@@ -582,10 +583,17 @@ export type CanvasVariant = { readonly blockId: BlockId; readonly title: string 
 
 export type FrameToHost =
   | { readonly kind: "ready" }
-  /** `at` is where Rob clicked, in the frame's viewport coordinates, so the host can anchor the composer there. */
-  | { readonly kind: "picked"; readonly pin: Pin; readonly at: { readonly x: number; readonly y: number } }
+  /**
+   * `at` is where Rob clicked and `rect` the element he picked, both in the frame's viewport coordinates, so the host
+   * can place the composer beside the element instead of over it.
+   */
+  | { readonly kind: "picked"; readonly pin: Pin; readonly at: { readonly x: number; readonly y: number }; readonly rect: CanvasRect }
   | { readonly kind: "pin_clicked"; readonly id: FeedbackId }
   | { readonly kind: "select_block"; readonly blockId: BlockId }
   | { readonly kind: "pin_placement"; readonly placed: readonly FeedbackId[]; readonly detached: readonly FeedbackId[] }
   | { readonly kind: "block_error"; readonly blockId: BlockId; readonly message: string }
-  | { readonly kind: "csp_violation"; readonly directive: string; readonly blockedUri: string };
+  | { readonly kind: "csp_violation"; readonly directive: string; readonly blockedUri: string }
+  /** A shortcut pressed while the canvas has focus, so the shell's keys work wherever Rob last clicked. */
+  | { readonly kind: "key"; readonly key: string; readonly ctrl: boolean; readonly meta: boolean; readonly shift: boolean; readonly alt: boolean };
+
+export type CanvasRect = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };

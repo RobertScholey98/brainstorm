@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { BlockId, BlockView, CanvasFrame, CanvasMode, CanvasPin, FeedbackId, FrameToHost, HostToFrame, Pin, Props } from "../core/types";
+import type { BlockId, BlockView, CanvasFrame, CanvasMode, CanvasPin, CanvasRect, FeedbackId, FrameToHost, HostToFrame, Pin, Props } from "../core/types";
 
 export type Placement = { readonly placed: ReadonlySet<FeedbackId>; readonly detached: ReadonlySet<FeedbackId> };
 
@@ -14,6 +14,7 @@ export function CanvasHost({
   selected,
   mode,
   pins,
+  focused,
   pulse,
   onSelect,
   onBlockError,
@@ -27,11 +28,13 @@ export function CanvasHost({
   selected: BlockId | null;
   mode: CanvasMode;
   pins: readonly CanvasPin[];
+  /** The pin whose feedback row is open in the Inspector. */
+  focused: FeedbackId | null;
   /** A new `seq` pulses the pin again, even the same one. */
   pulse: { readonly id: FeedbackId; readonly seq: number } | null;
   onSelect: (blockId: BlockId) => void;
   onBlockError: (blockId: BlockId, message: string) => void;
-  onPicked: (pin: Pin, at: { x: number; y: number }) => void;
+  onPicked: (pin: Pin, at: { x: number; y: number }, rect: CanvasRect) => void;
   onPinClicked: (id: FeedbackId) => void;
   onPlacement: (placement: Placement) => void;
 }) {
@@ -59,13 +62,19 @@ export function CanvasHost({
           handlers.current.onBlockError(message.blockId, message.message);
           return;
         case "picked":
-          handlers.current.onPicked(message.pin, message.at);
+          handlers.current.onPicked(message.pin, message.at, message.rect);
           return;
         case "pin_clicked":
           handlers.current.onPinClicked(message.id);
           return;
         case "pin_placement":
           handlers.current.onPlacement({ placed: new Set(message.placed), detached: new Set(message.detached) });
+          return;
+        case "key":
+          // Shortcuts work while the canvas has focus: replay the key on the host as if it were pressed here.
+          (document.activeElement ?? document.body).dispatchEvent(
+            new KeyboardEvent("keydown", { key: message.key, ctrlKey: message.ctrl, metaKey: message.meta, shiftKey: message.shift, altKey: message.alt, bubbles: true, cancelable: true }),
+          );
           return;
         case "csp_violation":
           console.warn(`The canvas blocked ${message.blockedUri || "a resource"} (${message.directive}).`);
@@ -93,8 +102,8 @@ export function CanvasHost({
   }, [readyCount, mode]);
 
   useEffect(() => {
-    if (readyCount > 0) post({ kind: "pins", pins });
-  }, [readyCount, pins]);
+    if (readyCount > 0) post({ kind: "pins", pins, focused });
+  }, [readyCount, pins, focused]);
 
   useEffect(() => {
     if (readyCount > 0 && pulse !== null) post({ kind: "pulse", id: pulse.id });
