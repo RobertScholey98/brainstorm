@@ -125,6 +125,17 @@ function RegenerateForm({
   return (
     <>
       <Segmented value={kind} onValueChange={setKind} options={SCOPES} itemData="scope" aria-label="Scope" />
+      {/* The field sits right under the scope, so neither moves when a scope adds its block list below. */}
+      <Textarea
+        rows={3}
+        value={text}
+        aria-label="Free text"
+        data-freetext
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && void submit()}
+        placeholder={kind === "described" ? "What should change?" : "Anything to add? (optional)"}
+        className="resize-none"
+      />
 
       {kind === "blocks" && (
         <div className="grid gap-2" data-block-choices>
@@ -142,17 +153,6 @@ function RegenerateForm({
       )}
       {kind === "all" && <p className="text-fg-muted">The agent may change any block, in every slot.</p>}
       {kind === "described" && <p className="text-fg-muted">The agent picks the blocks from what you write.</p>}
-
-      <Textarea
-        rows={3}
-        value={text}
-        aria-label="Free text"
-        data-freetext
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && void submit()}
-        placeholder={kind === "described" ? "What should change?" : "Anything to add? (optional)"}
-        className="resize-none"
-      />
 
       <div className="grid min-w-0 gap-1" data-attached-feedback>
         <h3 className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
@@ -290,14 +290,28 @@ export function RequestStatus({ view, send }: { view: SessionView; send: (action
           {detail.label}
         </span>
       )}
-      {phase.actions.length > 0 && (
-        <span className="flex shrink-0 items-center gap-2">
-          {phase.actions.filter((action) => action !== detail?.own).map((action) => (
-            <PhaseAction key={action} action={action} view={view} send={send} />
-          ))}
-        </span>
-      )}
     </div>
+  );
+}
+
+/** The phase's actions that the bar shows; one the strip under the bar holds itself stays there. */
+export function phaseActions(view: SessionView): readonly RequestPhaseAction[] {
+  if (view.request === null) return [];
+  const own = DETAIL[view.request.phase.phase]?.own;
+  return view.request.phase.actions.filter((action) => action !== own);
+}
+
+/**
+ * The request's actions, in the header's right cluster before Regenerate. Anchored there, they stay put as the phase's
+ * label changes length, so Withdraw sits at one x from queued to working.
+ */
+export function PhaseActions({ view, send }: { view: SessionView; send: (action: RobAction) => Promise<unknown> }) {
+  return (
+    <span className="flex shrink-0 items-center gap-2" data-phase-actions>
+      {phaseActions(view).map((action) => (
+        <PhaseAction key={action} action={action} view={view} send={send} />
+      ))}
+    </span>
   );
 }
 

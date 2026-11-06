@@ -19,7 +19,7 @@ async function phase(name) {
   check(`${name}: the whole message is readable`, clipped, false);
   return {
     message: (await window.textContent("[data-request-message]"))?.trim(),
-    actions: await window.$$eval("[data-request-phase] [data-request-action]", (els) => els.map((e) => e.dataset.requestAction)),
+    actions: await window.$$eval("[data-phase-actions] [data-request-action]", (els) => els.map((e) => e.dataset.requestAction)),
   };
 }
 
@@ -85,6 +85,13 @@ try {
     ["1"],
   );
   await shot(window, shots, "1-menu");
+  const fieldTop = () => window.$eval("[data-regenerate-menu] [data-freetext]", (el) => Math.round(el.getBoundingClientRect().top));
+  const tops = [await fieldTop()];
+  for (const scope of ["all", "described", "blocks"]) {
+    await window.click(`[data-regenerate-menu] [data-scope="${scope}"]`);
+    tops.push(await fieldTop());
+  }
+  check("the free text stays under the scope switch, at one height in every scope", new Set(tops).size, 1);
   await window.click("[data-regenerate-menu] [data-send]");
   check("the queued request shows with its actions", await phase("queued"), { message: "Queued in T3", actions: ["open_thread", "withdraw"] });
   check(
@@ -109,7 +116,7 @@ try {
   check(
     "in the narrowest window, 1100, the title and message give way, and the phase actions stay clear of Regenerate",
     await window.evaluate(() => {
-      const last = [...document.querySelectorAll("[data-request-phase] [data-request-action]")].at(-1).getBoundingClientRect();
+      const last = [...document.querySelectorAll("[data-phase-actions] [data-request-action]")].at(-1).getBoundingClientRect();
       return last.right <= document.querySelector("[data-regenerate-toggle]").getBoundingClientRect().left;
     }),
     true,
@@ -165,6 +172,16 @@ try {
   await regenerate("all");
   await window.click("[data-regenerate-menu] [data-send]");
   check("queued", await phase("queued"), { message: "Queued in T3", actions: ["open_thread", "withdraw"] });
+  const withdrawAt = () => window.$eval('[data-request-action="withdraw"]', (el) => Math.round(el.getBoundingClientRect().left));
+  const at = [await withdrawAt()];
+  check(
+    "the request's actions sit in the header's right cluster, a divider between them and Regenerate",
+    await window.evaluate(() => {
+      const right = (s) => document.querySelector(s).getBoundingClientRect();
+      return [right("[data-phase-actions]").right <= right("[data-phase-divider]").left, right("[data-phase-divider]").right <= right("[data-regenerate-toggle]").left];
+    }),
+    [true, true],
+  );
   await window.click('[data-request-action="open_thread"]');
   await window.waitForTimeout(300);
   check("Open thread opens the thread's link outside the app", await app.evaluate(() => globalThis.opened), [`https://app.t3.codes/threads/fake/${DEMO_THREAD}`]);
@@ -172,9 +189,12 @@ try {
   t3.startRun(DEMO_THREAD);
   check("working", await phase("working"), { message: "The agent is working", actions: ["open_thread", "withdraw"] });
   check("working shows progress", await window.isVisible("[data-request-phase] [data-progress]"), true);
+  at.push(await withdrawAt());
   t3.ask(DEMO_THREAD);
   check("asking", await phase("asking"), { message: "The agent is asking something in T3", actions: ["open_thread", "withdraw"] });
   check("asking shows no spinner", await window.$("[data-request-phase] [data-progress]"), null);
+  at.push(await withdrawAt());
+  check("Withdraw stays at one x from queued through working to asking, whatever the label's length", new Set(at).size, 1);
   await shot(window, shots, "4-asking");
 
   t3.endRun(DEMO_THREAD, "failed");

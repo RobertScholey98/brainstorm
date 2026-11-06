@@ -8,7 +8,7 @@ import { Hint } from "@/components/ui/tooltip";
 import type { BlockId, ExportResult, RobAction, SessionView } from "../core/types";
 import { ExportButton } from "./Export";
 import { Mark } from "./Mark";
-import { Regenerate, RequestStatus } from "./Regenerate";
+import { PhaseActions, phaseActions, Regenerate, RequestStatus } from "./Regenerate";
 
 /** The right panel's toggle, as T3 Code has it: pressed while the panel shows. */
 export type PanelToggle = { readonly open: boolean; readonly onToggle: () => void };
@@ -77,6 +77,13 @@ export function SessionBar({
           </>
         ) : (
           <>
+            {phaseActions(view).length > 0 && (
+              <>
+                <PhaseActions view={view} send={send} />
+                {/* The request's actions, then the session's. */}
+                <Separator orientation="vertical" className="h-4 self-center" data-phase-divider />
+              </>
+            )}
             <Regenerate view={view} selected={selected} send={send} />
             <ExportButton disabled={view.iteration === null} exportHtml={exportHtml} />
           </>
@@ -98,11 +105,7 @@ export function SessionBar({
             {title}
           </h1>
         </nav>
-        {view !== null && view.iteration !== null && (
-            <Badge data-iteration>
-              Iteration {view.iteration.n}
-            </Badge>
-        )}
+        {view !== null && view.iteration !== null && <Badge data-iteration>Iteration {view.iteration.n}</Badge>}
         {view !== null && view.request !== null && (
           <>
             <Separator orientation="vertical" className="h-4 self-center" />
