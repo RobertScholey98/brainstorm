@@ -190,6 +190,18 @@ async function settle(page, { keepFocus, loading = false }) {
  */
 const park = (page, c) => page.mouse.move(Math.round(c.width * 0.55), c.height - 3);
 
+/**
+ * Moves the pointer onto an element in the canvas frame the way a hand does, across what lies between. Playwright's
+ * own hover jumps straight in, and a pointer that lands in the frame without crossing the host leaves the host's last
+ * hover standing, such as a fill on the slot tab just clicked.
+ */
+async function handTo(page, frame, selector) {
+  const el = await frame.waitForSelector(selector);
+  await el.scrollIntoViewIfNeeded();
+  const box = await el.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 12 });
+}
+
 async function setCombo(page, c) {
   await page.setViewportSize({ width: c.width, height: c.height });
   await page.emulateMedia({ colorScheme: c.theme });
@@ -369,7 +381,7 @@ function seedAll(home, env, t3) {
     thread: DEMO_THREAD,
     project: chores,
     slots: [
-      { id: "preview", title: "Preview", frame: { width: 390, height: 320 }, variants: { broken: { files: { "block.tsx": BROKEN_BLOCK, "block.json": BROKEN_JSON } } } },
+      { id: "preview", title: "Preview", frame: { width: 390, height: 320 }, variants: { rota: { files: { "block.tsx": BROKEN_BLOCK, "block.json": BROKEN_JSON } } } },
       { id: "result", title: "The result", frame: { width: 390 }, variants: { card: { from: demo("result", "card") } } },
     ],
   }).id;
@@ -716,7 +728,7 @@ function scenes(page, home, env, t3, sessions) {
       await ensurePicking();
       await capture(page, "state-pick-mode", {
         each: async () => {
-          await canvas.hover(HEADLINE);
+          await handTo(page, canvas, HEADLINE);
           await canvas.waitForSelector(".bs-pick[data-on]");
         },
       });
@@ -756,7 +768,7 @@ function scenes(page, home, env, t3, sessions) {
       await capture(page, "state-hover-pin", {
         each: async () => {
           await page.click('[data-slot-tab="wheel"]');
-          await canvas.hover('.bs-pin[data-pin="2"]');
+          await handTo(page, canvas, '.bs-pin[data-pin="2"]');
           await grown(canvas, 2);
         },
       });
@@ -826,7 +838,7 @@ function scenes(page, home, env, t3, sessions) {
         await route.continue();
       });
       await page.click("[data-export]");
-      await page.waitForSelector('[data-slot="popover-content"]:has-text("Writing the file")');
+      await page.waitForSelector('[data-slot="popover-content"]:has-text("Exporting")');
       await capture(page, "state-export-open", { keepFocus: true });
       release();
       await page.waitForSelector("[data-exported]");
@@ -1024,7 +1036,7 @@ function scenes(page, home, env, t3, sessions) {
       await capture(page, "vary-pick", {
         each: async () => {
           await varyPick();
-          await canvas.hover(inBlock("wheel/neon", "spin-button"));
+          await handTo(page, canvas, inBlock("wheel/neon", "spin-button"));
           await canvas.waitForSelector(".bs-pick[data-on]");
         },
       });
