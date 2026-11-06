@@ -529,7 +529,9 @@ function layoutPins(): void {
       x = r.right - b.left + (body.scrollLeft - body.clientLeft) * k - PIN_SIZE / 2;
       y = r.top - b.top + (body.scrollTop - body.clientTop) * k - PIN_SIZE / 2;
     }
-    x = Math.min(Math.max(x - index * (PIN_SIZE + 2), 2), body.scrollWidth * k - PIN_SIZE - 2);
+    // The client width, not the scroll width, which a pin past the edge widens, and 4 px in, so the hit area's 3 px stay
+    // inside too.
+    x = Math.min(Math.max(x - index * (PIN_SIZE + 2), 2), body.clientWidth * k - PIN_SIZE - 4);
     y = Math.min(Math.max(y, 2), body.scrollHeight * k - PIN_SIZE - 2);
     // The translate property, not transform: a hover or pulse scale applies inside it, so it never scales the offset.
     const translate = `${Math.round(x)}px ${Math.round(y)}px`;
@@ -656,15 +658,17 @@ body {
 .bs-frame:has(.bs-failure) .bs-frame-size { display: none; }
 .bs-frame[data-selected] .bs-frame-title { color: var(--bs-accent); }
 .bs-frame-body {
-  position: relative; overflow: auto; isolation: isolate;
+  position: relative; overflow-x: hidden; overflow-y: auto; isolation: isolate;
   background: var(--bs-card); border-radius: 4px;
-  box-shadow: 0 0 0 1px var(--bs-border), var(--bs-elevation-sm);
+  box-shadow: 0 0 0 calc(1px * var(--bs-unzoom, 1)) var(--bs-border-strong), var(--bs-elevation-sm);
   transition: box-shadow 120ms ease-out;
 }
-.bs-frame[data-selected] .bs-frame-body { box-shadow: 0 0 0 2px var(--bs-accent), var(--bs-elevation-sm); }
+.bs-frame[data-selected] .bs-frame-body { box-shadow: 0 0 0 calc(2px * var(--bs-unzoom, 1)) var(--bs-accent), var(--bs-elevation-sm); }
 .bs-frame-body:has(> .bs-failure) { height: auto !important; }
 .bs-frame-body[data-scrolls] { overflow-y: scroll; }
 .bs-frame-body::-webkit-scrollbar { width: calc(var(--bs-scrollbar) * var(--bs-unzoom, 1)); }
+/* The gutter a scrolling frame adds outside its width is the scrollbar's track, not more page. */
+.bs-frame-body[data-scrolls]::-webkit-scrollbar { background: var(--bs-muted); }
 .bs-failure {
   display: flex; align-items: flex-start; gap: 8px; margin: 16px; padding: 12px; border-radius: 8px;
   color: var(--bs-fg); background: var(--bs-danger-subtle);
@@ -688,7 +692,7 @@ body {
   width: ${PIN_SIZE}px; height: ${PIN_SIZE}px; box-sizing: border-box; padding: 0;
   border: 2px solid var(--bs-card); border-radius: 10px 10px 10px 4px; background: var(--bs-accent); color: var(--bs-accent-fg);
   font: 600 11px/1 var(--bs-font-ui); font-variant-numeric: tabular-nums;
-  box-shadow: var(--bs-elevation-sm); cursor: pointer; scroll-margin: 48px; transition: scale 120ms ease-out, box-shadow 120ms ease-out;
+  box-shadow: var(--bs-elevation-sm); cursor: pointer; scroll-margin-block: 48px; transition: scale 120ms ease-out, box-shadow 120ms ease-out;
 }
 .bs-pin[data-placed] { display: grid; }
 /* The hit area sits 3 px past the face; an inset is measured inside the 2 px border, so it is 5 px. */

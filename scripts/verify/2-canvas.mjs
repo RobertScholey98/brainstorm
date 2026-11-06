@@ -227,6 +227,24 @@ try {
   await canvas.evaluate(() => document.getElementById("verify-grow").remove());
   check("and once it fits again, the frame keeps its declared width with no gutter", (await wheelFrame()).bar, 0);
 
+  // The spin button ends at the wheel frame's right edge, so its pin sits on the frame's edge.
+  await window.click("[data-pick-toggle]");
+  await canvas.click(inBlock("wheel/neon", "spin-button"));
+  await window.waitForSelector("[data-composer]");
+  await window.keyboard.type("Louder");
+  await window.click('[data-composer] button:has-text("Pin comment")');
+  await canvas.waitForSelector(".bs-pin[data-placed]");
+  const sideways = () =>
+    settled(() => canvas.$$eval(".bs-frame-body", (bodies) => bodies.map((b) => b.scrollWidth - b.clientWidth)));
+  const edges = [await sideways()];
+  await window.setViewportSize({ width: 1100, height: 720 });
+  edges.push(await sideways());
+  await window.setViewportSize({ width: 1440, height: 900 });
+  check("a pin on an element at a frame's right edge never gives the frame sideways scroll, at 100% or zoomed", edges, [
+    [0, 0],
+    [0, 0],
+  ]);
+
   // A third slot, so the board at 1100 needs under half size for one row and wraps.
   cpSync(join(work, "slots", "wheel"), join(work, "slots", "spare"), { recursive: true });
   const manifest = JSON.parse(readFileSync(join(work, "brainstorm.json"), "utf8"));
