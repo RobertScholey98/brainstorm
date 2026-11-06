@@ -18,6 +18,8 @@
 //                    components/ui/chip.ts through Code, Kbd or Badge, so one chip reads on every surface
 //   hint-side        a Hint that doesn't name its side, or a header hint that opens up or down over the card under the
 //                    header, outside components/ui
+//   page-title       the title step of the type scale outside components/ui; a page heading comes from PageHeader, so
+//                    every page title has one size
 //
 // A string counts as classes inside className, cn, cva, cx and clsx. Elsewhere it counts when every word in it is a
 // Tailwind candidate and at least one generates CSS, so `align="end"` and `data-icon="inline-start"` aren't classes.
@@ -43,6 +45,7 @@ const FLOATING = new Set(["bg-raised", "shadow-md", "shadow-lg"]);
 /** Kit components whose look is a typed variant. A caller may place them but not restyle them. */
 export const VARIANT_KIT = new Set(["Badge", "Button", "Callout", "Kbd", "PopoverContent", "Segmented", "SidebarMenuButton", "SidebarTrigger", "Toast"]);
 const INVERSE_FILL = /^bg-inverse(?:\/\d+)?$/;
+const PAGE_TITLE = /^text-title(?:\/|$)/;
 /** Files whose hints sit on the window header, where opening down would cover the canvas bar or the Inspector header. */
 const HEADER_FILES = /(?:^|[\\/])(?:TopBar|Regenerate|Export)\.tsx$/;
 const LAYOUT = /^(?:m[trblxyse]?-|w-|min-w-|max-w-|flex-1$|grow|shrink|basis-|self-|justify-self-|order-|col-|row-)/;
@@ -92,6 +95,7 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
       if (why !== null) problems.push({ rule: "off-scale", line: lit.line, text: token, message: why });
       const why2 = focusRing(splitClass(token).variants, utility);
       if (why2 !== null) problems.push({ rule: "focus-ring", line: lit.line, text: token, message: why2 });
+      if (!kit && PAGE_TITLE.test(utility)) problems.push({ rule: "page-title", line: lit.line, text: token, message: "a page heading is the kit's PageHeader, the one user of the title step" });
       if (INVERSE_FILL.test(utility)) problems.push({ rule: "inverse-fill", line: lit.line, text: token, message: "inverse is the tooltip surface; fill a control with the accent or not at all" });
       if (FLOATING.has(utility)) problems.push({ rule: "surface-recipe", line: lit.line, text: token, message: "floating surfaces come from overlaySurface in components/ui/overlay.ts" });
     });

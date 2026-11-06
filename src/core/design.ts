@@ -61,6 +61,9 @@ const SOLID = {
   },
 } as const satisfies Record<Theme, Record<string, string>>;
 
+/** A scrollbar's track stops this far short of each end, the main card's corner radius, so its thumb never runs into a rounded corner. */
+export const SCROLL_TRACK_INSET = 12;
+
 /** Segoe UI Variable and Cascadia Mono ship with Windows 11; see ADR 001 for why no font is bundled. */
 const FONTS = {
   "font-ui": '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
@@ -69,7 +72,7 @@ const FONTS = {
 
 /** The same mix in both themes, so a derived token can never drift from the solid it comes from. */
 const DERIVED: Readonly<Record<string, (v: (name: string) => string) => string>> = {
-  hover: (v) => `color-mix(in oklab, ${v("fg")} 6%, transparent)`,
+  hover: (v) => `color-mix(in oklab, ${v("fg")} 8%, transparent)`,
   selected: (v) => `color-mix(in oklab, ${v("accent")} 18%, transparent)`,
   "accent-hover": (v) => `color-mix(in oklab, ${v("accent")} 88%, ${v("fg")})`,
   "success-subtle": (v) => `color-mix(in oklab, ${v("success")} 12%, ${v("card")})`,
@@ -100,6 +103,8 @@ export function designCss(prefix = ""): string {
     // Chromium ignores these pseudo-elements once scrollbar-width or scrollbar-color is set, so neither is.
     "::-webkit-scrollbar { width: 10px; height: 10px; }",
     "::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }",
+    `::-webkit-scrollbar-track:vertical { margin-block: ${SCROLL_TRACK_INSET}px; }`,
+    `::-webkit-scrollbar-track:horizontal { margin-inline: ${SCROLL_TRACK_INSET}px; }`,
     "::-webkit-scrollbar-button { display: none; }",
     `::-webkit-scrollbar-thumb { background-color: ${v("scrollbar-thumb")}; background-clip: padding-box; border: 2px solid transparent; border-radius: 9999px; }`,
     `::-webkit-scrollbar-thumb:hover { background-color: ${v("scrollbar-thumb-hover")}; }`,

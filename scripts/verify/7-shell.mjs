@@ -87,6 +87,11 @@ try {
   );
   check("the overview carries the page heading", (await window.textContent("[data-home-overview] h1"))?.trim(), "All brainstorms");
   check(
+    "at the title step, the one size every page heading takes",
+    await window.$eval("[data-home-overview] h1", (h) => [getComputedStyle(h).fontSize, getComputedStyle(h).lineHeight, getComputedStyle(h).fontWeight]),
+    ["22px", "28px", "600"],
+  );
+  check(
     "with nothing open, the main panel says how to start one",
     (await window.textContent("[data-home-hint]"))?.includes("run /ux-brainstorm in a T3 thread on your project"),
     true,

@@ -1,4 +1,4 @@
-| `info` | 4.67, 5.20, 5.67, 5.67, 4.97 | 7.89, 7.13, 6.43, 5.66, 5.33 || `danger` | 4.67, 5.21, 5.68, 5.68, 4.98 | 7.63, 6.89, 6.21, 5.47, 5.16 || `warning` | 5.21, 5.81, 6.33, 6.33, 5.55 | 9.79, 8.85, 7.97, 7.02, 6.62 || `success` | 4.79, 5.34, 5.82, 5.82, 5.10 | 9.29, 8.40, 7.56, 6.66, 6.28 || `accent` | 4.55, 5.08, 5.54, 5.54, 4.86 | 8.16, 7.37, 6.64, 5.85, 5.51 || `ring` | 3.97, 4.43, 4.82, 4.82, 4.23 | 5.66, 5.11, 4.61, 4.05, 3.82 || `fg-muted` | 4.81, 5.36, 5.85, 5.85, 5.13 | 7.23, 6.53, 5.88, 5.18, 4.88 || `fg` | 14.18, 15.81, 17.24, 17.24, 15.12 | 14.62, 13.21, 11.90, 10.48, 9.88 |# ADR 001: Colour tokens, closed scales and the accent
+# ADR 001: Colour tokens, closed scales and the accent
 
 Status: accepted. Rob picked the Lagoon accent at the foundation checkpoint on 2026-11-05, and approved the rest of the direction.
 
@@ -27,7 +27,7 @@ Each colour has one meaning. A role is named for what it does, not for its shade
 | `card` | `#ffffff` | `#2b2b29` | A frame body, the inspector and inputs |
 | `raised` | `#ffffff` | `#343431` | Popovers, menus and the select list |
 | `muted` | `#f1f0ec` | `#383834` | A quiet fill, such as a secondary button or a confirmed pin |
-| `hover` | `fg` at 6% | same mix | The pointer is over it |
+| `hover` | `fg` at 8% | same mix | The pointer is over it |
 | `selected` | `accent` at 18% | same mix | It is the chosen item |
 | `fg` | `#1b1b1a` | `#ecebe8` | Body text |
 | `fg-muted` | `#66655f` | `#a8a7a1` | Secondary text and icons |
@@ -69,7 +69,7 @@ Text roles pass 4.5:1 on every surface and the ring passes 3:1. Round 2 found th
 | Spacing | `0` 0, `0.5` 2, `1` 4, `1.5` 6, `2` 8, `3` 12, `4` 16, `5` 20, `6` 24, `8` 32, `10` 40, `12` 48 px |
 | Sizing only | `2.5` 10, `3.5` 14, `4.5` 18, `7` 28, `16` 64 px, for icons, dots and control heights |
 | Layout widths | `inspector` 280, `popover-sm` 320, `popover-md` 380, `menu` 144, `picker` 220 px; containers `xs` 20rem, `sm` 24rem, `md` 28rem |
-| Type | `2xs` 11/14, `xs` 12/16, `sm` 13/18, `base` 14/20, `lg` 16/22 px |
+| Type | `2xs` 11/14, `xs` 12/16, `sm` 13/18, `base` 14/20, `lg` 16/22, `title` 22/28 px |
 | Weight | `normal` 400, `medium` 500, `semibold` 600 |
 | Leading | `none` 1, `snug` 1.375, `relaxed` 1.55 |
 | Tracking | `tight` -0.01em |
@@ -87,7 +87,7 @@ Brainstorm is a tool Rob keeps open all day beside two other dense apps, so the 
 
 ### Scrollbars
 
-Every scroll region, the canvas frame included, uses one `::-webkit-scrollbar` style. It is 10 px, with no arrow buttons, a transparent track and a round thumb of `fg` at 22% that darkens to 36% on hover. A 2 px transparent border clipped to the padding box makes the thumb sit inside the track. The stylesheet sets neither `scrollbar-width` nor `scrollbar-color`, because Chromium ignores the `::-webkit-scrollbar` rules once either is set, and the standard properties can't round or inset the thumb.
+Every scroll region, the canvas frame included, uses one `::-webkit-scrollbar` style. It is 10 px, with no arrow buttons, a transparent track and a round thumb of `fg` at 22% that darkens to 36% on hover. A 2 px transparent border clipped to the padding box makes the thumb sit inside the track, and the track stops 12 px short of each end, the main card's corner radius. The stylesheet sets neither `scrollbar-width` nor `scrollbar-color`, because Chromium ignores the `::-webkit-scrollbar` rules once either is set, and the standard properties can't round or inset the thumb.
 
 ### Font
 
@@ -192,3 +192,15 @@ The lint gains three rules, each tested in `test/design-lint.test.ts`.
 - `inverse-fill` fails `bg-inverse` in any TSX file, the kit included.
 - `chip-recipe` fails a `<code>` or `<kbd>` element whose own classes paint a fill.
 - `hint-side` fails a `Hint` with no `side`, and a `top` or `bottom` hint in `TopBar.tsx`, `Regenerate.tsx` or `Export.tsx`.
+
+### Round 3, second pass: a title step, a firmer hover, and tracks that clear the corners (2026-11-06)
+
+- **A title step.** The home heading was `lg`, 16 px, beside Claude desktop's page title at about 24 px, so the overview had no page-level presence (round 4 shots 02 and `vs-claude-home`). The scale gains one display step, `title`, 22/28 px, at semibold with `tracking-tight`. Only the kit's `PageHeader` uses it, so every page heading has one size, and the lint's `page-title` rule fails `text-title` anywhere else. The window header's breadcrumb title stays 13 px, because it names the window, as T3 Code's does.
+- **Hover.** `hover` went from `fg` at 6% to 8%. At 6% a hovered row sat 2.65 CIEDE2000 off the light window, about a just-noticeable difference (SB3-16, U29). At 8% it is at least 3.6 off the window and the card in both themes, and still at least 7.8 from `selected`. A token test holds the 3.5 floor.
+- **Scrollbar tracks.** A thumb ran into the main card's 12 px corners (OD3-22, U50). Every track now stops `SCROLL_TRACK_INSET` short of each end, 12 px, and a test ties that value to `--radius-xl`.
+
+| Token or step | Old | New |
+| --- | --- | --- |
+| `hover` | `fg` at 6% | `fg` at 8% |
+| type `title` | none | 22/28 px |
+| scrollbar track | runs end to end | 12 px short of each end |

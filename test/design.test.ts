@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { contrast, deltaE2000, designCss, designStylesheet, lab, mixOklab, solidColours, THEMES } from "../src/core/design";
+import { contrast, deltaE2000, designCss, designStylesheet, lab, mixOklab, SCROLL_TRACK_INSET, solidColours, THEMES } from "../src/core/design";
 
 const SURFACES = ["app", "canvas", "card", "raised", "muted"] as const;
 /** The accent and each status colour carry one meaning each, so no two may read as the same hue. */
@@ -10,6 +10,8 @@ const MIN_HUE_DISTANCE = 20;
 const STATUSES = ["success", "warning", "danger", "info"] as const;
 /** Two subtle fills closer than this read as one tint at a glance. */
 const MIN_SUBTLE_DISTANCE = 5;
+/** The smallest step a hover fill makes off the surface under it, so the pointer's row reads at a glance. */
+const MIN_HOVER_STEP = 3.5;
 /** The smallest surface step that reads without leaning on a border. */
 const MIN_STEP = 2.5;
 
@@ -50,6 +52,13 @@ describe("design tokens", () => {
 
   it("keeps the committed design.css in step with design.ts", () => {
     expect(readFileSync("src/renderer/design.css", "utf8")).toBe(designStylesheet());
+  });
+
+  it("stops every scrollbar track short of the main card's rounded corners", () => {
+    const radius = /--radius-xl:\s*(\d+)px/.exec(readFileSync("src/renderer/styles.css", "utf8"))?.[1];
+    expect(SCROLL_TRACK_INSET).toBe(Number(radius));
+    expect(designCss()).toContain(`::-webkit-scrollbar-track:vertical { margin-block: ${radius}px; }`);
+    expect(designCss()).toContain(`::-webkit-scrollbar-track:horizontal { margin-inline: ${radius}px; }`);
   });
 
   it("prefixes every variable for the canvas, so block code can't pick one up by accident", () => {
@@ -106,6 +115,13 @@ describe("design tokens", () => {
       // components/ui/chip.ts: a card fill inside a border-strong edge.
       const c = solidColours(theme);
       const faint = SURFACES.filter((s) => deltaE2000(lab(c["border-strong"]!), lab(c[s]!)) < MIN_SUBTLE_DISTANCE);
+      expect(faint).toEqual([]);
+    });
+
+    it(`lifts a hovered row off the window, the canvas and the card in ${theme}`, () => {
+      const c = solidColours(theme);
+      const painted = paintedSurfaces(theme);
+      const faint = ["app", "card"].filter((base) => deltaE2000(lab(painted[`hover on ${base}`]!), lab(c[base]!)) < MIN_HOVER_STEP);
       expect(faint).toEqual([]);
     });
 

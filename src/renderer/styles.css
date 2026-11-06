@@ -55,7 +55,7 @@
   --container-sm: 24rem;
   --container-md: 28rem;
 
-  /* Type. Each size carries its line height. 2xs is for numerals in pins and badges only. */
+  /* Type. Each size carries its line height. 2xs is for numerals in pins and badges only; title is the page heading, which only the kit's PageHeader sets. */
   --text-2xs: 11px;
   --text-2xs--line-height: 14px;
   --text-xs: 12px;
@@ -66,6 +66,8 @@
   --text-base--line-height: 20px;
   --text-lg: 16px;
   --text-lg--line-height: 22px;
+  --text-title: 22px;
+  --text-title--line-height: 28px;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;

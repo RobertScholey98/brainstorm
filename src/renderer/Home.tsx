@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Code } from "@/components/ui/kbd";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SessionId, SessionListing } from "../core/types";
 import { markdownText } from "./markdownSubset";
@@ -33,12 +34,7 @@ export function HomeOverview({
   return (
     <div className="size-full overflow-y-auto" data-home-overview>
       <div className="grid gap-5 p-6">
-        <header className="grid gap-1">
-          <h1 className="text-lg font-semibold">All brainstorms</h1>
-          <p className="text-sm text-fg-muted" data-home-hint>
-            To start a new brainstorm, {START}.
-          </p>
-        </header>
+        <PageHeader heading="All brainstorms" description={<span data-home-hint>To start a new brainstorm, {START}.</span>} />
         {/* Cards hug their own content, so a card with no brief never carries a blank band to match its row. */}
         <ul className="grid-overview grid items-start gap-3" aria-busy={sessions === null || undefined}>
           {sessions === null

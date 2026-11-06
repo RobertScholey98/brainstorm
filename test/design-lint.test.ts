@@ -147,6 +147,12 @@ describe("design lint", () => {
     expect(header("src/renderer/CanvasBar.tsx")).toEqual([{ rule: "hint-side", line: 1, text: "<Hint> without side" }]);
   });
 
+  it("page-title: fails the title step outside the kit, where PageHeader is its one user", () => {
+    const source = `<h1 className="text-title font-semibold" />\n<h2 className="text-lg font-semibold" />`;
+    expect(rules(source)).toEqual([{ rule: "page-title", line: 1, text: "text-title" }]);
+    expect(rules(source, true)).toEqual([]);
+  });
+
   it("passes on the renderer as it stands", async () => {
     expect(await lintRenderer()).toEqual([]);
   });
