@@ -560,7 +560,14 @@ try {
   // hover state behind, which no real pointer crossing the gap does.
   await window.mouse.move(700, 20);
   await rouletteCanvas.waitForSelector('.bs-pin[data-pin="1"]:not([data-hovered])', { state: "attached" });
-  const labelTop = () => rouletteCanvas.evaluate(() => Math.round(document.querySelector('.bs-frame[data-slot="wheel"] .bs-frame-title').getBoundingClientRect().top));
+  // Measured unscrolled: on the board the canvas scrolls the picked pin into view, which the history strip's height can call for.
+  const labelTop = () =>
+    rouletteCanvas.evaluate(() => {
+      const label = document.querySelector('.bs-frame[data-slot="wheel"] .bs-frame-title');
+      let top = label.getBoundingClientRect().top;
+      for (let p = label.parentElement; p !== null; p = p.parentElement) top += p.scrollTop;
+      return Math.round(top);
+    });
   check(
     "the view switch shows both labels whole, in segments of one width",
     await window.$$eval("[data-view-option]", (els) => [els.every((e) => e.scrollWidth <= e.clientWidth), new Set(els.map((e) => Math.round(e.getBoundingClientRect().width))).size]),

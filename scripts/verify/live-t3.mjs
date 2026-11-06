@@ -179,8 +179,32 @@ try {
   check("the top bar reads the takeover's fulfilled iteration", (await window.textContent("[data-request-message]"))?.trim(), await fulfilledText(third));
   await shot(window, shots, "4-takeover-fulfilled");
 
+  // One fork: the app starts its thread itself, and the new thread's agent works from that first message alone.
+  const instruction = `${title} fork: make the button label shorter. Keep it short and ask no questions.`;
+  const forkTitle = `${title} fork`;
+  await window.click("[data-fork-toggle]");
+  await window.fill("[data-fork-instruction]", instruction);
+  await window.click("[data-fork-send]");
+  await window.waitForSelector(`[data-forked-from="${session.id}"]`, { timeout: 60_000 });
+  const fork = await waitFor("the fork's thread", takeover, async () => {
+    const s = await sessionIn(takeover, forkTitle);
+    return s !== undefined && !s.attachedThread.startsWith("pending:") ? s : undefined;
+  });
+  const forkThread = fork.attachedThread;
+  console.log(`...  fork thread ${forkThread}`);
+  check(
+    "the fork's thread opened with the fork's request 1",
+    userTexts(forkThread)[0]?.split("\n")[0],
+    `[brainstorm] session ${fork.id} · request 1 · fork of ${session.id} iteration 3 · scope: all · freetext: ${JSON.stringify(instruction)}`,
+  );
+  const forked = await waitFor("iteration 2 from the fork's thread", forkThread, () => fulfilled(fork.id, 2));
+  check("the fork's agent attached from that message and fulfilled it", [(await sessionIn(forkThread, forkTitle))?.attachedThread, forked.n], [forkThread, 2]);
+  await window.waitForSelector('[data-request-phase="fulfilled"]', { timeout: 60_000 });
+  await shot(window, shots, "5-fork-fulfilled");
+
   console.log(`thread ${first}: ${showThread(first).thread.link}`);
   console.log(`thread ${takeover}: ${showThread(takeover).thread.link}`);
+  console.log(`fork thread ${forkThread}: ${showThread(forkThread).thread.link}`);
   console.log(`screenshots in ${shots}`);
   check("the window logged no errors or warnings", errors, []);
 } catch (e) {

@@ -13,9 +13,14 @@ const PIN = '.bs-pin[data-pin="1"]';
 const boxes = (canvas) =>
   canvas.evaluate(
     ([pin, part]) => {
+      // Where each sits in its frame's content, so a pin scrolled into view doesn't read as the element moving.
       const box = (selector) => {
-        const r = document.querySelector(selector)?.getBoundingClientRect();
-        return r === undefined ? null : { x: r.x, y: r.y, width: r.width, height: r.height };
+        const el = document.querySelector(selector);
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        let [x, y] = [r.x, r.y];
+        for (let p = el.parentElement; p !== null; p = p.parentElement) [x, y] = [x + p.scrollLeft, y + p.scrollTop];
+        return { x, y, width: r.width, height: r.height };
       };
       return { pin: box(pin), part: box(part) };
     },

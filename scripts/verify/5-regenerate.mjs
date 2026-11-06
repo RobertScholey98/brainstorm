@@ -145,13 +145,12 @@ try {
 
   t3.startRun(DEMO_THREAD);
   check("the agent picking it up shows as working", await phase("working"), { message: "The agent is working", actions: ["open_thread", "withdraw"] });
-  await window.setViewportSize({ width: 1000, height: 720 });
+  await window.setViewportSize({ width: 1100, height: 720 });
   check(
-    "when the top bar runs short, the title gives way before the status message",
-    await window.evaluate(() => [document.querySelector("[data-session-title]"), document.querySelector("[data-request-message]")].map((el) => el.scrollWidth > el.clientWidth)),
+    "when the top bar runs short, in the narrowest window, the title gives way before the status message",
+    await settled(() => window.evaluate(() => [document.querySelector("[data-session-title]"), document.querySelector("[data-request-message]")].map((el) => el.scrollWidth > el.clientWidth))),
     [true, false],
   );
-  await window.setViewportSize({ width: 1100, height: 720 });
   check(
     "in the narrowest window, 1100, the title and message give way, and the phase actions stay clear of Regenerate",
     await window.evaluate(() => {

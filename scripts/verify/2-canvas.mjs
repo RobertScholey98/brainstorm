@@ -289,7 +289,10 @@ try {
     ["failed", 0],
   );
   const thrown = errors.filter((e) => e.includes("verify: the card throws"));
-  check("the only errors logged are the thrown block's own", thrown.length > 0 && thrown.length === errors.length, true);
+  // Each frame Playwright attaches to replays its process's console, so the /health probes above come back as the
+  // history strip's stills load.
+  const probed = (e) => e.includes(`127.0.0.1:${api.port}/health`);
+  check("the only errors logged are the thrown block's own", [thrown.length > 0, errors.filter((e) => !thrown.includes(e) && !probed(e))], [true, []]);
   errors.length = 0;
 
   check("the window logged no errors or warnings", errors, []);
