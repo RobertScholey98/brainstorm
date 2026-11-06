@@ -147,11 +147,12 @@ try {
       return [send.disabled, getComputedStyle(send).opacity, getComputedStyle(footer.querySelector("[data-slot=kbd]")).opacity];
     });
   check(
-    "the footer's hint stands at least 16 px off its Ctrl+Enter key, so the two never read as one phrase",
-    await window.$eval("[data-regenerate-menu] [data-slot=popover-footer]", (footer) =>
-      Math.round(footer.querySelector("[data-slot=kbd]").getBoundingClientRect().left - footer.firstElementChild.getBoundingClientRect().right) >= 16,
-    ),
-    true,
+    "the footer's hint reads whole and stands at least 16 px off its Ctrl+Enter key, so the two never read as one phrase",
+    await window.$eval("[data-regenerate-menu] [data-slot=popover-footer]", (footer) => {
+      const hint = footer.firstElementChild;
+      return [hint.scrollWidth <= hint.clientWidth, Math.round(footer.querySelector("[data-slot=kbd]").getBoundingClientRect().left - hint.getBoundingClientRect().right) >= 16];
+    }),
+    [true, true],
   );
   await window.click('[data-regenerate-menu] [data-scope="described"]');
   await window.fill("[data-regenerate-menu] [data-freetext]", "");
