@@ -108,6 +108,18 @@ try {
     ["wheel/neon"],
   );
   check(
+    "the checklist keeps the column's edges: checkboxes start under the slot headings and tags end with the free text, so only the hover fill overhangs",
+    await window.$eval("[data-regenerate-menu]", (menu) => {
+      const field = menu.querySelector("[data-freetext]").getBoundingClientRect();
+      const legend = menu.querySelector("[data-block-choices] legend").getBoundingClientRect();
+      const row = menu.querySelector("[data-choice]");
+      const box = row.querySelector("[data-slot=checkbox]").getBoundingClientRect();
+      const tag = row.lastElementChild.getBoundingClientRect();
+      return [Math.round(box.left - legend.left), Math.round(field.right - tag.right)].map((d) => d || 0);
+    }),
+    [0, 0],
+  );
+  check(
     "the menu lists the in-scope open feedback it will attach",
     await window.$$eval("[data-attached]", (els) => els.map((e) => e.dataset.attached)),
     ["1"],

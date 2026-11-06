@@ -197,7 +197,7 @@ function RegenerateForm({
 
 function BlockChoice({ block, showing, checked, onToggle }: { block: BlockView; showing: boolean; checked: boolean; onToggle: () => void }) {
   return (
-    <label className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-hover" data-choice={block.id} data-showing={showing || undefined}>
+    <label className="-mx-1.5 flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-hover" data-choice={block.id} data-showing={showing || undefined}>
       <Checkbox checked={checked} onCheckedChange={onToggle} />
       <span className="truncate">{block.title}</span>
       {/* The sidebar's mark for the showing variant, so the tag column only ever holds tags. */}
