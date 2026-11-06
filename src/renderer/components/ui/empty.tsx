@@ -1,5 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
+import { chip } from "@/components/ui/chip"
 
 function Empty({ className, ...props }: React.ComponentProps<"div">) {
   return (
@@ -30,7 +31,7 @@ const emptyMediaVariants = cva(
     variants: {
       variant: {
         default: "bg-transparent",
-        icon: "flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-fg [&_svg:not([class*='size-'])]:size-4",
+        icon: `${chip} flex size-8 shrink-0 items-center justify-center rounded-lg text-fg [&_svg:not([class*='size-'])]:size-4`,
       },
     },
     defaultVariants: {

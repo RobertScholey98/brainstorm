@@ -327,7 +327,7 @@ export function TextEditor({
   };
   const actions = (
     <>
-      <Kbd>Ctrl+Enter</Kbd>
+      <Kbd disabled={text.trim() === "" || busy}>Ctrl+Enter</Kbd>
       <Button variant="ghost" onClick={onCancel}>
         Cancel
       </Button>

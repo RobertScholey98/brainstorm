@@ -120,6 +120,17 @@ try {
     tops.push(await fieldTop());
   }
   check("the free text stays under the scope switch, at one height in every scope", new Set(tops).size, 1);
+  const sendLook = () =>
+    window.$eval("[data-regenerate-menu] [data-slot=popover-footer]", (footer) => {
+      const send = footer.querySelector("[data-send]");
+      return [send.disabled, getComputedStyle(send).opacity, getComputedStyle(footer.querySelector("[data-slot=kbd]")).opacity];
+    });
+  await window.click('[data-regenerate-menu] [data-scope="described"]');
+  await window.fill("[data-regenerate-menu] [data-freetext]", "");
+  check("a disabled Send dims its Ctrl+Enter chip with it", await settled(sendLook), [true, "0.5", "0.5"]);
+  await window.fill("[data-regenerate-menu] [data-freetext]", "make the spin feel less random");
+  await window.click('[data-regenerate-menu] [data-scope="blocks"]');
+  check("and an enabled one shows it whole", await settled(sendLook), [false, "1", "1"]);
   await window.click("[data-regenerate-menu] [data-send]");
   check("the queued request shows with its actions", await phase("queued"), { message: "Queued in T3", actions: ["open_thread", "withdraw"] });
   check(

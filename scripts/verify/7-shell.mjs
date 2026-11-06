@@ -669,6 +669,17 @@ try {
     [true, false, true],
   );
   check("a failed home keeps its page heading over the error", (await window.textContent("[data-home-overview] h1"))?.trim(), "All brainstorms");
+  check(
+    "its icon tile takes the chip recipe, so it reads off the canvas",
+    await window.$eval('[data-home-error] [data-slot="empty-icon"]', (tile) => {
+      const style = getComputedStyle(tile);
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--border-strong); background: var(--card)" }));
+      const [edge, card] = [getComputedStyle(probe).color, getComputedStyle(probe).backgroundColor];
+      probe.remove();
+      return [style.backgroundColor === card, style.boxShadow.includes(edge)];
+    }),
+    [true, true],
+  );
   serverDown = false;
   await window.click("[data-home-retry]");
   await window.waitForSelector("[data-overview-session]");

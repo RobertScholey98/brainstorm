@@ -178,7 +178,7 @@ function RegenerateForm({
 
       {/* A disabled Send can't show a Hint, so the footer says what it is waiting for. */}
       <PopoverFooter hint={<span data-send-hint>{missing ?? "Goes to the attached T3 thread"}</span>}>
-        <Kbd>Ctrl+Enter</Kbd>
+        <Kbd disabled={body === null || sending}>Ctrl+Enter</Kbd>
         <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
