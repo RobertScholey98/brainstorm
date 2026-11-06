@@ -472,7 +472,11 @@ try {
   const inspectorWidth = () => window.$eval("aside[aria-label=Inspector]", (el) => el.getBoundingClientRect().width);
   await window.click("[data-inspector-toggle]");
   await window.waitForSelector("[data-inspector-rail]");
-  check("the Inspector collapses to a 40 px rail that counts the open feedback", [await inspectorWidth(), (await window.textContent("[data-rail-count]"))?.trim()], [40, "1"]);
+  check(
+    "the Inspector collapses to a 40 px rail that counts the open feedback in the chip",
+    [await inspectorWidth(), (await window.textContent("[data-rail-count]"))?.trim(), await window.getAttribute("[data-rail-count]", "data-slot")],
+    [40, "1", "badge"],
+  );
   await window.click("[data-rail-feedback]");
   await window.waitForSelector("[data-feedback-panel]");
   const narrow = await inspectorWidth();

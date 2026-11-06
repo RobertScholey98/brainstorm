@@ -2,6 +2,7 @@ import { JSONUIProvider, Renderer } from "@json-render/react";
 import type { Spec } from "@json-render/core";
 import { MessageSquare } from "lucide-react";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout, CalloutItem } from "@/components/ui/callout";
 import { ResizeHandle } from "@/components/ui/resize-handle";
@@ -64,11 +65,8 @@ export function InspectorRail({ open, onExpand }: { open: number; onExpand: () =
           <MessageSquare aria-hidden />
         </Button>
       </Hint>
-      {open > 0 && (
-        <span className="text-2xs font-medium text-accent tabular-nums" data-rail-count>
-          {open}
-        </span>
-      )}
+      {/* The chip every other count takes, so the rail's count reads as one. */}
+      {open > 0 && <Badge data-rail-count>{open}</Badge>}
     </aside>
   );
 }
