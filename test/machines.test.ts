@@ -111,7 +111,7 @@ const seen = (
   return {
     phase: phase.phase,
     actions: phase.actions,
-    message: phaseMessage(phase, { title: "Chore wheel", changed: ["wheel/neon" as BlockId] }),
+    message: phaseMessage(phase, { title: "Chore wheel", changed: ["Neon wheel"] }),
   };
 };
 
@@ -190,8 +190,18 @@ describe("requestPhase, one test per design.md row", () => {
     expect(seen({ state: "fulfilled", iteration: it(5) }, lost, { kind: "ended", failed: true })).toEqual({
       phase: "fulfilled",
       actions: [],
-      message: "Iteration 5 · changed wheel/neon",
+      message: "Iteration 5 · changed Neon wheel",
     });
+  });
+
+  test("fulfilled names two changed blocks, then counts the rest", () => {
+    const fulfilled = requestPhase(request({ state: "fulfilled", iteration: it(3) }), attached, null);
+    const message = (changed: string[]) => phaseMessage(fulfilled, { title: "Chore wheel", changed });
+    expect([message([]), message(["Neon wheel", "Card"]), message(["Neon wheel", "Card", "Slot reel", "Receipt"])]).toEqual([
+      "Iteration 3 · no blocks changed",
+      "Iteration 3 · changed Neon wheel, Card",
+      "Iteration 3 · changed Neon wheel, Card and 2 more",
+    ]);
   });
 
   test("withdrawn has no actions", () => {

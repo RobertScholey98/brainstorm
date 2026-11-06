@@ -278,7 +278,7 @@ describe("commit", () => {
     expect(result.warnings).toEqual([]);
     const view = data(await service.view(S));
     expect(view.feedback.map((f) => [f.id, f.status])).toEqual([[1, { state: "addressed", in: 2 }]]);
-    expect(view.request?.message).toBe("Iteration 2 · changed wheel/neon");
+    expect(view.request?.message).toBe("Iteration 2 · changed Neon wheel");
     expect(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": { tsx: louder, json: neonJson } }), addresses: [1 as FeedbackId], note: null })).toMatchObject({
       ok: true,
       data: { created: false, iteration: { n: 2 } },
@@ -476,7 +476,7 @@ describe("request phases", () => {
 
     const edited = { "wheel/neon": { tsx: neonTsx.replace("Spin", "Go"), json: neonJson } };
     data(await service.commit({ session: S, thread: T1, files: copy(1, edited), addresses: [], note: null }));
-    expect(await phase(service)).toEqual({ phase: "fulfilled", actions: [], message: "Iteration 2 · changed wheel/neon" });
+    expect(await phase(service)).toEqual({ phase: "fulfilled", actions: [], message: "Iteration 2 · changed Neon wheel" });
   });
 
   test("send failed, and a retry that finds the marker already arrived doesn't send twice", async () => {

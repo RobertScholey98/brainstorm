@@ -110,8 +110,8 @@ export function takeoverPhrase(title: string): string {
   return `pick up the brainstorm session titled "${title}"`;
 }
 
-/** What Rob reads for a phase. `changed` is the fulfilling iteration's changed blocks. */
-export function phaseMessage(phase: RequestPhase, context: { title: string; changed: readonly BlockId[] }): string {
+/** What Rob reads for a phase. `changed` names the fulfilling iteration's changed blocks by title. */
+export function phaseMessage(phase: RequestPhase, context: { title: string; changed: readonly string[] }): string {
   switch (phase.phase) {
     case "sending":
       return "Sending to T3…";
@@ -132,7 +132,7 @@ export function phaseMessage(phase: RequestPhase, context: { title: string; chan
     case "no_change":
       return "The agent replied in T3 without changing the design";
     case "fulfilled":
-      return `Iteration ${phase.iteration} · ${changedText(context.changed)}`;
+      return `Iteration ${phase.iteration} · ${changedNames(context.changed)}`;
     case "withdrawn":
       return "Withdrawn";
   }
@@ -165,6 +165,13 @@ const MARKER = /\[brainstorm\] session (\S+) · request (\d+)/;
 type RequestMessageFields = Pick<Request, "session" | "n" | "scope" | "freetext" | "feedbackIds">;
 
 export const scopeText = (scope: RequestScope): string => (scope.kind === "blocks" ? scope.blocks.join(", ") : scope.kind);
+
+/** The fulfilled message's list, short enough for the top bar: two names, then a count. */
+export function changedNames(titles: readonly string[]): string {
+  if (titles.length === 0) return "no blocks changed";
+  const shown = titles.slice(0, 2).join(", ");
+  return titles.length > 2 ? `changed ${shown} and ${titles.length - 2} more` : `changed ${shown}`;
+}
 
 export const changedText = (changed: readonly string[]): string =>
   changed.length === 0 ? "no blocks changed" : `changed ${changed.join(", ")}`;

@@ -334,7 +334,9 @@ function SlotSection({
                   data-showing={active || undefined}
                 >
                   <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${active ? "bg-fg-muted" : ""}`} />
-                  <span className="min-w-0 flex-1 truncate">{block?.title ?? variant}</span>
+                  <span className="min-w-0 flex-1 truncate" data-variant-title>
+                    {block?.title ?? variant}
+                  </span>
                   {failed && (
                     <Hint label="This block failed to render">
                       <CircleAlert aria-label="Failed to render" className="text-danger" data-variant-error />

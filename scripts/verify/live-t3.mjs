@@ -108,7 +108,18 @@ const agent = async (path) => {
 const sessionIn = async (thread, title) => (await agent(`/v1/agent/sessions?thread=${thread}`)).data?.find((s) => s.title === title);
 const latestOf = async (id) => (await agent(`/v1/agent/sessions/${id}/context`)).data?.latest;
 const userTexts = (thread) => showThread(thread).messages.filter((m) => m.role === "user").map((m) => m.text.trim());
-const fulfilledText = (latest) => `Iteration ${latest.n} · ${latest.changed.length === 0 ? "no blocks changed" : `changed ${latest.changed.join(", ")}`}`;
+/** The message the top bar shows: changed blocks by the title their sidebar row carries, two names then a count. */
+async function fulfilledText(latest) {
+  const titles = await Promise.all(
+    latest.changed.map((id) => {
+      const [slot, variant] = id.split("/");
+      return window.$eval(`[data-slot-id="${slot}"] [data-variant="${variant}"] [data-variant-title]`, (el) => el.textContent.trim());
+    }),
+  );
+  const shown = titles.slice(0, 2).join(", ");
+  const list = titles.length === 0 ? "no blocks changed" : titles.length > 2 ? `changed ${shown} and ${titles.length - 2} more` : `changed ${shown}`;
+  return `Iteration ${latest.n} · ${list}`;
+}
 
 async function regenerate(scope, freetext) {
   await window.waitForSelector("[data-regenerate-toggle]:not([disabled])", { timeout: 60_000 });
@@ -151,7 +162,7 @@ try {
   await shot(window, shots, "2-sent");
   const second = await waitFor("iteration 2 from the first thread", first, () => fulfilled(session.id, 2));
   await window.waitForSelector('[data-request-phase="fulfilled"]', { timeout: 60_000 });
-  check("the top bar reads the fulfilled iteration", (await window.textContent("[data-request-message]"))?.trim(), fulfilledText(second));
+  check("the top bar reads the fulfilled iteration", (await window.textContent("[data-request-message]"))?.trim(), await fulfilledText(second));
   await shot(window, shots, "3-fulfilled");
 
   const takeover = startThread(`${title} takeover`, `${envLine(home)}\nPick up the brainstorm session titled "${title}"`);
@@ -165,7 +176,7 @@ try {
   check("the first thread did not", userTexts(first).some((t) => t.includes(`session ${session.id} · request 2`)), false);
   const third = await waitFor("iteration 3 from the takeover thread", takeover, () => fulfilled(session.id, 3));
   await window.waitForSelector('[data-request-phase="fulfilled"]', { timeout: 60_000 });
-  check("the top bar reads the takeover's fulfilled iteration", (await window.textContent("[data-request-message]"))?.trim(), fulfilledText(third));
+  check("the top bar reads the takeover's fulfilled iteration", (await window.textContent("[data-request-message]"))?.trim(), await fulfilledText(third));
   await shot(window, shots, "4-takeover-fulfilled");
 
   console.log(`thread ${first}: ${showThread(first).thread.link}`);

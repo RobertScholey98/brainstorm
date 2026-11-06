@@ -119,7 +119,7 @@ try {
   );
   t3.endRun(DEMO_THREAD, "completed");
 
-  check("the fulfilled request names what changed", await phase("fulfilled"), { message: "Iteration 2 · changed wheel/neon", actions: [] });
+  check("the fulfilled request names what changed", await phase("fulfilled"), { message: "Iteration 2 · changed Neon wheel", actions: [] });
   await canvas.waitForFunction((sel) => document.querySelector(sel)?.textContent?.includes("weighted by chores"), inBlock("wheel/neon", "pool"));
   check("the host sent only the changed block's module", await canvas.evaluate(() => window.receivedModules), ["wheel/neon"]);
   check(
