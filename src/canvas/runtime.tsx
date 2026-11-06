@@ -390,8 +390,9 @@ function layoutPins(): void {
     }
     x = Math.min(Math.max(x - index * (PIN_SIZE + 2), 2), body.scrollWidth - PIN_SIZE - 2);
     y = Math.min(Math.max(y, 2), body.scrollHeight - PIN_SIZE - 2);
-    const transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-    if (marker.style.transform !== transform) marker.style.transform = transform;
+    // The translate property, not transform: a hover or pulse scale applies inside it, so it never scales the offset.
+    const translate = `${Math.round(x)}px ${Math.round(y)}px`;
+    if (marker.style.translate !== translate) marker.style.translate = translate;
     marker.dataset.placed = "";
     if (wantedPulse === id && marker.closest("[data-offstage]") === null) {
       wantedPulse = null;

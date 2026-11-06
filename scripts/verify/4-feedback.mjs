@@ -151,6 +151,17 @@ try {
   const after = await boxes(canvas);
   check("the headline moved down the card", after.part.y - before.part.y > 40, true);
   check("the pin followed it to its new position", overlaps(after), true);
+  const pinAt = () =>
+    canvas.$eval(PIN, (el) => {
+      const r = el.getBoundingClientRect();
+      const body = el.closest(".bs-frame-body");
+      return { hovered: el.matches(":hover"), x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), sideways: body.scrollWidth > body.clientWidth };
+    });
+  const resting = await pinAt();
+  const frameBox = await window.$eval("iframe[title=Canvas]", (el) => el.getBoundingClientRect().toJSON());
+  await window.mouse.move(frameBox.x + resting.x, frameBox.y + resting.y);
+  await canvas.waitForTimeout(300);
+  check("a hovered pin grows where it is and stays under the pointer, and its frame never scrolls sideways", await pinAt(), { ...resting, hovered: true });
   check("the pin is coloured addressed", await canvas.getAttribute(PIN, "data-status"), "addressed");
   check(
     "the list shows it addressed in iteration 2, on a line of its own under where it is pinned",
