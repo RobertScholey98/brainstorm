@@ -65,8 +65,8 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
 }
 
 /**
- * The folder, then the file name on its own line. The folder may break only after a separator, so no segment is split
- * mid-word; the text is still the whole path for copying.
+ * The folder, then the file name on its own line. The folder may break only after a separator, and a segment never
+ * breaks inside itself, not even at a hyphen; the text is still the whole path for copying.
  */
 function ExportPath({ path }: { path: string }) {
   const cut = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/")) + 1;
@@ -76,7 +76,7 @@ function ExportPath({ path }: { path: string }) {
       <span className="text-fg-muted">
         {segments.map((segment, i) => (
           <Fragment key={i}>
-            {segment}
+            <span className="whitespace-nowrap">{segment}</span>
             <wbr />
           </Fragment>
         ))}

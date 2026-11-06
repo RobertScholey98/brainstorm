@@ -38,11 +38,13 @@ export function HomeOverview({
         <ul className="grid-overview grid gap-3" aria-busy={sessions === null || undefined}>
           {sessions === null
             ? [0, 1, 2, 3, 4, 5].map((i) => (
-                <li key={i} className="grid gap-2 rounded-lg bg-card p-4 ring-1 ring-border" data-overview-skeleton>
-                  <Skeleton className="h-3 w-1/3" />
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-3 w-1/2" />
+                <li key={i} className="flex flex-col gap-1.5 rounded-lg bg-card p-4 ring-1 ring-border" data-overview-skeleton>
+                  {/* One bar a line, each as tall as the card's text, so the cards that replace these don't move. */}
+                  <Skeleton className="h-4 w-1/3" />
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-4.5 w-full" />
+                  <Skeleton className="h-4.5 w-1/2" />
+                  <Skeleton className="mt-1 h-4 w-1/3" />
                 </li>
               ))
             : sorted.map((s) => (
@@ -62,31 +64,33 @@ function OverviewCard({ session: s, now, onOpen }: { session: SessionListing; no
     <button
       type="button"
       onClick={onOpen}
-      className="grid content-start gap-1.5 rounded-lg bg-card p-4 text-left shadow-xs ring-1 ring-border transition-shadow outline-none hover:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex flex-col gap-1.5 rounded-lg bg-card p-4 text-left shadow-xs ring-1 ring-border transition-shadow outline-none hover:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring"
       data-overview-session={s.id}
       data-lost={s.lost || undefined}
     >
       <span className="flex items-center gap-2 text-xs text-fg-muted">
         <span className="truncate">{s.projectName ?? "Other project"}</span>
-        {s.openRequest && (
-          <span className="ml-auto flex shrink-0 items-center gap-1.5 text-accent" data-session-busy>
-            <span aria-hidden className="size-1.5 rounded-full bg-accent" />
-            Waiting on the agent
-          </span>
-        )}
-      </span>
-      <span className="truncate text-base font-semibold">{s.title}</span>
-      <span className={`line-clamp-2 text-sm ${brief === "" ? "text-fg-muted italic" : "text-fg-muted"}`}>{brief === "" ? "No brief" : brief}</span>
-      <span className="flex flex-wrap items-center gap-x-1 gap-y-0.5 pt-1 text-xs whitespace-nowrap text-fg-muted">
-        <span className="tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
-        <span aria-hidden>·</span>
-        <span>{ago(s.activeAt, now)}</span>
-        {s.lost && (
-          <span className="ml-auto flex items-center gap-1 text-warning">
+        {/* One status place a card: a lost thread outranks a wait, since nobody can answer it. */}
+        {s.lost ? (
+          <span className="ml-auto flex shrink-0 items-center gap-1 text-warning" data-session-lost>
             <AlertTriangle aria-hidden className="size-3" />
             Thread lost
           </span>
+        ) : (
+          s.openRequest && (
+            <span className="ml-auto flex shrink-0 items-center gap-1.5 text-accent" data-session-busy>
+              <span aria-hidden className="size-1.5 rounded-full bg-accent" />
+              Waiting on the agent
+            </span>
+          )
         )}
+      </span>
+      <span className="truncate text-base font-semibold">{s.title}</span>
+      {brief !== "" && <span className="line-clamp-2 text-sm text-fg-muted">{brief}</span>}
+      <span className="mt-auto flex items-center gap-1 pt-1 text-xs whitespace-nowrap text-fg-muted" data-overview-footer>
+        <span className="tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
+        <span aria-hidden>·</span>
+        <span>{ago(s.activeAt, now)}</span>
       </span>
     </button>
   );

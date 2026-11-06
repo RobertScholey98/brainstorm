@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { markdownText, parseMarkdown } from "../src/renderer/markdownSubset";
+import { markdownText, parseMarkdown, withLeadLabel } from "../src/renderer/markdownSubset";
 
 describe("the about.md markdown subset", () => {
   test("reads paragraphs, bold, italic, inline code and - lists", () => {
@@ -46,5 +46,19 @@ describe("the about.md markdown subset", () => {
 
   test("markdownText drops the markup for a tooltip", () => {
     expect(markdownText("**Tradeoff.** It takes *room*.\n\n- one\n- `two`")).toBe("Tradeoff. It takes room.\n\n- one\n- two");
+  });
+
+  test("a short lead label is bold whether or not the author wrote the asterisks", () => {
+    const bold = withLeadLabel(parseMarkdown("**Hypothesis:** a loud wheel wins."));
+    const plain = withLeadLabel(parseMarkdown("Hypothesis: a loud wheel wins."));
+    expect(plain).toEqual([
+      { kind: "paragraph", inline: [{ kind: "strong", children: [{ kind: "text", text: "Hypothesis:" }] }, { kind: "text", text: " a loud wheel wins." }] },
+    ]);
+    expect(bold[0]?.kind === "paragraph" && bold[0].inline[0]).toEqual({ kind: "strong", children: [{ kind: "text", text: "Hypothesis:" }] });
+  });
+
+  test("a sentence with a colon later on is not a label", () => {
+    const source = "Loud and fast tests whether energy matters: it might.";
+    expect(withLeadLabel(parseMarkdown(source))).toEqual(parseMarkdown(source));
   });
 });

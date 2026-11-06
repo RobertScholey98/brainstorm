@@ -1,5 +1,7 @@
 import { AlertTriangle, ChevronLeft, ChevronRight, CircleAlert, ExternalLink, LayoutGrid } from "lucide-react";
-import { useMemo, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { cn } from "cn";
+import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ResizeHandle } from "@/components/ui/resize-handle";
@@ -24,7 +26,7 @@ import { blockIdOf, type BlockId, type BlockView, type SessionId, type SessionLi
 import type { PaneLimits } from "./hooks/use-pane-width";
 import { Mark } from "./Mark";
 import { Markdown } from "./Markdown";
-import { markdownText } from "./markdownSubset";
+import { parseMarkdown, withLeadLabel } from "./markdownSubset";
 import { CopyPhrase } from "./Regenerate";
 import { groupByProject } from "./sessionGroups";
 import { ago, useNow } from "./time";
@@ -69,9 +71,9 @@ function arrowFocus(e: KeyboardEvent<HTMLElement>, selector: string): HTMLElemen
   return next;
 }
 
-/** A soft edge at the bottom of a scrolling sidebar, so the last row reads as cut off rather than as the end. */
+/** The sidebar's end: room after the last row, and a soft edge over rows that scroll under it, so a cut row reads as cut. */
 function BottomFade() {
-  return <div aria-hidden className="pointer-events-none sticky bottom-0 -mt-6 h-6 shrink-0 bg-linear-to-t from-app" />;
+  return <div aria-hidden className="pointer-events-none sticky bottom-0 h-6 shrink-0 bg-linear-to-t from-app" />;
 }
 
 export function HomePanel({
@@ -96,7 +98,7 @@ export function HomePanel({
   const now = useNow();
   return (
     <SidebarContent
-      className="animate-in fade-in-0 slide-in-from-left-3 pb-6 duration-200"
+      className="animate-in fade-in-0 slide-in-from-left-3 duration-200"
       data-sidebar-panel="home"
       onKeyDown={(e) => arrowFocus(e, "[data-overview], [data-session]")}
     >
@@ -111,7 +113,7 @@ export function HomePanel({
         </SidebarMenu>
       </SidebarGroup>
       {sessions === null && failed ? (
-        <p className="px-4 py-3 text-sm/relaxed text-fg-muted">Brainstorms show here once they load.</p>
+        <p className="px-4 py-3 text-sm/relaxed text-pretty text-fg-muted">The list didn't load. Try again from the overview.</p>
       ) : sessions === null ? (
         <SidebarGroup data-home-loading>
           <SidebarMenu>
@@ -123,7 +125,7 @@ export function HomePanel({
           </SidebarMenu>
         </SidebarGroup>
       ) : groups.length === 0 ? (
-        <p className="px-4 py-3 text-sm/relaxed text-fg-muted">Brainstorms you start appear here.</p>
+        <p className="px-4 py-3 text-sm/relaxed text-pretty text-fg-muted">Brainstorms you start appear here.</p>
       ) : (
         groups.map((group) => (
           <Collapsible key={group.projectId} defaultOpen render={<SidebarGroup className="py-1" data-project={group.projectId} />}>
@@ -168,17 +170,19 @@ function SessionRow({ session: s, now, active, onOpen }: { session: SessionListi
           )}
         </span>
         <span className="flex min-w-0 items-center gap-1 text-xs font-normal text-fg-muted">
-          <span className="shrink-0 tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
+          {/* A row has room for two facts, and a lost thread matters more than which iteration is showing. */}
+          {s.lost ? (
+            <span className="flex min-w-0 items-center gap-1 text-warning" data-session-lost>
+              <AlertTriangle aria-hidden className="size-3! shrink-0" />
+              <span className="truncate">Thread lost</span>
+            </span>
+          ) : (
+            <span className="truncate tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
+          )}
           <span aria-hidden>·</span>
-          <span className="truncate" data-age={s.activeAt}>
+          <span className="shrink-0" data-age={s.activeAt}>
             {ago(s.activeAt, now)}
           </span>
-          {s.lost && (
-            <span className="ml-auto flex shrink-0 items-center gap-1 text-warning" data-session-lost>
-              <AlertTriangle aria-hidden className="size-3!" />
-              Thread lost
-            </span>
-          )}
         </span>
       </span>
     </SidebarMenuButton>
@@ -206,7 +210,7 @@ export function SessionPanel({
 }) {
   const byId = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
   return (
-    <SidebarContent className="animate-in fade-in-0 slide-in-from-right-3 pb-6 duration-200" data-sidebar-panel="session">
+    <SidebarContent className="animate-in fade-in-0 slide-in-from-right-3 duration-200" data-sidebar-panel="session">
       <SidebarGroup className="pb-0">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -277,7 +281,10 @@ function ThreadSection({ view }: { view: SessionView }) {
       {showTakeover && (
         <div className="px-2 pt-1" data-takeover>
           <Callout tone="warning" heading="Not attached to a thread" actions={<CopyPhrase title={view.session.title} />}>
-            <p>In a T3 thread on this project, say: {takeoverPhrase(view.session.title)}</p>
+            <p>In a T3 thread on this project, say:</p>
+            <p className="rounded-sm bg-card px-1.5 py-1 font-mono text-xs select-all" data-takeover-phrase>
+              {takeoverPhrase(view.session.title)}
+            </p>
           </Callout>
         </div>
       )}
@@ -360,36 +367,43 @@ function SlotSection({
 }
 
 /**
- * Past this many characters a note is cut to three lines, so one long note doesn't push the next slot below the fold.
- * Its Hint holds the whole note.
+ * A variant's note, aligned with the variant's name. Past three lines it is cut with a fade, not an ellipsis that
+ * can land after a full stop, and More shows the rest in place.
  */
-const ABOUT_CLAMP = 160;
-
 function About({ source }: { source: string }) {
-  const text = markdownText(source);
-  if (text.length <= ABOUT_CLAMP) {
-    return (
-      <div className="grid gap-1.5 px-2 pt-1.5 pb-2 text-xs/relaxed text-fg-muted" data-about>
-        <Markdown source={source} />
-      </div>
-    );
-  }
+  const blocks = useMemo(() => withLeadLabel(parseMarkdown(source)), [source]);
+  const [open, setOpen] = useState(false);
+  const [long, setLong] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = body.current;
+    if (el === null || open) return;
+    const measure = () => setLong(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [open, blocks]);
+  const id = useId();
   return (
-    <div className="px-2 pt-1.5 pb-2 text-xs/relaxed text-fg-muted" data-about>
-      <Hint
-        side="right"
-        label={
-          <span className="grid gap-1.5 py-0.5">
-            {text.split("\n\n").map((p, i) => (
-              <span key={i}>{p}</span>
-            ))}
-          </span>
-        }
-      >
-        <div tabIndex={0} className="line-clamp-3 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring [&>*+*]:mt-1.5" data-about-clamped>
-          <Markdown source={source} />
+    <div className="flex gap-2 px-2 pt-1.5 pb-2 text-xs/relaxed text-fg-muted" data-about>
+      {/* The row's dot column, so the note starts where the variant's name does. */}
+      <span aria-hidden className="w-1.5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div
+          ref={body}
+          id={id}
+          className={cn("[&>*+*]:mt-1.5", !open && "max-h-about overflow-hidden", !open && long && "mask-b-from-50%")}
+          data-about-body
+        >
+          <Markdown source={source} blocks={blocks} />
         </div>
-      </Hint>
+        {long && (
+          <Button variant="ghost" size="xs" className="-ml-2" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} data-about-more>
+            {open ? "Less" : "More"}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

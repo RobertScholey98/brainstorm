@@ -49,6 +49,8 @@
   --spacing-popover-md: 380px;
   --spacing-menu: 144px;
   --spacing-picker: 220px;
+  /* A variant note before More: three of its own lines. */
+  --spacing-about: 3lh;
   --container-xs: 20rem;
   --container-sm: 24rem;
   --container-md: 28rem;

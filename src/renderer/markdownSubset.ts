@@ -98,3 +98,21 @@ export function markdownText(source: string): string {
     .map((b) => (b.kind === "paragraph" ? inlineText(b.inline) : b.items.map((item) => `- ${inlineText(item)}`).join("\n")))
     .join("\n\n");
 }
+
+const LEAD_LABEL = /^([A-Z][A-Za-z]*(?: [A-Za-z]+){0,2}:)\s+/;
+
+/**
+ * A note that opens with a short label, such as "Hypothesis:", shows it bold whether or not its author wrote the
+ * asterisks, so two notes side by side never disagree on it.
+ */
+export function withLeadLabel(blocks: readonly MarkdownBlock[]): MarkdownBlock[] {
+  const [first, ...rest] = blocks;
+  if (first?.kind !== "paragraph") return [...blocks];
+  const [head, ...tail] = first.inline;
+  if (head?.kind !== "text") return [...blocks];
+  const label = LEAD_LABEL.exec(head.text);
+  if (label === null) return [...blocks];
+  const after = head.text.slice(label[0].length);
+  const inline: Inline[] = [{ kind: "strong", children: [{ kind: "text", text: label[1] ?? "" }] }, { kind: "text", text: ` ${after}` }, ...tail];
+  return [{ kind: "paragraph", inline }, ...rest];
+}

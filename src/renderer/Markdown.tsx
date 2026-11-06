@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { parseMarkdown, type Inline } from "./markdownSubset";
+import { parseMarkdown, type Inline, type MarkdownBlock } from "./markdownSubset";
 
 function InlineNodes({ nodes }: { nodes: readonly Inline[] }): ReactNode {
   return nodes.map((n, i) => {
@@ -29,8 +29,8 @@ function InlineNodes({ nodes }: { nodes: readonly Inline[] }): ReactNode {
 }
 
 /** Renders the about.md subset as React elements, so block text can never become markup. */
-export function Markdown({ source }: { source: string }) {
-  return parseMarkdown(source).map((block, i) =>
+export function Markdown({ source, blocks = parseMarkdown(source) }: { source: string; blocks?: readonly MarkdownBlock[] }) {
+  return blocks.map((block, i) =>
     block.kind === "paragraph" ? (
       <p key={i}>
         <InlineNodes nodes={block.inline} />

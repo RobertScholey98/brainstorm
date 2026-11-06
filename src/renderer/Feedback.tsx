@@ -1,4 +1,4 @@
-import { MessageSquarePlus } from "lucide-react";
+import { MessageSquarePlus, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, CanvasRect, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
@@ -33,14 +33,15 @@ const PIN_FORM: Record<FeedbackStatus["state"], string> = {
   confirmed: "bg-muted text-fg-muted",
 };
 
+/** The item sits under a heading that names its status, so the line says only what the heading doesn't. */
 function statusLine(status: FeedbackStatus): string | null {
   switch (status.state) {
     case "open":
-      return status.previouslyAddressedIn === null ? null : `Previously addressed in ${status.previouslyAddressedIn}`;
+      return status.previouslyAddressedIn === null ? null : `Previously addressed in iteration ${status.previouslyAddressedIn}`;
     case "addressed":
-      return `Addressed in ${status.in}`;
+      return `In iteration ${status.in}`;
     case "confirmed":
-      return `Confirmed · addressed in ${status.addressedIn}`;
+      return `Addressed in iteration ${status.addressedIn}`;
   }
 }
 
@@ -156,19 +157,19 @@ function FeedbackItem({
   send: (action: RobAction) => Promise<unknown>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const item = useRef<HTMLLIElement>(null);
   useEffect(() => {
     if (focused) item.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [focused]);
   const line = statusLine(f.status);
   const where = `${block?.title ?? f.pin.blockId} · ${f.pin.part ?? "whole block"}`;
-  const meta = line === null ? where : `${where} · ${line}`;
   const run = (action: FeedbackAction) => {
     switch (action) {
       case "edit":
         return setEditing(true);
       case "delete":
-        return void send({ kind: "delete_feedback", id: f.id });
+        return setConfirming(true);
       case "confirm":
         return void send({ kind: "confirm_feedback", id: f.id });
       case "reopen":
@@ -208,29 +209,71 @@ function FeedbackItem({
               {f.text}
             </button>
           )}
-          <Hint label={meta}>
-            <p className="truncate pt-1 text-xs/snug text-fg-muted" data-feedback-meta>
-              {where}
-              {line !== null && <span data-feedback-status> · {line}</span>}
-            </p>
-          </Hint>
-          {place !== "placed" && (
-            <p className="pt-0.5 text-xs/snug text-warning" data-feedback-place>
-              {PLACE_NOTE[place]}
-            </p>
-          )}
           {!editing && (
-            <div className="flex gap-1 pt-1.5 empty:hidden">
-              {FEEDBACK_ACTIONS[f.status.state].map((action) => (
-                <Button key={action} variant={ACTION_VARIANT[action]} size="xs" onClick={() => run(action)} data-feedback-action={action}>
-                  {ACTION_LABEL[action]}
-                </Button>
-              ))}
-            </div>
+            <>
+              {/* Below, so the Hint never covers the comment it describes. */}
+              <Hint label={where} side="bottom">
+                <p className="truncate pt-1 text-xs/snug text-fg-muted" data-feedback-meta>
+                  {where}
+                </p>
+              </Hint>
+              {line !== null && (
+                <p className="text-xs/snug text-fg-muted" data-feedback-status>
+                  {line}
+                </p>
+              )}
+              {place !== "placed" && (
+                <p className="pt-0.5 text-xs/snug text-warning" data-feedback-place>
+                  {PLACE_NOTE[place]}
+                </p>
+              )}
+              {confirming ? (
+                <DeleteConfirm
+                  onDelete={() => void send({ kind: "delete_feedback", id: f.id })}
+                  onCancel={() => {
+                    setConfirming(false);
+                    requestAnimationFrame(() => item.current?.querySelector<HTMLElement>('[data-feedback-action="delete"]')?.focus());
+                  }}
+                />
+              ) : (
+                <div className="flex gap-1 pt-1.5 empty:hidden">
+                  {FEEDBACK_ACTIONS[f.status.state].map((action) => (
+                    <Button key={action} variant={ACTION_VARIANT[action]} size="xs" onClick={() => run(action)} data-feedback-action={action}>
+                      {ACTION_LABEL[action]}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
     </li>
+  );
+}
+
+/** Delete asks once, in place, with Cancel focused so a second Enter keeps the comment. */
+function DeleteConfirm({ onDelete, onCancel }: { onDelete: () => void; onCancel: () => void }) {
+  const cancel = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => cancel.current?.focus(), []);
+  return (
+    <div
+      role="group"
+      aria-label="Delete this comment?"
+      className="flex flex-wrap items-center gap-1 pt-1.5"
+      data-feedback-confirm
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onCancel();
+      }}
+    >
+      <span className="mr-1 text-xs text-fg">Delete this comment?</span>
+      <Button variant="destructive" size="xs" onClick={onDelete} data-feedback-delete>
+        Delete
+      </Button>
+      <Button ref={cancel} variant="ghost" size="xs" onClick={onCancel} data-feedback-cancel>
+        Cancel
+      </Button>
+    </div>
   );
 }
 
@@ -275,7 +318,7 @@ export function TextEditor({
         <Button variant="ghost" className="ml-auto" onClick={onCancel}>
           Cancel
         </Button>
-        <Button disabled={text.trim() === "" || busy} onClick={() => void submit()}>
+        <Button variant="accent" disabled={text.trim() === "" || busy} onClick={() => void submit()} data-editor-submit>
           {submitLabel}
         </Button>
       </div>
@@ -302,19 +345,29 @@ export function PinComposer({
 }) {
   const { left, top } = composerPlace(at, rect, bounds);
   return (
-    <div
-      role="dialog"
-      aria-label="New comment"
-      data-composer
-      data-open=""
-      className={cn(overlaySurface(), "absolute z-popover grid gap-2 p-3 text-sm")}
-      style={{ left, top, width: COMPOSER.width }}
-    >
-      <span aria-hidden className="absolute size-2 rounded-full bg-accent ring-2 ring-card" style={{ left: at.x - left - 4, top: at.y - top - 4 }} />
-      <p className="truncate text-xs text-fg-muted">
-        <span className="font-medium text-fg">{pin.part ?? "Whole block"}</span> in {block?.title ?? pin.blockId}
-      </p>
-      <TextEditor initial="" placeholder="What should change here?" submitLabel="Pin comment" onSubmit={onSave} onCancel={onCancel} />
-    </div>
+    <>
+      {/* The pin to be, where the saved pin will land: on the element's top right corner, not over its text. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute z-popover grid size-5 place-items-center rounded-full rounded-bl-sm bg-accent text-accent-fg ring-2 ring-card"
+        style={{ left: rect.x + rect.width - 10, top: rect.y - 10 }}
+        data-composer-pin
+      >
+        <Plus className="size-3" />
+      </span>
+      <div
+        role="dialog"
+        aria-label="New comment"
+        data-composer
+        data-open=""
+        className={cn(overlaySurface(), "absolute z-popover grid gap-2 p-3 text-sm")}
+        style={{ left, top, width: COMPOSER.width }}
+      >
+        <p className="truncate text-xs text-fg-muted">
+          <span className="font-medium text-fg">{pin.part ?? "Whole block"}</span> in {block?.title ?? pin.blockId}
+        </p>
+        <TextEditor initial="" placeholder="What should change here?" submitLabel="Pin comment" onSubmit={onSave} onCancel={onCancel} />
+      </div>
+    </>
   );
 }

@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
 import { Spinner } from "@/components/ui/spinner";
@@ -66,7 +67,8 @@ export function Regenerate({
   }
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint label="Ask the agent for a new iteration" shortcut="Ctrl+R">
+      {/* To the left, so it never covers the Inspector's heading under the bar. */}
+      <Hint label="Ask the agent for a new iteration" shortcut="Ctrl+R" side="left">
         <PopoverTrigger render={<Button variant="accent" data-regenerate-toggle />}>Regenerate</PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="end" data-regenerate-menu>
@@ -100,6 +102,7 @@ function RegenerateForm({
     blocks.filter((b) => chosen.has(b.id)).map((b) => b.id),
   );
   const body = requestBody(scope, text);
+  const missing = body !== null ? null : kind === "blocks" ? "Pick a block to send" : "Say what to change to send";
   const attached = scope === null ? [] : requestFeedback(view.feedback, scope);
   const toggle = (id: BlockId) =>
     setChosen((c) => {
@@ -149,8 +152,15 @@ function RegenerateForm({
       />
 
       <div className="grid min-w-0 gap-1" data-attached-feedback>
-        <h3 className="text-xs font-medium text-fg-muted">
-          {attached.length === 0 ? "No open feedback in scope" : `Open feedback sent with it (${attached.length})`}
+        <h3 className="flex gap-1.5 text-xs font-medium text-fg-muted">
+          {attached.length === 0 ? (
+            "No open feedback in scope"
+          ) : (
+            <>
+              Open feedback sent with it
+              <span className="font-normal tabular-nums">{attached.length}</span>
+            </>
+          )}
         </h3>
         {attached.map((f) => (
           <p key={f.id} className="flex min-w-0 gap-1.5 text-sm/snug" data-attached={f.id}>
@@ -163,16 +173,16 @@ function RegenerateForm({
         ))}
       </div>
 
-      <PopoverFooter hint="Goes to the attached T3 thread">
+      {/* A disabled Send can't show a Hint, so the footer says what it is waiting for. */}
+      <PopoverFooter hint={<span data-send-hint>{missing ?? "Goes to the attached T3 thread"}</span>}>
+        <Kbd>Ctrl+Enter</Kbd>
         <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
-        <Hint label="Send" shortcut="Ctrl+Enter">
-          <Button variant="accent" disabled={body === null || sending} onClick={() => void submit()} data-send>
-            {sending && <Spinner data-icon="inline-start" />}
-            {sending ? "Sending…" : "Send"}
-          </Button>
-        </Hint>
+        <Button variant="accent" disabled={body === null || sending} onClick={() => void submit()} data-send>
+          {sending && <Spinner data-icon="inline-start" />}
+          {sending ? "Sending…" : "Send"}
+        </Button>
       </PopoverFooter>
     </>
   );
@@ -180,10 +190,17 @@ function RegenerateForm({
 
 function BlockChoice({ block, showing, checked, onToggle }: { block: BlockView; showing: boolean; checked: boolean; onToggle: () => void }) {
   return (
-    <label className="flex h-8 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-hover" data-choice={block.id}>
+    <label className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-hover" data-choice={block.id} data-showing={showing || undefined}>
       <Checkbox checked={checked} onCheckedChange={onToggle} />
       <span className="truncate">{block.title}</span>
-      <span className="ml-auto shrink-0 text-xs text-fg-muted">{showing ? "showing" : block.variant}</span>
+      {/* The sidebar's mark for the showing variant, so the tag column only ever holds tags. */}
+      {showing && (
+        <span className="flex shrink-0 items-center">
+          <span aria-hidden className="size-1.5 rounded-full bg-fg-muted" />
+          <span className="sr-only">showing</span>
+        </span>
+      )}
+      <span className="ml-auto shrink-0 text-xs text-fg-muted">{block.variant}</span>
     </label>
   );
 }
@@ -239,7 +256,9 @@ const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; re
   no_change: { label: "No change", tone: "info" },
 };
 
+/** A phase's label takes its icon's tone, so a tone never means one thing in the icon and another in the words. */
 const TONE_TEXT: Partial<Record<RequestPhase["phase"], string>> = {
+  asking: "text-info",
   send_failed: "text-danger",
   run_failed: "text-danger",
   thread_lost: "text-warning",
@@ -300,7 +319,6 @@ function PhaseAction({ action, view, send }: { action: RequestPhaseAction; view:
       return view.thread === null ? null : (
         <Button
           variant="outline"
-          size="xs"
           nativeButton={false}
           render={<a href={view.thread.link} target="_blank" rel="noreferrer" />}
           data-request-action={action}
@@ -322,14 +340,22 @@ export function CopyPhrase({ title }: { title: string }) {
   }, [copied]);
   return (
     <ActionButton action="copy_phrase" onClick={() => void navigator.clipboard.writeText(takeoverPhrase(title)).then(() => setCopied(true))}>
-      {copied ? "Copied" : ACTION_LABEL.copy_phrase}
+      {/* Both labels share one cell, so the button keeps the wider one's width and nothing beside it moves. */}
+      <span className="grid *:col-start-1 *:row-start-1" data-copied={copied || undefined}>
+        <span className={copied ? "invisible" : undefined}>{ACTION_LABEL.copy_phrase}</span>
+        <span className={copied ? "flex items-center justify-center gap-1" : "invisible flex items-center justify-center gap-1"} aria-live="polite">
+          <Check aria-hidden className="size-3.5 text-success" />
+          Copied
+        </span>
+      </span>
     </ActionButton>
   );
 }
 
+/** Phase actions are full-height outline buttons, the same size as Regenerate and Export beside them. */
 function ActionButton({ action, onClick, children }: { action: RequestPhaseAction; onClick: () => void; children: ReactNode }) {
   return (
-    <Button variant="outline" size="xs" onClick={onClick} data-request-action={action}>
+    <Button variant="outline" onClick={onClick} data-request-action={action}>
       {children}
     </Button>
   );
