@@ -261,11 +261,10 @@ const ACTION_LABEL: Record<RequestPhaseAction, string> = {
 };
 
 /** What each action does, for its hint once a narrow header leaves it its icon alone. */
-const ACTION_HINT: Record<Exclude<RequestPhaseAction, "copy_phrase">, string> = {
+const ACTION_HINT: Record<Exclude<RequestPhaseAction, "copy_phrase" | "open_thread">, string> = {
   retry: "Send the request again",
   resend: "Send the request to the thread that took over",
   withdraw: "Withdraw the request",
-  open_thread: "Open the attached thread in T3",
   discard: "Discard this fork",
 };
 
@@ -294,8 +293,14 @@ const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; re
   no_change: { label: "No change", tone: "info", note: "The agent replied in T3 without changing the design." },
 };
 
-/** A phase's label takes its icon's tone, so a tone never means one thing in the icon and another in the words. */
+/**
+ * A phase's label takes its icon's tone, so a tone never means one thing in the icon and another in the words: the
+ * accent while the agent works, a status hue when Rob has to look, and muted for the rest.
+ */
 const TONE_TEXT: Partial<Record<RequestPhase["phase"], string>> = {
+  sending: "text-accent",
+  starting: "text-accent",
+  working: "text-accent",
   asking: "text-info",
   send_failed: "text-danger",
   start_failed: "text-danger",
@@ -407,7 +412,7 @@ function PhaseAction({
 function OpenThread({ view }: { view: SessionView }) {
   if (view.thread === null) return null;
   return (
-    <Hint label={ACTION_HINT.open_thread} side="left">
+    <Hint label={`Open ${view.thread.title} in T3`} side="left">
       <Button variant="outline" className={COMPACT} nativeButton={false} render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-request-action="open_thread">
         <ActionLabel action="open_thread" />
       </Button>
@@ -455,7 +460,7 @@ function CopyPhrase({ title }: { title: string }) {
 }
 
 /** Phase actions are full-height outline buttons, the same size as Regenerate and Export beside them. */
-function ActionButton({ action, onClick }: { action: Exclude<RequestPhaseAction, "copy_phrase">; onClick: () => void }) {
+function ActionButton({ action, onClick }: { action: keyof typeof ACTION_HINT; onClick: () => void }) {
   return (
     <Hint label={ACTION_HINT[action]} side="left">
       <Button variant="outline" className={COMPACT} onClick={onClick} data-request-action={action}>

@@ -17,6 +17,16 @@ async function phase(name) {
   await window.waitForSelector(`[data-request-phase="${name}"]`, { timeout: PHASE_MS });
   const clipped = await window.$eval("[data-request-message]", (el) => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight);
   check(`${name}: the whole message is readable`, clipped, false);
+  check(
+    `${name}: the bar's label takes its icon's tone`,
+    await window.$eval("[data-topbar] [data-request-phase]", (el) => {
+      const label = el.querySelector("[data-request-label], [data-request-message]");
+      const icon = el.firstElementChild;
+      const ink = icon.tagName === "svg" ? getComputedStyle(icon).color : getComputedStyle(icon.querySelector("[data-phase-glyph] > span")).backgroundColor;
+      return getComputedStyle(label).color === ink;
+    }),
+    true,
+  );
   return {
     message: (await window.textContent("[data-request-message]"))?.trim(),
     actions: await window.$$eval("[data-phase-actions] [data-request-action]", (els) => els.map((e) => e.dataset.requestAction)),
@@ -387,6 +397,13 @@ try {
   const attached = brainstorm(env, ["session", "attach", "Chore roulette", "--thread", TAKEOVER, "--json"]);
   check("a new thread takes the session over through the CLI", [attached.code, attached.json?.data?.previous], [0, DEMO_THREAD]);
   check("previous thread", await phase("previous_thread"), { message: "Another thread took this brainstorm over. Resend sends the request to it.", actions: ["resend", "open_thread", "withdraw"] });
+  await window.hover('[data-request-action="open_thread"]');
+  check(
+    "after a takeover, Open thread's hint names the thread it opens",
+    await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" }).then((h) => h.textContent()),
+    "Open Takeover thread in T3",
+  );
+  await window.mouse.move(120, 600);
   await shot(window, shots, "7-previous-thread");
   await window.click('[data-request-action="resend"]');
   check("Resend sends it to the new thread", [await phase("queued"), markers(TAKEOVER, 3)], [{ message: "Queued in T3", actions: ["open_thread", "withdraw"] }, 1]);
@@ -410,6 +427,23 @@ try {
     [phrase, true, true, 8],
   );
   check("the session's thread reads Thread lost, the bar's term", (await window.textContent('[data-thread="lost"]'))?.trim(), "Thread lost");
+  check(
+    "one lost thread takes one amber status: the header's, beside its divider, with the strip saying what to do and the sidebar row only stating it",
+    await window.evaluate(() => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("i"), { style: "color: var(--warning)" }));
+      const amber = getComputedStyle(probe).color;
+      probe.remove();
+      const row = document.querySelector('[data-thread="lost"]');
+      const mark = row.parentElement.querySelector('[data-slot="sidebar-menu-mark"] > span');
+      const divider = document.querySelector('[data-header-status] [data-slot="separator"]').getBoundingClientRect();
+      return {
+        header: getComputedStyle(document.querySelector("[data-topbar] [data-request-label]")).color === amber,
+        row: getComputedStyle(row).color === amber || getComputedStyle(mark).backgroundColor === amber,
+        divider: [Math.round(divider.width), Math.round(divider.height)],
+      };
+    }),
+    { header: true, row: false, divider: [1, 16] },
+  );
   await window.click('[data-request-detail] [data-request-action="copy_phrase"]');
   await window.waitForSelector('[data-request-detail] [data-request-action="copy_phrase"] [data-copied]');
   check("Copy phrase puts the takeover phrase on the clipboard", await app.evaluate(({ clipboard }) => clipboard.readText()), phrase);

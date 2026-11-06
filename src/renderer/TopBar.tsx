@@ -47,7 +47,13 @@ export function TopBar({
     };
   }, []);
   return (
-    <header ref={header} className="@container/header titlebar-inset flex h-12 shrink-0 items-center gap-3 pl-1" data-topbar data-drag-region>
+    <header
+      ref={header}
+      className="@container/header titlebar-inset flex h-12 shrink-0 items-center gap-3 pl-1"
+      data-topbar
+      data-drag-region
+      data-sidebar-state={isMobile ? "collapsed" : state}
+    >
       {/* With the sidebar away, its toggle and the mark move here, so the window still says whose it is. */}
       {(state === "collapsed" || isMobile) && (
         <>
@@ -166,7 +172,8 @@ export function SessionBar({
         )
       }
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
+      {/* 16 px into the card, on the first ink of the canvas bar and the Inspector's header under it. */}
+      <div className="flex min-w-0 flex-1 items-center gap-2 pl-3 in-data-[sidebar-state=collapsed]:pl-0">
         <nav aria-label="Breadcrumb" className="flex min-w-0 max-w-fit flex-1 items-center gap-1 text-sm">
           {project !== null && (
             <>
