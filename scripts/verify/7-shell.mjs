@@ -230,6 +230,15 @@ try {
   await window.waitForSelector('[data-sidebar-panel="session"] [data-thread="lost"]');
   check("a brainstorm whose thread is gone says so in its sidebar", (await window.textContent('[data-thread="lost"]'))?.trim(), "Unattached");
   check(
+    "the takeover phrase keeps the sidebar's width, with Copy phrase under it",
+    await window.$eval("[data-takeover]", (el) => {
+      const phrase = el.querySelector("p:not([data-callout-tone])").getBoundingClientRect();
+      const copy = el.querySelector("button").getBoundingClientRect();
+      return [phrase.width > el.getBoundingClientRect().width * 0.7, copy.top >= phrase.bottom];
+    }),
+    [true, true],
+  );
+  check(
     "before the first iteration, the Inspector says when settings appear and Pin comment is disabled",
     [(await window.textContent("[data-inspector-empty]"))?.includes("first iteration"), await window.isDisabled("[data-pick-toggle]")],
     [true, true],

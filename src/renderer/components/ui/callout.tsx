@@ -30,7 +30,8 @@ const calloutVariants = cva("flex items-start gap-2 text-xs/relaxed text-fg", {
 
 /**
  * Every status box in the app: the Inspector's block error and inapplicable adjustments, the takeover phrase, and the
- * request message under the top bar. `inset` sits inside a panel; `strip` runs edge to edge under a bar.
+ * request message under the top bar. `inset` sits inside a panel; `strip` runs edge to edge under a bar. Actions sit
+ * under the message, so a narrow panel keeps the message at full width.
  */
 function Callout({
   tone,
@@ -56,8 +57,8 @@ function Callout({
           </p>
         )}
         {children}
+        {actions !== undefined && <div className="flex flex-wrap items-center gap-1 pt-1">{actions}</div>}
       </div>
-      {actions !== undefined && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
     </div>
   )
 }
