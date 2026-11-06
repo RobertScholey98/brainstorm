@@ -147,6 +147,19 @@ describe("design lint", () => {
     expect(header("src/renderer/CanvasBar.tsx")).toEqual([{ rule: "hint-side", line: 1, text: "<Hint> without side" }]);
   });
 
+  it("dismiss-ghost: fails a Cancel or Done button that isn't ghost, and leaves other buttons alone", () => {
+    const source = [
+      `<Button onClick={close}>Cancel</Button>`,
+      `<Button variant="outline">Done</Button>`,
+      `<Button variant="ghost" onClick={close}>Cancel</Button>`,
+      `<Button variant="outline">Delete</Button>`,
+    ].join("\n");
+    expect(rules(source)).toEqual([
+      { rule: "dismiss-ghost", line: 1, text: "<Button> Cancel" },
+      { rule: "dismiss-ghost", line: 2, text: "<Button> Cancel" },
+    ]);
+  });
+
   it("overlay-kit: fails an overlay drawn from the surface recipe outside the kit, and allows the kit", () => {
     const source = [`<div className={cn(overlaySurface(), "absolute grid w-popover-sm p-3")} />`, `<OverlayPanel style={{ left, top }} />`].join("\n");
     expect(rules(source)).toEqual([{ rule: "overlay-kit", line: 1, text: "overlaySurface()" }]);

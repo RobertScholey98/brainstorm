@@ -34,7 +34,8 @@ const SOLID = {
     info: "#2f63c4",
     "elevation-xs": "0 1px 2px rgb(0 0 0 / 0.06)",
     "elevation-sm": "0 1px 3px rgb(0 0 0 / 0.08), 0 1px 2px rgb(0 0 0 / 0.04)",
-    "elevation-md": "0 4px 16px rgb(0 0 0 / 0.10), 0 1px 3px rgb(0 0 0 / 0.06)",
+    // An overlay over the white Inspector or a card needs a lift you can see, not only its 1 px edge (T45).
+    "elevation-md": "0 8px 24px rgb(0 0 0 / 0.14), 0 2px 6px rgb(0 0 0 / 0.08)",
     "elevation-lg": "0 8px 24px rgb(0 0 0 / 0.14), 0 2px 6px rgb(0 0 0 / 0.06)",
   },
   dark: {

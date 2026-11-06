@@ -61,6 +61,12 @@ describe("design tokens", () => {
     expect(designCss()).toContain(`::-webkit-scrollbar-track:horizontal { margin-inline: ${radius}px; }`);
   });
 
+  it("lifts an overlay in light with a soft shadow you can see over a white panel, not only its 1 px edge", () => {
+    const md = /--elevation-md:\s*([^;]+);/.exec(designCss())?.[1] ?? "";
+    const layers = [...md.matchAll(/0 (\d+)px (\d+)px rgb\(0 0 0 \/ ([\d.]+)\)/g)].map(([, y, blur, alpha]) => ({ y: Number(y), blur: Number(blur), alpha: Number(alpha) }));
+    expect(layers.some((l) => l.blur >= 20 && l.alpha >= 0.12 && l.y >= 6)).toBe(true);
+  });
+
   it("prefixes every variable for the canvas, so block code can't pick one up by accident", () => {
     const css = designCss("bs-");
     expect(css).toContain("--bs-accent: #");

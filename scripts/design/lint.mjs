@@ -22,6 +22,7 @@
 //                    every page title has one size
 //   inline-size      an inline style that sets a size to a number or a named constant, outside components/ui; a fixed
 //                    size is a step on the closed scales, and only a measured size goes inline
+//   dismiss-ghost    a Cancel or Done Button that isn't ghost, outside components/ui, so dismissing has one look
 //   overlay-kit      an overlaySurface() call outside components/ui; an overlay is the kit's PopoverContent, or
 //                    OverlayPanel for one its caller places, so it keeps the popover's column and nothing leaves its box
 //   frame-sandbox    an iframe anywhere in the renderer that isn't the canvas's: its src must be /canvas or
@@ -110,7 +111,7 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
     });
   }
   problems.push(...chipRecipe(source, lits), ...frameSandbox(source));
-  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source));
+  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source), ...dismissGhost(source));
   return problems.sort((a, b) => a.line - b.line);
 }
 
@@ -180,6 +181,18 @@ function inlineSize(source) {
       .flatMap((attr) => [...source.slice(attr.start, attr.end).matchAll(SIZE_KEY)].filter((m) => FIXED.test(m[2].trim())).map((m) => ({ attr, m })))
       .map(({ attr, m }) => ({ rule: "inline-size", line: attr.line, text: `<${el.tag}> ${m[1]}: ${m[2].trim()}`, message: "a fixed size is a step on the closed scales; only a measured size goes inline" })),
   );
+}
+
+/** A Button that only dismisses, Cancel or Done, is ghost everywhere, so dismissing has one look beside an outline action. */
+function dismissGhost(source) {
+  return jsxElements(source)
+    .filter((el) => el.tag === "Button" && source[el.end] === ">")
+    .filter((el) => /^(?:Cancel|Done)$/.test(source.slice(el.end + 1, source.indexOf("</Button>", el.end)).trim()))
+    .filter((el) => {
+      const variant = el.attrs.find((a) => a.name === "variant");
+      return variant === undefined || source.slice(variant.start, variant.end).replace(/^\{?"?|"?\}?$/g, "") !== "ghost";
+    })
+    .map((el) => ({ rule: "dismiss-ghost", line: el.line, text: "<Button> Cancel", message: "a dismiss button is ghost, as every overlay footer has it" }));
 }
 
 /** An overlay built by hand from the surface recipe, outside the kit components that lay it out. */

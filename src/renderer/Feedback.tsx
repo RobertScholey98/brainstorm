@@ -279,7 +279,7 @@ function DeleteConfirm({ onDelete, onCancel }: { onDelete: () => void; onCancel:
       <span className="mr-auto min-w-0 truncate text-xs text-fg" data-feedback-question>
         Delete it?
       </span>
-      <Button ref={cancel} onClick={onCancel} data-feedback-cancel>
+      <Button ref={cancel} variant="ghost" onClick={onCancel} data-feedback-cancel>
         Cancel
       </Button>
       <Button variant="destructive" onClick={onDelete} data-feedback-delete>
