@@ -621,6 +621,8 @@ function scenes(page, home, env, t3, sessions) {
         each: () => page.$eval("[data-feedback-panel]", (el) => el.scrollIntoView({ block: "end" })),
       });
       await capture(page, "state-hover-pin", { each: () => canvas.hover('.bs-pin[data-pin="2"]') });
+      // Hovering scrolls pin 2 into view; later shots start from the top like the earlier ones.
+      await canvas.evaluate(() => scrollTo(0, 0));
       await capture(page, "state-hover-feedback", {
         each: async () => {
           await page.$eval("[data-feedback-panel]", (el) => el.scrollIntoView({ block: "end" }));
