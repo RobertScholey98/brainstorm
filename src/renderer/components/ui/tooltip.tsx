@@ -70,20 +70,26 @@ function TooltipContent({
 /**
  * A styled hint on one control, with its keyboard shortcut when it has one. The renderer uses this instead of a native
  * `title`, which the OS draws outside the theme; `npm run lint:design` fails a `title` hint.
+ *
+ * Every hint names its side, so it opens off the controls it serves and off the Inspector header: a header hint opens
+ * to the side, never down over the card. `npm run lint:design` checks both. `disabled` keeps it shut, for a hint that
+ * would only repeat text already in full on screen.
  */
 function Hint({
   label,
   shortcut,
   side,
+  disabled,
   children,
 }: {
   label: ReactNode
   shortcut?: string
-  side?: TooltipPrimitive.Positioner.Props["side"]
+  side: NonNullable<TooltipPrimitive.Positioner.Props["side"]>
+  disabled?: boolean
   children: ReactElement
 }) {
   return (
-    <Tooltip>
+    <Tooltip disabled={disabled}>
       <TooltipTrigger render={children} />
       <TooltipContent side={side}>
         <span>{label}</span>

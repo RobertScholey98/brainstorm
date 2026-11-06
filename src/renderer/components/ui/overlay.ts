@@ -11,7 +11,8 @@ export const overlaySurface = cva(
     variants: {
       tone: {
         raised: "bg-raised text-fg ring-1 ring-fg/10",
-        inverse: "bg-inverse text-inverse-fg",
+        // In dark an inverse fill is a near-white slab, so a tooltip there takes the raised panel instead.
+        inverse: "bg-inverse text-inverse-fg dark:bg-raised dark:text-fg dark:ring-1 dark:ring-fg/10",
       },
     },
     defaultVariants: { tone: "raised" },

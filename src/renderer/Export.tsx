@@ -1,4 +1,6 @@
 import { Fragment, useRef, useState } from "react";
+import { cn } from "cn";
+import { chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
@@ -25,7 +27,7 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <Hint label={disabled ? "Export needs a first iteration" : "Save the current iteration, with your adjustments, as one HTML file"}>
+      <Hint label={disabled ? "Export needs a first iteration" : "Save the current iteration, with your adjustments, as one HTML file"} side="left">
         <span tabIndex={disabled ? 0 : -1} className="inline-flex">
           <PopoverTrigger disabled={disabled} render={<Button variant="outline" data-export />}>
             Export
@@ -72,7 +74,7 @@ function ExportPath({ path }: { path: string }) {
   const cut = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/")) + 1;
   const segments = path.slice(0, cut).split(/(?<=[\\/])/);
   return (
-    <code className="grid gap-0.5 rounded-md bg-muted px-2 py-1.5 font-mono text-xs/snug select-all" data-export-path>
+    <code className={cn(chip, "grid gap-0.5 rounded-md px-2 py-1.5 font-mono text-xs/snug text-fg select-all")} data-export-path>
       <span className="text-fg-muted">
         {segments.map((segment, i) => (
           <Fragment key={i}>

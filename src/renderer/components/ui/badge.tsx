@@ -1,51 +1,25 @@
 import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
-import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
+import { chip } from "@/components/ui/chip"
 
-const badgeVariants = cva(
-  "group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap tabular-nums transition-all focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 aria-invalid:border-danger aria-invalid:ring-danger/20 dark:aria-invalid:ring-danger/40 [&>svg]:pointer-events-none [&>svg]:size-3!",
-  {
-    variants: {
-      variant: {
-        default: "bg-inverse text-inverse-fg [a]:hover:bg-inverse/80",
-        secondary:
-          "bg-muted text-fg [a]:hover:bg-muted/80",
-        destructive:
-          "bg-danger/10 text-danger dark:bg-danger/20 [a]:hover:bg-danger/20",
-        outline:
-          "border-border text-fg [a]:hover:bg-muted [a]:hover:text-fg-muted",
-        ghost:
-          "hover:bg-muted hover:text-fg-muted dark:hover:bg-muted/50",
-        link: "text-inverse underline-offset-4 hover:underline",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
-
-function Badge({
-  className,
-  variant = "default",
-  render,
-  ...props
-}: useRender.ComponentProps<"span"> & VariantProps<typeof badgeVariants>) {
+/** A short label beside a title, such as the iteration. It takes the one chip recipe. */
+function Badge({ className, render, ...props }: useRender.ComponentProps<"span">) {
   return useRender({
     defaultTagName: "span",
     props: mergeProps<"span">(
       {
-        className: cn(badgeVariants({ variant }), className),
+        className: cn(
+          chip,
+          "inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full px-2 text-xs font-medium whitespace-nowrap tabular-nums [&>svg]:pointer-events-none [&>svg]:size-3!",
+          className
+        ),
       },
       props
     ),
     render,
-    state: {
-      slot: "badge",
-      variant,
-    },
+    state: { slot: "badge" },
   })
 }
 
-export { Badge, badgeVariants }
+export { Badge }

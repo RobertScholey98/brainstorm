@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Code } from "@/components/ui/kbd";
 import { parseMarkdown, type Inline, type MarkdownBlock } from "./markdownSubset";
 
 function InlineNodes({ nodes }: { nodes: readonly Inline[] }): ReactNode {
@@ -20,9 +21,7 @@ function InlineNodes({ nodes }: { nodes: readonly Inline[] }): ReactNode {
         );
       case "code":
         return (
-          <code key={i} className="rounded-sm bg-muted px-1 font-mono text-xs">
-            {n.text}
-          </code>
+          <Code key={i}>{n.text}</Code>
         );
     }
   });

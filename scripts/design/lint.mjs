@@ -12,6 +12,12 @@
 //   focus-ring       a focus ring in any colour but the full-strength ring token, or ring-ring with an opacity, kit
 //                    included, so every focus ring keeps the 3:1 the token tests measure
 //   callout-actions  a button written inside a Callout's message instead of its actions, outside components/ui
+//   inverse-fill     an inverse fill, kit included; inverse is the tooltip surface overlay.ts draws, and a control fills
+//                    with the accent, the one primary, or not at all
+//   chip-recipe      a code or key element that paints its own fill, kit included; chips take the recipe in
+//                    components/ui/chip.ts through Code, Kbd or Badge, so one chip reads on every surface
+//   hint-side        a Hint that doesn't name its side, or a header hint that opens up or down over the card under the
+//                    header, outside components/ui
 //
 // A string counts as classes inside className, cn, cva, cx and clsx. Elsewhere it counts when every word in it is a
 // Tailwind candidate and at least one generates CSS, so `align="end"` and `data-icon="inline-start"` aren't classes.
@@ -36,6 +42,9 @@ const RAW_COLOUR = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b|(?<![a-z])(?:rg
 const FLOATING = new Set(["bg-raised", "shadow-md", "shadow-lg"]);
 /** Kit components whose look is a typed variant. A caller may place them but not restyle them. */
 export const VARIANT_KIT = new Set(["Badge", "Button", "Callout", "Kbd", "PopoverContent", "Segmented", "SidebarMenuButton", "SidebarTrigger", "Toast"]);
+const INVERSE_FILL = /^bg-inverse(?:\/\d+)?$/;
+/** Files whose hints sit on the window header, where opening down would cover the canvas bar or the Inspector header. */
+const HEADER_FILES = /(?:^|[\\/])(?:TopBar|Regenerate|Export)\.tsx$/;
 const LAYOUT = /^(?:m[trblxyse]?-|w-|min-w-|max-w-|flex-1$|grow|shrink|basis-|self-|justify-self-|order-|col-|row-)/;
 
 export async function loadDesign(styles = STYLES) {
@@ -60,7 +69,7 @@ function focusRing(variants, utility) {
 }
 
 /** Every rule break in one file's source. `kit` is true for the upstream shadcn files in components/ui. */
-export function lintSource(design, source, { kit = false } = {}) {
+export function lintSource(design, source, { kit = false, file = "" } = {}) {
   const problems = [];
   const lits = literals(source);
   for (const lit of lits) {
@@ -83,10 +92,12 @@ export function lintSource(design, source, { kit = false } = {}) {
       if (why !== null) problems.push({ rule: "off-scale", line: lit.line, text: token, message: why });
       const why2 = focusRing(splitClass(token).variants, utility);
       if (why2 !== null) problems.push({ rule: "focus-ring", line: lit.line, text: token, message: why2 });
+      if (INVERSE_FILL.test(utility)) problems.push({ rule: "inverse-fill", line: lit.line, text: token, message: "inverse is the tooltip surface; fill a control with the accent or not at all" });
       if (FLOATING.has(utility)) problems.push({ rule: "surface-recipe", line: lit.line, text: token, message: "floating surfaces come from overlaySurface in components/ui/overlay.ts" });
     });
   }
-  if (!kit) problems.push(...elementRules(source, lits));
+  problems.push(...chipRecipe(source, lits));
+  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file));
   return problems.sort((a, b) => a.line - b.line);
 }
 
@@ -111,6 +122,35 @@ function elementRules(source, lits) {
     }
   }
   return problems;
+}
+
+/** A code or key element whose own classes paint a fill, instead of taking the chip recipe. */
+function chipRecipe(source, lits) {
+  return jsxElements(source)
+    .filter((el) => el.tag === "code" || el.tag === "kbd")
+    .flatMap((el) => el.attrs.filter((a) => a.name === "className").map((attr) => ({ el, attr })))
+    .flatMap(({ el, attr }) =>
+      lits
+        .filter((l) => l.start >= attr.start && l.end <= attr.end)
+        .flatMap((l) => l.text.split(/\s+/))
+        .filter((token) => /^bg-/.test(splitClass(token).utility))
+        .map((token) => ({ rule: "chip-recipe", line: attr.line, text: `<${el.tag}> ${token}`, message: "take the chip recipe: Code, Kbd, Badge or chip from components/ui/chip.ts" })),
+    );
+}
+
+/** A Hint names its side, and on the window header that side is left or right. */
+function hintSide(source, file) {
+  return jsxElements(source)
+    .filter((el) => el.tag === "Hint")
+    .flatMap((el) => {
+      const side = el.attrs.find((a) => a.name === "side");
+      if (side === undefined) return [{ rule: "hint-side", line: el.line, text: "<Hint> without side", message: "name the side, so the hint opens off the controls it serves" }];
+      const value = source.slice(side.start, side.end).replace(/^\{?"?|"?\}?$/g, "");
+      if (HEADER_FILES.test(file) && /^(?:top|bottom)$/.test(value)) {
+        return [{ rule: "hint-side", line: side.line, text: `<Hint side="${value}">`, message: "a header hint opens left or right, off the canvas bar and the Inspector header" }];
+      }
+      return [];
+    });
 }
 
 /** A button between a Callout's tags must sit in the `actions` of the Callout or a CalloutItem, never in the message. */
@@ -139,7 +179,7 @@ const KIT = /[\\/]components[\\/]ui[\\/]/;
 export async function lintRenderer() {
   const design = await loadDesign();
   return tsxFiles(join(root, "src", "renderer")).flatMap((file) =>
-    lintSource(design, readFileSync(file, "utf8"), { kit: KIT.test(file) }).map((p) => ({ file: relative(root, file), ...p })),
+    lintSource(design, readFileSync(file, "utf8"), { kit: KIT.test(file), file }).map((p) => ({ file: relative(root, file), ...p })),
   );
 }
 

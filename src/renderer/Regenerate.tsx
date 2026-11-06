@@ -56,7 +56,7 @@ export function Regenerate({
   }, [gate.ok]);
   if (!gate.ok) {
     return (
-      <Hint label={blockedMessage(gate.reason, view.request?.request.n)}>
+      <Hint label={blockedMessage(gate.reason, view.request?.request.n)} side="left">
         <span tabIndex={0} data-regenerate-blocked>
           <Button variant="accent" disabled data-regenerate-toggle>
             Regenerate
@@ -165,7 +165,7 @@ function RegenerateForm({
         {attached.map((f) => (
           <p key={f.id} className="flex min-w-0 gap-1.5 text-sm/snug" data-attached={f.id}>
             <span className="shrink-0 font-semibold tabular-nums text-accent">#{f.id}</span>
-            <Hint label={f.text}>
+            <Hint label={f.text} side="left">
               <span className="min-w-0 truncate">{f.text}</span>
             </Hint>
             <span className="ml-auto shrink-0 text-fg-muted">{f.pin.part ?? "whole block"}</span>

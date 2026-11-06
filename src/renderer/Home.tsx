@@ -2,6 +2,7 @@ import { AlertTriangle, CloudOff, Lightbulb } from "lucide-react";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Code } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SessionId, SessionListing } from "../core/types";
 import { markdownText } from "./markdownSubset";
@@ -9,7 +10,7 @@ import { ago, useNow } from "./time";
 
 const START = (
   <>
-    run <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-fg">/ux-brainstorm</code> in a T3 thread on your project
+    run <Code>/ux-brainstorm</Code> in a T3 thread on your project
   </>
 );
 

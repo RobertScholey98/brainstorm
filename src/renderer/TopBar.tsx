@@ -25,7 +25,7 @@ export function TopBar({ actions, panel, children }: { actions?: ReactNode; pane
       <div className="ml-auto flex shrink-0 items-center gap-2">
         {actions}
         {panel !== undefined && (
-          <Hint label={panel.open ? "Collapse the Inspector" : "Show the Inspector"}>
+          <Hint label={panel.open ? "Collapse the Inspector" : "Show the Inspector"} side="left">
             <Button variant="ghost" size="icon" aria-label="Inspector" aria-pressed={panel.open} onClick={panel.onToggle} data-inspector-toggle>
               <PanelRight aria-hidden />
             </Button>
@@ -92,7 +92,7 @@ export function SessionBar({
           </h1>
         </nav>
         {view !== null && view.iteration !== null && (
-            <Badge variant="secondary" data-iteration>
+            <Badge data-iteration>
               Iteration {view.iteration.n}
             </Badge>
         )}

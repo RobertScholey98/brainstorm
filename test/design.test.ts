@@ -102,6 +102,13 @@ describe("design tokens", () => {
       expect(deltaE2000(lab(c.canvas!), lab(c.app!)), "the canvas steps off the window").toBeGreaterThanOrEqual(MIN_STEP);
     });
 
+    it(`draws the one chip recipe so its edge reads on every surface in ${theme}`, () => {
+      // components/ui/chip.ts: a card fill inside a border-strong edge.
+      const c = solidColours(theme);
+      const faint = SURFACES.filter((s) => deltaE2000(lab(c["border-strong"]!), lab(c[s]!)) < MIN_SUBTLE_DISTANCE);
+      expect(faint).toEqual([]);
+    });
+
     it(`keeps a selected row apart from a hovered one in ${theme}`, () => {
       const painted = paintedSurfaces(theme);
       for (const base of ["app", "card"]) {

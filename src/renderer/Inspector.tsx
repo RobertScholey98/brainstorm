@@ -210,7 +210,7 @@ function Inapplicable({
                 key={`${o.blockId}/${o.prop}`}
                 data-override={`${o.blockId}:${o.prop}`}
                 actions={
-                  <Button variant="outline" size="xs" onClick={() => onDismiss(item)}>
+                  <Button variant="outline" onClick={() => onDismiss(item)}>
                     Dismiss
                   </Button>
                 }

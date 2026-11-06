@@ -1,12 +1,13 @@
 import { cva, type VariantProps } from "class-variance-authority"
+import { chip } from "@/components/ui/chip"
 
 const kbdVariants = cva(
   "inline-flex h-4.5 shrink-0 items-center rounded-sm px-1 font-sans text-xs font-medium tabular-nums",
   {
     variants: {
       tone: {
-        default: "bg-muted text-fg-muted inset-ring inset-ring-border",
-        inverse: "bg-inverse-fg/15 text-inverse-fg/80",
+        default: chip,
+        inverse: "bg-inverse-fg/15 text-inverse-fg/80 dark:bg-fg/10 dark:text-fg-muted",
       },
     },
     defaultVariants: { tone: "default" },
@@ -22,4 +23,13 @@ function Kbd({ tone, children }: VariantProps<typeof kbdVariants> & { children: 
   )
 }
 
-export { Kbd }
+/** A code span in running text, such as a command to type. */
+function Code({ children }: { children: string }) {
+  return (
+    <code data-slot="code" className={`${chip} rounded-sm px-1 font-mono text-xs text-fg`}>
+      {children}
+    </code>
+  )
+}
+
+export { Code, Kbd }

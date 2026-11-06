@@ -3,5 +3,5 @@ export type Design = { readonly __design: unique symbol };
 export const SIZING_ONLY: ReadonlySet<string>;
 export const VARIANT_KIT: ReadonlySet<string>;
 export function loadDesign(styles?: string): Promise<Design>;
-export function lintSource(design: Design, source: string, options?: { kit?: boolean }): Problem[];
+export function lintSource(design: Design, source: string, options?: { kit?: boolean; file?: string }): Problem[];
 export function lintRenderer(): Promise<(Problem & { file: string })[]>;

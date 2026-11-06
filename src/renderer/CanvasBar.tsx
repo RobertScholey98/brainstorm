@@ -30,20 +30,20 @@ export function CanvasBar({
   const board = view === "board";
   return (
     <div className="flex h-10 shrink-0 items-center gap-1 border-b bg-card px-2" data-canvas-bar>
-      <Hint label="Previous slot">
+      <Hint label="Previous slot" side="bottom">
         <Button variant="ghost" size="icon-xs" aria-label="Previous slot" disabled={at <= 0} onClick={() => step(-1)} data-slot-step="previous">
           <ChevronLeft aria-hidden />
         </Button>
       </Hint>
-      <Hint label="Next slot">
+      <Hint label="Next slot" side="bottom">
         <Button variant="ghost" size="icon-xs" aria-label="Next slot" disabled={at < 0 || at >= slots.length - 1} onClick={() => step(1)} data-slot-step="next">
           <ChevronRight aria-hidden />
         </Button>
       </Hint>
       <Tabs value={current} onValueChange={onSlot} tabs={slots.map((s) => ({ value: s.id, label: s.title }))} itemData="slot-tab" aria-label="Slots" />
       <div className="ml-auto flex shrink-0 items-center gap-1">
-        <Hint label={board ? "Show one slot at a time" : "Show every slot side by side"}>
-          <Button variant="ghost" size="xs" aria-pressed={board} onClick={() => onView(board ? "stage" : "board")} data-board-toggle>
+        <Hint label={board ? "Show one slot at a time" : "Show every slot side by side"} side="bottom">
+          <Button variant="ghost" aria-pressed={board} onClick={() => onView(board ? "stage" : "board")} data-board-toggle>
             <LayoutGrid data-icon="inline-start" aria-hidden />
             All slots
           </Button>

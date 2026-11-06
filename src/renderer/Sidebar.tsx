@@ -351,7 +351,7 @@ function SlotSection({
                     {block?.title ?? variant}
                   </span>
                   {failed && (
-                    <Hint label="This block failed to render">
+                    <Hint label="This block failed to render" side="right">
                       <CircleAlert aria-label="Failed to render" className="text-danger" data-variant-error />
                     </Hint>
                   )}
@@ -400,7 +400,7 @@ function About({ source }: { source: string }) {
           <Markdown source={source} blocks={blocks} />
         </div>
         {long && (
-          <Button variant="ghost" size="xs" className="-ml-2" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} data-about-more>
+          <Button variant="ghost" className="-ml-2" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} data-about-more>
             {open ? "Less" : "More"}
           </Button>
         )}

@@ -258,7 +258,7 @@ function SidebarTrigger({
   const { toggleSidebar, state } = useSidebar()
 
   return (
-    <Hint label={state === "expanded" ? "Hide the sidebar" : "Show the sidebar"} shortcut="Ctrl+B">
+    <Hint label={state === "expanded" ? "Hide the sidebar" : "Show the sidebar"} shortcut="Ctrl+B" side="right">
       <Button
         data-sidebar="trigger"
         data-slot="sidebar-trigger"

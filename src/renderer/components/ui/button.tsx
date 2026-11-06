@@ -7,26 +7,22 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-inverse text-inverse-fg hover:bg-inverse/80",
         accent: "bg-accent text-accent-fg hover:bg-accent-hover",
         outline:
-          "border-border bg-card hover:bg-muted hover:text-fg aria-expanded:bg-muted aria-expanded:text-fg dark:border-border-strong dark:bg-border-strong/30 dark:hover:bg-border-strong/50",
-        secondary:
-          "bg-muted text-fg hover:bg-border aria-expanded:bg-border",
+          "border-border-strong bg-card hover:bg-muted hover:text-fg aria-expanded:bg-muted aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
         ghost:
           "hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg aria-pressed:bg-selected aria-pressed:text-fg",
         destructive:
-          "text-danger hover:bg-danger-subtle",
+          "border-border-strong bg-card text-danger hover:bg-danger-subtle",
       },
       size: {
         default: "h-7 gap-1.5 px-2 text-sm has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        xs: "h-6 gap-1 px-2 text-xs has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
         icon: "size-7",
         "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3.5",
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: "outline",
       size: "default",
     },
   }
@@ -34,7 +30,7 @@ const buttonVariants = cva(
 
 function Button({
   className,
-  variant = "default",
+  variant = "outline",
   size = "default",
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {

@@ -71,7 +71,7 @@ describe("design lint", () => {
       `<Button variant="ghost"\n  title={label}>Reset</Button>`,
       `<iframe title="Canvas" />`,
       `<SessionPanel title={view.title} />`,
-      `<Hint label="Reset"><Button>Reset</Button></Hint>`,
+      `<Hint label="Reset" side="left"><Button>Reset</Button></Hint>`,
     ].join("\n");
     expect(rules(source)).toEqual([
       { rule: "title-hint", line: 2, text: "<span title>" },
@@ -117,6 +117,34 @@ describe("design lint", () => {
       `<Button>Outside</Button>`,
     ].join("\n");
     expect(rules(source)).toEqual([{ rule: "callout-actions", line: 5, text: "<Button> in a Callout message" }]);
+  });
+
+  it("inverse-fill: fails an inverse fill on any control, kit included", () => {
+    expect(rules(`<Button className={cn("bg-inverse")} />\nconst v = cva("data-checked:bg-inverse hover:bg-inverse/80");`, true)).toEqual([
+      { rule: "inverse-fill", line: 1, text: "bg-inverse" },
+      { rule: "inverse-fill", line: 2, text: "data-checked:bg-inverse" },
+      { rule: "inverse-fill", line: 2, text: "hover:bg-inverse/80" },
+    ]);
+    expect(rules(`<span className="bg-inverse-fg/15 text-inverse-fg" />`, true)).toEqual([]);
+  });
+
+  it("chip-recipe: fails a code or key element that paints its own fill, kit included", () => {
+    const source = [`<code className="rounded-md bg-muted px-1">x</code>`, `<kbd className={cn("bg-card", size)}>K</kbd>`, `<code className={cn(chip, "px-1")}>y</code>`, `<span className="bg-muted" />`].join("\n");
+    expect(rules(source, true)).toEqual([
+      { rule: "chip-recipe", line: 1, text: "<code> bg-muted" },
+      { rule: "chip-recipe", line: 2, text: "<kbd> bg-card" },
+    ]);
+  });
+
+  it("hint-side: fails a Hint without a side, and a header hint that opens up or down", () => {
+    const source = [`<Hint label="a"><b /></Hint>`, `<Hint label="b" side="bottom"><b /></Hint>`, `<Hint label="c" side={"top"}><b /></Hint>`, `<Hint label="d" side="left"><b /></Hint>`].join("\n");
+    const header = (file: string) => lintSource(design, source, { file }).map(({ rule, line, text }) => ({ rule, line, text }));
+    expect(header("src/renderer/TopBar.tsx")).toEqual([
+      { rule: "hint-side", line: 1, text: "<Hint> without side" },
+      { rule: "hint-side", line: 2, text: `<Hint side="bottom">` },
+      { rule: "hint-side", line: 3, text: `<Hint side="top">` },
+    ]);
+    expect(header("src/renderer/CanvasBar.tsx")).toEqual([{ rule: "hint-side", line: 1, text: "<Hint> without side" }]);
   });
 
   it("passes on the renderer as it stands", async () => {

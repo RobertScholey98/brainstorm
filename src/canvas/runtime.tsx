@@ -501,7 +501,7 @@ body {
 .bs-frame-title > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .bs-frame-size { font-variant-numeric: tabular-nums; font-weight: 400; }
 .bs-frame-zoom {
-  padding: 0 4px; border-radius: 4px; background: var(--bs-muted); color: var(--bs-fg);
+  padding: 0 4px; border-radius: 4px; background: var(--bs-card); color: var(--bs-fg-muted); box-shadow: inset 0 0 0 1px var(--bs-border-strong);
   font-variant-numeric: tabular-nums; font-weight: 500;
 }
 .bs-frame[data-selected] .bs-frame-title { color: var(--bs-accent); }

@@ -61,7 +61,7 @@ function Row({ bound, trailing, children }: { bound: Pick<Bound<AppearanceType>,
         {overridden && <span aria-hidden className="absolute top-1/2 -left-3 size-1.5 -translate-y-1/2 rounded-full bg-fg" data-overridden-mark />}
         <span className="truncate text-sm font-medium">{label}</span>
         {overridden && (
-          <Hint label="Reset to the agent's value">
+          <Hint label="Reset to the agent's value" side="left">
             <Button variant="ghost" size="icon-xs" aria-label={`Reset ${label}`} onClick={() => scope.reset(spec.name)}>
               <RotateCcw aria-hidden />
             </Button>

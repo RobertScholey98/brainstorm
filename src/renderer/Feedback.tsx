@@ -47,14 +47,6 @@ function statusLine(status: FeedbackStatus): string | null {
 
 const ACTION_LABEL: Record<FeedbackAction, string> = { confirm: "Confirm", reopen: "Reopen", edit: "Edit", delete: "Delete" };
 
-/** A list of items repeats its actions, so none of them is filled; Delete reads as destructive. */
-const ACTION_VARIANT: Record<FeedbackAction, "secondary" | "outline" | "destructive"> = {
-  confirm: "secondary",
-  reopen: "outline",
-  edit: "outline",
-  delete: "destructive",
-};
-
 const PLACE_NOTE: Record<Exclude<PinPlace, "placed">, string> = {
   detached: "Detached: its element is gone",
   hidden: "On a variant that isn't showing",
@@ -89,12 +81,12 @@ export function FeedbackPanel({
         <h2 className="text-sm font-semibold">Feedback</h2>
         <span className="text-xs tabular-nums text-fg-muted">{feedback.length > 0 ? feedback.length : ""}</span>
         {canPin ? (
-          <Button variant={picking ? "default" : "outline"} className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
+          <Button variant="outline" className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
             <MessageSquarePlus data-icon="inline-start" aria-hidden />
             {picking ? "Picking…" : "Pin comment"}
           </Button>
         ) : (
-          <Hint label="There is nothing on the canvas to pin to yet">
+          <Hint label="There is nothing on the canvas to pin to yet" side="left">
             <span tabIndex={0} className="ml-auto" data-pick-blocked>
               <Button variant="outline" disabled data-pick-toggle>
                 <MessageSquarePlus data-icon="inline-start" aria-hidden />
@@ -158,6 +150,7 @@ function FeedbackItem({
 }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [metaCut, setMetaCut] = useState(false);
   const item = useRef<HTMLLIElement>(null);
   useEffect(() => {
     if (focused) item.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -211,9 +204,13 @@ function FeedbackItem({
           )}
           {!editing && (
             <>
-              {/* Below, so the Hint never covers the comment it describes. */}
-              <Hint label={where} side="bottom">
-                <p className="truncate pt-1 text-xs/snug text-fg-muted" data-feedback-meta>
+              {/* Out into the canvas, off the item's status and actions, and only when the line is cut. */}
+              <Hint label={where} side="left" disabled={!metaCut}>
+                <p
+                  className="truncate pt-1 text-xs/snug text-fg-muted"
+                  onPointerEnter={(e) => setMetaCut(e.currentTarget.scrollWidth > e.currentTarget.clientWidth)}
+                  data-feedback-meta
+                >
                   {where}
                 </p>
               </Hint>
@@ -238,7 +235,7 @@ function FeedbackItem({
               ) : (
                 <div className="flex gap-1 pt-1.5 empty:hidden">
                   {FEEDBACK_ACTIONS[f.status.state].map((action) => (
-                    <Button key={action} variant={ACTION_VARIANT[action]} size="xs" onClick={() => run(action)} data-feedback-action={action}>
+                    <Button key={action} variant={action === "delete" ? "destructive" : "outline"} onClick={() => run(action)} data-feedback-action={action}>
                       {ACTION_LABEL[action]}
                     </Button>
                   ))}
@@ -260,18 +257,18 @@ function DeleteConfirm({ onDelete, onCancel }: { onDelete: () => void; onCancel:
     <div
       role="group"
       aria-label="Delete this comment?"
-      className="flex flex-wrap items-center gap-1 pt-1.5"
+      className="flex items-center gap-1 pt-1.5"
       data-feedback-confirm
       onKeyDown={(e) => {
         if (e.key === "Escape") onCancel();
       }}
     >
-      <span className="mr-1 text-xs text-fg">Delete this comment?</span>
-      <Button variant="destructive" size="xs" onClick={onDelete} data-feedback-delete>
-        Delete
-      </Button>
-      <Button ref={cancel} variant="ghost" size="xs" onClick={onCancel} data-feedback-cancel>
+      <span className="mr-auto min-w-0 truncate text-xs text-fg">Delete this comment?</span>
+      <Button ref={cancel} onClick={onCancel} data-feedback-cancel>
         Cancel
+      </Button>
+      <Button variant="destructive" onClick={onDelete} data-feedback-delete>
+        Delete
       </Button>
     </div>
   );
