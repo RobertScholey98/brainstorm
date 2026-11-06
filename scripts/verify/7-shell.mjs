@@ -345,9 +345,9 @@ try {
   check("a hint is 28 px tall, the height of the controls it labels", await window.$eval('[data-slot="tooltip-content"]', (t) => Math.round(t.getBoundingClientRect().height)), 28);
   await window.hover('[data-slot="resize-handle"][aria-label="Inspector width"]');
   check(
-    "under the pointer, the resize line is a 2 px control edge in border-strong",
+    "under the pointer, the resize line is a 2 px fg-muted edge, darker than a scrollbar thumb",
     await window.$eval('[data-slot="resize-handle"][aria-label="Inspector width"]', (h) => [getComputedStyle(h, "::after").backgroundColor, getComputedStyle(h, "::after").width]),
-    ["rgb(212, 211, 205)", "2px"],
+    ["rgb(102, 101, 95)", "2px"],
   );
   await window.mouse.move(700, 600);
   await window.click('[data-slot-step="next"]');
