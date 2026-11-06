@@ -362,14 +362,16 @@ describe("listSessions", () => {
     data(await service.newSession({ title: "Onboarding", brief: "", thread: T3, projectPath: null }));
     at = "2026-11-05T12:00:00.000Z";
     data(await service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: null }));
-    const listed = async () => data(await service.listSessions(null)).map((s) => [s.id, s.projectId, s.projectName, s.latest, s.lost, s.activeAt]);
+    const listed = async () => data(await service.listSessions(null)).map((s) => [s.id, s.projectId, s.projectName, s.latest, s.lost, s.activeAt, s.openRequest]);
     expect(await listed()).toEqual([
-      [S, "proj-a", "repo", 1, false, "2026-11-05T12:00:00.000Z"],
-      ["s_onbrd02", "proj-b", null, null, false, "2026-11-05T11:00:00.000Z"],
+      [S, "proj-a", "repo", 1, false, "2026-11-05T12:00:00.000Z", false],
+      ["s_onbrd02", "proj-b", null, null, false, "2026-11-05T11:00:00.000Z", false],
     ]);
     at = "2026-11-05T13:00:00.000Z";
     data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null }));
-    expect((await listed())[0]).toEqual([S, "proj-a", "repo", 1, false, "2026-11-05T13:00:00.000Z"]);
+    expect((await listed())[0]).toEqual([S, "proj-a", "repo", 1, false, "2026-11-05T13:00:00.000Z", true]);
+    data(await service.act(S, { kind: "withdraw_request" }));
+    expect((await listed())[0]?.[6]).toBe(false);
   });
 
   test("names a project from its newest session in git, and keeps the name when a later one isn't", async () => {

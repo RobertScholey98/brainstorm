@@ -110,6 +110,7 @@ const toListing = (r: Row): SessionListing => {
     lost: r.lost_at !== null,
     latest: r.latest_n === null ? null : (num(r.latest_n) as IterationN),
     activeAt: [strOrNull(r.latest_at), strOrNull(r.request_at)].reduce<string>((max, t) => (t !== null && t > max ? t : max), createdAt),
+    openRequest: num(r.open_request) === 1,
   };
 };
 
@@ -262,7 +263,8 @@ export class Store {
       `SELECT s.id, s.project_id, p.name AS project_name, s.title, s.brief, s.created_at, a.thread_id, a.lost_at,
         (SELECT MAX(n) FROM iteration WHERE session_id = s.id) AS latest_n,
         (SELECT MAX(created_at) FROM iteration WHERE session_id = s.id) AS latest_at,
-        (SELECT MAX(created_at) FROM request WHERE session_id = s.id) AS request_at
+        (SELECT MAX(created_at) FROM request WHERE session_id = s.id) AS request_at,
+        EXISTS (SELECT 1 FROM request WHERE session_id = s.id AND ${OPEN_REQUEST}) AS open_request
       FROM session s JOIN project p ON p.id = s.project_id JOIN attachment a ON a.session_id = s.id AND a.detached_at IS NULL
       WHERE s.archived_at IS NULL AND (? IS NULL OR s.project_id = ?)
       ORDER BY s.created_at, s.id`,

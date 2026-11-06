@@ -3,7 +3,7 @@ import type { SessionListing } from "../src/core/types";
 import { groupByProject } from "../src/renderer/sessionGroups";
 
 const listing = (id: string, projectId: string, projectName: string | null, activeAt: string): SessionListing =>
-  ({ id, projectId, projectName, title: id, brief: "", createdAt: activeAt, attachedThread: "t", lost: false, latest: null, activeAt }) as unknown as SessionListing;
+  ({ id, projectId, projectName, title: id, brief: "", createdAt: activeAt, attachedThread: "t", lost: false, latest: null, activeAt, openRequest: false }) as unknown as SessionListing;
 
 test("groups by project, newest activity first, labelled with the project's name or Other project", () => {
   const groups = groupByProject([

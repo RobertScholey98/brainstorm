@@ -446,6 +446,8 @@ export type SessionListing = SessionSummary & {
   readonly latest: IterationN | null;
   /** The newest of its creation, latest iteration and latest request. */
   readonly activeAt: string;
+  /** A Regenerate request is waiting on the agent. */
+  readonly openRequest: boolean;
 };
 
 export type NewSessionResult = { readonly session: SessionSummary; readonly attachment: Attachment };
