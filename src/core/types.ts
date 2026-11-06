@@ -446,9 +446,12 @@ export type SessionListing = SessionSummary & {
   readonly latest: IterationN | null;
   /** The newest of its creation, latest iteration and latest request. */
   readonly activeAt: string;
-  /** A Regenerate request is waiting on the agent. */
-  readonly openRequest: boolean;
+  /** The open Regenerate request's phase, or null when none is open. */
+  readonly request: OpenPhase | null;
 };
+
+/** The phases of a request that is still open. A fulfilled or withdrawn request has closed. */
+export type OpenPhase = Exclude<RequestPhase["phase"], "fulfilled" | "withdrawn">;
 
 export type NewSessionResult = { readonly session: SessionSummary; readonly attachment: Attachment };
 

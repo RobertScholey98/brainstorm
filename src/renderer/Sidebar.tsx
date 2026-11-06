@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleAlert, ExternalLink, LayoutGrid } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleAlert, ExternalLink, LayoutGrid } from "lucide-react";
 import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import { Mark } from "./Mark";
 import { Markdown } from "./Markdown";
 import { parseMarkdown, withLeadLabel } from "./markdownSubset";
 import { TakeoverPhrase } from "./Regenerate";
+import { SessionStatus } from "./SessionStatus";
 import { groupByProject } from "./sessionGroups";
 import { age, useNow } from "./time";
 
@@ -169,20 +170,7 @@ function SessionRow({ session: s, now, active, onOpen }: { session: SessionListi
   return (
     <SidebarMenuButton isActive={active} onClick={onOpen} data-session={s.id} data-lost={s.lost || undefined}>
       <span className="min-w-0 flex-1 truncate">{s.title}</span>
-      {/* A lost thread outranks a wait, since nobody can answer it. */}
-      {s.lost ? (
-        <span className="flex shrink-0 items-center text-warning" data-session-lost>
-          <AlertTriangle aria-hidden className="size-3.5!" />
-          <span className="sr-only">Thread lost</span>
-        </span>
-      ) : (
-        s.openRequest && (
-          <span className="flex shrink-0 items-center" data-session-busy>
-            <span aria-hidden className="size-1.5 rounded-full bg-accent" />
-            <span className="sr-only">Waiting on the agent</span>
-          </span>
-        )
-      )}
+      <SessionStatus session={s} compact />
       <span className="shrink-0 text-xs font-normal text-fg-muted tabular-nums" data-age={s.activeAt}>
         {age(s.activeAt, now)}
       </span>

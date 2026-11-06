@@ -1,4 +1,4 @@
-import { AlertTriangle, CloudOff, Lightbulb } from "lucide-react";
+import { CloudOff, Lightbulb } from "lucide-react";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -8,6 +8,7 @@ import { ScrollPane } from "@/components/ui/scroll-pane";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SessionId, SessionListing } from "../core/types";
 import { markdownText } from "./markdownSubset";
+import { SessionStatus } from "./SessionStatus";
 import { ago, useNow } from "./time";
 
 const START = (
@@ -72,20 +73,7 @@ function OverviewCard({ session: s, now, onOpen }: { session: SessionListing; no
     >
       <span className="flex items-center gap-2 text-xs text-fg-muted">
         <span className="truncate">{s.projectName ?? "Other project"}</span>
-        {/* One status place a card: a lost thread outranks a wait, since nobody can answer it. */}
-        {s.lost ? (
-          <span className="ml-auto flex shrink-0 items-center gap-1 text-warning" data-session-lost>
-            <AlertTriangle aria-hidden className="size-3" />
-            Thread lost
-          </span>
-        ) : (
-          s.openRequest && (
-            <span className="ml-auto flex shrink-0 items-center gap-1.5 text-accent" data-session-busy>
-              <span aria-hidden className="size-1.5 rounded-full bg-accent" />
-              Waiting on the agent
-            </span>
-          )
-        )}
+        <SessionStatus session={s} className="ml-auto" />
       </span>
       <span className="truncate text-base font-semibold">{s.title}</span>
       {brief !== "" && <span className="line-clamp-2 text-sm text-fg-muted">{brief}</span>}

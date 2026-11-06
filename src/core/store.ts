@@ -102,7 +102,10 @@ const toSession = (r: Row): SessionSummary => ({
   createdAt: str(r.created_at),
 });
 
-const toListing = (r: Row): SessionListing => {
+/** A listing as the store holds it; the service reads an open request's phase from the thread. */
+export type StoredListing = Omit<SessionListing, "request"> & { readonly openRequest: boolean };
+
+const toListing = (r: Row): StoredListing => {
   const createdAt = str(r.created_at);
   return {
     ...toSession(r),
@@ -271,7 +274,7 @@ export class Store {
   }
 
   /** `project: null` lists every project's sessions. */
-  sessions(project: ProjectId | null): SessionListing[] {
+  sessions(project: ProjectId | null): StoredListing[] {
     return this.#all(
       `SELECT s.id, s.project_id, p.name AS project_name, s.title, s.brief, s.created_at, a.thread_id, a.lost_at,
         (SELECT MAX(n) FROM iteration WHERE session_id = s.id) AS latest_n,

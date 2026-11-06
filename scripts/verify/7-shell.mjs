@@ -622,8 +622,8 @@ try {
     [true, true],
   );
   await window.click("[data-back]");
-  await window.waitForSelector(`[data-session="${loose}"][data-lost] [data-session-lost]`);
-  check("its home row carries the lost marker", (await window.textContent(`[data-session="${loose}"] [data-session-lost]`))?.trim(), "Thread lost");
+  await window.waitForSelector(`[data-session="${loose}"][data-lost] [data-session-status="thread_lost"]`);
+  check("its home row carries the lost marker", (await window.textContent(`[data-session="${loose}"] [data-session-status="thread_lost"]`))?.trim(), "Thread lost");
   check("the window logged no errors or warnings after the restart", errors, []);
 
   await app.close();

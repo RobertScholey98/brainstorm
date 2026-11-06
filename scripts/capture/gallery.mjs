@@ -477,7 +477,7 @@ function scenes(page, home, env, t3, sessions) {
       await open(sessions.loose);
       await page.waitForSelector('[data-thread="lost"]', { timeout: PHASE_MS });
       await goHome();
-      await page.waitForSelector(`[data-session="${sessions.loose}"] [data-session-lost]`);
+      await page.waitForSelector(`[data-session="${sessions.loose}"] [data-session-status="thread_lost"]`);
       await capture(page, "home");
 
       await page.click('[data-project="kitchen-proj"] [data-project-label]');

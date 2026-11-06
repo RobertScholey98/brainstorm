@@ -45,6 +45,7 @@ import {
   type IterationSummary,
   type IterationView,
   type NewSessionResult,
+  type OpenPhase,
   type Override,
   type PartName,
   type ProjectId,
@@ -218,7 +219,16 @@ export class Brainstorm {
       if (!info.ok) return info;
       project = info.data.projectId;
     }
-    return ok(this.#store.sessions(project));
+    return ok(this.#store.sessions(project).map(({ openRequest, ...listing }) => ({ ...listing, request: openRequest ? this.#openPhase(listing.id) : null })));
+  }
+
+  /** The open request's phase from the thread as last seen, so a list shows what the brainstorm is waiting on. */
+  #openPhase(id: SessionId): OpenPhase | null {
+    const request = this.#store.openRequest(id);
+    if (request === null) return null;
+    const snapshot = this.#seen.get(request.threadId)?.snapshot ?? null;
+    const { phase } = requestPhase(request, this.#store.attachment(id), snapshot === null ? null : observeRequest(id, request.n, snapshot));
+    return phase === "fulfilled" || phase === "withdrawn" ? null : phase;
   }
 
   async attach(input: { ref: string; thread: ThreadId }): Promise<Result<AttachResult>> {

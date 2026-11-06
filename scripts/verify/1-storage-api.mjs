@@ -153,7 +153,7 @@ try {
           lost: false,
           latest: null,
           activeAt: list.result.data[0].createdAt,
-          openRequest: false,
+          request: null,
         },
       ],
     },

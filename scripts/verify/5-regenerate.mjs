@@ -25,7 +25,9 @@ async function phase(name) {
 
 /** The header controls a hint covers once it has settled in place, by their labels. */
 async function coveredBy(trigger) {
-  // Right after a popover closes, the first entry sometimes opens no hint; the check is where a hint lands, so it re-enters.
+  // A trigger still moving after a resize slides out from under the pointer, and its hint closes, so it is hovered once
+  // it is still. Right after a popover closes, the first entry sometimes opens no hint, so a miss re-enters.
+  await settled(() => window.$eval(trigger, (el) => JSON.stringify(el.getBoundingClientRect())));
   for (let attempt = 0; ; attempt += 1) {
     await window.mouse.move(120, 600);
     await window.waitForSelector('[data-slot="tooltip-content"]', { state: "detached" });
@@ -235,6 +237,24 @@ try {
   check("working", await phase("working"), { message: "The agent is working", actions: ["open_thread", "withdraw"] });
   check("working shows progress", await window.isVisible("[data-request-phase] [data-progress]"), true);
   at.push(await withdrawAt());
+  await window.click("[data-back]");
+  await window.click("[data-overview]");
+  await window.waitForSelector(`[data-overview-session="${session}"] [data-session-status="working"]`, { timeout: PHASE_MS });
+  check(
+    "home shows the request's phase on the brainstorm's row and card, in the accent while the agent works",
+    await window.evaluate((id) => {
+      const row = document.querySelector(`[data-session="${id}"] [data-session-status]`);
+      const card = document.querySelector(`[data-overview-session="${id}"] [data-session-status]`);
+      const accent = getComputedStyle(document.body).getPropertyValue("--accent").trim();
+      const probe = document.body.appendChild(Object.assign(document.createElement("i"), { style: `color: ${accent}` }));
+      const tone = getComputedStyle(probe).color;
+      probe.remove();
+      return { row: row.textContent.trim(), card: card.textContent.trim(), tone: [row, card].every((el) => getComputedStyle(el).color === tone), pulses: row.querySelector(".animate-ping") !== null };
+    }, session),
+    { row: "Agent working", card: "Agent working", tone: true, pulses: true },
+  );
+  await openSession(window, session);
+  await window.waitForSelector('[data-request-phase="working"]');
   t3.ask(DEMO_THREAD);
   check("asking", await phase("asking"), { message: "The agent is asking something in T3", actions: ["open_thread", "withdraw"] });
   check("asking shows no spinner", await window.$("[data-request-phase] [data-progress]"), null);

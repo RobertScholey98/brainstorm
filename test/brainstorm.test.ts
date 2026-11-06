@@ -362,16 +362,16 @@ describe("listSessions", () => {
     data(await service.newSession({ title: "Onboarding", brief: "", thread: T3, projectPath: null }));
     at = "2026-11-05T12:00:00.000Z";
     data(await service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: null }));
-    const listed = async () => data(await service.listSessions(null)).map((s) => [s.id, s.projectId, s.projectName, s.latest, s.lost, s.activeAt, s.openRequest]);
+    const listed = async () => data(await service.listSessions(null)).map((s) => [s.id, s.projectId, s.projectName, s.latest, s.lost, s.activeAt, s.request]);
     expect(await listed()).toEqual([
-      [S, "proj-a", "repo", 1, false, "2026-11-05T12:00:00.000Z", false],
-      ["s_onbrd02", "proj-b", null, null, false, "2026-11-05T11:00:00.000Z", false],
+      [S, "proj-a", "repo", 1, false, "2026-11-05T12:00:00.000Z", null],
+      ["s_onbrd02", "proj-b", null, null, false, "2026-11-05T11:00:00.000Z", null],
     ]);
     at = "2026-11-05T13:00:00.000Z";
     data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null }));
-    expect((await listed())[0]).toEqual([S, "proj-a", "repo", 1, false, "2026-11-05T13:00:00.000Z", true]);
+    expect((await listed())[0]).toEqual([S, "proj-a", "repo", 1, false, "2026-11-05T13:00:00.000Z", "queued"]);
     data(await service.act(S, { kind: "withdraw_request" }));
-    expect((await listed())[0]?.[6]).toBe(false);
+    expect((await listed())[0]?.[6]).toBe(null);
   });
 
   test("names a project from its newest session in git, and keeps the name when a later one isn't", async () => {
@@ -449,10 +449,13 @@ describe("request phases", () => {
     ]);
     await service.tick();
     expect(await phase(service)).toEqual({ phase: "queued", actions: ["open_thread", "withdraw"], message: "Queued in T3" });
+    const listed = async () => data(await service.listSessions(null)).find((l) => l.id === S)?.request;
+    expect(await listed()).toBe("queued");
 
     bridge.startRun(T1, "run:2");
     await service.tick();
     expect(await phase(service)).toEqual({ phase: "working", actions: ["open_thread", "withdraw"], message: "The agent is working" });
+    expect(await listed(), "a listing shows the phase the bar does").toBe("working");
 
     bridge.startRun(T1, "run:2", 1);
     await service.tick();
@@ -461,6 +464,7 @@ describe("request phases", () => {
     bridge.endRun(T1, "failed");
     await service.tick();
     expect(await phase(service)).toEqual({ phase: "run_failed", actions: ["retry", "open_thread", "withdraw"], message: "The agent's run failed in T3" });
+    expect(await listed()).toBe("run_failed");
 
     bridge.endRun(T1, "completed");
     await service.tick();
