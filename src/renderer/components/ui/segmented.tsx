@@ -11,7 +11,7 @@ type Option<T extends string> = { readonly value: T; readonly label: ReactNode }
  * One choice out of a few, always one on: the Inspector's enum controls and the Regenerate scope. The chosen segment
  * is a raised chip with an edge on a sunken track, so it reads as on in both themes without relying on a tint.
  * `itemData` names a data attribute each segment carries its value in, for tests and the capture. `fit` sizes it to its
- * labels, for a view switch in a bar, where the default fills its row like a form field.
+ * labels, every segment as wide as the widest, for a view switch in a bar; the default fills its row like a form field.
  */
 function Segmented<T extends string>({
   value,
@@ -34,7 +34,7 @@ function Segmented<T extends string>({
       aria-label={label}
       value={[value]}
       onValueChange={(next) => next[0] !== undefined && onValueChange(next[0] as T)}
-      className={cn("flex h-7 items-stretch gap-0.5 rounded-md bg-canvas p-0.5 inset-ring inset-ring-border dark:bg-app", fit ? "w-fit shrink-0" : "w-full")}
+      className={cn("h-7 gap-0.5 rounded-md bg-canvas p-0.5 inset-ring inset-ring-border dark:bg-app", fit ? "grid w-fit shrink-0 auto-cols-fr grid-flow-col" : "flex w-full items-stretch")}
     >
       {options.map((o) => (
         <TogglePrimitive

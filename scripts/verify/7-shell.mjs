@@ -283,6 +283,11 @@ try {
   await window.mouse.move(700, 20);
   await rouletteCanvas.waitForSelector('.bs-pin[data-pin="1"]:not([data-hovered])', { state: "attached" });
   const labelTop = () => rouletteCanvas.evaluate(() => Math.round(document.querySelector('.bs-frame[data-slot="wheel"] .bs-frame-title').getBoundingClientRect().top));
+  check(
+    "the view switch shows both labels whole, in segments of one width",
+    await window.$$eval("[data-view-option]", (els) => [els.every((e) => e.scrollWidth <= e.clientWidth), new Set(els.map((e) => Math.round(e.getBoundingClientRect().width))).size]),
+    [true, 1],
+  );
   const stageLabel = await labelTop();
   await window.click('[data-view-option="board"]');
   await rouletteCanvas.waitForSelector('#canvas[data-view="board"]');
