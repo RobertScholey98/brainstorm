@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, outsideBox, showBoard, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, outsideBox, settled, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-4");
@@ -38,8 +38,11 @@ try {
   await showBoard(window, canvas);
   await canvas.waitForSelector(HEADLINE);
 
+  const toggleBox = () => settled(() => window.$eval("[data-pick-toggle]", (b) => [Math.round(b.getBoundingClientRect().left), Math.round(b.getBoundingClientRect().width)]));
+  const idleBox = await toggleBox();
   await window.click("[data-pick-toggle]");
   await window.waitForSelector("[data-pick-hint]");
+  check("Pin comment keeps its width and its left edge while it reads Picking…", await toggleBox(), idleBox);
   await canvas.hover(HEADLINE);
   await canvas.waitForSelector(".bs-pick[data-on]");
   check("hovering in pin mode highlights the nearest data-part", await canvas.textContent(".bs-pick[data-on] span"), "headline");
@@ -60,7 +63,7 @@ try {
       el.querySelector("[data-slot=popover-description]")?.textContent,
       [...el.querySelectorAll("[data-slot=popover-footer] kbd, [data-slot=popover-footer] button")].map((n) => n.textContent),
     ]),
-    ["New comment", "Assignment card · headline", ["Ctrl+Enter", "Cancel", "Pin comment"]],
+    ["New comment", "Assignment card · Headline", ["Ctrl+Enter", "Cancel", "Pin comment"]],
   );
   const frameAt = await window.$eval("iframe[title=Canvas]", (el) => el.getBoundingClientRect().toJSON());
   const part = await canvas.$eval(HEADLINE, (el) => el.getBoundingClientRect().toJSON());
@@ -173,7 +176,7 @@ try {
   check(
     "the list shows it addressed in iteration 2, on a line of its own under where it is pinned",
     [await itemText(window, 1, "meta"), await itemText(window, 1, "status")],
-    ["Assignment card · headline", "In iteration 2"],
+    ["Assignment card · Headline", "In iteration 2"],
   );
   await shot(window, shots, "4-addressed");
 

@@ -1,7 +1,9 @@
 import { MessageSquarePlus, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { partLabel } from "../core/fork";
 import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, CanvasRect, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
+import { HeldLabel } from "./HeldLabel";
 import { POPOVER_WIDTH } from "./placement";
 import { useComposerPlace } from "./useComposerPlace";
 import { cn } from "cn";
@@ -91,7 +93,7 @@ export function FeedbackPanel({
         {canPin ? (
           <Button variant="outline" className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
             <MessageSquarePlus data-icon="inline-start" aria-hidden />
-            {picking ? "Picking…" : "Pin comment"}
+            <HeldLabel active={picking} idle="Pin comment" busy="Picking…" />
           </Button>
         ) : (
           <Hint label={pinBlocked} side="left">
@@ -290,7 +292,8 @@ function DeleteConfirm({ onDelete, onCancel }: { onDelete: () => void; onCancel:
 }
 
 /** Where a pin sits, block first, as the feedback list and the composer both name it. */
-const pinWhere = (pin: Pin, block: BlockView | null | undefined) => `${block?.title ?? pin.blockId} · ${pin.part ?? "whole block"}`;
+/** Where a comment is pinned, the part read as words, as the vary popover names it ("Spin button", not "spin-button"). */
+const pinWhere = (pin: Pin, block: BlockView | null | undefined) => `${block?.title ?? pin.blockId} · ${pin.part === null ? "whole block" : partLabel(pin.part)}`;
 
 /** `overlay` puts the actions in the popover footer, for an editor that is a whole overlay rather than part of a row. */
 export function TextEditor({

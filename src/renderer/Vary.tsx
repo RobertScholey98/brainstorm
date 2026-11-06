@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Hint } from "@/components/ui/tooltip";
 import { partLabel, VARY_MAX } from "../core/fork";
 import type { BlockView, CanvasRect, Pin, SlotView } from "../core/types";
+import { HeldLabel } from "./HeldLabel";
 import { POPOVER_WIDTH } from "./placement";
 import { useComposerPlace } from "./useComposerPlace";
 
@@ -21,7 +22,7 @@ export function VarySection({ picking, blocked, onPickToggle }: { picking: boole
   const button = (
     <Button variant="outline" className="ml-auto" aria-pressed={picking} disabled={blocked !== null} onClick={onPickToggle} data-vary-toggle>
       <Shuffle data-icon="inline-start" aria-hidden />
-      {picking ? "Picking…" : "Vary element"}
+      <HeldLabel active={picking} idle="Vary element" busy="Picking…" />
     </Button>
   );
   return (
