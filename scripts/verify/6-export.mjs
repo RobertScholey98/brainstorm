@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, showBoard, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, settled, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-6");
@@ -45,8 +45,27 @@ try {
 
   const trigger = () => window.$eval("[data-export]", (b) => [b.getAttribute("aria-expanded"), getComputedStyle(b).backgroundColor, getComputedStyle(b).borderColor]);
   const closed = await trigger();
+  let release;
+  const written = new Promise((r) => (release = r));
+  await window.route("**/v1/ui/sessions/*/export", async (route) => {
+    await written;
+    await route.continue();
+  });
   await window.click("[data-export]");
+  // Where the title's words start, after its glyph.
+  const titleAt = () =>
+    settled(() =>
+      window.$eval("[data-export-title]", (t) => {
+        const range = document.createRange();
+        range.selectNodeContents(t.lastChild);
+        return Math.round(range.getBoundingClientRect().left);
+      }),
+    );
+  await window.waitForSelector('[data-export-title]:has-text("Exporting")');
+  const writing = await titleAt();
+  release();
   await window.waitForSelector("[data-exported]");
+  check("the Export title holds its place as the file lands", await titleAt(), writing);
   const opened = await trigger();
   check(
     "Export shows it is open, in the pressed look, and goes back when it closes",
@@ -55,7 +74,7 @@ try {
   );
   check(
     "Exported leads with a success check, as Copied does",
-    await window.$eval("[data-exported-title]", (t) => {
+    await window.$eval("[data-export-title]", (t) => {
       const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--success)" }));
       const success = getComputedStyle(probe).color;
       probe.remove();
