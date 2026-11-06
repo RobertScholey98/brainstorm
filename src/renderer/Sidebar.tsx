@@ -1,6 +1,5 @@
 import { AlertTriangle, ChevronLeft, ChevronRight, CircleAlert, ExternalLink, LayoutGrid } from "lucide-react";
-import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { useMemo, type KeyboardEvent, type ReactNode } from "react";
 import { Callout } from "@/components/ui/callout";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ResizeHandle } from "@/components/ui/resize-handle";
@@ -353,20 +352,37 @@ function SlotSection({
   );
 }
 
-/** Past this many characters the note is cut to three lines, so one long note doesn't push the next slot away. */
+/**
+ * Past this many characters a note is cut to three lines, so one long note doesn't push the next slot below the fold.
+ * Its Hint holds the whole note.
+ */
 const ABOUT_CLAMP = 160;
 
 function About({ source }: { source: string }) {
-  const [open, setOpen] = useState(false);
-  const long = markdownText(source).length > ABOUT_CLAMP;
+  const text = markdownText(source);
+  if (text.length <= ABOUT_CLAMP) {
+    return (
+      <div className="grid gap-1.5 px-2 pt-1.5 pb-2 text-xs/relaxed text-fg-muted" data-about>
+        <Markdown source={source} />
+      </div>
+    );
+  }
   return (
-    <div className="grid gap-1.5 px-2 pt-1.5 pb-2 text-xs/relaxed text-fg-muted" data-about>
-      {long && !open ? <p className="line-clamp-3">{markdownText(source)}</p> : <Markdown source={source} />}
-      {long && (
-        <Button variant="ghost" size="xs" className="-ml-2 w-fit" onClick={() => setOpen((o) => !o)} aria-expanded={open} data-about-toggle>
-          {open ? "Show less" : "Show more"}
-        </Button>
-      )}
+    <div className="px-2 pt-1.5 pb-2 text-xs/relaxed text-fg-muted" data-about>
+      <Hint
+        side="right"
+        label={
+          <span className="grid gap-1.5 py-0.5">
+            {text.split("\n\n").map((p, i) => (
+              <span key={i}>{p}</span>
+            ))}
+          </span>
+        }
+      >
+        <div tabIndex={0} className="line-clamp-3 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring [&>*+*]:mt-1.5" data-about-clamped>
+          <Markdown source={source} />
+        </div>
+      </Hint>
     </div>
   );
 }
