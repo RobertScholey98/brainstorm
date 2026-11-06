@@ -165,7 +165,9 @@ function revealSelected(behavior: ScrollBehavior): void {
 const STAGE_PAD = 24;
 
 function fitStage(): void {
-  const room = document.documentElement.clientWidth - 2 * STAGE_PAD;
+  const gutter = innerWidth - document.documentElement.clientWidth;
+  document.documentElement.style.setProperty("--bs-gutter", `${gutter}px`);
+  const room = document.documentElement.clientWidth - 2 * STAGE_PAD - gutter;
   const next = new Map<string, number>();
   for (const f of state.frames) {
     if (state.stage === f.slot && f.frame.width > room) next.set(f.slot, Math.max(room, 1) / f.frame.width);
@@ -491,7 +493,8 @@ body {
   font: 12px/16px var(--bs-font-ui);
 }
 #canvas { display: flex; align-items: flex-start; gap: 24px; padding: 24px 24px 48px; width: max-content; }
-#canvas[data-view="stage"] { justify-content: center; width: auto; }
+/* The left pad matches the scrollbar gutter on the right, so the stage centres in the canvas, not left of it. */
+#canvas[data-view="stage"] { justify-content: center; width: auto; padding-left: calc(24px + var(--bs-gutter, 0px)); }
 .bs-frame { flex: none; }
 .bs-frame[data-offstage] { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none; }
 .bs-frame-title {
@@ -500,6 +503,7 @@ body {
 }
 .bs-frame-title > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .bs-frame-size { font-variant-numeric: tabular-nums; font-weight: 400; }
+.bs-frame:has(.bs-failure) .bs-frame-size { display: none; }
 .bs-frame-zoom {
   padding: 0 4px; border-radius: 4px; background: var(--bs-card); color: var(--bs-fg-muted); box-shadow: inset 0 0 0 1px var(--bs-border-strong);
   font-variant-numeric: tabular-nums; font-weight: 500;
@@ -515,7 +519,7 @@ body {
 .bs-frame-body:has(> .bs-failure) { height: auto !important; }
 .bs-edge {
   position: fixed; top: 0; bottom: 0; z-index: 10; width: 8px; pointer-events: none; opacity: 0; transition: opacity 120ms ease-out;
-  box-shadow: var(--bs-elevation-md);
+  box-shadow: var(--bs-elevation-md), 0 0 0 1px var(--bs-border-strong);
 }
 .bs-edge[data-side="left"] { left: -8px; }
 .bs-edge[data-side="right"] { right: -8px; }
@@ -544,7 +548,10 @@ body {
 .bs-pin[data-placed] { display: grid; }
 .bs-pin::after { content: ""; position: absolute; inset: -3px; }
 .bs-pin[data-status="addressed"] { background: var(--bs-card); color: var(--bs-accent); border-color: var(--bs-accent); }
-.bs-pin[data-status="confirmed"] { background: var(--bs-muted); color: var(--bs-fg-muted); }
+.bs-pin[data-status="confirmed"] {
+  background: var(--bs-muted); color: var(--bs-fg-muted);
+  box-shadow: 0 0 0 1px var(--bs-fg-muted), var(--bs-elevation-sm);
+}
 .bs-pin:hover { scale: 1.15; box-shadow: var(--bs-elevation-md); }
 .bs-pin[data-focused] { box-shadow: 0 0 0 2px var(--bs-card), 0 0 0 4px var(--bs-accent), var(--bs-elevation-sm); }
 .bs-pin.bs-pulse { animation: bs-pulse 650ms ease-out 2; }
