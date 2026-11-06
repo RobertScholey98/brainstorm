@@ -187,7 +187,7 @@ function FeedbackItem({
       data-focused={focused || undefined}
       onPointerEnter={() => onHover(f.id)}
       onPointerLeave={() => onHover(null)}
-      className="group relative -mx-1.5 rounded-lg px-1.5 py-2 hover:bg-hover/60 data-[focused]:bg-selected"
+      className="group relative -mx-1 rounded-lg px-1 py-2 hover:bg-hover/60 data-[focused]:bg-selected"
     >
       <div className="flex gap-2">
         <span

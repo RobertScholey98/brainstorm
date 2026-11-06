@@ -178,6 +178,16 @@ try {
   await canvas.click(PIN);
   await window.waitForSelector('[data-feedback="1"][data-focused]');
   check("clicking the pin focuses its comment in the list", await window.isVisible('[data-feedback="1"][data-focused]'), true);
+  check(
+    "the focused comment's fill overhangs the column by 4 px a side, so 12 px stays clear of the Inspector's edge",
+    await window.$eval('[data-feedback="1"][data-focused]', (li) => {
+      const pane = li.closest("aside");
+      const aside = pane.getBoundingClientRect();
+      const r = li.getBoundingClientRect();
+      return [Math.round(r.left - aside.left - pane.clientLeft), Math.round(aside.right - r.right)];
+    }),
+    [12, 12],
+  );
 
   await window.click('[data-feedback="1"] button:has-text("Confirm")');
   await window.waitForSelector('[data-feedback="1"][data-status="confirmed"]');
