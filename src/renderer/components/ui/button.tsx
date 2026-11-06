@@ -14,7 +14,7 @@ const buttonVariants = cva(
         secondary:
           "bg-muted text-fg hover:bg-border aria-expanded:bg-border",
         ghost:
-          "hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg",
+          "hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg aria-pressed:bg-selected aria-pressed:text-fg",
         destructive:
           "text-danger hover:bg-danger-subtle",
       },

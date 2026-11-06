@@ -56,8 +56,9 @@ function Row({ bound, trailing, children }: { bound: Pick<Bound<AppearanceType>,
   const overridden = scope.overridden.has(spec.name);
   return (
     <div className="grid gap-1.5" data-control={spec.name} data-overridden={overridden || undefined}>
-      <div className="flex h-6 items-center gap-1.5">
-        {overridden && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-fg" data-overridden-mark />}
+      <div className="relative flex h-6 items-center gap-1.5">
+        {/* In the gutter, so an overridden label starts on the same edge as the rest. */}
+        {overridden && <span aria-hidden className="absolute top-1/2 -left-3 size-1.5 -translate-y-1/2 rounded-full bg-fg" data-overridden-mark />}
         <span className="truncate text-sm font-medium">{label}</span>
         {overridden && (
           <Hint label="Reset to the agent's value">

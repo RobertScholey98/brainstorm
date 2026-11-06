@@ -360,7 +360,7 @@ function SidebarSeparator({
     <Separator
       data-slot="sidebar-separator"
       data-sidebar="separator"
-      className={cn("mx-2 w-auto bg-border", className)}
+      className={cn("mx-2 bg-border data-horizontal:w-auto", className)}
       {...props}
     />
   )
