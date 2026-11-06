@@ -35,6 +35,7 @@ import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { Inspector } from "./Inspector";
 import { PendingOverrides } from "./overrides";
 import { AppSidebar, HomePanel, SessionPanel } from "./Sidebar";
+import { RequestDetail } from "./Regenerate";
 import { SessionBar, TopBar } from "./TopBar";
 
 const NOTICE_MS = 6000;
@@ -116,12 +117,13 @@ export function App({ api }: { api: Api }) {
   );
 }
 
-function Shell({ sidebar, bar, children }: { sidebar: ReactNode; bar: ReactNode; children: ReactNode }) {
+function Shell({ sidebar, bar, strip, children }: { sidebar: ReactNode; bar: ReactNode; strip?: ReactNode; children: ReactNode }) {
   return (
     <>
       <AppSidebar>{sidebar}</AppSidebar>
       <SidebarInset className="min-h-0 min-w-0 overflow-hidden ring-1 ring-border/70">
         {bar}
+        {strip}
         <div className="flex min-h-0 flex-1">{children}</div>
       </SidebarInset>
     </>
@@ -264,6 +266,7 @@ function SessionWorkspace({
         />
       }
       bar={<SessionBar view={view} selected={selectedBlock?.id ?? null} send={send} exportHtml={exportHtml} />}
+      strip={view !== null && <RequestDetail view={view} />}
     >
       <section ref={canvasArea} className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Canvas" data-canvas-region>
         {iteration === null ? (

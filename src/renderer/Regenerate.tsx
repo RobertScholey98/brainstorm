@@ -1,6 +1,7 @@
 import { AlertTriangle, Check, CircleHelp, Clock, MessageSquare, Undo2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
@@ -201,9 +202,10 @@ function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
       return <Undo2 className={`${cls} text-fg-muted`} aria-hidden />;
     case "send_failed":
     case "run_failed":
+      return <AlertTriangle className={`${cls} text-danger`} aria-hidden />;
     case "previous_thread":
     case "thread_lost":
-      return <AlertTriangle className={`${cls} ${phase === "previous_thread" ? "text-warning" : "text-danger"}`} aria-hidden />;
+      return <AlertTriangle className={`${cls} text-warning`} aria-hidden />;
   }
 }
 
@@ -215,16 +217,43 @@ const ACTION_LABEL: Record<RequestPhaseAction, string> = {
   copy_phrase: "Copy phrase",
 };
 
+type Tone = "danger" | "warning" | "info";
+
+/**
+ * Phases whose message is too long for the bar: an error, the takeover phrase, the agent's reply. The bar names the
+ * phase and the strip under it holds the whole message, so nothing Rob has to read or copy is cut off.
+ */
+const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; readonly tone: Tone }>> = {
+  send_failed: { label: "Send failed", tone: "danger" },
+  thread_lost: { label: "Thread lost", tone: "warning" },
+  no_change: { label: "No change", tone: "info" },
+};
+
+const TONE_TEXT: Partial<Record<RequestPhase["phase"], string>> = {
+  send_failed: "text-danger",
+  run_failed: "text-danger",
+  thread_lost: "text-warning",
+  previous_thread: "text-warning",
+  no_change: "text-info",
+};
+
 export function RequestStatus({ view, send }: { view: SessionView; send: (action: RobAction) => Promise<unknown> }) {
   const request = view.request;
   if (request === null) return null;
   const { phase } = request;
+  const detail = DETAIL[phase.phase];
   return (
     <div className="flex min-w-0 items-center gap-2 text-sm" data-request-phase={phase.phase}>
       <PhaseIcon phase={phase.phase} />
-      <span className="truncate text-fg-muted" data-request-message>
-        {request.message}
-      </span>
+      {detail === undefined ? (
+        <span className={`truncate ${TONE_TEXT[phase.phase] ?? "text-fg-muted"}`} data-request-message>
+          {request.message}
+        </span>
+      ) : (
+        <span className={`shrink-0 font-medium ${TONE_TEXT[phase.phase]}`} data-request-label>
+          {detail.label}
+        </span>
+      )}
       {phase.actions.length > 0 && (
         <span className="flex shrink-0 items-center gap-1">
           {phase.actions.map((action) => (
@@ -233,6 +262,19 @@ export function RequestStatus({ view, send }: { view: SessionView; send: (action
         </span>
       )}
     </div>
+  );
+}
+
+/** The full message of a phase the bar only names, as a strip under the top bar. */
+export function RequestDetail({ view }: { view: SessionView }) {
+  const detail = view.request === null ? undefined : DETAIL[view.request.phase.phase];
+  if (view.request === null || detail === undefined) return null;
+  return (
+    <Callout tone={detail.tone} layout="strip" role="status" data-request-detail>
+      <p className="select-text" data-request-message>
+        {view.request.message}
+      </p>
+    </Callout>
   );
 }
 

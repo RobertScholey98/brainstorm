@@ -15,6 +15,8 @@ const { app, window, errors } = await launch(home, env);
 
 async function phase(name) {
   await window.waitForSelector(`[data-request-phase="${name}"]`, { timeout: PHASE_MS });
+  const clipped = await window.$eval("[data-request-message]", (el) => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight);
+  check(`${name}: the whole message is readable`, clipped, false);
   return {
     message: (await window.textContent("[data-request-message]"))?.trim(),
     actions: await window.$$eval("[data-request-phase] [data-request-action]", (els) => els.map((e) => e.dataset.requestAction)),
@@ -210,7 +212,7 @@ try {
   check(
     "with no request open, the top bar still offers the takeover phrase",
     (await window.textContent("[data-takeover]"))?.replace(/\s+/g, " ").trim(),
-    `In a T3 thread on this project, say: ${phrase}Copy phrase`,
+    `Not attached to a threadIn a T3 thread on this project, say: ${phrase}Copy phrase`,
   );
   check("Regenerate is disabled while the session is unattached", await window.isDisabled("[data-regenerate-toggle]"), true);
   await shot(window, shots, "9-unattached");
