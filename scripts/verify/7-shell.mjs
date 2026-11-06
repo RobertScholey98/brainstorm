@@ -552,6 +552,14 @@ try {
     }),
     { inRegion: true, clear: true },
   );
+  check(
+    "a notice leads with the step that failed, in a medium title over its reason",
+    await window.$eval("[data-slot=toast]", (t) => {
+      const title = t.querySelector("[data-toast-title]");
+      return [title.textContent, getComputedStyle(title).fontWeight, title.nextElementSibling.textContent.length > 0];
+    }),
+    ["Couldn't switch the variant", "500", true],
+  );
   await window.click("[data-toast-close]");
   await window.waitForSelector("[data-slot=toast]", { state: "detached" });
   check("a notice closes from its close button", await window.$("[data-slot=toast]"), null);

@@ -35,6 +35,7 @@ import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
 import { fitPanes, usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
 import { Inspector, InspectorRail, InspectorSkeleton } from "./Inspector";
+import { failedTitle, type Notice } from "./notice";
 import { PendingOverrides } from "./overrides";
 import { AppSidebar, HomePanel, SessionPanel } from "./Sidebar";
 import { RequestDetail } from "./Regenerate";
@@ -83,7 +84,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
   const [listError, setListError] = useState<string | null>(null);
   const [nav, setNav] = useState<Nav>({ kind: "overview" });
   const [revision, setRevision] = useState(0);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const sidebarLimits = useWiderThan(1280) ? SIDEBAR_WIDE : SIDEBAR_NARROW;
   const [sidebarWidth, setSidebarWidth] = usePaneWidth(prefs.panes.sidebar, sidebarLimits, (sidebar) => savePrefs({ panes: { sidebar } }));
   const [inspectorWidth, setInspectorWidth] = usePaneWidth(prefs.panes.inspector, INSPECTOR, (inspector) => savePrefs({ panes: { inspector } }));
@@ -108,7 +109,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
       setSessions(list.data);
       setListError(null);
       setNotice(null);
-    } else if (loaded.current) setNotice(list.error.message);
+    } else if (loaded.current) setNotice({ title: failedTitle("list"), detail: list.error.message });
     else setListError(list.error.message);
   }, [api]);
 
@@ -147,7 +148,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     </AppSidebar>
   );
   const listing = sessions?.find((s) => s.id === sessionId);
-  const toast = notice !== null && <Toast message={notice} onClose={clearNotice} />;
+  const toast = notice !== null && <Toast heading={notice.title} message={notice.detail} onClose={clearNotice} />;
 
   return (
     <TooltipProvider>
@@ -221,7 +222,7 @@ function SessionWorkspace({
   title: string;
   project: string | null;
   revision: number;
-  showNotice: (message: string) => void;
+  showNotice: (notice: Notice) => void;
   clearNotice: () => void;
   /** The failure notice, drawn in the canvas region so it stays off the Inspector. */
   toast: ReactNode;
@@ -235,6 +236,9 @@ function SessionWorkspace({
   onHome: () => void;
 }) {
   const [view, setView] = useState<SessionView | null>(null);
+  // A failed setting is named by its control's label, read when the failure comes back.
+  const blocksNow = useRef<readonly BlockView[]>([]);
+  blocksNow.current = view?.iteration?.blocks ?? [];
   // Selection is a slot, so switching variants keeps the controls on the slot's new block.
   const [selectedSlot, setSelectedSlot] = useState<SlotId | null>(layout?.slot ?? null);
   const [canvasView, setCanvasView] = useState<CanvasLayout["view"]>(layout?.view ?? "stage");
@@ -248,7 +252,7 @@ function SessionWorkspace({
   const canvasArea = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    void api.view(sessionId).then((next) => (next.ok ? setView(next.data) : showNotice(next.error.message)));
+    void api.view(sessionId).then((next) => (next.ok ? setView(next.data) : showNotice({ title: failedTitle("load"), detail: next.error.message })));
   }, [api, sessionId, revision, showNotice]);
 
   // A thread can vanish while nothing is in flight, so the open brainstorm asks T3 now and then. A failed check
@@ -267,7 +271,7 @@ function SessionWorkspace({
     async (action: RobAction): Promise<SessionView | null> => {
       const result = await api.act(sessionId, action);
       if (!result.ok) {
-        showNotice(result.error.message);
+        showNotice({ title: failedTitle(action, blocksNow.current), detail: result.error.message });
         return null;
       }
       clearNotice();
@@ -360,7 +364,7 @@ function SessionWorkspace({
   const exportHtml = async () => {
     const result = await api.exportHtml(sessionId);
     if (result.ok) clearNotice();
-    else showNotice(`Export failed. ${result.error.message}`);
+    else showNotice({ title: failedTitle("export"), detail: result.error.message });
     return result.ok ? result.data : null;
   };
 
