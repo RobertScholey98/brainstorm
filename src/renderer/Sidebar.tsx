@@ -243,7 +243,7 @@ function SessionRow({
           {age(since, now)}
         </span>
       </SidebarMenuButton>
-      <Hint label={label} shortcut={SETTLE_SHORTCUT} side="right">
+      <Hint label={label} shortcut={SETTLE_SHORTCUT} side="left">
         <SidebarMenuAction showOnHover className="text-fg-muted" onClick={onSettle} aria-label={`${label} ${s.title}`} data-settle={s.id}>
           {settleUndoes(s) ? <Undo2 aria-hidden /> : <CircleCheck aria-hidden />}
         </SidebarMenuAction>
@@ -476,7 +476,7 @@ function SlotSection({
                     </span>
                   )}
                   {failed && (
-                    <Hint label="This block failed to render" side="right">
+                    <Hint label="This block failed to render" side="left">
                       <CircleAlert aria-label="Failed to render" className="text-danger" data-variant-error />
                     </Hint>
                   )}

@@ -218,6 +218,20 @@ try {
   await window.hover(`[data-settle="${kitchen}"]`);
   await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
   check("its hint names the action and T3's chord", (await window.textContent('[data-slot="tooltip-content"]'))?.trim(), "SettleCtrl+Shift+S");
+  check(
+    "and opens over its own row, covering no control outside it, the home search least of all",
+    await settled(() =>
+      window.evaluate((id) => {
+        const hint = document.querySelector('[data-slot="tooltip-content"]').getBoundingClientRect();
+        const row = document.querySelector(`[data-session="${id}"]`).closest("li");
+        const over = (r) => hint.left < r.right && hint.right > r.left && hint.top < r.bottom && hint.bottom > r.top;
+        return [...document.querySelectorAll('button, a, input, [tabindex="0"]')]
+          .filter((c) => !row.contains(c) && c.getClientRects().length > 0 && over(c.getBoundingClientRect()))
+          .map((c) => c.getAttribute("aria-label") ?? c.textContent.trim());
+      }, kitchen),
+    ),
+    [],
+  );
   await shot(window, shots, "settle-action");
   await window.click(`[data-settle="${kitchen}"]`);
   await window.waitForSelector("[data-settled-group]");
@@ -551,7 +565,7 @@ try {
   await window.mouse.move(700, 20);
   await window.hover('[data-slot="sidebar"] [data-sidebar="trigger"]');
   await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
-  check("a hint is 28 px tall, the height of the controls it labels", await window.$eval('[data-slot="tooltip-content"]', (t) => Math.round(t.getBoundingClientRect().height)), 28);
+  check("a hint is 24 px tall, under the 28 px controls it labels, so it never reads as one more of them", await window.$eval('[data-slot="tooltip-content"]', (t) => Math.round(t.getBoundingClientRect().height)), 24);
   await window.hover('[data-slot="resize-handle"][aria-label="Inspector width"]');
   check(
     "under the pointer, the resize line is a 2 px fg-muted edge, darker than a scrollbar thumb",

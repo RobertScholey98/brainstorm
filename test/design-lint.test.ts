@@ -147,6 +147,14 @@ describe("design lint", () => {
     expect(header("src/renderer/CanvasBar.tsx")).toEqual([{ rule: "hint-side", line: 1, text: "<Hint> without side" }]);
   });
 
+  it("hint-side: fails a sidebar hint that opens anywhere but left, over the main panel or the rows beside it", () => {
+    const source = [`<Hint label="a" side="right"><b /></Hint>`, `<Hint label="b" side="top"><b /></Hint>`, `<Hint label="c" side="left"><b /></Hint>`].join("\n");
+    expect(lintSource(design, source, { file: "src/renderer/Sidebar.tsx" }).map(({ rule, line, text }) => ({ rule, line, text }))).toEqual([
+      { rule: "hint-side", line: 1, text: `<Hint side="right">` },
+      { rule: "hint-side", line: 2, text: `<Hint side="top">` },
+    ]);
+  });
+
   it("page-title: fails the title step outside the kit, where PageHeader is its one user", () => {
     const source = `<h1 className="text-title font-semibold" />\n<h2 className="text-lg font-semibold" />`;
     expect(rules(source)).toEqual([{ rule: "page-title", line: 1, text: "text-title" }]);
