@@ -111,6 +111,7 @@ export function App({ api }: { api: Api }) {
   const homePanel = (
     <HomePanel
       sessions={sessions}
+      failed={listError !== null}
       current={sessionId}
       overview={nav.kind === "overview"}
       onOverview={() => setNav({ kind: "overview" })}

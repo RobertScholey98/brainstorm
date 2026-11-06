@@ -45,9 +45,11 @@ export function checks() {
   };
 }
 
-export async function launch(home, env) {
+/** `sessions` handles the session list requests from the first load on, for launch states a running app can't reach. */
+export async function launch(home, env, { sessions } = {}) {
   const startedAt = Date.now();
   const app = await _electron.launch({ args: [root], env, cwd: root });
+  if (sessions !== undefined) await app.context().route("**/v1/ui/sessions", sessions);
   const window = await app.firstWindow();
   const errors = [];
   window.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));

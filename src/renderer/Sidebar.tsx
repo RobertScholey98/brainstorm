@@ -76,6 +76,7 @@ function BottomFade() {
 
 export function HomePanel({
   sessions,
+  failed,
   current,
   overview,
   onOverview,
@@ -83,6 +84,8 @@ export function HomePanel({
 }: {
   /** Null while the first list is loading. */
   sessions: readonly SessionListing[] | null;
+  /** The first list didn't load; the overview says why. */
+  failed: boolean;
   /** The brainstorm open behind this panel, if any. */
   current: SessionId | null;
   overview: boolean;
@@ -107,7 +110,9 @@ export function HomePanel({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroup>
-      {sessions === null ? (
+      {sessions === null && failed ? (
+        <p className="px-4 py-3 text-sm/relaxed text-fg-muted">Brainstorms show here once they load.</p>
+      ) : sessions === null ? (
         <SidebarGroup data-home-loading>
           <SidebarMenu>
             {[0, 1, 2, 3].map((i) => (

@@ -238,6 +238,20 @@ try {
   await window.waitForSelector(`[data-session="${loose}"][data-lost] [data-session-lost]`);
   check("its home row carries the lost marker", (await window.textContent(`[data-session="${loose}"] [data-session-lost]`))?.trim(), "Thread lost");
   check("the window logged no errors or warnings after the restart", errors, []);
+
+  await app.close();
+  let serverDown = true;
+  ({ app, window, errors } = await launch(home, env, { sessions: (route) => (serverDown ? route.abort() : route.continue()) }));
+  await window.waitForSelector("[data-home-error]");
+  check(
+    "a list that fails at launch shows its error with Try again, and the sidebar stops loading",
+    [await window.isVisible("[data-home-retry]"), await window.isVisible("[data-home-loading]"), (await window.textContent('[data-sidebar-panel="home"]'))?.includes("once they load")],
+    [true, false, true],
+  );
+  serverDown = false;
+  await window.click("[data-home-retry]");
+  await window.waitForSelector("[data-overview-session]");
+  check("Try again loads the overview and the sidebar list", await window.isVisible(`[data-session="${loose}"]`), true);
 } finally {
   await app.close();
 }
