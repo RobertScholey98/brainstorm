@@ -43,6 +43,13 @@ try {
 
   await run.window.focus(slider);
   for (let i = 0; i < 10; i++) await run.window.keyboard.press("ArrowRight");
+  check(
+    "a slider moved from the keyboard rings its thumb",
+    await run.window
+      .waitForFunction(() => getComputedStyle(document.querySelector('[data-control="spinSeconds"] [data-slot="slider-thumb"]')).boxShadow.includes("0px 0px 0px 2px"), null, { timeout: 2000 })
+      .then(() => true, () => false),
+    true,
+  );
   await run.window.click(hex);
   await run.window.keyboard.press("Control+A");
   await run.window.keyboard.type("#00f0ff");
