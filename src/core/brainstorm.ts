@@ -675,7 +675,7 @@ export class Brainstorm {
     const changed = phase.iteration === latest?.n ? latest.changed : this.#changedIn(session.id, phase.iteration);
     // Rob reads blocks by the titles the canvas shows, not by their ids.
     const titles = new Map(this.#store.iterationBlocks(session.id, phase.iteration).map((b) => [b.id, this.#load(b).draft.title]));
-    return { request, phase, message: phaseMessage(phase, { title: session.title, changed: changed.map((id) => titles.get(id) ?? id) }) };
+    return { request, phase, message: phaseMessage(phase, { title: session.title, changed: changed.map((id) => titles.get(id) ?? id), scope: request.scope }) };
   }
 
   async act(id: SessionId, action: RobAction): Promise<Result<SessionView>> {

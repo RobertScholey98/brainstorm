@@ -21,6 +21,7 @@ import type {
   PartName,
   Request,
   RequestN,
+  RequestScope,
   RequestState,
   RunId,
   SessionId,
@@ -210,6 +211,21 @@ describe("requestPhase, one test per design.md row", () => {
       "Iteration 3 · changed Neon wheel, Card",
       "Iteration 3 · changed Neon wheel, Card and 2 more",
     ]);
+  });
+
+  test("a fulfilled vary counts the new variants that landed, by the element", () => {
+    const fulfilled = requestPhase(request({ state: "fulfilled", iteration: it(4) }), attached, null);
+    const variants = [
+      { key: "spin-button-a", title: "Spin button A" },
+      { key: "spin-button-b", title: "Spin button B" },
+    ] as unknown as Extract<RequestScope, { kind: "vary" }>["variants"];
+    const vary = (part: string | null) => ({ kind: "vary", target: { blockId: "wheel/neon", part }, variants }) as unknown as RequestScope;
+    const message = (scope: RequestScope, changed: string[]) => phaseMessage(fulfilled, { title: "Chore wheel", changed, scope });
+    expect([
+      message(vary("spin-button"), ["Spin button A", "Spin button B"]),
+      message(vary(null), ["Spin button A"]),
+      message(vary("spin-button"), ["Neon wheel"]),
+    ]).toEqual(["Iteration 4 · 2 new variants of Spin button", "Iteration 4 · 1 new variant", "Iteration 4 · changed Neon wheel"]);
   });
 
   test("withdrawn has no actions", () => {

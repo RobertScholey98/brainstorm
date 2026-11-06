@@ -142,8 +142,11 @@ export function takeoverPhrase(title: string): string {
   return `pick up the brainstorm session titled "${title}"`;
 }
 
-/** What Rob reads for a phase. `changed` names the fulfilling iteration's changed blocks by title. */
-export function phaseMessage(phase: RequestPhase, context: { title: string; changed: readonly string[] }): string {
+/**
+ * What Rob reads for a phase. `changed` names the fulfilling iteration's changed blocks by title, and `scope` is the
+ * request's, so a vary reads as what it asked for.
+ */
+export function phaseMessage(phase: RequestPhase, context: { title: string; changed: readonly string[]; scope?: RequestScope }): string {
   switch (phase.phase) {
     case "sending":
       return "Sending to T3…";
@@ -169,7 +172,7 @@ export function phaseMessage(phase: RequestPhase, context: { title: string; chan
     case "no_change":
       return "The agent replied in T3 without changing the design";
     case "fulfilled":
-      return `Iteration ${phase.iteration} · ${changedNames(context.changed)}`;
+      return `Iteration ${phase.iteration} · ${context.scope?.kind === "vary" ? varyLanded(context.scope, context.changed) : changedNames(context.changed)}`;
     case "withdrawn":
       return "Request withdrawn";
   }
@@ -231,6 +234,14 @@ export function originText(origin: IterationOrigin): string {
       return freetext ?? (scope.kind === "all" ? "Everything" : "Selected blocks");
     }
   }
+}
+
+/** A fulfilled vary, by the new variants it asked for that landed: "3 new variants of Spin button". */
+function varyLanded(scope: Extract<RequestScope, { kind: "vary" }>, changed: readonly string[]): string {
+  const landed = scope.variants.filter((v) => changed.includes(v.title)).length;
+  if (landed === 0) return changedNames(changed);
+  const what = scope.target.part === null ? "" : ` of ${partLabel(scope.target.part)}`;
+  return `${landed} new ${landed === 1 ? "variant" : "variants"}${what}`;
 }
 
 /** The fulfilled message's list, short enough for the top bar: two names, then a count. */

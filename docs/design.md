@@ -250,7 +250,7 @@ Each actor writes its own rows:
 | sent | marker in active run | "The agent is working" | Open thread, Withdraw |
 | sent | marker's run ended, thread `failed` | "The agent's run failed in T3" | Retry, Withdraw |
 | sent | marker's run ended, no commit | "The agent replied in T3 without changing the design" | Retry, Withdraw |
-| fulfilled | none | "Iteration n · changed …" | none |
+| fulfilled | none | "Iteration n · changed …", or for a vary "Iteration n · 3 new variants of Spin button" | none |
 | sending | a fork's thread hasn't started | "Starting a T3 thread…" | none |
 | send_failed | a fork's thread hasn't started | "Couldn't start a T3 thread (<error>). The fork is saved." | Retry, Discard fork |
 
