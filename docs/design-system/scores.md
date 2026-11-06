@@ -150,3 +150,46 @@ These findings are open:
 - the header hint reading as a button (T26)
 
 The vs-claude-session sheet pairs Claude's home with a Brainstorm session, because no Claude session exemplar exists.
+
+## Round 6 (captures round-6, after the history, fork and vary build, ADR 005)
+
+The slices match round 5, extended to shot 80:
+- **A:** light 1440, shots 01 to 40, plus the sheets
+- **B:** dark 1440, shots 01 to 40, plus the T3 sheets
+- **C:** light 1440, shots 41 to 80
+- **E:** dark 1440, shots 41 to 80
+- **D:** 22 key 1100 shots, both themes
+
+GPT Sol reviewed all 312 shots and the four sheets. No read failed. Each Claude score is the member's lowest across its slices.
+
+| Area | Claude Opus 5.5 | GPT-6.1 Sol | Claude Sonnet 5.5 |
+| --- | --- | --- | --- |
+| Shell | 8.5 | 9.0 | 7.0 |
+| Navigation and lists | 8.0 | 9.0 | 7.0 |
+| Canvas chrome | 8.0 | 9.5 | 7.0 |
+| Inspector and controls | 8.5 | 9.0 | 8.0 |
+| Overlays | 9.0 | 9.5 | 7.5 |
+| Feedback | 9.0 | 9.5 | 8.0 |
+| States and request phases | 8.0 | 9.3 | 7.0 |
+| Dark mode | 8.5 | 9.3 | 8.0 |
+| Self-consistency | 8.0 | 9.2 | 7.0 |
+| Fitness for all-day use | 8.0 | 9.1 | 7.0 |
+| Completely happy | no | no | no |
+| Blocker / major / minor / nit (all slices) | 0 / 2 / 34 / 56 | 0 / 0 / 3 / 1 | 0 / 6 / 36 / 39 |
+| Comparison sheets won | 4 of 4 named. Slice A ahead in every area on all four. Slice B has T3 ahead on navigation on vs-t3-session-dark | 4 of 4 named, not ahead in every shared area | 2 of 4 named in slice A (Claude took vs-claude-session on chrome, vs-t3-home-dark a tie leaning T3). Slice B won both T3 sheets |
+
+Opus slice A was the first slice to put Brainstorm ahead in every area on all four sheets.
+
+All eight majors come from the header at 1440. In the asking and previous-thread phases the title shrinks to "Chore …" or "C.". The breadcrumb on a new fork drops below R5-31's 160 px floor. The compact header switches on at a fixed 60rem pane width, so at 1440 the title is the only thing that gives way, and at 1100 labels drop even with 150 to 215 px free. Sonnet E's other two majors are the history strip's hard cut at its edge and the fork breadcrumb.
+
+These findings recur across members:
+- the strip has no fade and is too tall for one iteration
+- wide frames show as slivers in strip stills
+- "Queued in T3" shows in two tones, header and sidebar
+- the history toggle reads pressed with no strip
+- the loading view has no strip
+- an accent sliver shows through the Inspector's top fade (R5-21)
+- vary rows lose the letter that tells them apart at 1100
+- the Regenerate attached row shows a raw part id (R5-47)
+- vertical dividers sit off centre (the kit separator's `self-stretch`)
+- a Windows toast covers shot 56 (T23)
