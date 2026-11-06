@@ -131,11 +131,15 @@ export function Inspector({
       width={width}
       handle={<ResizeHandle edge="left" value={width} min={limits.min} max={limits.max} reset={limits.fallback} onValueChange={onWidth} aria-label="Inspector width" />}
       header={
-        block !== null &&
-        props !== null && (
+        block !== null && props !== null ? (
           <Header>
             <h2 className="min-w-0 truncate text-base font-semibold">{block.title}</h2>
             <span className="ml-auto shrink-0 text-xs text-fg-muted">{slot?.title ?? block.slot}</span>
+          </Header>
+        ) : (
+          // With no block to name, the header row still holds, so the column keeps its top rule and its text's place.
+          <Header>
+            <h2 className="min-w-0 truncate text-base font-semibold text-fg-muted">Settings</h2>
           </Header>
         )
       }

@@ -30,32 +30,46 @@ export function HomeOverview({
   onSession: (id: SessionId) => void;
 }) {
   const now = useNow();
-  const sorted = useMemo(() => [...(sessions ?? [])].sort((a, b) => (a.activeAt < b.activeAt ? 1 : a.activeAt > b.activeAt ? -1 : 0)), [sessions]);
-  if (sessions === null && error !== null) return <ListError message={error} onRetry={onRetry} />;
-  if (sessions !== null && sessions.length === 0) return <HomeEmpty />;
+  const sorted = useMemo(
+    () => [...(sessions ?? [])].sort((a, b) => (a.activeAt < b.activeAt ? 1 : a.activeAt > b.activeAt ? -1 : 0)),
+    [sessions],
+  );
+  const failed = sessions === null && error !== null;
+  const empty = sessions !== null && sessions.length === 0;
+  // The heading holds in every state, so loading, empty and failed home keep the page's frame. Empty drops the hint,
+  // which its own message says.
   return (
     <ScrollPane inset={6} className="size-full" data-home-overview>
-      <div className="grid gap-5 py-6">
-        <PageHeader heading="All brainstorms" description={<span data-home-hint>To start a new brainstorm, {START}.</span>} />
-        {/* Cards hug their own content, so a card with no brief never carries a blank band to match its row. */}
-        <ul className="grid-overview grid gap-3" aria-busy={sessions === null || undefined}>
-          {sessions === null
-            ? [true, false, false, true, false, false].map((brief, i) => (
-                <li key={i} className="flex flex-col gap-1.5 rounded-lg bg-card p-4 ring-1 ring-border" data-overview-skeleton>
-                  {/* One bar a line, each as tall as the card's text, so the cards that replace these don't move. */}
-                  <Skeleton className="h-4 w-1/3" />
-                  <Skeleton className="h-5 w-2/3" />
-                  {brief && <Skeleton className="h-4.5 w-full" />}
-                  {brief && <Skeleton className="h-4.5 w-1/2" />}
-                  <Skeleton className="mt-1 h-4 w-1/3" />
-                </li>
-              ))
-            : sorted.map((s) => (
-                <li key={s.id} className="grid min-w-0">
-                  <OverviewCard session={s} now={now} onOpen={() => onSession(s.id)} />
-                </li>
-              ))}
-        </ul>
+      <div className="flex min-h-full flex-col gap-5 py-6">
+        <PageHeader
+          heading="All brainstorms"
+          description={failed || empty ? undefined : <span data-home-hint>To start a new brainstorm, {START}.</span>}
+        />
+        {failed ? (
+          <ListError message={error} onRetry={onRetry} />
+        ) : empty ? (
+          <HomeEmpty />
+        ) : (
+          // Cards hug their own content, so a card with no brief never carries a blank band to match its row.
+          <ul className="grid-overview grid gap-3" aria-busy={sessions === null || undefined}>
+            {sessions === null
+              ? [true, false, false, true, false, false].map((brief, i) => (
+                  <li key={i} className="flex flex-col gap-1.5 rounded-lg bg-card p-4 ring-1 ring-border" data-overview-skeleton>
+                    {/* One bar a line, each as tall as the card's text, so the cards that replace these don't move. */}
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="h-5 w-2/3" />
+                    {brief && <Skeleton className="h-4.5 w-full" />}
+                    {brief && <Skeleton className="h-4.5 w-1/2" />}
+                    <Skeleton className="mt-1 h-4 w-1/3" />
+                  </li>
+                ))
+              : sorted.map((s) => (
+                  <li key={s.id} className="grid min-w-0">
+                    <OverviewCard session={s} now={now} onOpen={() => onSession(s.id)} />
+                  </li>
+                ))}
+          </ul>
+        )}
       </div>
     </ScrollPane>
   );
@@ -88,15 +102,13 @@ function OverviewCard({ session: s, now, onOpen }: { session: SessionListing; no
 
 function HomeEmpty() {
   return (
-    <Empty className="size-full rounded-none" data-home-empty>
+    <Empty className="rounded-none" data-home-empty>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Lightbulb aria-hidden />
         </EmptyMedia>
         <EmptyTitle>No brainstorms yet</EmptyTitle>
-        <EmptyDescription>
-          To start one, {START}. It appears here as soon as the agent creates it.
-        </EmptyDescription>
+        <EmptyDescription>To start one, {START}. It appears here as soon as the agent creates it.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );
@@ -104,7 +116,7 @@ function HomeEmpty() {
 
 function ListError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <Empty className="size-full rounded-none" data-home-error>
+    <Empty className="rounded-none" data-home-error>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <CloudOff aria-hidden className="text-danger" />

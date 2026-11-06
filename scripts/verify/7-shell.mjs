@@ -640,6 +640,15 @@ try {
     [(await window.textContent("[data-inspector-empty]"))?.includes("first iteration"), await window.isDisabled("[data-pick-toggle]")],
     [true, true],
   );
+  check(
+    "and keeps its frame: the Inspector's header row and the canvas bar still rule off at one height",
+    await window.evaluate(() => {
+      const header = document.querySelector("[data-inspector-header]");
+      const bar = document.querySelector("[data-canvas-bar]");
+      return [header?.textContent.trim(), header === null || bar === null ? null : Math.round(header.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom)];
+    }),
+    ["Settings", 0],
+  );
   await window.click("[data-back]");
   await window.waitForSelector(`[data-session="${loose}"][data-lost] [data-session-status="thread_lost"]`);
   check("its home row carries the lost marker", (await window.textContent(`[data-session="${loose}"] [data-session-status="thread_lost"]`))?.trim(), "Thread lost");
@@ -654,6 +663,7 @@ try {
     [await window.isVisible("[data-home-retry]"), await window.isVisible("[data-home-loading]"), (await window.textContent('[data-sidebar-panel="home"]'))?.includes("The list didn't load")],
     [true, false, true],
   );
+  check("a failed home keeps its page heading over the error", (await window.textContent("[data-home-overview] h1"))?.trim(), "All brainstorms");
   serverDown = false;
   await window.click("[data-home-retry]");
   await window.waitForSelector("[data-overview-session]");

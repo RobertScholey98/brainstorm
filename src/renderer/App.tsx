@@ -494,28 +494,41 @@ function WaitingEmpty({ loading }: { loading: boolean }) {
   if (loading) {
     return (
       <div className="flex size-full flex-col bg-canvas" aria-busy data-canvas-loading>
-        <div className="flex h-10 shrink-0 items-center gap-4 border-b bg-card px-10">
-          <Skeleton className="h-3.5 w-16" />
-          <Skeleton className="h-3.5 w-16" />
+        {/* The bar as a brainstorm with slots lays it out: two arrows, the tabs, and the view switch at the end. */}
+        <div className="flex h-10 shrink-0 items-center gap-1 border-b bg-card px-2">
+          <Skeleton className="size-6" />
+          <Skeleton className="size-6" />
+          <Skeleton className="ml-2 h-3.5 w-16" />
+          <Skeleton className="ml-4 h-3.5 w-16" />
+          <Skeleton className="ml-auto h-7 w-menu" />
         </div>
+        {/* A frame as the stage draws one, at the phone width most brainstorms open with. */}
         <div className="flex min-h-0 flex-1 justify-center p-6">
-          <div className="flex w-full max-w-popover-md flex-col gap-2">
-            <Skeleton className="h-4 w-1/3" />
-            <Skeleton className="flex-1 rounded-sm" />
+          <div className="flex w-full max-w-frame flex-col gap-2">
+            <Skeleton className="h-4.5 w-1/3" />
+            <div className="grid flex-1 content-start gap-3 rounded-sm bg-card p-4 shadow-xs ring-1 ring-border">
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
           </div>
         </div>
       </div>
     );
   }
   return (
-    <Empty className="size-full rounded-none bg-canvas">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Loader2 aria-hidden className="animate-spin text-accent" />
-        </EmptyMedia>
-        <EmptyTitle>Waiting for the agent's first commit</EmptyTitle>
-        <EmptyDescription>Blocks appear here as soon as it lands.</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
+    <div className="flex size-full flex-col bg-canvas">
+      {/* An empty bar, so the card keeps its top rule and the Inspector's header still meets it across the seam. */}
+      <div className="h-10 shrink-0 border-b bg-card" data-canvas-bar />
+      <Empty className="rounded-none">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Loader2 aria-hidden className="animate-spin text-accent" />
+          </EmptyMedia>
+          <EmptyTitle>Waiting for the agent's first commit</EmptyTitle>
+          <EmptyDescription>Blocks appear here as soon as it lands.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    </div>
   );
 }

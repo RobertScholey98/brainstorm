@@ -217,7 +217,11 @@ export function SessionPanel({
             <div className="flex h-8 items-center px-2">
               <Skeleton className="h-3 w-12" />
             </div>
-            <SidebarMenuSkeleton width="w-2/3" trailing={false} />
+            {/* The thread row's two lines: its title, then its status. */}
+            <div className="flex flex-col justify-center gap-1.5 px-2 py-2">
+              <Skeleton className="h-3.5 w-2/3" />
+              <Skeleton className="h-3 w-1/4" />
+            </div>
           </SidebarGroup>
           {[3, 2].map((rows, slot) => (
             <SidebarGroup key={slot}>

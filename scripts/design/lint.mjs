@@ -35,7 +35,7 @@ const root = fileURLToPath(new URL("../..", import.meta.url));
 const STYLES = join(root, "src", "renderer", "styles.css");
 
 /** Keys in the spacing namespace that are for sizes only, so padding, margin and gap can't use them. */
-export const SIZING_ONLY = new Set(["2.5", "3.5", "4.5", "7", "16", "inspector", "popover-sm", "popover-md", "menu", "picker"]);
+export const SIZING_ONLY = new Set(["2.5", "3.5", "4.5", "7", "16", "inspector", "popover-sm", "popover-md", "menu", "picker", "frame"]);
 const SPACING_UTILITY = /^(?:p[xytrblse]?|m[xytrblse]?|gap(?:-[xy])?|space-[xy])-(.+)$/;
 const RING_WIDTH = /^(?:ring|inset-ring|ring-offset|outline)-(\d+)$/;
 /** A ring or outline utility that sets a colour rather than a width or a style. */
