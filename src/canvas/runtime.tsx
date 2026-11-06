@@ -33,8 +33,6 @@ type CanvasState = {
   readonly stage: SlotId | null;
   /** Each slot zoomed below 1 to fit, keyed by slot. */
   readonly zooms: ReadonlyMap<string, number>;
-  /** The board couldn't fit one row at the floor zoom, so its frames wrap at their own size. */
-  readonly wrap: boolean;
   readonly mode: CanvasMode;
   readonly pins: readonly CanvasPin[];
   readonly focused: FeedbackId | null;
@@ -113,7 +111,6 @@ let state: CanvasState = {
   selected: null,
   stage: null,
   zooms: new Map(),
-  wrap: false,
   mode: "view",
   pins: [],
   focused: null,
@@ -161,7 +158,6 @@ function receive(message: HostToFrame): void {
       if (canvas !== null) canvas.dataset.view = message.stage === null ? "board" : "stage";
       fitCanvas();
       if (reveal) requestAnimationFrame(() => revealSelected("smooth"));
-      requestAnimationFrame(reportBelow);
       return;
     }
     case "mode":
@@ -195,16 +191,6 @@ function revealSelected(behavior: ScrollBehavior): void {
  */
 const gutter = (f: CanvasFrame) => (state.scrolling.has(f.slot) ? SCROLLBAR : 0);
 
-let lastBelow = 0;
-/** Tells the host how many board frames sit wholly below the window, so the bar can say they are there. */
-function reportBelow(): void {
-  const count =
-    state.stage !== null ? 0 : [...document.querySelectorAll(".bs-frame:not([data-offstage])")].filter((f) => f.getBoundingClientRect().top >= innerHeight).length;
-  if (count === lastBelow) return;
-  lastBelow = count;
-  post({ kind: "below", count });
-}
-
 function measureScrolling(): void {
   const scrolling = new Set<string>();
   for (const body of document.querySelectorAll<HTMLElement>(".bs-frame-body[data-height]")) {
@@ -221,7 +207,6 @@ const blockSizes = new ResizeObserver(measureScrolling);
 new MutationObserver(() => {
   for (const el of document.querySelectorAll(".bs-frame-body[data-height] > [data-bid] > *")) blockSizes.observe(el);
   measureScrolling();
-  requestAnimationFrame(reportBelow);
 }).observe(document.getElementById("canvas") ?? document.body, { childList: true, subtree: true });
 
 /** Applies the fit rules to the canvas as it is now, and tells the host when a zoom changes. */
@@ -229,18 +214,15 @@ function fitCanvas(): void {
   // The scrollbar's gutter is kept on both sides and the padding gives it back, so in either view the room is the
   // window less its pad, with or without a scrollbar.
   const room = innerWidth - 2 * CANVAS_PAD;
-  const { zooms: next, wrap } = fitFrames(
+  const next = fitFrames(
     state.frames.map((f) => ({ slot: f.slot, width: f.frame.width, gutter: gutter(f) })),
     room,
     state.stage,
   );
-  const same = wrap === state.wrap && next.size === state.zooms.size && [...next].every(([k, v]) => state.zooms.get(k) === v);
+  const same = next.size === state.zooms.size && [...next].every(([k, v]) => state.zooms.get(k) === v);
   if (same) return;
-  setState({ zooms: next, wrap });
-  const canvas = document.getElementById("canvas");
-  if (canvas !== null) canvas.dataset.wrap = String(wrap);
+  setState({ zooms: next });
   post({ kind: "zooms", zooms: Object.fromEntries(next) });
-  requestAnimationFrame(reportBelow);
 }
 
 const HOST_KINDS = new Set<string>(["modules", "state", "mode", "pins", "pulse", "variants"] satisfies HostToFrame["kind"][]);
@@ -646,7 +628,6 @@ body {
   display: flex; align-items: flex-start; gap: ${GAP}px;
   padding: ${CANVAS_PAD}px calc(${CANVAS_PAD}px - var(--bs-scrollbar)) 48px;
 }
-#canvas[data-wrap="true"] { flex-wrap: wrap; justify-content: center; }
 #canvas[data-view="stage"] { justify-content: center; }
 /* A reveal stops at the canvas padding, so a frame's label sits the same way off the bar in both views. */
 .bs-frame { flex: none; min-width: 0; scroll-margin: ${CANVAS_PAD}px; }
@@ -756,7 +737,5 @@ addEventListener("resize", () => {
   if (preview) return setState({});
   fitCanvas();
   revealSelected("auto");
-  requestAnimationFrame(reportBelow);
 });
-addEventListener("scroll", reportBelow, { passive: true });
 post({ kind: "ready" });

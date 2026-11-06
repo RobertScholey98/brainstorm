@@ -682,8 +682,6 @@ export type FrameToHost =
   | { readonly kind: "csp_violation"; readonly directive: string; readonly blockedUri: string }
   /** Every slot the fit rules zoomed below 1, keyed by slot, sent whenever that changes. */
   | { readonly kind: "zooms"; readonly zooms: Readonly<Record<string, number>> }
-  /** How many board frames sit wholly below the visible canvas, sent whenever that changes. */
-  | { readonly kind: "below"; readonly count: number }
   /** A shortcut pressed while the canvas has focus, so the shell's keys work wherever Rob last clicked. */
   | { readonly kind: "key"; readonly key: string; readonly ctrl: boolean; readonly meta: boolean; readonly shift: boolean; readonly alt: boolean }
   /** A preview frame has painted its block: a still of it as a PNG data URL, or null when it couldn't take one. */

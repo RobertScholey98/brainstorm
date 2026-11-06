@@ -89,3 +89,19 @@ The runtime watches each frame with a declared height, and while its block is ta
 ## Amendment: round 4. A wrapped board centres its rows and says what is below
 
 At 1100 a three-slot board wraps at full size, and its first screen showed one frame hugging the left with nothing to say two more waited below (T16). A wrapped board now centres each row, as the stage centres its frame, and the runtime tells the host how many board frames sit wholly below the window; the canvas bar shows that count as a chip ("2 more below") until they scroll into view. `verify:2` adds a third slot, checks the wrapped rows centre and the bar counts two below, and that the count goes once they are in view.
+
+## Amendment: round 5. The board is one row at any size
+
+Status: accepted. Rob ruled R5-71 from the brief on 2026-11-06: the "All slots" board exists "so the whole flow is still visible at a glance".
+
+The round 5 council found that at 1100 with three slots, All slots showed what One slot shows (SD5-14). Three 390 px frames beside the Inspector need 41% to share a row, under the 50% floor, so the board wrapped to one full-size frame per row, and only the "2 more below" chip said it differed from the stage.
+
+The floor is gone. The board always fits every frame in one row at one zoom, however small that makes them. The floor guarded legibility, and the board isn't where Rob reads a frame: the stage is, one click away, at full size or zoomed only to the room. Pins keep their screen size at any zoom, so pinning and picking still work on a small board.
+
+| | Before | After |
+| --- | --- | --- |
+| Board, row needs below 50% | wraps into rows at full size, rows centred | one row at the zoom that fits it |
+| Three phone slots at 1100 beside the Inspector | one per row | side by side at 41% |
+| "2 more below" chip | counted board frames under the fold | removed, since a board never has any |
+
+`fitFrames` returns only the zooms now, and the frame-to-host `below` message is gone with the chip. `test/fit.test.ts` holds three phones at 41% at the minimum window and a desktop frame between two phones at 20%, and `verify:2` checks that at 1100 the three-slot board sits in one row inside the canvas with no sideways scroll.

@@ -245,29 +245,27 @@ try {
     [0, 0],
   ]);
 
-  // A third slot, so the board at 1100 needs under half size for one row and wraps.
+  // A third slot, so the board at 1100 needs well under half size to show the flow in one row.
   cpSync(join(work, "slots", "wheel"), join(work, "slots", "spare"), { recursive: true });
   const manifest = JSON.parse(readFileSync(join(work, "brainstorm.json"), "utf8"));
   writeFileSync(join(work, "brainstorm.json"), JSON.stringify({ ...manifest, slots: [...manifest.slots, { id: "spare", title: "The spare", frame: { width: 390, height: 760 } }] }));
   const third = brainstorm(env, ["commit", session, "--from", work, "--note", "A spare wheel", "--json"]);
   check("the agent adds a third slot", third.code, 0);
   await canvas.waitForSelector('.bs-frame[data-slot="spare"]');
-  // The first frame selected, so the reveal on resize keeps the board at its top.
-  await canvas.click(inBlock("wheel/neon", "screen"));
-  await window.waitForSelector('[data-block="wheel/neon"]');
   await window.setViewportSize({ width: 1100, height: 720 });
-  const wrapped = () =>
-    settled(async () => ({
-      ...(await canvas.evaluate(() => {
-        const frames = [...document.querySelectorAll(".bs-frame")].map((f) => f.getBoundingClientRect());
-        const first = frames[0];
-        return { wrap: document.getElementById("canvas").dataset.wrap, centred: Math.abs(first.left - (innerWidth - first.right)) <= 1 };
-      })),
-      below: await window.evaluate(() => document.querySelector("[data-canvas-below]")?.dataset.canvasBelow ?? null),
-    }));
-  check("a wrapped board centres its rows, and the bar says how many frames wait below", await wrapped(), { wrap: "true", centred: true, below: "2" });
-  await canvas.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
-  check("and the count goes once they are in view", (await wrapped()).below, null);
+  const row = await settled(() =>
+    canvas.evaluate(() => {
+      const frames = [...document.querySelectorAll(".bs-frame")].map((f) => f.getBoundingClientRect());
+      return {
+        view: document.getElementById("canvas").dataset.view,
+        frames: frames.length,
+        oneRow: frames.every((f) => Math.abs(f.top - frames[0].top) <= 1),
+        inside: frames.every((f) => f.left >= 0 && f.right <= innerWidth),
+        sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      };
+    }),
+  );
+  check("at 1100 the board shows all three slots side by side, inside the canvas, with no sideways scroll", row, { view: "board", frames: 3, oneRow: true, inside: true, sideways: false });
   await window.setViewportSize({ width: 1440, height: 900 });
 
   // A brainstorm whose block throws: its card says the preview failed, and says so again when home comes back,

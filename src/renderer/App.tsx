@@ -308,7 +308,6 @@ function SessionWorkspace({
   const [focusedFeedback, setFocusedFeedback] = useState<FeedbackId | null>(null);
   const [hoveredFeedback, setHoveredFeedback] = useState<FeedbackId | null>(null);
   const [zooms, setZooms] = useState<Readonly<Record<string, number>>>({});
-  const [below, setBelow] = useState(0);
   const [pulse, setPulse] = useState<{ id: FeedbackId; seq: number } | null>(null);
   const canvasArea = useRef<HTMLElement>(null);
 
@@ -567,7 +566,6 @@ function SessionWorkspace({
             current={slot?.id ?? null}
             view={shownView}
             zoom={slot === null ? null : (zooms[slot.id] ?? null)}
-            below={shownView === "board" ? below : 0}
             picking={picking}
             onSlot={setSelectedSlot}
             onView={setCanvasView}
@@ -604,7 +602,6 @@ function SessionWorkspace({
             onPinClicked={onPinClicked}
             onPlacement={setPlacement}
             onZooms={setZooms}
-            onBelow={setBelow}
           />
         )}
         {interaction.kind === "composing" && (
