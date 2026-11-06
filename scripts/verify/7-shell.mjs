@@ -165,38 +165,23 @@ try {
   );
   check("the Inspector toggle sits in the header, pressed while the Inspector shows", await window.getAttribute("[data-topbar] [data-inspector-toggle]", "aria-pressed"), "true");
   check("the canvas region ends where the Inspector starts", iframe.right <= inspector.left, true);
-  const frameIn = (scroll) =>
-    canvas.evaluate((x) => {
-      scrollTo(x === "end" ? document.documentElement.scrollWidth : 0, 0);
-      const r = document.querySelector(".bs-frame-body").getBoundingClientRect();
-      return { left: r.left, right: r.right, width: r.width, viewport: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth };
-    }, scroll);
-  const fit = () =>
-    canvas.evaluate(() => {
-      const body = document.querySelector('.bs-frame:not([data-offstage]) .bs-frame-body').getBoundingClientRect();
+  const zoomShown = () => window.getAttribute("[data-canvas-bar] [data-canvas-zoom]", "data-canvas-zoom");
+  const fit = async () => ({
+    ...(await canvas.evaluate(() => {
+      const body = document.querySelector(".bs-frame:not([data-offstage]) .bs-frame-body").getBoundingClientRect();
       const de = document.documentElement;
-      return { sideways: de.scrollWidth > de.clientWidth, zoom: document.querySelector(".bs-frame-zoom")?.dataset.zoom ?? null, fits: body.left >= 0 && body.right <= de.clientWidth };
-    });
+      return { sideways: de.scrollWidth > de.clientWidth, fits: body.left >= 0 && body.right <= de.clientWidth };
+    })),
+    zoom: await zoomShown(),
+  });
   check("a brainstorm opens on the stage", await window.getAttribute("[data-canvas-region]", "data-canvas-view"), "stage");
-  check("the stage zooms the 980 px frame to fit, says by how much, and never scrolls sideways at 1440", await fit(), { sideways: false, zoom: "83", fits: true });
+  check("with one slot both views are the same, so the bar shows no view switch", await window.$("[data-view-option]"), null);
+  check("the stage zooms the 980 px frame to fit, says by how much in the canvas bar, and never scrolls sideways at 1440", await fit(), { sideways: false, zoom: "83", fits: true });
   await window.setViewportSize({ width: 1100, height: 720 });
-  await canvas.waitForFunction(() => document.querySelector(".bs-frame-zoom")?.dataset.zoom !== "83");
+  await window.waitForFunction(() => document.querySelector("[data-canvas-zoom]")?.dataset.canvasZoom !== "83");
   check("and at 1100", await fit(), { sideways: false, zoom: "49", fits: true });
   await window.setViewportSize({ width: 1440, height: 900 });
-  await canvas.waitForFunction(() => document.querySelector(".bs-frame-zoom")?.dataset.zoom === "83");
-  await window.click("[data-board-toggle]");
-  await canvas.waitForSelector('#canvas[data-view="board"]');
-  check("All slots shows the board, where a frame keeps its own size", [await window.getAttribute("[data-board-toggle]", "aria-pressed"), await canvas.$(".bs-frame-zoom")], ["true", null]);
-  const start = await frameIn("start");
-  check("the 980 px frame is wider than the board, so the board scrolls", [start.width, start.scrollWidth > start.viewport], [980, true]);
-  check("scrolled to the start, the frame begins inside the canvas", start.left >= 0, true);
-  const end = await frameIn("end");
-  check(
-    "scrolled to the end, the frame's right edge is left of the Inspector",
-    [iframe.left + end.right <= inspector.left, end.right <= end.viewport],
-    [true, true],
-  );
-  await frameIn("start");
+  await window.waitForFunction(() => document.querySelector("[data-canvas-zoom]")?.dataset.canvasZoom === "83");
   check(
     "the page never scrolls sideways",
     await window.evaluate(() => [document.documentElement.scrollWidth <= innerWidth, document.body.scrollWidth <= innerWidth, scrollX]),
@@ -204,7 +189,6 @@ try {
   );
   await window.waitForTimeout(300);
   await shot(window, shots, "session-light");
-  await window.click("[data-board-toggle]");
   await canvas.waitForSelector('#canvas[data-view="stage"]');
 
   await window.click('[data-slot="sidebar"] [data-sidebar="trigger"]');
@@ -280,6 +264,7 @@ try {
       return Math.abs(p.left + p.width / 2 - a.right) <= 2 && Math.abs(p.top + p.height / 2 - a.top) <= 2;
     }, id);
   await window.click("[data-pick-toggle]");
+  check("pick mode says so in the canvas bar, where it covers no frame", await window.$eval("[data-pick-hint]", (h) => h.closest("[data-canvas-bar]") !== null), true);
   await rouletteCanvas.click(inBlock("wheel/neon", "spin-button"));
   await window.waitForSelector("[data-composer]");
   await window.keyboard.type("Spin should be bigger");
@@ -287,18 +272,48 @@ try {
   await window.waitForSelector('[data-feedback="1"]');
   await rouletteCanvas.waitForSelector('.bs-pin[data-pin="1"][data-placed]');
   check("a pin picked on the stage lands on its element's corner", await pinAt(1), true);
-  await window.click("[data-board-toggle]");
+  await window.hover('[data-feedback="1"]');
+  check(
+    "hovering a feedback item lifts its pin on the canvas",
+    await rouletteCanvas.waitForSelector('.bs-pin[data-pin="1"][data-hovered]').then(() => true, () => false),
+    true,
+  );
+  // Off the item onto the window's own header: a single synthetic move straight into the iframe leaves the panel's
+  // hover state behind, which no real pointer crossing the gap does.
+  await window.mouse.move(700, 20);
+  await rouletteCanvas.waitForSelector('.bs-pin[data-pin="1"]:not([data-hovered])', { state: "attached" });
+  const labelTop = () => rouletteCanvas.evaluate(() => Math.round(document.querySelector('.bs-frame[data-slot="wheel"] .bs-frame-title').getBoundingClientRect().top));
+  const stageLabel = await labelTop();
+  await window.click('[data-view-option="board"]');
   await rouletteCanvas.waitForSelector('#canvas[data-view="board"]');
   check(
     "on the board both slots sit side by side and fit at 1440, and the pin stays on its element",
     [await staged(), await rouletteCanvas.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), await pinAt(1)],
     [["wheel", "result"], true, true],
   );
-  await window.click("[data-board-toggle]");
+  check("a frame's label sits as far off the canvas bar on the board as on the stage", [stageLabel, await labelTop()], [24, 24]);
+  const row = () =>
+    rouletteCanvas.evaluate(() => {
+      const de = document.documentElement;
+      const bodies = [...document.querySelectorAll(".bs-frame-body")].map((b) => b.getBoundingClientRect());
+      return { sideways: de.scrollWidth > de.clientWidth, tops: new Set(bodies.map((b) => Math.round(b.top))).size, inside: bodies.every((b) => b.left >= 0 && b.right <= de.clientWidth) };
+    });
+  await window.setViewportSize({ width: 1100, height: 720 });
+  await window.waitForSelector("[data-canvas-bar] [data-canvas-zoom]");
+  // The panels ease to their new widths, so the canvas refits a few times before it settles.
+  await rouletteCanvas.waitForFunction(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth, null, { timeout: 3000 }).catch(() => {});
+  check(
+    "at 1100 beside the Inspector the board zooms both frames to fit one row, says so in the bar, and never scrolls sideways",
+    [await row(), await pinAt(1)],
+    [{ sideways: false, tops: 1, inside: true }, true],
+  );
+  await window.setViewportSize({ width: 1440, height: 900 });
+  await window.waitForSelector("[data-canvas-zoom]", { state: "detached" });
+  await window.click('[data-view-option="stage"]');
   await rouletteCanvas.waitForSelector('#canvas[data-view="stage"]');
 
   await window.click('[data-slot-tab="result"]');
-  await window.click("[data-board-toggle]");
+  await window.click('[data-view-option="board"]');
   await rouletteCanvas.waitForSelector('#canvas[data-view="board"]');
   await rouletteCanvas.click(inBlock("wheel/neon", "screen"));
   await window.keyboard.press("Control+r");
@@ -412,7 +427,7 @@ try {
   await again.waitForSelector('#canvas[data-view="board"]');
   check(
     "after a restart the sidebar width, the rail and this brainstorm's board come back as Rob left them",
-    [await sidebarWidth(), (await window.$("[data-inspector-rail]")) !== null, await window.getAttribute("[data-board-toggle]", "aria-pressed")],
+    [await sidebarWidth(), (await window.$("[data-inspector-rail]")) !== null, await window.getAttribute('[data-view-option="board"]', "aria-pressed")],
     [widths.sidebar, true, "true"],
   );
   await window.click("[data-rail-feedback]");

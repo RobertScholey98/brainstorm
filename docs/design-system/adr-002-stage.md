@@ -55,3 +55,21 @@ The frames for the slots that aren't on the stage stay mounted, fixed and hidden
 - **Fit to height as well.** A tall phone frame would shrink to an unreadable size to fit 900 px. The stage scrolls down instead.
 - **Reflowing a wide frame to the room.** It breaks the width contract with the agent.
 - **A free zoom control.** Nothing in the brief needs one, and a fixed rule means a frame looks the same every time Rob opens it.
+
+## Amendment: round 3, second pass. The board fits too
+
+The round 3 council found the board still scrolled sideways once the window narrowed (U21, U35): at 1100 px beside the Inspector, a third frame peeked in as a sliver and two phone frames ran under the canvas edge. The soft edge cue that said "more this way" (U36) was a patch over that. The fix is one fit rule for both views, in `src/canvas/fit.ts`, with its cases in `test/fit.test.ts`.
+
+| | Before | After |
+| --- | --- | --- |
+| Board, row too wide | scrolls sideways at full size | every frame takes one `zoom` so the row fits the room |
+| Board, row needs below 50% | scrolls sideways | wraps into rows at full size, each frame zoomed only if it alone is wider than the room |
+| Stage | zoomed to the room | unchanged |
+| Scale readout | in the frame title, stage only | a `Badge` in the canvas bar for the selected frame, with a hint naming Ctrl+B and the Inspector toggle |
+| Edge cue | 8 px fade at a side with more to scroll | removed, since nothing scrolls sideways |
+| View switch | "All slots" toggle, always shown | a One slot / All slots `Segmented` switch, shown only with two or more slots |
+| Reveal on select | `nearest`, so the label could sit flush under the bar | stops 24 px short (`scroll-margin`), so a label sits as far off the bar in both views (U49) |
+
+Half size is the floor because below it a phone frame's 13 px text renders under 7 px, which is no longer a preview. The board measures its room without the scrollbar gutter, since only the stage pads its left by it to centre.
+
+`verify:7` now checks: with one slot there is no view switch; the stage readout is in the bar (83% at 1440, 49% at 1100); two 390 px frames fit at full size at 1440 and at one zoom in one row at 1100 beside the Inspector (58% there), with no sideways scroll and the pin on its element; a frame's label is 24 px under the bar in both views; and pick mode's hint sits in the bar.

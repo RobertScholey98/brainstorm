@@ -62,6 +62,7 @@ export function FeedbackPanel({
   canPin,
   picking,
   focused,
+  onHover,
   onPickToggle,
   onOpen,
   send,
@@ -73,6 +74,8 @@ export function FeedbackPanel({
   canPin: boolean;
   picking: boolean;
   focused: FeedbackId | null;
+  /** The item under the pointer, so its pin can echo the hover on the canvas. */
+  onHover: (id: FeedbackId | null) => void;
   onPickToggle: () => void;
   onOpen: (f: Feedback) => void;
   send: (action: RobAction) => Promise<unknown>;
@@ -122,6 +125,7 @@ export function FeedbackPanel({
                     block={blocks.find((b) => b.id === f.pin.blockId) ?? null}
                     place={place(f)}
                     focused={focused === f.id}
+                    onHover={onHover}
                     onOpen={() => onOpen(f)}
                     send={send}
                   />
@@ -140,6 +144,7 @@ function FeedbackItem({
   block,
   place,
   focused,
+  onHover,
   onOpen,
   send,
 }: {
@@ -147,6 +152,7 @@ function FeedbackItem({
   block: BlockView | null;
   place: PinPlace;
   focused: boolean;
+  onHover: (id: FeedbackId | null) => void;
   onOpen: () => void;
   send: (action: RobAction) => Promise<unknown>;
 }) {
@@ -179,6 +185,8 @@ function FeedbackItem({
       data-status={f.status.state}
       data-place={place}
       data-focused={focused || undefined}
+      onPointerEnter={() => onHover(f.id)}
+      onPointerLeave={() => onHover(null)}
       className="group relative mx-2 rounded-lg px-2 py-2 hover:bg-hover/60 data-[focused]:bg-selected"
     >
       <div className="flex gap-2">

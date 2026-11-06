@@ -16,12 +16,14 @@ export function CanvasHost({
   mode,
   pins,
   focused,
+  hovered,
   pulse,
   onSelect,
   onBlockError,
   onPicked,
   onPinClicked,
   onPlacement,
+  onZooms,
 }: {
   blocks: readonly BlockView[];
   frames: readonly CanvasFrame[];
@@ -33,6 +35,8 @@ export function CanvasHost({
   pins: readonly CanvasPin[];
   /** The pin whose feedback row is open in the Inspector. */
   focused: FeedbackId | null;
+  /** The pin whose feedback row is under the pointer, echoed on the canvas. */
+  hovered: FeedbackId | null;
   /** A new `seq` pulses the pin again, even the same one. */
   pulse: { readonly id: FeedbackId; readonly seq: number } | null;
   onSelect: (blockId: BlockId) => void;
@@ -40,12 +44,13 @@ export function CanvasHost({
   onPicked: (pin: Pin, at: { x: number; y: number }, rect: CanvasRect) => void;
   onPinClicked: (id: FeedbackId) => void;
   onPlacement: (placement: Placement) => void;
+  onZooms: (zooms: Readonly<Record<string, number>>) => void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const sent = useRef(new Set<string>());
   const [readyCount, setReadyCount] = useState(0);
-  const handlers = useRef({ onSelect, onBlockError, onPicked, onPinClicked, onPlacement });
-  handlers.current = { onSelect, onBlockError, onPicked, onPinClicked, onPlacement };
+  const handlers = useRef({ onSelect, onBlockError, onPicked, onPinClicked, onPlacement, onZooms });
+  handlers.current = { onSelect, onBlockError, onPicked, onPinClicked, onPlacement, onZooms };
 
   const post = (message: HostToFrame) => frame.current?.contentWindow?.postMessage(message, "*");
 
@@ -72,6 +77,9 @@ export function CanvasHost({
           return;
         case "pin_placement":
           handlers.current.onPlacement({ placed: new Set(message.placed), detached: new Set(message.detached) });
+          return;
+        case "zooms":
+          handlers.current.onZooms(message.zooms);
           return;
         case "key":
           // Shortcuts work while the canvas has focus: replay the key on the host as if it were pressed here.
@@ -105,8 +113,8 @@ export function CanvasHost({
   }, [readyCount, mode]);
 
   useEffect(() => {
-    if (readyCount > 0) post({ kind: "pins", pins, focused });
-  }, [readyCount, pins, focused]);
+    if (readyCount > 0) post({ kind: "pins", pins, focused, hovered });
+  }, [readyCount, pins, focused, hovered]);
 
   useEffect(() => {
     if (readyCount > 0 && pulse !== null) post({ kind: "pulse", id: pulse.id });

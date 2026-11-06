@@ -84,7 +84,7 @@ export async function openSession(window, id) {
 
 /** A brainstorm opens on the stage; checks that span slots switch to the board, which then stays for that brainstorm. */
 export async function showBoard(window, canvas) {
-  if ((await window.getAttribute("[data-board-toggle]", "aria-pressed")) !== "true") await window.click("[data-board-toggle]");
+  await window.click('[data-view-option="board"]');
   await canvas.waitForSelector('#canvas[data-view="board"]');
 }
 

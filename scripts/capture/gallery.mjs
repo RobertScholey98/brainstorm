@@ -39,7 +39,7 @@ const SHOTS = [
   ["state-hover-row", "home", "Home with the pointer over the Chore roulette session row"],
   ["session", "canvas", "The Chore roulette brainstorm as it opens: on the stage, the first slot alone under the slot tabs, its controls in the Inspector"],
   ["session-multi-slot", "views", "A brainstorm with three slots and several variants each, where the showing variants carry long about text"],
-  ["session-wide-frame", "views", "All slots: a 980 px frame on the board, wider than the canvas, scrolled halfway across"],
+  ["session-wide-frame", "views", "All slots: the 980 px frame beside a phone frame, both scaled to fit one row, with the zoom in the canvas bar"],
   ["session-block-error", "views", "A block that throws in the canvas: the frame shows the failure, and the Inspector names the error"],
   ["session-no-iteration", "views", "A brainstorm whose agent hasn't committed yet: waiting state, Regenerate and Export disabled"],
   ["inspector-overridden", "inspector", "The Inspector on the assignment card with the headline, accent and name size overridden"],
@@ -90,7 +90,7 @@ const SHOTS = [
   ["window-title-bar", "window", "The whole window at its real size, from the screen: the app's own header with the native buttons overlaid at its right end, in the theme's colours"],
   ["state-escape", "canvas", "Escape closing an overlay, pick mode and the composer"],
   ["session-board", "canvas", "All slots: the Chore roulette board, both frames side by side"],
-  ["stage-wide-frame", "views", "The 980 px frame on the stage, scaled to fit with its zoom readout and no sideways scroll"],
+  ["stage-wide-frame", "views", "The 980 px frame on the stage, scaled to fit with its zoom in the canvas bar and no sideways scroll"],
   ["stage-desktop-frame", "views", "A 1440 px frame on the stage, scaled to fit"],
   ["stage-tabs-focus", "canvas", "Keyboard focus on a slot tab in the canvas bar"],
   ["about-more-open", "views", "A long variant note opened with More, so it reads Less"],
@@ -366,7 +366,10 @@ function seedAll(home, env, t3) {
     title: "Start a task",
     thread: DEMO_THREAD,
     project: chores,
-    slots: [{ id: "result", title: "Wide frame", frame: { width: 980, height: 600 }, variants: { card: { from: demo("result", "card") } } }],
+    slots: [
+      { id: "result", title: "Wide frame", frame: { width: 980, height: 600 }, variants: { card: { from: demo("result", "card") } } },
+      { id: "wheel", title: "Phone frame", frame: { width: 390, height: 600 }, variants: { neon: { from: demo("wheel", "neon") } } },
+    ],
   }).id;
   sessions.desktop = seed(home, env, {
     title: "Rota on the desktop",
@@ -440,7 +443,7 @@ function scenes(page, home, env, t3, sessions) {
   }
 
   async function showView(canvas, view) {
-    if ((await page.getAttribute("[data-board-toggle]", "aria-pressed")) !== String(view === "board")) await page.click("[data-board-toggle]");
+    if ((await page.$(`[data-view-option="${view}"]`)) !== null) await page.click(`[data-view-option="${view}"]`);
     await canvas.waitForSelector(`#canvas[data-view="${view}"]`);
   }
 
@@ -519,17 +522,15 @@ function scenes(page, home, env, t3, sessions) {
       await capture(page, "about-more-open");
       await page.click('[data-slot-id="wheel"] [data-about-more]');
 
-      const staged = await open(sessions.wide, [inBlock("result/card", "card")]);
-      await staged.waitForSelector(".bs-frame-zoom");
+      await open(sessions.wide, [inBlock("result/card", "card")], "stage");
+      await page.waitForSelector("[data-canvas-zoom]");
       await capture(page, "stage-wide-frame");
-      const desktop = await open(sessions.desktop, [inBlock("result/card", "card")]);
-      await desktop.waitForSelector(".bs-frame-zoom");
+      await open(sessions.desktop, [inBlock("result/card", "card")]);
+      await page.waitForSelector("[data-canvas-zoom]");
       await capture(page, "stage-desktop-frame");
 
-      const wide = await open(sessions.wide, [inBlock("result/card", "card")], "board");
-      await capture(page, "session-wide-frame", {
-        each: () => wide.evaluate(() => scrollTo(Math.round((document.documentElement.scrollWidth - innerWidth) / 2), 0)),
-      });
+      await open(sessions.wide, [inBlock("result/card", "card"), inBlock("wheel/neon", "screen")], "board");
+      await capture(page, "session-wide-frame");
 
       await open(sessions.broken, [".bs-failure", inBlock("result/card", "card")]);
       await page.waitForSelector('aside[aria-label=Inspector] [role="alert"]');

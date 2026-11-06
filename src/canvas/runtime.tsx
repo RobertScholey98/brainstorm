@@ -1,8 +1,10 @@
 import * as React from "react";
 import { Component, type ComponentType, type ReactNode, useSyncExternalStore } from "react";
 import * as JSXRuntime from "react/jsx-runtime";
+import { CircleAlert } from "lucide-react";
 import { createRoot } from "react-dom/client";
 import { designCss } from "../core/design";
+import { CANVAS_PAD, fitFrames, GAP } from "./fit";
 import type {
   BlockId,
   CanvasFrame,
@@ -28,11 +30,15 @@ type CanvasState = {
   readonly selected: BlockId | null;
   /** The slot on the stage, or null for the board. */
   readonly stage: SlotId | null;
-  /** Each staged slot zoomed below 1 to fit, keyed by slot. */
+  /** Each slot zoomed below 1 to fit, keyed by slot. */
   readonly zooms: ReadonlyMap<string, number>;
+  /** The board couldn't fit one row at the floor zoom, so its frames wrap at their own size. */
+  readonly wrap: boolean;
   readonly mode: CanvasMode;
   readonly pins: readonly CanvasPin[];
   readonly focused: FeedbackId | null;
+  /** The pin whose feedback item the pointer is over in the Inspector. */
+  readonly hovered: FeedbackId | null;
   /** Export only: each slot's variants, for the in-page switcher. */
   readonly variants: Readonly<Record<string, readonly CanvasVariant[]>>;
   /** Which content each block shows. Modules are cached by hash, so a new hash is the only thing that remounts a block. */
@@ -96,7 +102,20 @@ function applyCss(m: CanvasModule): void {
   style.textContent = `@scope ([data-bid="${m.blockId}"]) {\n${m.css}\n}`;
 }
 
-let state: CanvasState = { frames: [], props: {}, selected: null, stage: null, zooms: new Map(), mode: "view", pins: [], focused: null, variants: {}, hashes: new Map() };
+let state: CanvasState = {
+  frames: [],
+  props: {},
+  selected: null,
+  stage: null,
+  zooms: new Map(),
+  wrap: false,
+  mode: "view",
+  pins: [],
+  focused: null,
+  hovered: null,
+  variants: {},
+  hashes: new Map(),
+};
 /** The block Rob just pressed in the canvas. Its selection comes back from the host and needs no reveal. */
 let pressed: BlockId | null = null;
 const listeners = new Set<() => void>();
@@ -129,7 +148,7 @@ function receive(message: HostToFrame): void {
       setState({ frames: message.frames, props: message.props, selected: message.selected, stage: message.stage });
       const canvas = document.getElementById("canvas");
       if (canvas !== null) canvas.dataset.view = message.stage === null ? "board" : "stage";
-      fitStage();
+      fitCanvas();
       if (reveal) requestAnimationFrame(() => revealSelected("smooth"));
       return;
     }
@@ -140,7 +159,7 @@ function receive(message: HostToFrame): void {
       wake();
       return;
     case "pins":
-      setState({ pins: message.pins, focused: message.focused });
+      setState({ pins: message.pins, focused: message.focused, hovered: message.hovered });
       wake();
       return;
     case "pulse":
@@ -158,22 +177,23 @@ function revealSelected(behavior: ScrollBehavior): void {
   document.querySelector(".bs-frame[data-selected]:not([data-offstage])")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior });
 }
 
-/**
- * The stage's page-width rule (ADR 002): a frame lays out at its declared width, always. On the stage, one wider than
- * the room the stage has is zoomed down to fit it, so the stage never scrolls sideways, and its title says by how much.
- */
-const STAGE_PAD = 24;
-
-function fitStage(): void {
+/** Applies the fit rules to the canvas as it is now, and tells the host when a zoom changes. */
+function fitCanvas(): void {
   const gutter = innerWidth - document.documentElement.clientWidth;
   document.documentElement.style.setProperty("--bs-gutter", `${gutter}px`);
-  const room = document.documentElement.clientWidth - 2 * STAGE_PAD - gutter;
-  const next = new Map<string, number>();
-  for (const f of state.frames) {
-    if (state.stage === f.slot && f.frame.width > room) next.set(f.slot, Math.max(room, 1) / f.frame.width);
-  }
-  const same = next.size === state.zooms.size && [...next].every(([k, v]) => state.zooms.get(k) === v);
-  if (!same) setState({ zooms: next });
+  // The stage pads its left by the scrollbar's width too, so a centred frame sits mid-window; the board does not.
+  const room = document.documentElement.clientWidth - 2 * CANVAS_PAD - (state.stage === null ? 0 : gutter);
+  const { zooms: next, wrap } = fitFrames(
+    state.frames.map((f) => ({ slot: f.slot, width: f.frame.width })),
+    room,
+    state.stage,
+  );
+  const same = wrap === state.wrap && next.size === state.zooms.size && [...next].every(([k, v]) => state.zooms.get(k) === v);
+  if (same) return;
+  setState({ zooms: next, wrap });
+  const canvas = document.getElementById("canvas");
+  if (canvas !== null) canvas.dataset.wrap = String(wrap);
+  post({ kind: "zooms", zooms: Object.fromEntries(next) });
 }
 
 const HOST_KINDS = new Set<string>(["modules", "state", "mode", "pins", "pulse", "variants"] satisfies HostToFrame["kind"][]);
@@ -202,11 +222,15 @@ class BlockBoundary extends Component<
   }
 }
 
+/** The Inspector's danger callout, drawn in the frame: the tone icon, the title in the tone, the error in body text. */
 function BlockFailure({ message }: { message: string }) {
   return (
     <div className="bs-failure" role="alert">
-      <strong>This block failed to render</strong>
-      <span>{message}</span>
+      <CircleAlert aria-hidden className="bs-failure-icon" />
+      <div>
+        <strong>This block failed to render</strong>
+        <span>{message}</span>
+      </div>
     </div>
   );
 }
@@ -260,6 +284,8 @@ function Canvas() {
             data-selected={selected || undefined}
             data-offstage={offstage || undefined}
             aria-hidden={offstage || undefined}
+            // The frame is as wide as its zoomed body, so a long title truncates inside it rather than widening it.
+            style={{ width: frame.frame.width * (zoom ?? 1) }}
             onPointerDownCapture={() => {
               pressed = frame.blockId;
               revealOnRelease = true;
@@ -271,11 +297,6 @@ function Canvas() {
               <span className="bs-frame-size">
                 {frame.frame.width} × {frame.frame.height ?? "auto"}
               </span>
-              {zoom !== undefined && (
-                <span className="bs-frame-zoom" data-zoom={Math.round(zoom * 100)}>
-                  {Math.round(zoom * 100)}%
-                </span>
-              )}
             </header>
             {variants.length > 1 && <VariantSwitch frame={frame} variants={variants} />}
             <div
@@ -301,6 +322,7 @@ function Canvas() {
                     data-pin={p.id}
                     data-status={p.status}
                     data-focused={s.focused === p.id || undefined}
+                    data-hovered={s.hovered === p.id || undefined}
                     aria-label={`Feedback ${p.id}`}
                     onClick={() => post({ kind: "pin_clicked", id: p.id })}
                   >
@@ -493,22 +515,20 @@ body {
   background-size: 16px 16px;
   font: 12px/16px var(--bs-font-ui);
 }
-#canvas { display: flex; align-items: flex-start; gap: 24px; padding: 24px 24px 48px; width: max-content; }
+#canvas { display: flex; align-items: flex-start; gap: ${GAP}px; padding: ${CANVAS_PAD}px ${CANVAS_PAD}px 48px; }
+#canvas[data-wrap="true"] { flex-wrap: wrap; }
 /* The left pad matches the scrollbar gutter on the right, so the stage centres in the canvas, not left of it. */
-#canvas[data-view="stage"] { justify-content: center; width: auto; padding-left: calc(24px + var(--bs-gutter, 0px)); }
-.bs-frame { flex: none; }
+#canvas[data-view="stage"] { justify-content: center; padding-left: calc(${CANVAS_PAD}px + var(--bs-gutter, 0px)); }
+/* A reveal stops at the canvas padding, so a frame's label sits the same way off the bar in both views. */
+.bs-frame { flex: none; min-width: 0; scroll-margin: ${CANVAS_PAD}px; }
 .bs-frame[data-offstage] { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none; }
 .bs-frame-title {
-  position: sticky; left: 12px; display: flex; gap: 8px; width: fit-content; max-width: calc(100vw - 24px);
-  margin: 0 2px 8px; color: var(--bs-fg-muted); font-weight: 500; cursor: default; user-select: none; white-space: nowrap;
+  display: flex; gap: 8px; max-width: 100%; box-sizing: border-box;
+  margin: 0 0 8px; padding: 0 2px; color: var(--bs-fg-muted); font-weight: 500; cursor: default; user-select: none; white-space: nowrap;
 }
 .bs-frame-title > span:first-child { overflow: hidden; text-overflow: ellipsis; }
-.bs-frame-size { font-variant-numeric: tabular-nums; font-weight: 400; }
+.bs-frame-size { flex: none; font-variant-numeric: tabular-nums; font-weight: 400; }
 .bs-frame:has(.bs-failure) .bs-frame-size { display: none; }
-.bs-frame-zoom {
-  padding: 0 4px; border-radius: 4px; background: var(--bs-card); color: var(--bs-fg-muted); box-shadow: inset 0 0 0 1px var(--bs-border-strong);
-  font-variant-numeric: tabular-nums; font-weight: 500;
-}
 .bs-frame[data-selected] .bs-frame-title { color: var(--bs-accent); }
 .bs-frame-body {
   position: relative; overflow: auto; isolation: isolate;
@@ -518,18 +538,15 @@ body {
 }
 .bs-frame[data-selected] .bs-frame-body { box-shadow: 0 0 0 2px var(--bs-accent), var(--bs-elevation-sm); }
 .bs-frame-body:has(> .bs-failure) { height: auto !important; }
-.bs-edge {
-  position: fixed; top: 0; bottom: 0; z-index: 10; width: 8px; pointer-events: none; opacity: 0; transition: opacity 120ms ease-out;
-  box-shadow: var(--bs-elevation-md), 0 0 0 1px var(--bs-border-strong);
-}
-.bs-edge[data-side="left"] { left: -8px; }
-.bs-edge[data-side="right"] { right: -8px; }
-.bs-edge[data-on] { opacity: 1; }
 .bs-failure {
-  display: grid; gap: 4px; margin: 16px; padding: 12px; border-radius: 6px;
-  color: var(--bs-danger); background: var(--bs-danger-subtle);
-  font: 12px/16px var(--bs-font-ui); white-space: pre-wrap;
+  display: flex; align-items: flex-start; gap: 8px; margin: 16px; padding: 12px; border-radius: 8px;
+  color: var(--bs-fg); background: var(--bs-danger-subtle);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bs-danger) 25%, transparent);
+  font: 12px/1.55 var(--bs-font-ui); white-space: pre-wrap; text-wrap: pretty;
 }
+.bs-failure > div { display: grid; gap: 4px; min-width: 0; }
+.bs-failure strong { color: var(--bs-danger); font: 500 13px/18px var(--bs-font-ui); }
+.bs-failure-icon { flex: none; width: 14px; height: 14px; margin-top: 2px; color: var(--bs-danger); }
 .bs-switch {
   display: flex; gap: 2px; margin: 0 0 8px; padding: 2px; border-radius: 6px; width: max-content; max-width: 100%;
   background: var(--bs-muted);
@@ -553,7 +570,8 @@ body {
   background: var(--bs-muted); color: var(--bs-fg-muted);
   box-shadow: 0 0 0 1px var(--bs-fg-muted), var(--bs-elevation-sm);
 }
-.bs-pin:hover { scale: 1.15; box-shadow: var(--bs-elevation-md); }
+/* Hovered here, or through its feedback item in the Inspector. */
+.bs-pin:hover, .bs-pin[data-hovered] { scale: 1.15; box-shadow: var(--bs-elevation-md); }
 .bs-pin[data-focused] { box-shadow: 0 0 0 2px var(--bs-card), 0 0 0 4px var(--bs-accent), var(--bs-elevation-sm); }
 .bs-pin.bs-pulse { animation: bs-pulse 650ms ease-out 2; }
 @keyframes bs-pulse {
@@ -592,27 +610,8 @@ for (const message of boot.messages ?? []) receive(message);
 const root = document.getElementById("canvas");
 if (root !== null) createRoot(root).render(<Canvas />);
 
-// Fades at the sides say there is more canvas to scroll to, since a frame cut by the edge looks like a broken frame.
-const edges = (["left", "right"] as const).map((side) => {
-  const edge = document.createElement("div");
-  edge.className = "bs-edge";
-  edge.dataset.side = side;
-  document.body.append(edge);
-  return edge;
-});
-const showEdges = () => {
-  const max = document.documentElement.scrollWidth - innerWidth;
-  for (const edge of edges) {
-    const on = edge.dataset.side === "left" ? scrollX > 1 : scrollX < max - 1;
-    if (on) edge.dataset.on = "";
-    else delete edge.dataset.on;
-  }
-};
-addEventListener("scroll", showEdges, { passive: true });
 addEventListener("resize", () => {
-  showEdges();
-  fitStage();
+  fitCanvas();
   revealSelected("auto");
 });
-if (root !== null) new ResizeObserver(showEdges).observe(root);
 post({ kind: "ready" });

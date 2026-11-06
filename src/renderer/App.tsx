@@ -1,9 +1,5 @@
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { cn } from "cn";
-import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
-import { overlaySurface } from "@/components/ui/overlay";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -246,6 +242,8 @@ function SessionWorkspace({
   const [interaction, setInteraction] = useState<CanvasInteraction>({ kind: "view" });
   const [placement, setPlacement] = useState<Placement>(NO_PLACEMENT);
   const [focusedFeedback, setFocusedFeedback] = useState<FeedbackId | null>(null);
+  const [hoveredFeedback, setHoveredFeedback] = useState<FeedbackId | null>(null);
+  const [zooms, setZooms] = useState<Readonly<Record<string, number>>>({});
   const [pulse, setPulse] = useState<{ id: FeedbackId; seq: number } | null>(null);
   const canvasArea = useRef<HTMLElement>(null);
 
@@ -290,7 +288,9 @@ function SessionWorkspace({
   const blocks = iteration?.blocks ?? [];
   const slot = slots.find((s) => s.id === selectedSlot) ?? slots[0] ?? null;
   const selectedBlock = slot === null ? null : (blocks.find((b) => b.id === blockIdOf(slot.id, slot.active)) ?? null);
-  const stage = canvasView === "stage" ? (slot?.id ?? null) : null;
+  // With one slot the board and the stage are the same, so the bar offers no switch and the canvas shows the stage.
+  const shownView = slots.length > 1 ? canvasView : "stage";
+  const stage = shownView === "stage" ? (slot?.id ?? null) : null;
   const saved = useRef(onLayout);
   saved.current = onLayout;
   useEffect(() => {
@@ -398,9 +398,12 @@ function SessionWorkspace({
           <CanvasBar
             slots={slots}
             current={slot?.id ?? null}
-            view={canvasView}
+            view={shownView}
+            zoom={slot === null ? null : (zooms[slot.id] ?? null)}
+            picking={interaction.kind === "picking"}
             onSlot={setSelectedSlot}
             onView={setCanvasView}
+            onCancelPick={() => setInteraction({ kind: "view" })}
           />
         )}
         <section
@@ -408,7 +411,7 @@ function SessionWorkspace({
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-canvas"
           aria-label="Canvas"
           data-canvas-region
-          data-canvas-view={iteration === null ? undefined : canvasView}
+          data-canvas-view={iteration === null ? undefined : shownView}
         >
         {iteration === null ? (
           <WaitingEmpty loading={view === null} />
@@ -422,24 +425,15 @@ function SessionWorkspace({
             mode={interaction.kind === "picking" ? "pin" : "view"}
             pins={pins}
             focused={focusedFeedback}
+            hovered={hoveredFeedback}
             pulse={pulse}
             onSelect={onSelectBlock}
             onBlockError={onBlockError}
             onPicked={onPicked}
             onPinClicked={onPinClicked}
             onPlacement={setPlacement}
+            onZooms={setZooms}
           />
-        )}
-        {interaction.kind === "picking" && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center" data-pick-hint>
-            <div data-open="" className={cn(overlaySurface(), "pointer-events-auto flex items-center gap-2 py-1 pr-1 pl-3 text-sm")}>
-              Click an element to pin a comment
-              <Kbd>Esc</Kbd>
-              <Button variant="ghost" onClick={() => setInteraction({ kind: "view" })}>
-                Cancel
-              </Button>
-            </div>
-          </div>
         )}
         {interaction.kind === "composing" && (
           <PinComposer
@@ -480,6 +474,7 @@ function SessionWorkspace({
             canPin={iteration !== null}
             picking={interaction.kind === "picking"}
             focused={focusedFeedback}
+            onHover={setHoveredFeedback}
             onPickToggle={() => setInteraction((i) => (i.kind === "picking" ? { kind: "view" } : { kind: "picking" }))}
             onOpen={openFeedback}
             send={send}

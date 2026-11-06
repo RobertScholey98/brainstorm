@@ -576,8 +576,8 @@ export type HostToFrame =
       readonly stage: SlotId | null;
     }
   | { readonly kind: "mode"; readonly mode: CanvasMode }
-  /** `focused` is the comment open in the Inspector, ringed on the canvas. */
-  | { readonly kind: "pins"; readonly pins: readonly CanvasPin[]; readonly focused: FeedbackId | null }
+  /** `focused` is the comment open in the Inspector, ringed on the canvas; `hovered` is the one under the pointer there. */
+  | { readonly kind: "pins"; readonly pins: readonly CanvasPin[]; readonly focused: FeedbackId | null; readonly hovered: FeedbackId | null }
   /** Scrolls a pin into view and pulses it. */
   | { readonly kind: "pulse"; readonly id: FeedbackId }
   /** Export only: every variant of each slot, for the in-page switcher. Keyed by SlotId. */
@@ -597,6 +597,8 @@ export type FrameToHost =
   | { readonly kind: "pin_placement"; readonly placed: readonly FeedbackId[]; readonly detached: readonly FeedbackId[] }
   | { readonly kind: "block_error"; readonly blockId: BlockId; readonly message: string }
   | { readonly kind: "csp_violation"; readonly directive: string; readonly blockedUri: string }
+  /** Every slot the fit rules zoomed below 1, keyed by slot, sent whenever that changes. */
+  | { readonly kind: "zooms"; readonly zooms: Readonly<Record<string, number>> }
   /** A shortcut pressed while the canvas has focus, so the shell's keys work wherever Rob last clicked. */
   | { readonly kind: "key"; readonly key: string; readonly ctrl: boolean; readonly meta: boolean; readonly shift: boolean; readonly alt: boolean };
 
