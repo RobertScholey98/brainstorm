@@ -1,6 +1,6 @@
 import { JSONUIProvider, Renderer } from "@json-render/react";
 import type { Spec } from "@json-render/core";
-import { MessageSquare, PanelRightOpen } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Callout, CalloutItem } from "@/components/ui/callout";
@@ -34,23 +34,21 @@ function Column({ width, handle, children }: { width: number; handle?: ReactNode
   );
 }
 
-/** The Inspector collapsed to a rail: a way back, and how much feedback is waiting behind it. */
-export function InspectorRail({ feedback, onExpand }: { feedback: number; onExpand: () => void }) {
+/**
+ * The Inspector collapsed to a rail. The header's toggle already brings it back, so the rail holds only what is
+ * waiting behind it: the open feedback, the comments the agent hasn't answered.
+ */
+export function InspectorRail({ open, onExpand }: { open: number; onExpand: () => void }) {
   return (
     <aside className="flex w-10 shrink-0 flex-col items-center gap-1 border-l bg-card py-2" aria-label="Inspector" data-inspector-rail>
-      <Hint label="Show the Inspector" side="left">
-        <Button variant="ghost" size="icon" aria-label="Show the Inspector" onClick={onExpand} data-rail-expand>
-          <PanelRightOpen aria-hidden />
-        </Button>
-      </Hint>
-      <Hint label={feedback === 1 ? "1 comment" : `${feedback} comments`} side="left">
+      <Hint label={open === 0 ? "No open feedback" : open === 1 ? "1 open comment" : `${open} open comments`} side="left">
         <Button variant="ghost" size="icon" aria-label="Show the feedback" onClick={onExpand} data-rail-feedback>
           <MessageSquare aria-hidden />
         </Button>
       </Hint>
-      {feedback > 0 && (
-        <span className="text-2xs tabular-nums text-fg-muted" data-rail-count>
-          {feedback}
+      {open > 0 && (
+        <span className="text-2xs font-medium text-accent tabular-nums" data-rail-count>
+          {open}
         </span>
       )}
     </aside>
@@ -61,9 +59,9 @@ export function InspectorRail({ feedback, onExpand }: { feedback: number; onExpa
 export function InspectorSkeleton({ width }: { width: number }) {
   return (
     <Column width={width}>
-      <div className="grid gap-1.5 border-b px-4 py-3" data-inspector-loading>
-        <Skeleton className="h-3 w-1/3" />
+      <div className="flex h-10 items-center justify-between border-b px-4" data-inspector-loading>
         <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-3 w-12" />
       </div>
       <div className="grid gap-5 px-4 py-4">
         {[0, 1, 2, 3].map((i) => (
@@ -163,18 +161,21 @@ function BlockControls({
 
   return (
     <div data-block={block.id}>
-      {/* Stuck 1 px high: at a fractional scroll offset, a top-0 header leaves a 1 px row of the content above it showing. */}
-      <header className="sticky -top-px z-sticky border-b bg-card px-4 pt-3 pb-3">
-        <div className="text-xs font-medium text-fg-muted">{slot?.title ?? block.slot}</div>
-        <h2 className="truncate pt-0.5 text-sm font-semibold">{block.title}</h2>
-        {error !== null && (
-          <div className="pt-2">
-            <Callout tone="danger" role="alert" heading="This block failed to render">
-              <p>The error shows in its frame on the canvas.</p>
-            </Callout>
-          </div>
-        )}
+      {/*
+        One 40 px line, the canvas bar's height, so the two bars rule off at one height across the seam. Stuck 1 px high:
+        at a fractional scroll offset, a top-0 header leaves a 1 px row of the content above it showing.
+      */}
+      <header className="sticky -top-px z-sticky flex h-10 items-center gap-2 border-b bg-card px-4">
+        <h2 className="min-w-0 truncate text-sm font-semibold">{block.title}</h2>
+        <span className="ml-auto shrink-0 text-xs text-fg-muted">{slot?.title ?? block.slot}</span>
       </header>
+      {error !== null && (
+        <div className="px-4 pt-3">
+          <Callout tone="danger" role="alert" heading="This block failed to render">
+            <p>The error shows in its frame on the canvas.</p>
+          </Callout>
+        </div>
+      )}
       {banner}
       {block.props.appearance.length === 0 ? (
         <p className="px-4 py-4 text-sm text-fg-muted">This block has no adjustable settings.</p>

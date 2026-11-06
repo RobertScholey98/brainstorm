@@ -36,8 +36,8 @@ import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { HomeOverview } from "./Home";
-import { useWiderThan } from "./hooks/use-mobile";
-import { usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
+import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
+import { fitPanes, usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
 import { Inspector, InspectorRail, InspectorSkeleton } from "./Inspector";
 import { PendingOverrides } from "./overrides";
 import { AppSidebar, HomePanel, SessionPanel } from "./Sidebar";
@@ -51,6 +51,8 @@ const THREAD_CHECK_MS = 15_000;
 const SIDEBAR_WIDE: PaneLimits = { fallback: 288, min: 200, max: 400 };
 const SIDEBAR_NARROW: PaneLimits = { ...SIDEBAR_WIDE, fallback: 240 };
 const INSPECTOR: PaneLimits = { fallback: 280, min: 240, max: 480 };
+/** The collapsed Inspector, `InspectorRail`'s w-10. */
+const RAIL = 40;
 
 /**
  * What the window shows. An open brainstorm keeps its canvas while the sidebar shows the home list, so going back to
@@ -89,6 +91,12 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
   const sidebarLimits = useWiderThan(1280) ? SIDEBAR_WIDE : SIDEBAR_NARROW;
   const [sidebarWidth, setSidebarWidth] = usePaneWidth(prefs.panes.sidebar, sidebarLimits, (sidebar) => savePrefs({ panes: { sidebar } }));
   const [inspectorWidth, setInspectorWidth] = usePaneWidth(prefs.panes.inspector, INSPECTOR, (inspector) => savePrefs({ panes: { inspector } }));
+  const rail = prefs.inspectorRail;
+  const fitted = fitPanes(
+    { sidebar: sidebarWidth, inspector: rail ? RAIL : inspectorWidth },
+    { sidebar: sidebarLimits.min, inspector: rail ? RAIL : INSPECTOR.min },
+    useWindowWidth(),
+  );
   // A notice stays until Rob closes it or the next call he makes succeeds.
   const clearNotice = useCallback(() => setNotice(null), []);
 
@@ -138,7 +146,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     />
   );
   const sidebar = (panel: ReactNode) => (
-    <AppSidebar width={sidebarWidth} limits={sidebarLimits} onWidth={setSidebarWidth}>
+    <AppSidebar width={fitted.sidebar} limits={sidebarLimits} onWidth={setSidebarWidth}>
       {panel}
     </AppSidebar>
   );
@@ -147,7 +155,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
 
   return (
     <TooltipProvider>
-      <SidebarProvider className="h-svh min-h-0 overflow-hidden" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
+      <SidebarProvider className="h-svh min-h-0 overflow-hidden" style={{ "--sidebar-width": `${fitted.sidebar}px` } as CSSProperties}>
         {nav.kind === "overview" ? (
           <Shell
             sidebar={sidebar(homePanel)}
@@ -172,7 +180,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
             toast={toast}
             layout={prefs.canvas[nav.id]}
             onLayout={(layout) => savePrefs({ canvas: { session: nav.id, layout } })}
-            inspector={{ width: inspectorWidth, onWidth: setInspectorWidth, rail: prefs.inspectorRail, onRail: (inspectorRail) => savePrefs({ inspectorRail }) }}
+            inspector={{ width: fitted.inspector, onWidth: setInspectorWidth, rail, onRail: (inspectorRail) => savePrefs({ inspectorRail }) }}
             sidebar={sidebar}
             homePanel={nav.panel === "home" ? homePanel : null}
             onHome={() => setNav({ kind: "brainstorm", id: nav.id, panel: "home" })}
@@ -451,7 +459,7 @@ function SessionWorkspace({
       {view === null ? (
         <InspectorSkeleton width={inspector.width} />
       ) : inspector.rail ? (
-        <InspectorRail feedback={feedback.length} onExpand={() => inspector.onRail(false)} />
+        <InspectorRail open={feedback.filter((f) => f.status.state === "open").length} onExpand={() => inspector.onRail(false)} />
       ) : (
         <Inspector
           width={inspector.width}

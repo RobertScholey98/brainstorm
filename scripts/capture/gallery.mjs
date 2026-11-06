@@ -695,7 +695,7 @@ function scenes(page, home, env, t3, sessions) {
       await page.click("[data-inspector-toggle]");
       await page.waitForSelector("[data-inspector-rail]");
       await capture(page, "inspector-rail");
-      await page.click("[data-rail-expand]");
+      await page.click("[data-rail-feedback]");
       await page.waitForSelector("[data-feedback-panel]");
 
       await openRegenerate("all", "Make the whole flow feel calmer, especially the spin");

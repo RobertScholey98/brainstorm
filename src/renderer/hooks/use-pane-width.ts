@@ -41,3 +41,23 @@ export function usePaneWidth(stored: number | null, limits: PaneLimits, save: (w
   );
   return [width ?? limits.fallback, set];
 }
+
+/** The narrowest canvas that still shows a phone frame with the stage's padding round it. */
+export const CANVAS_MIN = 560;
+
+/**
+ * The widths the panes show at, so a pair kept from a wider window never squeezes the canvas under `CANVAS_MIN`.
+ * The Inspector gives way first, then the sidebar, neither below its minimum. The kept widths stay as Rob left them,
+ * for when the window is wide again.
+ */
+export function fitPanes(
+  panes: { readonly sidebar: number; readonly inspector: number },
+  mins: { readonly sidebar: number; readonly inspector: number },
+  window: number,
+): { sidebar: number; inspector: number } {
+  const over = panes.sidebar + panes.inspector + CANVAS_MIN - window;
+  if (over <= 0) return { ...panes };
+  const inspector = Math.max(mins.inspector, panes.inspector - over);
+  const sidebar = Math.max(mins.sidebar, panes.sidebar - (over - (panes.inspector - inspector)));
+  return { sidebar, inspector };
+}

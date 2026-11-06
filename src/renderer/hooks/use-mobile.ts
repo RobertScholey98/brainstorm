@@ -30,3 +30,14 @@ export function useWiderThan(px: number): boolean {
     () => matchMedia(query).matches,
   );
 }
+
+/** The window's width in CSS pixels, following resizes. */
+export function useWindowWidth(): number {
+  return React.useSyncExternalStore(
+    (onChange) => {
+      addEventListener("resize", onChange);
+      return () => removeEventListener("resize", onChange);
+    },
+    () => innerWidth,
+  );
+}

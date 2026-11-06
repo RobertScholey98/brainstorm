@@ -128,6 +128,13 @@ try {
   );
 
   await canvas.waitForSelector('[data-bid="result/card"]');
+  await window.waitForSelector("[data-block] header");
+  check(
+    "the canvas bar and the Inspector header rule off at one height across the seam",
+    await window.evaluate(() => Math.round(document.querySelector("[data-block] header").getBoundingClientRect().bottom - document.querySelector("[data-canvas-bar]").getBoundingClientRect().bottom)),
+    0,
+  );
+  check("a brainstorm with one slot shows no slot arrows", await window.$("[data-slot-step]"), null);
   const box = (selector) =>
     window.$eval(selector, (el) => {
       const r = el.getBoundingClientRect();
@@ -279,8 +286,8 @@ try {
   const inspectorWidth = () => window.$eval("aside[aria-label=Inspector]", (el) => el.getBoundingClientRect().width);
   await window.click("[data-inspector-toggle]");
   await window.waitForSelector("[data-inspector-rail]");
-  check("the Inspector collapses to a 40 px rail that counts the feedback", [await inspectorWidth(), (await window.textContent("[data-rail-count]"))?.trim()], [40, "1"]);
-  await window.click("[data-rail-expand]");
+  check("the Inspector collapses to a 40 px rail that counts the open feedback", [await inspectorWidth(), (await window.textContent("[data-rail-count]"))?.trim()], [40, "1"]);
+  await window.click("[data-rail-feedback]");
   await window.waitForSelector("[data-feedback-panel]");
   const narrow = await inspectorWidth();
   await window.focus('[data-slot="resize-handle"][aria-label="Inspector width"]');
@@ -384,9 +391,19 @@ try {
     [await sidebarWidth(), (await window.$("[data-inspector-rail]")) !== null, await window.getAttribute("[data-board-toggle]", "aria-pressed")],
     [widths.sidebar, true, "true"],
   );
-  await window.click("[data-rail-expand]");
+  await window.click("[data-rail-feedback]");
   await window.waitForSelector("[data-feedback-panel]");
   check("and so does the Inspector width", await inspectorWidth(), widths.inspector);
+  await window.setViewportSize({ width: 1100, height: 720 });
+  await window.waitForTimeout(300);
+  check(
+    "in a narrower window the kept widths give way, so the canvas keeps its 560 px",
+    await window.$eval("[data-canvas-region]", (el) => el.getBoundingClientRect().width >= 560 - 16),
+    true,
+  );
+  await window.setViewportSize({ width: 1440, height: 900 });
+  await window.waitForTimeout(300);
+  check("and come back when it widens", [await sidebarWidth(), await inspectorWidth()], [widths.sidebar, widths.inspector]);
   check("the window logged no errors or warnings across the restart", errors, []);
 
   // A fresh app asks T3 about each thread on first view, which is how a thread that vanished is found.
