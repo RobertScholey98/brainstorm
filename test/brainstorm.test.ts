@@ -502,7 +502,7 @@ describe("request phases", () => {
     expect(await phase(service)).toEqual({ phase: "queued", actions: ["open_thread", "withdraw"], message: "Queued in T3" });
 
     data(await service.act(S, { kind: "withdraw_request" }));
-    expect(await phase(service)).toEqual({ phase: "withdrawn", actions: [], message: "Withdrawn" });
+    expect(await phase(service)).toEqual({ phase: "withdrawn", actions: [], message: "Request withdrawn" });
   });
 
   test("previous thread after a takeover, and resend goes to the new thread", async () => {

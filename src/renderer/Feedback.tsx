@@ -4,9 +4,11 @@ import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, CanvasRect, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
 import { COMPOSER, composerPlace } from "./placement";
 import { cn } from "cn";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { overlaySurface } from "@/components/ui/overlay";
+import { OverlayHeader, PopoverFooter } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Hint } from "@/components/ui/tooltip";
 import type { Placement } from "./CanvasHost";
@@ -79,7 +81,7 @@ export function FeedbackPanel({
     <section className="border-t" aria-label="Feedback" data-feedback-panel>
       <header className="flex items-center gap-2 px-4 pt-3 pb-2">
         <h2 className="text-sm font-semibold">Feedback</h2>
-        <span className="text-xs tabular-nums text-fg-muted">{feedback.length > 0 ? feedback.length : ""}</span>
+        {feedback.length > 0 && <Badge>{feedback.length}</Badge>}
         {canPin ? (
           <Button variant="outline" className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
             <MessageSquarePlus data-icon="inline-start" aria-hidden />
@@ -108,9 +110,9 @@ export function FeedbackPanel({
           if (items.length === 0) return null;
           return (
             <div key={state} className="pb-2" data-group={state}>
-              <h3 className="flex gap-1.5 px-4 pt-1 pb-1 text-xs font-medium">
+              <h3 className="flex items-center gap-1.5 px-4 pt-1 pb-1 text-xs font-medium">
                 {title}
-                <span className="font-normal tabular-nums text-fg-muted">{items.length}</span>
+                <Badge>{items.length}</Badge>
               </h3>
               <ul>
                 {items.map((f) => (
@@ -156,7 +158,7 @@ function FeedbackItem({
     if (focused) item.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [focused]);
   const line = statusLine(f.status);
-  const where = `${block?.title ?? f.pin.blockId} · ${f.pin.part ?? "whole block"}`;
+  const where = pinWhere(f.pin, block);
   const run = (action: FeedbackAction) => {
     switch (action) {
       case "edit":
@@ -274,16 +276,22 @@ function DeleteConfirm({ onDelete, onCancel }: { onDelete: () => void; onCancel:
   );
 }
 
+/** Where a pin sits, block first, as the feedback list and the composer both name it. */
+const pinWhere = (pin: Pin, block: BlockView | null | undefined) => `${block?.title ?? pin.blockId} · ${pin.part ?? "whole block"}`;
+
+/** `overlay` puts the actions in the popover footer, for an editor that is a whole overlay rather than part of a row. */
 export function TextEditor({
   initial,
   placeholder,
   submitLabel,
+  overlay = false,
   onSubmit,
   onCancel,
 }: {
   initial: string;
   placeholder?: string;
   submitLabel: string;
+  overlay?: boolean;
   onSubmit: (text: string) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -307,18 +315,27 @@ export function TextEditor({
     if (e.key === "Escape") onCancel();
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void submit();
   };
-  return (
+  const actions = (
+    <>
+      <Kbd>Ctrl+Enter</Kbd>
+      <Button variant="ghost" onClick={onCancel}>
+        Cancel
+      </Button>
+      <Button variant="accent" disabled={text.trim() === "" || busy} onClick={() => void submit()} data-editor-submit>
+        {submitLabel}
+      </Button>
+    </>
+  );
+  const field = <Textarea ref={area} rows={3} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} className="resize-none" />;
+  return overlay ? (
+    <>
+      {field}
+      <PopoverFooter>{actions}</PopoverFooter>
+    </>
+  ) : (
     <div className="grid gap-2">
-      <Textarea ref={area} rows={3} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} className="resize-none" />
-      <div className="flex items-center gap-1.5">
-        <Kbd>Ctrl+Enter</Kbd>
-        <Button variant="ghost" className="ml-auto" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button variant="accent" disabled={text.trim() === "" || busy} onClick={() => void submit()} data-editor-submit>
-          {submitLabel}
-        </Button>
-      </div>
+      {field}
+      <div className="flex items-center justify-end gap-1.5">{actions}</div>
     </div>
   );
 }
@@ -354,16 +371,14 @@ export function PinComposer({
       </span>
       <div
         role="dialog"
-        aria-label="New comment"
+        aria-labelledby="composer-title"
         data-composer
         data-open=""
-        className={cn(overlaySurface(), "absolute z-popover grid gap-2 p-3 text-sm")}
+        className={cn(overlaySurface(), "absolute z-popover grid gap-3 p-3 text-sm")}
         style={{ left, top, width: COMPOSER.width }}
       >
-        <p className="truncate text-xs text-fg-muted">
-          <span className="font-medium text-fg">{pin.part ?? "Whole block"}</span> in {block?.title ?? pin.blockId}
-        </p>
-        <TextEditor initial="" placeholder="What should change here?" submitLabel="Pin comment" onSubmit={onSave} onCancel={onCancel} />
+        <OverlayHeader id="composer-title" heading="New comment" description={pinWhere(pin, block)} />
+        <TextEditor overlay initial="" placeholder="What should change here?" submitLabel="Pin comment" onSubmit={onSave} onCancel={onCancel} />
       </div>
     </>
   );

@@ -205,7 +205,7 @@ describe("requestPhase, one test per design.md row", () => {
   });
 
   test("withdrawn has no actions", () => {
-    expect(seen({ state: "withdrawn" }, attached, null)).toEqual({ phase: "withdrawn", actions: [], message: "Withdrawn" });
+    expect(seen({ state: "withdrawn" }, attached, null)).toEqual({ phase: "withdrawn", actions: [], message: "Request withdrawn" });
   });
 });
 

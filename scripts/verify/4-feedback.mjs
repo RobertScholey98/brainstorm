@@ -48,7 +48,15 @@ try {
 
   await canvas.click(HEADLINE);
   await window.waitForSelector("[data-composer]");
-  check("the composer names the picked part and block", (await window.textContent("[data-composer] p"))?.trim(), "headline in Assignment card");
+  check(
+    "the composer is titled New comment and names the block, then the picked part, with Ctrl+Enter beside Cancel in its footer",
+    await window.$eval("[data-composer]", (el) => [
+      el.querySelector("h2")?.textContent,
+      el.querySelector("[data-slot=popover-description]")?.textContent,
+      [...el.querySelectorAll("[data-slot=popover-footer] kbd, [data-slot=popover-footer] button")].map((n) => n.textContent),
+    ]),
+    ["New comment", "Assignment card · headline", ["Ctrl+Enter", "Cancel", "Pin comment"]],
+  );
   const frameAt = await window.$eval("iframe[title=Canvas]", (el) => el.getBoundingClientRect().toJSON());
   const part = await canvas.$eval(HEADLINE, (el) => el.getBoundingClientRect().toJSON());
   const pending = await window.$eval("[data-composer-pin]", (el) => el.getBoundingClientRect().toJSON());
@@ -81,6 +89,14 @@ try {
   await window.keyboard.press("Control+Enter");
   await window.waitForSelector('[data-feedback="2"]');
   await window.click('[data-feedback="2"] button:has-text("Edit")');
+  check(
+    "the edit field keeps the card's fill, not the row's tint, with Ctrl+Enter beside Cancel",
+    await window.$eval('[data-feedback="2"]', (li) => {
+      const card = getComputedStyle(li.closest("aside")).backgroundColor;
+      return [getComputedStyle(li.querySelector("textarea")).backgroundColor === card, [...li.querySelectorAll("kbd, button")].map((n) => n.textContent).slice(-3)];
+    }),
+    [true, ["Ctrl+Enter", "Cancel", "Save"]],
+  );
   await window.keyboard.press("Control+A");
   await window.keyboard.type("Spin button needs more contrast");
   await window.click('[data-feedback="2"] button:has-text("Save")');

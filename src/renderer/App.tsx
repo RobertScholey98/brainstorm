@@ -512,7 +512,7 @@ function WaitingEmpty({ loading }: { loading: boolean }) {
     <Empty className="size-full rounded-none bg-canvas">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Loader2 aria-hidden className="animate-spin" />
+          <Loader2 aria-hidden className="animate-spin text-accent" />
         </EmptyMedia>
         <EmptyTitle>Waiting for the agent's first commit</EmptyTitle>
         <EmptyDescription>Blocks appear here as soon as it lands.</EmptyDescription>

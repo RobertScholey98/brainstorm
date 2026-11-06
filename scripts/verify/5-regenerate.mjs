@@ -193,7 +193,7 @@ try {
   t3.endRun(DEMO_THREAD, "completed");
   check("no change", await phase("no_change"), { message: "The agent replied in T3 without changing the design", actions: ["retry", "withdraw"] });
   await window.click('[data-request-action="withdraw"]');
-  check("Withdraw closes the request", await phase("withdrawn"), { message: "Withdrawn", actions: [] });
+  check("Withdraw closes the request", await phase("withdrawn"), { message: "Request withdrawn", actions: [] });
 
   t3.setFailAfter(["send"]);
   await regenerate("described", "try a calmer palette everywhere");

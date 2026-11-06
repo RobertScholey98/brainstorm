@@ -134,7 +134,7 @@ export function phaseMessage(phase: RequestPhase, context: { title: string; chan
     case "fulfilled":
       return `Iteration ${phase.iteration} · ${changedNames(context.changed)}`;
     case "withdrawn":
-      return "Withdrawn";
+      return "Request withdrawn";
   }
 }
 

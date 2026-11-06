@@ -1,6 +1,7 @@
 import { AlertTriangle, Check, CircleAlert, CircleHelp, Clock, Info, Undo2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "cn";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -104,7 +105,7 @@ function RegenerateForm({
     blocks.filter((b) => chosen.has(b.id)).map((b) => b.id),
   );
   const body = requestBody(scope, text);
-  const missing = body !== null ? null : kind === "blocks" ? "Pick a block to send" : "Say what to change to send";
+  const missing = body !== null ? null : kind === "blocks" ? "Pick a block to send" : "Describe the change to send";
   const attached = scope === null ? [] : requestFeedback(view.feedback, scope);
   const toggle = (id: BlockId) =>
     setChosen((c) => {
@@ -126,7 +127,7 @@ function RegenerateForm({
       <Segmented value={kind} onValueChange={setKind} options={SCOPES} itemData="scope" aria-label="Scope" />
 
       {kind === "blocks" && (
-        <div className="grid max-h-picker gap-2 overflow-y-auto" data-block-choices>
+        <div className="grid gap-2" data-block-choices>
           {slots.map((slot) => (
             <fieldset key={slot.id} className="grid gap-0.5">
               <legend className="pb-0.5 text-xs font-medium text-fg-muted">{slot.title}</legend>
@@ -140,7 +141,7 @@ function RegenerateForm({
         </div>
       )}
       {kind === "all" && <p className="text-fg-muted">The agent may change any block, in every slot.</p>}
-      {kind === "described" && <p className="text-fg-muted">Say what to change. The agent works out which blocks that means.</p>}
+      {kind === "described" && <p className="text-fg-muted">The agent picks the blocks from what you write.</p>}
 
       <Textarea
         rows={3}
@@ -149,18 +150,18 @@ function RegenerateForm({
         data-freetext
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && void submit()}
-        placeholder={kind === "described" ? "Describe what to change" : "Anything to add? (optional)"}
+        placeholder={kind === "described" ? "What should change?" : "Anything to add? (optional)"}
         className="resize-none"
       />
 
       <div className="grid min-w-0 gap-1" data-attached-feedback>
-        <h3 className="flex gap-1.5 text-xs font-medium text-fg-muted">
+        <h3 className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
           {attached.length === 0 ? (
             "No open feedback in scope"
           ) : (
             <>
               Open feedback sent with it
-              <span className="font-normal tabular-nums">{attached.length}</span>
+              <Badge>{attached.length}</Badge>
             </>
           )}
         </h3>

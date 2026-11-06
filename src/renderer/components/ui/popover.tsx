@@ -39,7 +39,7 @@ function PopoverContent({
       >
         <PopoverPrimitive.Popup
           data-slot="popover-content"
-          className={cn(overlaySurface(), "flex max-w-(--available-width) flex-col gap-3 p-3 text-sm", WIDTH[size])}
+          className={cn(overlaySurface(), "flex max-h-(--available-height) max-w-(--available-width) flex-col gap-3 overflow-y-auto p-3 text-sm", WIDTH[size])}
           {...props}
         />
       </PopoverPrimitive.Positioner>
@@ -47,17 +47,34 @@ function PopoverContent({
   )
 }
 
+const TITLE = "text-sm font-semibold"
+const DESCRIPTION = "text-xs text-fg-muted"
+
 function PopoverHeader({ heading, description }: { heading: React.ReactNode; description?: React.ReactNode }) {
   return (
     <div data-slot="popover-header" className="grid gap-0.5">
-      <PopoverPrimitive.Title data-slot="popover-title" className="text-sm font-semibold">
+      <PopoverPrimitive.Title data-slot="popover-title" className={TITLE}>
         {heading}
       </PopoverPrimitive.Title>
       {description !== undefined && (
-        <PopoverPrimitive.Description data-slot="popover-description" className="text-xs text-fg-muted">
+        <PopoverPrimitive.Description data-slot="popover-description" className={DESCRIPTION}>
           {description}
         </PopoverPrimitive.Description>
       )}
+    </div>
+  )
+}
+
+/** The popover header on an overlay that isn't a Popover, such as the pin composer, which it titles by `id`. */
+function OverlayHeader({ id, heading, description }: { id: string; heading: React.ReactNode; description: React.ReactNode }) {
+  return (
+    <div data-slot="popover-header" className="grid min-w-0 gap-0.5">
+      <h2 id={id} className={TITLE}>
+        {heading}
+      </h2>
+      <p data-slot="popover-description" className={cn(DESCRIPTION, "truncate")}>
+        {description}
+      </p>
     </div>
   )
 }
@@ -73,6 +90,7 @@ function PopoverFooter({ hint, children }: { hint?: React.ReactNode; children: R
 }
 
 export {
+  OverlayHeader,
   Popover,
   PopoverContent,
   PopoverFooter,
