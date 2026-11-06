@@ -427,7 +427,8 @@ async function still(): Promise<string | null> {
     const shown = document.querySelector<HTMLElement>(".bs-preview");
     const width = state.frames[0]?.frame.width;
     if (shown === null || width === undefined) return null;
-    const height = Math.ceil((innerHeight * width) / innerWidth);
+    // The frame, down to the window's bottom: a frame shorter than the window ends there, and the host's mat shows under it.
+    const height = Math.min(Math.ceil((innerHeight * width) / innerWidth), Math.ceil(shown.offsetHeight));
     const body = getComputedStyle(document.body);
     const wrap = document.createElement("div");
     wrap.className = "bs-still";
@@ -447,7 +448,7 @@ async function still(): Promise<string | null> {
     await image.decode();
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(innerWidth * devicePixelRatio);
-    canvas.height = Math.round(innerHeight * devicePixelRatio);
+    canvas.height = Math.round(((height * innerWidth) / width) * devicePixelRatio);
     canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
     return canvas.toDataURL("image/png");
   } catch {

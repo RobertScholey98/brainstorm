@@ -137,11 +137,10 @@ function StatusLabel({ label, count }: { label: string; count: number | null }):
   return (
     <span className="flex items-center justify-center gap-1.5">
       {label}
-      {count !== null && (
-        <span className="font-normal text-fg-muted tabular-nums" data-status-count>
-          {count}
-        </span>
-      )}
+      {/* Two digits' room whether or not the count is in, so the row holds still when the first list lands. */}
+      <span className="min-w-4 text-left font-normal text-fg-muted tabular-nums" data-status-count={count === null ? undefined : true}>
+        {count}
+      </span>
     </span>
   );
 }

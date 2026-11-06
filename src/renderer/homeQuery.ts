@@ -4,7 +4,6 @@ import { markdownText } from "./markdownSubset";
 import { isSettled, listedAt } from "./sessionGroups";
 import { needsAttention } from "./status";
 
-
 const IN_STATUS: Record<HomeStatus, (s: SessionListing) => boolean> = {
   active: (s) => !isSettled(s),
   attention: (s) => !isSettled(s) && needsAttention(s),
@@ -22,12 +21,16 @@ export function matchesSearch(s: SessionListing, search: string): boolean {
 
 export type ProjectOption = { readonly id: ProjectId; readonly label: string; readonly count: number };
 
-/** Every project with a brainstorm, by name, for the project filter. */
-export function projectOptions(sessions: readonly SessionListing[]): ProjectOption[] {
+/**
+ * Every project with a brainstorm, by name, for the project filter. Each counts what picking it would show under the
+ * status and search as they are, so its count agrees with the cards; a project with none there still lists, at 0.
+ */
+export function projectOptions(sessions: readonly SessionListing[], status: HomeStatus, search: string): ProjectOption[] {
   const byId = new Map<ProjectId, ProjectOption>();
   for (const s of sessions) {
     const known = byId.get(s.projectId);
-    byId.set(s.projectId, { id: s.projectId, label: known?.label ?? s.projectName ?? "Other project", count: (known?.count ?? 0) + 1 });
+    const shown = IN_STATUS[status](s) && matchesSearch(s, search) ? 1 : 0;
+    byId.set(s.projectId, { id: s.projectId, label: known?.label ?? s.projectName ?? "Other project", count: (known?.count ?? 0) + shown });
   }
   return [...byId.values()].sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
 }

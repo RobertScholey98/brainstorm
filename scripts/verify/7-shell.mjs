@@ -36,7 +36,7 @@ function wideSession() {
   must("pull wide", brainstorm(env, ["pull", id, "--out", work, "--json"]));
   cpSync(join(root, "scripts", "demo", "chore-roulette", "slots", "result", "card"), join(work, "slots", "result", "card"), { recursive: true });
   const manifest = JSON.parse(readFileSync(join(work, "brainstorm.json"), "utf8"));
-  writeFileSync(join(work, "brainstorm.json"), JSON.stringify({ ...manifest, slots: [{ id: "result", title: "Wide frame", frame: { width: 980, height: 600 } }] }));
+  writeFileSync(join(work, "brainstorm.json"), JSON.stringify({ ...manifest, slots: [{ id: "result", title: "Wide frame", frame: { width: 980, height: 360 } }] }));
   must("commit wide", brainstorm(env, ["commit", id, "--from", work, "--json"]));
   return id;
 }
@@ -86,6 +86,8 @@ try {
     true,
   );
   check("the overview carries the page heading", (await window.textContent("[data-home-overview] h1"))?.trim(), "All brainstorms");
+  const statusWidth = () => window.$eval("[data-home-filters] [data-slot=segmented]", (s) => Math.round(s.getBoundingClientRect().width));
+  const loadedStatusWidth = await statusWidth();
   check(
     "at the title step, the one size every page heading takes",
     await window.$eval("[data-home-overview] h1", (h) => [getComputedStyle(h).fontSize, getComputedStyle(h).lineHeight, getComputedStyle(h).fontWeight]),
@@ -125,6 +127,16 @@ try {
     true,
   );
   check(
+    "every preview, still, waiting or failed, sits on one mat, and the wide frame, shorter than its well, ends on the mat rather than on a blank band",
+    await window.$$eval("[data-overview-session] [data-preview]", (wells) => {
+      const mats = new Set(wells.map((w) => getComputedStyle(w).backgroundColor + getComputedStyle(w).backgroundImage));
+      const stills = wells.map((w) => w.querySelector("img[data-preview-still]")).filter(Boolean);
+      const ends = stills.map((img) => Math.round(img.closest("[data-preview]").getBoundingClientRect().bottom - img.getBoundingClientRect().bottom));
+      return [mats.size, ends.some((gap) => gap > 12)];
+    }),
+    [1, true],
+  );
+  check(
     "no preview frame is left running once every still is taken",
     await window.$$eval('iframe[title="Preview"]', (frames) => frames.length),
     0,
@@ -143,6 +155,11 @@ try {
       return [...rows.values()].map((row) => [new Set(row.map(([h]) => h)).size, new Set(row.map(([, gap]) => gap)).size, row.length > 1]);
     }),
     [[1, 1, true]],
+  );
+  check(
+    "and every card is the same height, with or without a brief, so no row holds a blank the next doesn't",
+    await window.$$eval("[data-overview-session]", (cards) => new Set(cards.map((c) => Math.round(c.getBoundingClientRect().height))).size),
+    1,
   );
   check("the overview is the active row in the sidebar", (await window.$("[data-overview][data-active]")) !== null, true);
   check(
@@ -217,11 +234,15 @@ try {
   await window.click('[data-home-status="all"]');
   await window.waitForSelector("[data-overview-settled]");
   check(
-    "under All, the overview lists it under the Settled heading, muted and marked, its preview dimmed",
+    "under All, the overview lists it under the Settled heading, marked, a ghost of an active card with no fill or lift, on the same mat",
     await window.$$eval("[data-overview-settled] [data-overview-session]", (cards) =>
-      cards.map((c) => [c.dataset.overviewSession, c.dataset.settled, c.querySelector('[data-session-status="settled"]')?.textContent, getComputedStyle(c.querySelector("[data-preview]")).opacity]),
+      cards.map((c) => {
+        const style = getComputedStyle(c);
+        const mat = getComputedStyle(c.querySelector("[data-preview]")).backgroundColor === getComputedStyle(document.querySelector("[data-overview-session]:not([data-settled]) [data-preview]")).backgroundColor;
+        return [c.dataset.overviewSession, c.dataset.settled, c.querySelector('[data-session-status="settled"]')?.textContent, style.backgroundColor, style.boxShadow.includes("rgba(0, 0, 0, 0.06)"), mat];
+      }),
     ),
-    [[kitchen, "true", "Settled", "0.6"]],
+    [[kitchen, "true", "Settled", "rgba(0, 0, 0, 0)", false, true]],
   );
   await window.click("[data-settled-label]");
   await window.waitForSelector(`[data-settled-group] [data-session="${kitchen}"][data-settled]`);
@@ -279,7 +300,19 @@ try {
   await shot(window, shots, "search-results");
   await window.fill("[data-home-search]", "zebra");
   await window.waitForSelector('[data-home-none="no-match"]');
-  check("a search with no match says so, with one way out", (await window.textContent('[data-home-none="no-match"] [data-home-none-action]'))?.trim(), "Clear search and filters");
+  check(
+    "a search with no match says so, naming only the search, with one way out",
+    [
+      (await window.textContent('[data-home-none="no-match"] [data-slot=empty-description]'))?.trim(),
+      (await window.textContent('[data-home-none="no-match"] [data-home-none-action]'))?.trim(),
+    ],
+    ["No active brainstorm matches the search.", "Clear search"],
+  );
+  check(
+    "and sits under the query row, not down the page",
+    await window.evaluate(() => Math.round(document.querySelector("[data-home-none]").getBoundingClientRect().top - document.querySelector("[data-home-filters]").getBoundingClientRect().bottom)),
+    20,
+  );
   await shot(window, shots, "search-empty");
   await window.keyboard.press("Escape");
   check("Escape clears the search, and every active brainstorm is back", [await window.inputValue("[data-home-search]"), (await cards()).length], ["", 3]);
@@ -292,9 +325,9 @@ try {
   await window.click("[data-project-filter]");
   await window.waitForSelector("[data-project-menu]");
   check(
-    "the project filter lists every project by name, with how many brainstorms each holds",
+    "the project filter lists every project by name, with how many brainstorms each would show under the status, so a settled one isn't counted under Active",
     await window.$$eval("[data-project-option]", (rows) => rows.map((r) => r.textContent)),
-    ["chores2", "kitchen1", "Other project1"],
+    ["chores2", "kitchen0", "Other project1"],
   );
   await window.waitForTimeout(300);
   await shot(window, shots, "filter-menu");
@@ -854,12 +887,14 @@ try {
       await route.abort();
     },
   }));
+  await window.setViewportSize({ width: 1440, height: 900 });
   await window.waitForSelector("[data-overview-skeleton]");
   check(
     "while the first list loads, each status is named with no count, since none is known yet",
     await window.$$eval("[data-home-status]", (items) => items.map((i) => i.textContent)),
     ["Active", "Attention", "Settled", "All"],
   );
+  check("and keeps a count's room, so the row doesn't move when the counts land", await statusWidth(), loadedStatusWidth);
   answer();
   await window.waitForSelector("[data-home-error]");
   check(

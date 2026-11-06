@@ -48,20 +48,31 @@ function useInView(target: React.RefObject<Element | null>): boolean {
 }
 
 /**
- * A home card's preview: the latest iteration's first slot, as Rob left it, scaled to the card's width from the top.
+ * A home card's preview: the latest iteration's first slot, as Rob left it, on a mat of the canvas the way the stage
+ * shows a frame. The frame is inset from the mat's top and sides at the card's width and runs off its bottom, so a
+ * short frame ends on the mat and every state, loading, waiting, failed and settled, sits on the same surface.
  * It is drawn in the canvas's own sandboxed frame (`/canvas/preview`, same CSP, postMessage only), which takes a still
  * of itself and is then removed, so only a few frames ever run. It loads only while the card is in view, and nothing
  * in it can be pressed or focused: a click lands on the card.
  */
 export function CardPreview({ id, revision, load, muted }: { id: SessionId; revision: number; load: LoadPreview; muted: boolean }) {
   const loadStill = useCallback(() => load(id), [load, id]);
+  return <Still load={loadStill} revision={revision} className={WELL} muted={muted} empty={WAITING} />;
+}
+
+/** One brainstorm with no iteration yet, in the words the canvas and the sidebar use too. */
+export const WAITING = "Waiting for the first commit";
+
+const WELL = "h-preview shrink-0 rounded-t-lg border-b canvas-dots";
+/** The frame's place on the mat: 12 px in from the top and sides, running off the bottom. */
+const FRAME = "absolute inset-x-3 top-3 bottom-0";
+
+/** The well while the card itself loads: the mat, and a frame-shaped skeleton where the still will land. */
+export function PreviewSkeleton() {
   return (
-    <Still
-      load={loadStill}
-      revision={revision}
-      className={cn("h-preview shrink-0 rounded-t-lg border-b", muted && "opacity-60")}
-      empty="Waiting for the first commit"
-    />
+    <div aria-hidden className={cn("relative overflow-hidden bg-canvas", WELL)} data-preview="loading">
+      <Skeleton className={cn(FRAME, "rounded-b-none rounded-t-sm")} />
+    </div>
   );
 }
 
@@ -79,11 +90,14 @@ function Still({
   className,
   empty = "",
   compact = false,
+  muted = false,
 }: {
   load: LoadStill;
   revision: number;
   className: string;
   empty?: string;
+  /** A settled card's: the still recedes, the mat stays. */
+  muted?: boolean;
   /** A thumbnail: its states show as an icon alone. */
   compact?: boolean;
 }) {
@@ -166,19 +180,29 @@ function Still({
       className={cn("relative overflow-hidden bg-canvas", className)}
       data-preview={shown.kind}
     >
-      {shown.kind === "still" && <img src={shown.image} alt="" className="size-full object-cover object-top" draggable={false} />}
-      {(turn || shown.kind === "live") && shown.kind !== "still" && shown.kind !== "failed" && (
-        <iframe
-          ref={frame}
-          title="Preview"
-          src="/canvas/preview"
-          sandbox="allow-scripts"
-          tabIndex={-1}
-          inert
-          className={cn("pointer-events-none absolute inset-0 size-full border-0", shown.kind !== "live" && "opacity-0")}
-        />
-      )}
-      {shown.kind === "loading" && <Skeleton className={cn("absolute rounded-sm", compact ? "inset-1" : "inset-3")} />}
+      <div className={compact ? "absolute inset-0" : FRAME}>
+        {shown.kind === "still" && (
+          <img
+            src={shown.image}
+            alt=""
+            className={cn("block w-full", !compact && "rounded-sm shadow-xs ring-1 ring-border-strong", muted && "opacity-50 grayscale")}
+            draggable={false}
+            data-preview-still
+          />
+        )}
+        {(turn || shown.kind === "live") && shown.kind !== "still" && shown.kind !== "failed" && (
+          <iframe
+            ref={frame}
+            title="Preview"
+            src="/canvas/preview"
+            sandbox="allow-scripts"
+            tabIndex={-1}
+            inert
+            className={cn("pointer-events-none size-full border-0", !compact && "rounded-t-sm", shown.kind !== "live" && "opacity-0")}
+          />
+        )}
+        {shown.kind === "loading" && <Skeleton className={cn("absolute inset-0", compact ? "rounded-sm" : "rounded-b-none rounded-t-sm")} />}
+      </div>
       {shown.kind === "empty" && (
         <span className="flex size-full items-center justify-center gap-1.5 text-xs text-fg-muted">
           <Hourglass aria-hidden className="size-3.5" />

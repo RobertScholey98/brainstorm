@@ -165,6 +165,13 @@ body[data-resizing] [data-slot="sidebar-container"] {
   transition: none;
 }
 
+/* The canvas's dot grid, as the canvas document draws it, for a home preview's mat. */
+@utility canvas-dots {
+  background-color: var(--canvas);
+  background-image: radial-gradient(color-mix(in oklab, var(--fg) 10%, transparent) 1px, transparent 1.2px);
+  background-size: 16px 16px;
+}
+
 /* The home overview's cards: as many 240 px columns as fit, sharing the spare width. */
 @utility grid-overview {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));

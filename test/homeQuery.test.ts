@@ -75,9 +75,20 @@ test("search narrows the counts too, so a status tab never promises cards it won
 });
 
 test("the project filter lists every project once, by name, with Other project for one without", () => {
-  expect(projectOptions(all).map((p) => [p.id, p.label, p.count])).toEqual([
+  expect(projectOptions(all, "all", "").map((p) => [p.id, p.label, p.count])).toEqual([
     ["p-chores", "chores", 3],
     ["p-kitchen", "kitchen", 2],
     ["p-loose", "Other project", 1],
   ]);
+});
+
+test("each project counts what picking it would show under the status and search as they are", () => {
+  const counts = (status: HomeQuery["status"], search: string) => projectOptions(all, status, search).map((p) => [p.label, p.count]);
+  expect(counts("active", "")).toEqual([["chores", 2], ["kitchen", 1], ["Other project", 1]]);
+  expect(counts("settled", "")).toEqual([["chores", 1], ["kitchen", 1], ["Other project", 0]]);
+  expect(counts("all", "bins")).toEqual([["chores", 2], ["kitchen", 0], ["Other project", 0]]);
+  for (const status of ["active", "attention", "settled", "all"] as const) {
+    const total = projectOptions(all, status, "").reduce((n, p) => n + p.count, 0);
+    expect(total, status).toBe(queryHome(all, q({ status }), "").counts[status]);
+  }
 });
