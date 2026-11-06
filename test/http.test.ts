@@ -126,6 +126,18 @@ describe("http", () => {
     expect(await res.text()).toContain('<script type="application/json" id="brainstorm-boot">{"mode":"live","messages":[]}</script>');
   });
 
+  test("serves the preview page under the same CSP, with no payload, and its data only on the UI token", async () => {
+    const res = await fetch(`${base()}/canvas/preview`);
+    expect(res.headers.get("content-security-policy")).toBe(
+      "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'",
+    );
+    expect(await res.text()).toContain('<script type="application/json" id="brainstorm-boot">{"mode":"preview","messages":[]}</script>');
+    const created = await call("POST", "/v1/agent/sessions", agentToken, { title: "Previewed", brief: "", thread: T1, project: null });
+    const id = created.body.data.session.id;
+    expect((await call("GET", `/v1/ui/sessions/${id}/preview`, agentToken)).status).toBe(401);
+    expect(await call("GET", `/v1/ui/sessions/${id}/preview`, server.uiToken)).toEqual({ status: 200, body: { ok: true, data: null } });
+  });
+
   test("serves only the renderer's own files", async () => {
     expect((await fetch(`${base()}/assets/..%2F..%2Fpackage.json`)).status).toBe(404);
     expect((await fetch(`${base()}/assets/worker.cjs`)).status).toBe(404);

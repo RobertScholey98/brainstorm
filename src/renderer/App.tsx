@@ -85,6 +85,8 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
   const [listError, setListError] = useState<string | null>(null);
   const [nav, setNav] = useState<Nav>({ kind: "overview" });
   const [revision, setRevision] = useState(0);
+  // Each brainstorm's own count, so a change reloads that card's preview and no other.
+  const [revisions, setRevisions] = useState<ReadonlyMap<SessionId, number>>(new Map());
   const [notice, setNotice] = useState<Notice | null>(null);
   const sidebarLimits = useWiderThan(1280) ? SIDEBAR_WIDE : SIDEBAR_NARROW;
   const [sidebarWidth, setSidebarWidth] = usePaneWidth(prefs.panes.sidebar, sidebarLimits, (sidebar) => savePrefs({ panes: { sidebar } }));
@@ -121,10 +123,12 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     void api.events(
       (id) => {
         void refreshList();
+        setRevisions((m) => new Map(m).set(id, (m.get(id) ?? 0) + 1));
         if (id === current.current) setRevision((r) => r + 1);
       },
       () => {
         void refreshList();
+        setRevisions((m) => new Map([...m].map(([id, n]) => [id, n + 1])));
         setRevision((r) => r + 1);
       },
       controller.signal,
@@ -183,6 +187,8 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
                 onRetry={() => void refreshList()}
                 onSession={openSession}
                 onSettle={(s) => void toggleSettled(s)}
+                revisions={revisions}
+                loadPreview={api.preview}
               />
               {toast}
             </section>

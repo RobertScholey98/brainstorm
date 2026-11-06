@@ -22,6 +22,9 @@
 //                    every page title has one size
 //   inline-size      an inline style that sets a size to a number or a named constant, outside components/ui; a fixed
 //                    size is a step on the closed scales, and only a measured size goes inline
+//   frame-sandbox    an iframe anywhere in the renderer that isn't the canvas's: its src must be /canvas or
+//                    /canvas/preview and its sandbox exactly "allow-scripts", so agent code always runs in an opaque
+//                    origin under the canvas CSP, a home preview included
 //
 // A string counts as classes inside className, cn, cva, cx and clsx. Elsewhere it counts when every word in it is a
 // Tailwind candidate and at least one generates CSS, so `align="end"` and `data-icon="inline-start"` aren't classes.
@@ -35,7 +38,7 @@ const root = fileURLToPath(new URL("../..", import.meta.url));
 const STYLES = join(root, "src", "renderer", "styles.css");
 
 /** Keys in the spacing namespace that are for sizes only, so padding, margin and gap can't use them. */
-export const SIZING_ONLY = new Set(["2.5", "3.5", "4.5", "7", "16", "inspector", "popover-sm", "popover-md", "menu", "picker", "frame"]);
+export const SIZING_ONLY = new Set(["2.5", "3.5", "4.5", "7", "16", "inspector", "popover-sm", "popover-md", "menu", "picker", "frame", "preview"]);
 const SPACING_UTILITY = /^(?:p[xytrblse]?|m[xytrblse]?|gap(?:-[xy])?|space-[xy])-(.+)$/;
 const RING_WIDTH = /^(?:ring|inset-ring|ring-offset|outline)-(\d+)$/;
 /** A ring or outline utility that sets a colour rather than a width or a style. */
@@ -102,7 +105,7 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
       if (FLOATING.has(utility)) problems.push({ rule: "surface-recipe", line: lit.line, text: token, message: "floating surfaces come from overlaySurface in components/ui/overlay.ts" });
     });
   }
-  problems.push(...chipRecipe(source, lits));
+  problems.push(...chipRecipe(source, lits), ...frameSandbox(source));
   if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source));
   return problems.sort((a, b) => a.line - b.line);
 }
@@ -128,6 +131,23 @@ function elementRules(source, lits) {
     }
   }
   return problems;
+}
+
+const CANVAS_PAGES = new Set(["/canvas", "/canvas/preview"]);
+
+/** Every iframe is a canvas page under the canvas sandbox, with no other privilege. */
+function frameSandbox(source) {
+  return jsxElements(source)
+    .filter((el) => el.tag === "iframe")
+    .flatMap((el) => {
+      const value = (name) => {
+        const attr = el.attrs.find((a) => a.name === name);
+        return attr === undefined ? undefined : source.slice(attr.start, attr.end).replace(/^\{?"|"\}?$/g, "");
+      };
+      const [src, sandbox] = [value("src"), value("sandbox")];
+      if (CANVAS_PAGES.has(src) && sandbox === "allow-scripts") return [];
+      return [{ rule: "frame-sandbox", line: el.line, text: `<iframe src=${src} sandbox=${sandbox}>`, message: 'an iframe is a canvas page, /canvas or /canvas/preview, with sandbox="allow-scripts" and nothing more' }];
+    });
 }
 
 /** A code or key element whose own classes paint a fill, instead of taking the chip recipe. */

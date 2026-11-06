@@ -101,6 +101,22 @@ try {
     await window.$$eval("[data-overview-session]", (els) => els.map((e) => e.dataset.overviewSession)),
     [loose, kitchen, wide, roulette],
   );
+  await window.waitForFunction(() => [...document.querySelectorAll("[data-preview]")].every((p) => p.dataset.preview !== "loading"), null, { timeout: 15_000 });
+  check(
+    "each card's preview settles: a still for a brainstorm with an iteration, a quiet note for one waiting on its first commit",
+    await window.$$eval("[data-overview-session]", (cards) => cards.map((c) => [c.dataset.overviewSession, c.querySelector("[data-preview]")?.dataset.preview])),
+    [
+      [loose, "empty"],
+      [kitchen, "empty"],
+      [wide, "still"],
+      [roulette, "still"],
+    ],
+  );
+  check(
+    "no preview frame is left running once every still is taken",
+    await window.$$eval('iframe[title="Preview"]', (frames) => frames.length),
+    0,
+  );
   check(
     "cards in a row share one height, with each meta line on the card's bottom edge, whether or not it has a brief",
     await window.$$eval("[data-overview-session]", (cards) => {
@@ -182,9 +198,11 @@ try {
     [null, "1", null],
   );
   check(
-    "the overview moves its card under the Settled heading, muted and marked",
-    await window.$$eval("[data-overview-settled] [data-overview-session]", (cards) => cards.map((c) => [c.dataset.overviewSession, c.dataset.settled, c.querySelector('[data-session-status="settled"]')?.textContent])),
-    [[kitchen, "true", "Settled"]],
+    "the overview moves its card under the Settled heading, muted and marked, its preview dimmed",
+    await window.$$eval("[data-overview-settled] [data-overview-session]", (cards) =>
+      cards.map((c) => [c.dataset.overviewSession, c.dataset.settled, c.querySelector('[data-session-status="settled"]')?.textContent, getComputedStyle(c.querySelector("[data-preview]")).opacity]),
+    ),
+    [[kitchen, "true", "Settled", "0.6"]],
   );
   await window.click("[data-settled-label]");
   await window.waitForSelector(`[data-settled-group] [data-session="${kitchen}"][data-settled]`);

@@ -48,10 +48,12 @@ type CanvasState = {
 };
 
 const boot = JSON.parse(document.getElementById("brainstorm-boot")?.textContent ?? "{}") as {
-  mode?: "live" | "export";
+  mode?: "live" | "export" | "preview";
   messages?: HostToFrame[];
 };
 const live = boot.mode !== "export";
+/** A home card's preview: one block, no chrome, nothing to press, and a still of it once it has painted. */
+const preview = boot.mode === "preview";
 
 const post = (message: FrameToHost) => {
   if (live) window.parent.postMessage(message, "*");
@@ -144,6 +146,11 @@ function receive(message: HostToFrame): void {
       return;
     }
     case "state": {
+      if (preview) {
+        setState({ frames: message.frames, props: message.props });
+        void paint();
+        return;
+      }
       const moved = message.selected !== state.selected || message.stage !== state.stage;
       // A frame Rob pressed waits for the pointer to lift, so the canvas never scrolls under a click.
       const reveal = moved && message.selected !== null && message.selected !== pressed;
@@ -385,6 +392,69 @@ function Canvas() {
   );
 }
 
+/**
+ * The preview: the block at its frame's width, zoomed to the window's, so the card shows its top edge to edge. Its
+ * frame keeps the declared height, so a short block still fills the card.
+ */
+function Preview() {
+  const s = useSyncExternalStore(subscribe, () => state);
+  const frame = s.frames[0];
+  if (frame === undefined) return null;
+  return (
+    <div className="bs-preview" style={{ width: frame.frame.width, minHeight: frame.frame.height ?? undefined, zoom: innerWidth / frame.frame.width }}>
+      <Block frame={frame} hash={s.hashes.get(frame.blockId)} props={s.props[frame.blockId] ?? {}} />
+    </div>
+  );
+}
+
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
+/** Waits for the block to paint, then tells the host, with a still of what the card shows. */
+async function paint(): Promise<void> {
+  await document.fonts.ready;
+  await nextFrame();
+  await nextFrame();
+  post({ kind: "painted", image: await still() });
+}
+
+/**
+ * Draws the preview into an image: the DOM and every stylesheet go into an SVG foreignObject, which a canvas can
+ * draw and still read back, so the still needs no privilege the frame lacks. Animations are stopped at their resting
+ * style, since an image shows one moment. Null when any step fails, and the host then keeps the live frame.
+ */
+async function still(): Promise<string | null> {
+  try {
+    const shown = document.querySelector<HTMLElement>(".bs-preview");
+    const width = state.frames[0]?.frame.width;
+    if (shown === null || width === undefined) return null;
+    const height = Math.ceil((innerHeight * width) / innerWidth);
+    const body = getComputedStyle(document.body);
+    const wrap = document.createElement("div");
+    wrap.className = "bs-still";
+    wrap.setAttribute(
+      "style",
+      `width: ${width}px; height: ${height}px; overflow: hidden; background: ${body.backgroundColor}; color: ${body.color}; font-family: ${body.fontFamily}; font-size: ${body.fontSize}; line-height: ${body.lineHeight}`,
+    );
+    const css = document.createElement("style");
+    css.textContent = [...document.querySelectorAll("style")].map((s) => s.textContent ?? "").join("\n").replaceAll(":root", ".bs-still") +
+      "\n.bs-still *, .bs-still *::before, .bs-still *::after { animation: none !important; transition: none !important; }";
+    const copy = shown.cloneNode(true) as HTMLElement;
+    copy.style.zoom = "";
+    wrap.append(css, copy);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%">${new XMLSerializer().serializeToString(wrap)}</foreignObject></svg>`;
+    const image = new Image();
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(innerWidth * devicePixelRatio);
+    canvas.height = Math.round(innerHeight * devicePixelRatio);
+    canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
 // Pins and the pick highlight are positioned every animation frame, because block code can move its parts at any time
 // (transitions, state, resizes) and there is no event for all of those.
 
@@ -499,7 +569,7 @@ function layoutHover(): void {
   highlight.dataset.on = "";
 }
 
-if (live) {
+if (live && !preview) {
   document.body.append(highlight, fixedOrigin);
   // In pin mode a click pins instead of reaching the block, so it can't press the block's own buttons.
   for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "dblclick", "contextmenu"]) {
@@ -648,6 +718,14 @@ body {
 }
 body[data-mode="pin"], body[data-mode="pin"] * { cursor: crosshair !important; }
 body[data-mode="pin"] .bs-pin { cursor: pointer !important; }
+${
+  preview
+    ? `html { scrollbar-gutter: auto; overflow: hidden; }
+body { background: var(--bs-card); pointer-events: none; user-select: none; }
+#canvas { display: block; padding: 0; }
+.bs-preview { position: relative; isolation: isolate; overflow: hidden; }`
+    : ""
+}
 `;
 
 const chrome = document.createElement("style");
@@ -666,9 +744,10 @@ window.addEventListener("message", (e: MessageEvent) => {
 
 for (const message of boot.messages ?? []) receive(message);
 const root = document.getElementById("canvas");
-if (root !== null) createRoot(root).render(<Canvas />);
+if (root !== null) createRoot(root).render(preview ? <Preview /> : <Canvas />);
 
 addEventListener("resize", () => {
+  if (preview) return setState({});
   fitCanvas();
   revealSelected("auto");
   requestAnimationFrame(reportBelow);

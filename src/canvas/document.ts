@@ -8,9 +8,10 @@ export const CANVAS_CSP =
 
 /**
  * `live` talks to the host over postMessage. `export` has no host: the runtime replays the payload's messages in
- * order, exactly as if the host had sent them.
+ * order, exactly as if the host had sent them. `preview` is a home card's: one block scaled to the frame's width,
+ * with no chrome and nothing to press, that tells the host when it has painted.
  */
-export type CanvasDocumentMode = "live" | "export";
+export type CanvasDocumentMode = "live" | "export" | "preview";
 
 export type CanvasPayload = readonly HostToFrame[];
 

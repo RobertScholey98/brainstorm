@@ -22,6 +22,7 @@ import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps }
 import { Store, type FeedbackRecord, type IterationBlock, type StoredContent, type StoredIteration } from "./store";
 import {
   blockIdOf,
+  framesOf,
   issue,
   isError,
   splitBlockId,
@@ -59,6 +60,7 @@ import {
   type RobAction,
   type SessionId,
   type SessionListing,
+  type SessionPreview,
   type SessionSummary,
   type SessionView,
   type SlotView,
@@ -755,6 +757,15 @@ export class Brainstorm {
       result.kind === "sent" ? { state: "sent" } : { state: "send_failed", error: result.error },
       result.kind === "sent" ? { sentAt: this.#now() } : {},
     );
+  }
+
+  preview(id: SessionId): Result<SessionPreview | null> {
+    if (this.#store.session(id) === null) return fail(notFound("session", `no session ${id}`));
+    const { iteration } = this.#current(id, this.#store.latestIteration(id));
+    const frame = iteration === null ? undefined : framesOf(iteration.slots)[0];
+    const block = frame === undefined ? undefined : iteration?.blocks.find((b) => b.id === frame.blockId);
+    if (frame === undefined || block === undefined) return ok(null);
+    return ok({ frame, module: { blockId: block.id, hash: block.hash, compiled: block.compiled, css: block.css }, props: block.effectiveProps });
   }
 
   async exportHtml(id: SessionId): Promise<Result<ExportResult>> {

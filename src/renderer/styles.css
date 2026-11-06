@@ -51,6 +51,8 @@
   --spacing-picker: 220px;
   /* The phone frame most brainstorms open with, for the stage's loading frame. */
   --spacing-frame: 390px;
+  /* A home card's preview band. */
+  --spacing-preview: 160px;
   --container-xs: 20rem;
   --container-sm: 24rem;
   --container-md: 28rem;

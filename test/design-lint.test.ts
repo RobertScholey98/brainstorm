@@ -69,7 +69,7 @@ describe("design lint", () => {
       `import { Button, Hint } from "@/components/ui/button";`,
       `<span title="Thread lost" />`,
       `<Button variant="ghost"\n  title={label}>Reset</Button>`,
-      `<iframe title="Canvas" />`,
+      `<iframe title="Canvas" src="/canvas" sandbox="allow-scripts" />`,
       `<SessionPanel title={view.title} />`,
       `<Hint label="Reset" side="left"><Button>Reset</Button></Hint>`,
     ].join("\n");
@@ -166,6 +166,15 @@ describe("design lint", () => {
       { rule: "inline-size", line: 2, text: `<div> maxWidth: "20rem"` },
     ]);
     expect(rules(source, true)).toEqual([]);
+  });
+
+  it("frame-sandbox: fails an iframe that isn't a canvas page under the bare scripts sandbox, kit included", () => {
+    expect(rules(`<iframe src="/canvas" sandbox="allow-scripts" />\n<iframe title="Preview" src="/canvas/preview" sandbox="allow-scripts" />`, true)).toEqual([]);
+    expect(rules(`<iframe src="/canvas/preview" sandbox="allow-scripts allow-same-origin" />\n<iframe src="https://x.test" sandbox="allow-scripts" />\n<iframe src="/canvas" />`, true)).toEqual([
+      { rule: "frame-sandbox", line: 1, text: "<iframe src=/canvas/preview sandbox=allow-scripts allow-same-origin>" },
+      { rule: "frame-sandbox", line: 2, text: "<iframe src=https://x.test sandbox=allow-scripts>" },
+      { rule: "frame-sandbox", line: 3, text: "<iframe src=/canvas sandbox=undefined>" },
+    ]);
   });
 
   it("passes on the renderer as it stands", async () => {

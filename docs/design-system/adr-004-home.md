@@ -34,3 +34,44 @@ Home lists every brainstorm Rob has ever started. With a few dozen, the ones he 
 - `test/http.test.ts`: only the UI token settles, and a body without `settled` is refused.
 - `test/sessionGroups.test.ts`: settled brainstorms leave the active list newest settled first, a `settling` one stays, and one brought back lists first.
 - `verify:7`: the hover swap and the hint, the Settled group shut with its count, the overview's Settled section, the muted row and its age, the chord on a focused row both ways, a card's own control both ways, and a settle that survives a restart.
+
+## Previews
+
+Each overview card opens with a preview of the brainstorm: the latest iteration's first slot, showing the variant Rob has selected, with his settings applied. It fills the 160 px band T25 left at the top of the card, scaled to the card's width from the top, since every frame is a page that starts at its top. The band is there on every card, so rows keep one height.
+
+### Security
+
+A preview runs agent code, so it runs exactly as the canvas does. `/canvas/preview` is the canvas document in a third mode, under the same CSP header, in an iframe with `sandbox="allow-scripts"` and nothing else, so its origin is opaque. Its data comes by postMessage only: the renderer fetches `GET /v1/ui/sessions/:id/preview` with the UI token and posts `modules` and `state`, as the canvas host does. In preview mode the runtime draws the one block with no frame title, variant switch, pins, pick or key forwarding, and its page takes no pointer events. The iframe is `inert`, out of the tab order and under `aria-hidden`. Nothing in it can be pressed: the card's title is its button, stretched over the whole card, so a click on the preview opens the brainstorm. `npm run lint:design` fails any iframe in the renderer that isn't a canvas page under that sandbox (`frame-sandbox`).
+
+### Stills, three frames at a time
+
+Each preview frame is a page with its own copy of React. Two ways to show many were built and measured:
+
+- **Live frames.** Every card in view keeps its frame running, and a card that leaves the view drops it.
+- **Stills.** A card in view takes a turn, at most three at once. Its frame draws the block, then takes a still of itself: its DOM and styles go into an SVG `foreignObject`, which a canvas draws and reads back as a PNG without being tainted, so the still needs no privilege the frame lacks. The frame posts `painted { image }` and is removed, and the turn passes on. Stills are kept by block hash, settings, frame width and theme, so a card scrolled back to, or a theme switch back, shows at once.
+
+Measured on 2026-11-06 in Electron 44 with 24 brainstorms, each with its own block content, 12 cards in view at 1440 × 900, two runs each. Memory is private bytes summed over the app's processes, after the previews in view had painted.
+
+| | Memory | Idle CPU | 12 cards painted | 12 more after a scroll |
+| --- | --- | --- | --- | --- |
+| No previews | 314 MB | 0.4% | | |
+| Live frames, 12 running | 418 to 436 MB | 0.5 to 0.6% | 287 to 436 ms | 191 to 197 ms |
+| Stills, 3 frames at a time | 441 to 463 MB | 0.5 to 0.6% | 556 to 635 ms | 348 ms |
+
+With the demo's blocks, which sit still once drawn, the two cost the same memory and CPU; the frames share one sandboxed process of about 70 MB, which stays once the last frame goes. Live frames paint about 250 ms sooner. Stills are the choice anyway, because their cost doesn't depend on the blocks or the window. A live frame keeps its block running, so every timer, animation or canvas loop in a block costs CPU for as long as its card is in view, times the number of cards a large window shows. Stills run three frames at most, each for under a second, whatever the blocks do and however big the window is. The 250 ms sits under the loading skeleton, and a still from the cache shows at once (12 cards in about 30 ms).
+
+If a still fails, the card keeps its live frame, and gives its turn back, so one block that can't be drawn into an image still shows.
+
+### States
+
+- **Loading.** A skeleton fills the band until the still arrives.
+- **No iteration yet.** "Waiting for the first commit" with an hourglass, quiet, so the band never looks broken.
+- **Failed.** A block that fails to compile or render, or a frame that hasn't painted in 10 s, shows "The preview failed to render" with a danger icon, quiet beside the card's own status.
+- **Thread lost.** The preview shows as usual: the design is still Rob's, and the card's status says the thread is lost.
+- **Settled.** The preview is dimmed with the rest of the card.
+
+### Checks
+
+- `verify:2` holds a card's preview frame open and checks it shows the first slot's selected block with its real content and no canvas chrome, has an opaque origin, can't reach the parent document or the network, and is inert and hidden from assistive tech; that `/canvas/preview` carries the canvas CSP; that the still is a PNG with the block's colours and the frame is gone after; and that a click on the preview opens the brainstorm.
+- `verify:7` checks every card settles to a still or the waiting note with no frame left running, and that a settled card's preview is dimmed.
+- `test/brainstorm.test.ts` (`preview`), `test/http.test.ts`, `test/canvasDocument.test.ts` and `test/previewQueue.test.ts` cover the payload, the route behind the UI token, the preview document and its CSP, the three-frame limit and the still cache.

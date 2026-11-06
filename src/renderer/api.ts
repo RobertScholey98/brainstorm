@@ -1,9 +1,11 @@
 import type { UiPrefs, UiPrefsPatch } from "../core/prefs";
-import type { ExportResult, Result, RobAction, SessionId, SessionListing, SessionView } from "../core/types";
+import type { ExportResult, Result, RobAction, SessionId, SessionListing, SessionPreview, SessionView } from "../core/types";
 
 export type Api = {
   sessions(): Promise<Result<SessionListing[]>>;
   view(id: SessionId): Promise<Result<SessionView>>;
+  /** What the session's home card previews, or null before its first iteration. */
+  preview(id: SessionId): Promise<Result<SessionPreview | null>>;
   act(id: SessionId, action: RobAction): Promise<Result<SessionView>>;
   /** Settles a brainstorm, or brings it back. */
   settle(id: SessionId, settled: boolean): Promise<Result<SessionListing>>;
@@ -61,6 +63,7 @@ export function createApi(token: string): Api {
   return {
     sessions: () => call("GET", "/v1/ui/sessions"),
     view: (id) => call("GET", `/v1/ui/sessions/${id}`),
+    preview: (id) => call("GET", `/v1/ui/sessions/${id}/preview`),
     act: (id, action) => call("POST", `/v1/ui/sessions/${id}/actions`, action),
     settle: (id, settled) => call("POST", `/v1/ui/sessions/${id}/settle`, { settled }),
     exportHtml: (id) => call("POST", `/v1/ui/sessions/${id}/export`),

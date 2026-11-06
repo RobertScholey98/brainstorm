@@ -1,7 +1,7 @@
 import { cpSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, settled, showBoard, shot, workspace } from "./electron.mjs";
+import { build, canvasFrame, checks, inBlock, launch, settled, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-2");
@@ -10,8 +10,87 @@ const { check, finish } = checks();
 const { app, window, errors, api } = await launch(home, env);
 try {
   await window.setViewportSize({ width: 1440, height: 900 });
+  // The home card's preview frame gives its turn back as soon as it paints, so its painted message is held here
+  // while the frame is checked, then let through.
+  await window.evaluate(() => {
+    window.__held = [];
+    window.__hold = (e) => {
+      if (e.data?.kind !== "painted") return;
+      e.stopImmediatePropagation();
+      window.__held.push(e);
+    };
+    window.addEventListener("message", window.__hold, true);
+  });
   const { session, work } = seedDemo(home, env);
-  const canvas = await openSession(window, session);
+  const previewElement = await window.waitForSelector('[data-preview] iframe[title="Preview"]', { state: "attached" });
+  const preview = await previewElement.contentFrame();
+  await preview.waitForSelector("[data-bid]");
+  await window.waitForFunction(() => window.__held.length > 0);
+  check(
+    "a home card previews its first slot's selected variant, the block's own content, with no canvas chrome",
+    await preview.evaluate(() => ({
+      block: document.querySelector("[data-bid]")?.getAttribute("data-bid"),
+      content: document.querySelector("[data-bid]")?.textContent?.includes("ROULETTE"),
+      chrome: document.querySelectorAll(".bs-frame-title, .bs-switch, .bs-pin, .bs-pick").length,
+    })),
+    { block: "wheel/neon", content: true, chrome: 0 },
+  );
+  check(
+    "its frame is the canvas sandbox, out of reach: opaque origin, no parent document, no network, and inert to Rob",
+    {
+      origin: await preview.evaluate(() => origin),
+      parent: await preview.evaluate(() => {
+        try {
+          return window.parent.document ? "readable" : "empty";
+        } catch (e) {
+          return e.name;
+        }
+      }),
+      network: await preview.evaluate(() => fetch("/health").then(() => "loaded", () => "blocked")),
+      frame: await previewElement.evaluate((f) => ({
+        src: new URL(f.src).pathname,
+        sandbox: f.getAttribute("sandbox"),
+        inert: f.inert,
+        tabIndex: f.tabIndex,
+        hidden: f.closest("[aria-hidden=true]") !== null,
+      })),
+    },
+    { origin: "null", parent: "SecurityError", network: "blocked", frame: { src: "/canvas/preview", sandbox: "allow-scripts", inert: true, tabIndex: -1, hidden: true } },
+  );
+  check("until it paints, the card shows its preview loading", await window.getAttribute(`[data-overview-session="${session}"] [data-preview]`, "data-preview"), "loading");
+  const servedPreview = await fetch(`http://127.0.0.1:${api.port}/canvas/preview`);
+  check(
+    "/canvas/preview is served with the canvas CSP",
+    servedPreview.headers.get("content-security-policy"),
+    "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'",
+  );
+  await window.evaluate(() => {
+    window.removeEventListener("message", window.__hold, true);
+    for (const e of window.__held) window.dispatchEvent(new MessageEvent("message", { data: e.data, source: e.source }));
+  });
+  await window.waitForSelector(`[data-overview-session="${session}"] [data-preview="still"] img`);
+  check(
+    "then it shows a still of the block, a PNG with the block's colours, and the frame is gone",
+    await window.evaluate(async () => {
+      const img = document.querySelector("[data-preview=still] img");
+      const canvas = document.createElement("canvas");
+      [canvas.width, canvas.height] = [img.naturalWidth, img.naturalHeight];
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const colours = new Set();
+      for (let i = 0; i < pixels.length; i += 16) colours.add((pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2]);
+      return { png: img.src.startsWith("data:image/png;base64,"), colours: colours.size > 50, frames: document.querySelectorAll('iframe[title="Preview"]').length };
+    }),
+    { png: true, colours: true, frames: 0 },
+  );
+  errors.length = 0;
+  // A real click at the preview's centre, which the card's stretched button takes.
+  const box = await (await window.$(`[data-overview-session="${session}"] [data-preview]`)).boundingBox();
+  await window.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await window.waitForSelector('[data-sidebar-panel="session"]');
+  const canvas = await canvasFrame(window);
+  check("a click on the preview opens the brainstorm, as anywhere on its card", (await window.textContent("[data-topbar] h1"))?.trim(), "Chore roulette");
   await showBoard(window, canvas);
   await canvas.waitForSelector(inBlock("wheel/neon", "screen"));
   await canvas.waitForSelector(inBlock("result/card", "card"));

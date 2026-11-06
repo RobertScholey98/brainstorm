@@ -614,6 +614,14 @@ export type FrameToHost =
   /** How many board frames sit wholly below the visible canvas, sent whenever that changes. */
   | { readonly kind: "below"; readonly count: number }
   /** A shortcut pressed while the canvas has focus, so the shell's keys work wherever Rob last clicked. */
-  | { readonly kind: "key"; readonly key: string; readonly ctrl: boolean; readonly meta: boolean; readonly shift: boolean; readonly alt: boolean };
+  | { readonly kind: "key"; readonly key: string; readonly ctrl: boolean; readonly meta: boolean; readonly shift: boolean; readonly alt: boolean }
+  /** A preview frame has painted its block: a still of it as a PNG data URL, or null when it couldn't take one. */
+  | { readonly kind: "painted"; readonly image: string | null };
+
+/**
+ * What a home card previews: the latest iteration's first slot, showing the variant Rob has selected, with his
+ * settings applied. Null before the first iteration.
+ */
+export type SessionPreview = { readonly frame: CanvasFrame; readonly module: CanvasModule; readonly props: Props };
 
 export type CanvasRect = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };

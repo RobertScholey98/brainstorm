@@ -748,6 +748,28 @@ describe("context", () => {
   });
 });
 
+describe("preview", () => {
+  test("is the first slot's selected variant with Rob's settings, and nothing before the first iteration", async () => {
+    const { service } = await setup();
+    data(await service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: null }));
+    expect(service.preview(S)).toEqual({ ok: true, data: null });
+    data(await service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: null }));
+    const reelJson = JSON.stringify({ title: "Slot reel", props: { appearance: { headline: { type: "text", label: "Headline", default: "Pull" } } } });
+    data(await service.commit({ session: S, thread: T1, files: copy(1, { "wheel/reel": { tsx: sheetTsx, json: reelJson } }), addresses: [], note: null }));
+    data(await service.act(S, { kind: "select_variant", slot: "wheel" as SlotId, variant: "reel" as VariantKey }));
+    data(await service.act(S, { kind: "set_override", blockId: "wheel/reel" as BlockId, prop: "headline" as PropName, value: "Spin it" }));
+    const preview = data(service.preview(S));
+    const view = data(await service.view(S));
+    const reel = view.iteration?.blocks.find((b) => b.id === "wheel/reel");
+    expect(preview).toEqual({
+      frame: { slot: "wheel", title: "The wheel", frame: FRAME, blockId: "wheel/reel" },
+      module: { blockId: "wheel/reel", hash: reel?.hash, compiled: reel?.compiled, css: reel?.css },
+      props: { headline: "Spin it" },
+    });
+    expect(service.preview("s_nothere1" as SessionId).ok).toBe(false);
+  });
+});
+
 describe("exportHtml", () => {
   test("writes the latest iteration with every variant, Rob's choices and overrides, named by session, iteration and time", async () => {
     const { service, exportsDir } = await withIteration();

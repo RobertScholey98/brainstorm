@@ -263,6 +263,7 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       },
     },
     { method: "POST", path: /^\/v1\/ui\/sessions\/([^/]+)\/export$/, auth: "ui", handle: withSession((id) => service.exportHtml(id)) },
+    { method: "GET", path: /^\/v1\/ui\/sessions\/([^/]+)\/preview$/, auth: "ui", handle: withSession(async (id) => service.preview(id)) },
     {
       method: "GET",
       path: /^\/health$/,
@@ -316,9 +317,9 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       if (req.method === "GET" && url.pathname === "/v1/ui/events") {
         return authorized(req, "ui") ? openEvents(req, res) : refuse(res, "a UI token is required");
       }
-      if (req.method === "GET" && url.pathname === "/canvas") {
+      if (req.method === "GET" && (url.pathname === "/canvas" || url.pathname === "/canvas/preview")) {
         res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": CANVAS_CSP, "cache-control": "no-store" });
-        res.end(buildCanvasDocument(null, "live"));
+        res.end(buildCanvasDocument(null, url.pathname === "/canvas" ? "live" : "preview"));
         return;
       }
       if (req.method === "GET" && (url.pathname === "/" || url.pathname.startsWith("/assets/"))) return serveRenderer(res, url.pathname);

@@ -12,6 +12,7 @@ import { Hint } from "@/components/ui/tooltip";
 import type { SessionId, SessionListing } from "../core/types";
 import { markdownText } from "./markdownSubset";
 import { splitSettled } from "./sessionGroups";
+import { CardPreview, type LoadPreview } from "./Preview";
 import { SessionStatus } from "./SessionStatus";
 import { SETTLE_SHORTCUT, settleLabel, settleUndoes } from "./settle";
 import { ago, useNow } from "./time";
@@ -32,18 +33,30 @@ export function HomeOverview({
   onRetry,
   onSession,
   onSettle,
+  revisions,
+  loadPreview,
 }: {
   sessions: readonly SessionListing[] | null;
   error: string | null;
   onRetry: () => void;
   onSession: (id: SessionId) => void;
   onSettle: (session: SessionListing) => void;
+  /** Bumped for a brainstorm whenever it changes, so its preview reloads. */
+  revisions: ReadonlyMap<SessionId, number>;
+  loadPreview: LoadPreview;
 }) {
   const now = useNow();
   const { active, settled } = useMemo(() => splitSettled(sessions ?? []), [sessions]);
   const card = (s: SessionListing) => (
     <li key={s.id} className="grid min-w-0">
-      <OverviewCard session={s} now={now} onOpen={() => onSession(s.id)} onSettle={() => onSettle(s)} />
+      <OverviewCard
+        session={s}
+        now={now}
+        revision={revisions.get(s.id) ?? 0}
+        loadPreview={loadPreview}
+        onOpen={() => onSession(s.id)}
+        onSettle={() => onSettle(s)}
+      />
     </li>
   );
   const failed = sessions === null && error !== null;
@@ -70,13 +83,16 @@ export function HomeOverview({
           <ul className="grid-overview grid gap-3" aria-busy={sessions === null || undefined}>
             {sessions === null
               ? [true, false, false, true, false, false].map((brief, i) => (
-                  <li key={i} className="flex flex-col gap-1.5 rounded-lg bg-card p-4 ring-1 ring-border" data-overview-skeleton>
+                  <li key={i} className="flex flex-col rounded-lg bg-card ring-1 ring-border" data-overview-skeleton>
+                    <div className="h-preview rounded-t-lg border-b bg-canvas" />
                     {/* One bar a line, each as tall as the card's text, so the cards that replace these don't move. */}
-                    <Skeleton className="h-4 w-1/3" />
-                    <Skeleton className="h-5 w-2/3" />
-                    {brief && <Skeleton className="h-4.5 w-full" />}
-                    {brief && <Skeleton className="h-4.5 w-1/2" />}
-                    <Skeleton className="mt-1 h-4 w-1/3" />
+                    <div className="flex flex-col gap-1.5 p-4">
+                      <Skeleton className="h-4 w-1/3" />
+                      <Skeleton className="h-5 w-2/3" />
+                      {brief && <Skeleton className="h-4.5 w-full" />}
+                      {brief && <Skeleton className="h-4.5 w-1/2" />}
+                      <Skeleton className="mt-1 h-4 w-1/3" />
+                    </div>
                   </li>
                 ))
               : active.map(card)}
@@ -97,23 +113,38 @@ export function HomeOverview({
 }
 
 /**
- * One brainstorm. The card opens it; the settle control sits over its corner as a sibling, since a button can't hold
- * another, and shows on hover or focus. A settled card is muted and counts from when it was settled.
+ * One brainstorm: its preview, then its project, status, title, brief and footer. The title is the button that opens
+ * it, stretched over the whole card, so the preview and the text are a click target without a button holding a frame.
+ * The settle control sits over the bottom right corner, above the stretched button, and shows on hover or focus. A
+ * settled card is muted and counts from when it was settled.
  */
-function OverviewCard({ session: s, now, onOpen, onSettle }: { session: SessionListing; now: number; onOpen: () => void; onSettle: () => void }) {
+function OverviewCard({
+  session: s,
+  now,
+  revision,
+  loadPreview,
+  onOpen,
+  onSettle,
+}: {
+  session: SessionListing;
+  now: number;
+  revision: number;
+  loadPreview: LoadPreview;
+  onOpen: () => void;
+  onSettle: () => void;
+}) {
   const brief = markdownText(s.brief).trim();
   const settledAt = s.settlement.state === "settled" ? s.settlement.at : null;
   const label = settleLabel(s);
   return (
-    <div className="group/card relative flex min-w-0">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex h-full min-w-0 flex-1 flex-col gap-1.5 rounded-lg bg-card p-4 text-left shadow-xs ring-1 ring-border transition-shadow outline-none hover:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring"
-        data-overview-session={s.id}
-        data-lost={s.lost || undefined}
-        data-settled={settledAt !== null || undefined}
-      >
+    <div
+      className="group/card relative flex h-full min-w-0 flex-col rounded-lg bg-card shadow-xs ring-1 ring-border transition-shadow has-[[data-card-open]:hover]:ring-border-strong has-[[data-card-open]:focus-visible]:ring-2 has-[[data-card-open]:focus-visible]:ring-ring"
+      data-overview-session={s.id}
+      data-lost={s.lost || undefined}
+      data-settled={settledAt !== null || undefined}
+    >
+      <CardPreview id={s.id} revision={revision} load={loadPreview} muted={settledAt !== null} />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-4">
         <span className="flex items-center gap-2 text-xs text-fg-muted">
           <span className="truncate">{s.projectName ?? "Other project"}</span>
           {settledAt !== null ? (
@@ -125,14 +156,24 @@ function OverviewCard({ session: s, now, onOpen, onSettle }: { session: SessionL
             <SessionStatus session={s} className="ml-auto" />
           )}
         </span>
-        <span className={cn("truncate text-base font-semibold", settledAt !== null && "text-fg-muted")}>{s.title}</span>
+        <button
+          type="button"
+          onClick={onOpen}
+          className={cn(
+            "truncate text-left text-base font-semibold outline-none after:absolute after:inset-0 after:rounded-lg",
+            settledAt !== null && "text-fg-muted",
+          )}
+          data-card-open
+        >
+          {s.title}
+        </button>
         {brief !== "" && <span className="line-clamp-2 text-sm text-fg-muted">{brief}</span>}
         <span className="mt-auto flex items-center gap-1 pt-1 text-xs whitespace-nowrap text-fg-muted" data-overview-footer>
           <span className="tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
           <span aria-hidden>·</span>
           <span>{settledAt !== null ? `Settled ${ago(settledAt, now)}` : ago(s.activeAt, now)}</span>
         </span>
-      </button>
+      </div>
       <span className="absolute right-3 bottom-3 opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100">
         <Hint label={label} shortcut={SETTLE_SHORTCUT} side="top">
           <Button variant="ghost" size="icon-xs" onClick={onSettle} aria-label={`${label} ${s.title}`} data-settle={s.id}>

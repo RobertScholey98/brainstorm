@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildCanvasDocument } from "../src/canvas/document";
+import { buildCanvasDocument, CANVAS_CSP } from "../src/canvas/document";
 import type { BlockId, ContentHash, HostToFrame, SlotId } from "../src/core/types";
 
 const bootOf = (html: string): unknown => {
@@ -36,5 +36,11 @@ describe("buildCanvasDocument", () => {
 
   test("live mode carries no payload; the host sends it", () => {
     expect(bootOf(buildCanvasDocument(null, "live"))).toEqual({ mode: "live", messages: [] });
+  });
+
+  test("preview mode carries no payload either, and the same CSP as the canvas", () => {
+    const html = buildCanvasDocument(null, "preview");
+    expect(bootOf(html)).toEqual({ mode: "preview", messages: [] });
+    expect(html).toContain(`content="${CANVAS_CSP}"`);
   });
 });
