@@ -281,7 +281,6 @@ function DeleteConfirm({ onDelete, onCancel }: { onDelete: () => void; onCancel:
   );
 }
 
-/** Where a pin sits, block first, as the feedback list and the composer both name it. */
 /** Where a comment is pinned, the part read as words, as the vary popover names it ("Spin button", not "spin-button"). */
 const pinWhere = (pin: Pin, block: BlockView | null | undefined) => `${block?.title ?? pin.blockId} · ${pin.part === null ? "whole block" : partLabel(pin.part)}`;
 
