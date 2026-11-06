@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, type ReactElement, type ReactNode, type RefObject } from "react"
+import { createContext, useContext, type ReactElement, type ReactNode } from "react"
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 import { cn } from "cn"
 
@@ -57,7 +57,8 @@ function TooltipContent({
           data-slot="tooltip-content"
           className={cn(
             overlaySurface({ tone: "inverse" }),
-            "inline-flex min-h-7 w-fit max-w-xs items-center gap-2 px-2 py-1 text-xs",
+            // 24 px against the 28 px controls, so a hint beside a row of buttons never reads as one more of them.
+            "inline-flex min-h-6 w-fit max-w-xs items-center gap-2 px-2 py-0.5 text-xs",
             className
           )}
           {...props}
@@ -71,9 +72,10 @@ function TooltipContent({
 
 /**
  * A row of controls whose hints open off the whole row, not off their own control, so a hint never covers the
- * control beside the one it labels. The window header's right cluster provides it; a popover resets it.
+ * control beside the one it labels. The window header provides it, spanning its request status too, so a hint never
+ * hides the status either; a popover resets it.
  */
-const HintAnchor = createContext<RefObject<Element | null> | null>(null)
+const HintAnchor = createContext<TooltipPrimitive.Positioner.Props["anchor"] | null>(null)
 
 /**
  * A styled hint on one control, with its keyboard shortcut when it has one. The renderer uses this instead of a native

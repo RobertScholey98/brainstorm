@@ -23,7 +23,7 @@ async function phase(name) {
   };
 }
 
-/** The header controls a hint covers once it has settled in place, by their labels. */
+/** The header controls, and the request status, a hint covers once it has settled in place, by their labels. */
 async function coveredBy(trigger) {
   // A trigger still moving after a resize slides out from under the pointer, and its hint closes, so it is hovered once
   // it is still. Right after a popover closes, the first entry sometimes opens no hint, so a miss re-enters.
@@ -42,7 +42,7 @@ async function coveredBy(trigger) {
       if (shown === null) return "the hint closed";
       const hint = shown.getBoundingClientRect();
       const over = (r) => hint.left < r.right && hint.right > r.left && hint.top < r.bottom && hint.bottom > r.top;
-      return [...document.querySelectorAll('[data-topbar] :is(button, a, [tabindex="0"])')]
+      return [...document.querySelectorAll('[data-topbar] :is(button, a, [tabindex="0"], [data-request-phase], [data-thread-lost])')]
         .filter((c) => c.getClientRects().length > 0 && over(c.getBoundingClientRect()))
         .map((c) => c.textContent.trim() || c.getAttribute("aria-label"));
     }),
@@ -235,9 +235,29 @@ try {
     for (const trigger of ["[data-regenerate-blocked]", "[data-export]", "[data-inspector-toggle]"]) covered.push(await coveredBy(trigger));
     return covered;
   };
-  check("no header hint covers a header control, the blocked Regenerate's least of all", await headerHints(), [[], [], []]);
+  check("no header hint covers a header control or the request status, the blocked Regenerate's least of all", await headerHints(), [[], [], []]);
+  await window.hover("[data-regenerate-blocked]");
+  check(
+    "a hint is 24 px tall, under the 28 px controls beside it, so it never reads as one more button",
+    await settled(() => window.$eval('[data-slot="tooltip-content"]', (h) => Math.round(h.getBoundingClientRect().height))),
+    24,
+  );
+  await window.mouse.move(120, 600);
   await window.setViewportSize({ width: 1100, height: 720 });
   check("nor at 1100", await headerHints(), [[], [], []]);
+  check(
+    "at 1100 with a request open, Fork and Export give up their labels for icons, so the title still reads whole",
+    await settled(() =>
+      window.evaluate(() => {
+        const title = document.querySelector("[data-session-title]");
+        return [
+          ["[data-fork-toggle]", "[data-export]"].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().width)),
+          title.scrollWidth <= title.clientWidth,
+        ];
+      }),
+    ),
+    [[28, 28], true],
+  );
   await window.setViewportSize({ width: 1440, height: 900 });
   await window.click('[data-request-action="open_thread"]');
   await window.waitForTimeout(300);

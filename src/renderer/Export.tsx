@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, Download } from "lucide-react";
 import { Fragment, useRef, useState } from "react";
 import { cn } from "cn";
 import { chip } from "@/components/ui/chip";
@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger }
 import { Spinner } from "@/components/ui/spinner";
 import { Hint } from "@/components/ui/tooltip";
 import type { ExportResult } from "../core/types";
+import { COMPACT, COMPACT_LABEL } from "./headerAction";
 
 /** Each open or close starts a new attempt, so an export that finishes after its popover closed changes nothing. */
 export function ExportButton({ disabled, exportHtml }: { disabled: boolean; exportHtml: () => Promise<ExportResult | null> }) {
@@ -30,8 +31,9 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
     <Popover open={open} onOpenChange={onOpenChange}>
       <Hint label={disabled ? "Export needs a first iteration" : "Save the current iteration, with your settings, as one HTML file"} side="left">
         <span tabIndex={disabled ? 0 : -1} className="inline-flex">
-          <PopoverTrigger disabled={disabled} render={<Button variant="outline" data-export />}>
-            Export
+          <PopoverTrigger disabled={disabled} render={<Button variant="outline" className={COMPACT} data-export />}>
+            <Download data-icon="inline-start" aria-hidden />
+            <span className={COMPACT_LABEL}>Export</span>
           </PopoverTrigger>
         </span>
       </Hint>

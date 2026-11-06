@@ -1,5 +1,5 @@
-import { ChevronRight, History, PanelRight } from "lucide-react";
-import { useRef, type ReactNode } from "react";
+import { ChevronRight, Download, GitBranch, History, PanelRight } from "lucide-react";
+import { useCallback, useRef, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -8,6 +8,7 @@ import { Hint, HintAnchor } from "@/components/ui/tooltip";
 import type { BlockId, ContentHash, ExportResult, ForkInput, IterationN, IterationView, RobAction, SessionId, SessionView } from "../core/types";
 import { ExportButton } from "./Export";
 import { ForkButton } from "./Fork";
+import { COMPACT, COMPACT_LABEL } from "./headerAction";
 import { Mark } from "./Mark";
 import { PhaseActions, phaseActions, Regenerate, RequestStatus } from "./Regenerate";
 
@@ -31,9 +32,22 @@ export function TopBar({
   children?: ReactNode;
 }) {
   const { state, isMobile } = useSidebar();
+  const header = useRef<HTMLElement>(null);
   const cluster = useRef<HTMLDivElement>(null);
+  // The row its hints open left of: the right cluster, and the request status before it when there is one.
+  const row = useCallback(() => {
+    const actions = cluster.current;
+    const status = header.current?.querySelector("[data-header-status]");
+    if (actions === null || status == null) return actions;
+    return {
+      getBoundingClientRect: () => {
+        const [s, a] = [status.getBoundingClientRect(), actions.getBoundingClientRect()];
+        return DOMRect.fromRect({ x: s.left, y: a.top, width: a.right - s.left, height: a.height });
+      },
+    };
+  }, []);
   return (
-    <header className="titlebar-inset flex h-12 shrink-0 items-center gap-3 pl-1" data-topbar data-drag-region>
+    <header ref={header} className="@container/header titlebar-inset flex h-12 shrink-0 items-center gap-3 pl-1" data-topbar data-drag-region>
       {/* With the sidebar away, its toggle and the mark move here, so the window still says whose it is. */}
       {(state === "collapsed" || isMobile) && (
         <>
@@ -42,9 +56,9 @@ export function TopBar({
         </>
       )}
       {children}
-      {/* Its hints open left of the whole cluster, over the breadcrumb, so none covers a neighbouring control. */}
+      {/* Its hints open left of the whole cluster and the status, over the title, so none covers a control or the status. */}
       <div ref={cluster} className="ml-auto flex shrink-0 items-center gap-2" data-header-actions>
-        <HintAnchor.Provider value={cluster}>
+        <HintAnchor.Provider value={row}>
           {actions}
           {history !== undefined && (
             <Hint label={history.open ? "Hide the history" : "Show the history"} side="left">
@@ -124,14 +138,16 @@ export function SessionBar({
         view === null ? (
           // Held in place while the brainstorm loads, so the bar doesn't change shape when it arrives.
           <>
-            <Button variant="outline" disabled data-fork-toggle>
-              Fork
+            <Button variant="outline" disabled className={COMPACT} data-fork-toggle>
+              <GitBranch data-icon="inline-start" aria-hidden />
+              <span className={COMPACT_LABEL}>Fork</span>
             </Button>
             <Button variant="accent" disabled data-regenerate-toggle>
               Regenerate
             </Button>
-            <Button variant="outline" disabled data-export>
-              Export
+            <Button variant="outline" disabled className={COMPACT} data-export>
+              <Download data-icon="inline-start" aria-hidden />
+              <span className={COMPACT_LABEL}>Export</span>
             </Button>
           </>
         ) : (
@@ -172,10 +188,10 @@ export function SessionBar({
           </Badge>
         )}
         {view !== null && (view.request !== null || view.attachment.lostAt !== null) && (
-          <>
+          <div className="flex min-w-0 items-center gap-2" data-header-status>
             <Separator orientation="vertical" className="h-4 self-center" />
             <RequestStatus view={view} />
-          </>
+          </div>
         )}
       </div>
     </TopBar>

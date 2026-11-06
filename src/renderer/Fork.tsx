@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Hint } from "@/components/ui/tooltip";
 import { carryOver } from "../core/fork";
 import type { ContentHash, ForkInput, IterationView, SessionView, VariantKey } from "../core/types";
+import { COMPACT, COMPACT_LABEL } from "./headerAction";
 
 const SETTINGS_SHOWN = 3;
 
@@ -38,9 +39,9 @@ export function ForkButton({
     return (
       <Hint label="Fork needs a first iteration" side="left">
         <span tabIndex={0} data-fork-blocked>
-          <Button variant="outline" disabled data-fork-toggle>
+          <Button variant="outline" disabled className={COMPACT} data-fork-toggle>
             <GitBranch data-icon="inline-start" aria-hidden />
-            Fork
+            <span className={COMPACT_LABEL}>Fork</span>
           </Button>
         </span>
       </Hint>
@@ -49,9 +50,9 @@ export function ForkButton({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <Hint label={`Start a new brainstorm from iteration ${iteration.n}, in a new T3 thread`} side="left">
-        <PopoverTrigger render={<Button variant="outline" data-fork-toggle />}>
+        <PopoverTrigger render={<Button variant="outline" className={COMPACT} data-fork-toggle />}>
           <GitBranch data-icon="inline-start" aria-hidden />
-          {label}
+          <span className={COMPACT_LABEL}>{label}</span>
         </PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="end" data-fork-menu>
