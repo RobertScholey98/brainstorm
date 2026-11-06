@@ -539,7 +539,8 @@ try {
       if (pin === null || !pin.hasAttribute("data-placed")) return null;
       const p = pin.getBoundingClientRect();
       const a = anchor.getBoundingClientRect();
-      return Math.abs(p.left + p.width / 2 - a.right) <= 2 && Math.abs(p.top + p.height / 2 - a.top) <= 2;
+      // Centred on the corner, or, where the corner is at the frame's edge, held inside the frame with the corner under it.
+      return p.left <= a.right && a.right <= p.right && Math.abs(p.top + p.height / 2 - a.top) <= 2;
     }, id);
   await window.click("[data-pick-toggle]");
   check("pick mode says so in the canvas bar, where it covers no frame", await window.$eval("[data-pick-hint]", (h) => h.closest("[data-canvas-bar]") !== null), true);
