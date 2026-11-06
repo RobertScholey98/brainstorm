@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleAlert, ExternalLink, LayoutGrid } from "lucide-react";
 import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -139,11 +140,13 @@ export function HomePanel({
               className="group/label w-full cursor-pointer gap-1 hover:bg-hover hover:text-fg"
               data-project-label
             >
-              {/* First, so every group's chevron sits at one x whatever its label's length. */}
-              <ChevronRight aria-hidden className="transition-transform group-data-[panel-open]/label:rotate-90" />
+              {/* The label starts where its rows' titles do, and the chevron ends the row, at one x for every group. */}
               <span className="truncate">{group.label}</span>
-              <span className="ml-auto pl-2 font-normal text-fg-muted tabular-nums group-data-[panel-open]/label:hidden" data-project-count>
-                {group.sessions.length}
+              <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                <span className="flex group-data-[panel-open]/label:hidden">
+                  <Badge data-project-count>{group.sessions.length}</Badge>
+                </span>
+                <ChevronRight aria-hidden className="size-4 transition-transform group-data-[panel-open]/label:rotate-90" />
               </span>
             </SidebarGroupLabel>
             <CollapsibleContent>
@@ -294,7 +297,7 @@ function ThreadSection({ view }: { view: SessionView }) {
         </SidebarMenuItem>
       </SidebarMenu>
       {showTakeover && (
-        <div className="px-2 pt-1" data-takeover>
+        <div className="pt-1" data-takeover>
           <Callout tone="warning" actions={<TakeoverPhrase title={view.session.title} />}>
             <p>In a T3 thread on this project, say:</p>
           </Callout>

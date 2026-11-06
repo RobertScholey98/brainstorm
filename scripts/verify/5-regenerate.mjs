@@ -314,14 +314,19 @@ try {
   const phrase = 'pick up the brainstorm session titled "Chore roulette"';
   check("missing thread", await phase("thread_lost"), { message: "This brainstorm's thread is gone. In a T3 thread on this project, say:", actions: ["withdraw"] });
   check(
-    "the strip holds the takeover phrase on its own line, with Copy phrase beside it",
+    "the strip holds the takeover phrase on its own line, with Copy phrase beside it at the same height, 8 px off",
     await window.$eval("[data-request-detail]", (el) => {
       const phrase = el.querySelector("[data-takeover-phrase]");
       const copy = el.querySelector('[data-request-action="copy_phrase"]').getBoundingClientRect();
       const box = phrase.getBoundingClientRect();
-      return [phrase.textContent, getComputedStyle(phrase).fontFamily.includes("Cascadia") || getComputedStyle(phrase).fontFamily.includes("mono"), Math.abs(copy.top + copy.height / 2 - (box.top + box.height / 2)) < 4];
+      return [
+        phrase.textContent,
+        getComputedStyle(phrase).fontFamily.includes("Cascadia") || getComputedStyle(phrase).fontFamily.includes("mono"),
+        [Math.round(box.top), Math.round(box.bottom)].join() === [Math.round(copy.top), Math.round(copy.bottom)].join(),
+        Math.round(copy.left - box.right),
+      ];
     }),
-    [phrase, true, true],
+    [phrase, true, true, 8],
   );
   check("the session's thread reads Thread lost, the bar's term", (await window.textContent('[data-thread="lost"]'))?.trim(), "Thread lost");
   await window.click('[data-request-detail] [data-request-action="copy_phrase"]');

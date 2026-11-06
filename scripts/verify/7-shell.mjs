@@ -141,17 +141,18 @@ try {
   await window.waitForSelector(`[data-session="${kitchen}"]`, { state: "detached" });
   check("a project group collapses", await window.isVisible('[data-project="kitchen-proj"] [data-project-label]'), true);
   check(
-    "a collapsed group counts what it hides, an open one doesn't, and every group's chevron leads at one x",
+    "a collapsed group counts what it hides in a chip, an open one doesn't, its label starts where its rows' titles do, and every chevron ends its row at one x",
     await window.evaluate(() => {
       const labels = [...document.querySelectorAll("[data-project-label]")];
       const shown = (el) => el.checkVisibility();
+      const titleX = Math.round(document.querySelector("[data-session] span").getBoundingClientRect().left);
       return {
-        counts: labels.map((l) => l.querySelector("[data-project-count]")).filter(shown).map((c) => c.textContent),
-        chevrons: new Set(labels.map((l) => Math.round(l.querySelector("svg").getBoundingClientRect().left))).size,
-        first: labels.every((l) => l.firstElementChild.tagName === "svg"),
+        counts: labels.map((l) => l.querySelector("[data-project-count]")).filter(shown).map((c) => [c.textContent, c.dataset.slot]),
+        chevrons: new Set(labels.map((l) => Math.round(l.querySelector("svg").getBoundingClientRect().right))).size,
+        edge: labels.every((l) => Math.round(l.querySelector("span").getBoundingClientRect().left) === titleX),
       };
     }),
-    { counts: ["1"], chevrons: 1, first: true },
+    { counts: [["1", "badge"]], chevrons: 1, edge: true },
   );
   await window.click('[data-project="kitchen-proj"] [data-project-label]');
   await window.waitForSelector(`[data-session="${kitchen}"]`);

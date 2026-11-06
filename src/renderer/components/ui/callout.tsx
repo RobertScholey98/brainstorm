@@ -66,7 +66,7 @@ function Callout({
 }
 
 function CalloutActions({ children }: { children: ReactNode }) {
-  return <div className="flex flex-wrap items-center gap-1 pt-1">{children}</div>
+  return <div className="flex flex-wrap items-center gap-2 pt-1">{children}</div>
 }
 
 /** One entry in a callout that lists several, with its own actions under its text. */
