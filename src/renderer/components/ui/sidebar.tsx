@@ -490,8 +490,20 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
   )
 }
 
+/**
+ * A row's leading dot, in the 16 px slot an icon takes, so a dot and an icon centre on one line and every row's text
+ * starts at one edge. Without a `className` colour it holds the slot empty.
+ */
+function SidebarMenuMark({ className }: { className?: string }) {
+  return (
+    <span aria-hidden data-slot="sidebar-menu-mark" className="grid size-4 shrink-0 place-items-center">
+      <span className={cn("size-1.5 rounded-full", className)} />
+    </span>
+  )
+}
+
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-has-[:is([data-sidebar=menu-action],[data-sidebar=menu-reveal]):hover]/menu-item:bg-hover group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-hover hover:text-fg focus-visible:ring-2 active:bg-hover active:text-fg disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-hover data-open:hover:text-fg data-active:bg-selected data-active:font-medium data-active:text-fg [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
+  "peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-has-[:is([data-sidebar=menu-action],[data-sidebar=menu-reveal]):hover]/menu-item:bg-hover group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-inset active:bg-hover active:text-fg disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-hover data-open:hover:text-fg data-active:bg-selected data-active:font-medium data-active:text-fg [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
   {
     variants: {
       variant: {
@@ -618,7 +630,6 @@ function SidebarMenuBadge({
   )
 }
 
-/** A two-line session row while the list loads: the title, then the meta line, at the real row's height. */
 /** A row that hasn't loaded: one line as tall as a menu row, with the short trailing text a row ends in. */
 function SidebarMenuSkeleton({ width = "w-3/4", trailing = true }: { width?: "w-1/2" | "w-2/3" | "w-3/4"; trailing?: boolean }) {
   return (
@@ -705,6 +716,7 @@ export {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuMark,
   SidebarMenuSkeleton,
   SidebarMenuSub,
   SidebarMenuSubButton,

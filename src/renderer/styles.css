@@ -152,6 +152,10 @@
     margin: 0;
     overflow: hidden;
   }
+  /* Prose never ends on a lone word, whichever overlay, empty state or callout it sits in. */
+  p {
+    text-wrap: pretty;
+  }
 }
 
 /* While a pane is dragged, the canvas iframe would swallow the pointer and the sidebar's width transition would lag it. */
@@ -226,6 +230,16 @@ body[data-resizing] [data-slot="sidebar-container"] {
     --fade-bottom: 32px;
   }
 }
+/*
+ * Inside a ScrollPane while it can scroll: its thumb then stands in the right gutter, 8 px in from the pane's edge, so
+ * a fill that reaches into the padding stops short of it by as much as it stands off the left edge.
+ */
+@custom-variant scrolling {
+  @container scroll-state(scrollable: block) {
+    @slot;
+  }
+}
+
 @utility scroll-fades {
   mask-image: linear-gradient(
     to bottom,
