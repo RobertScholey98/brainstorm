@@ -837,7 +837,22 @@ try {
 
   await app.close();
   let serverDown = true;
-  ({ app, window, errors } = await launch(home, env, { sessions: (route) => (serverDown ? route.abort() : route.continue()) }));
+  let answer;
+  const answered = new Promise((r) => (answer = r));
+  ({ app, window, errors } = await launch(home, env, {
+    sessions: async (route) => {
+      if (!serverDown) return route.continue();
+      await answered;
+      await route.abort();
+    },
+  }));
+  await window.waitForSelector("[data-overview-skeleton]");
+  check(
+    "while the first list loads, each status is named with no count, since none is known yet",
+    await window.$$eval("[data-home-status]", (items) => items.map((i) => i.textContent)),
+    ["Active", "Attention", "Settled", "All"],
+  );
+  answer();
   await window.waitForSelector("[data-home-error]");
   check(
     "a list that fails at launch shows its error with Try again, and the sidebar stops loading",

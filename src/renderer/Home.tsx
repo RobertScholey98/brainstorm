@@ -95,7 +95,7 @@ export function HomeOverview({
             onSearch={setSearch}
             query={query}
             onQuery={onQuery}
-            counts={result.counts}
+            counts={sessions === null ? null : result.counts}
             projects={projects}
             selected={selected}
           />

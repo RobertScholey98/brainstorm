@@ -65,7 +65,8 @@ export function HomeFilters({
   onSearch: (search: string) => void;
   query: HomeQuery;
   onQuery: (query: HomeQuery) => void;
-  counts: Readonly<Record<HomeStatus, number>>;
+  /** Null while the first list loads, so no status claims a count of 0 it hasn't counted. */
+  counts: Readonly<Record<HomeStatus, number>> | null;
   projects: readonly ProjectOption[];
   /** The projects the filter names that still have a brainstorm; empty is every project. */
   selected: ReadonlySet<ProjectId>;
@@ -108,7 +109,7 @@ export function HomeFilters({
         fit
         value={query.status}
         onValueChange={(status) => onQuery({ ...query, status })}
-        options={STATUSES.map((s) => ({ value: s.value, label: <StatusLabel label={s.label} count={counts[s.value]} /> }))}
+        options={STATUSES.map((s) => ({ value: s.value, label: <StatusLabel label={s.label} count={counts?.[s.value] ?? null} /> }))}
         itemData="home-status"
         aria-label="Show"
       />
@@ -132,13 +133,15 @@ export function HomeFilters({
   );
 }
 
-function StatusLabel({ label, count }: { label: string; count: number }): ReactNode {
+function StatusLabel({ label, count }: { label: string; count: number | null }): ReactNode {
   return (
     <span className="flex items-center justify-center gap-1.5">
       {label}
-      <span className="font-normal text-fg-muted tabular-nums" data-status-count>
-        {count}
-      </span>
+      {count !== null && (
+        <span className="font-normal text-fg-muted tabular-nums" data-status-count>
+          {count}
+        </span>
+      )}
     </span>
   );
 }
