@@ -157,3 +157,8 @@ body[data-resizing] [data-slot="sidebar-gap"],
 body[data-resizing] [data-slot="sidebar-container"] {
   transition: none;
 }
+
+/* The home overview's cards: as many 240 px columns as fit, sharing the spare width. */
+@utility grid-overview {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}

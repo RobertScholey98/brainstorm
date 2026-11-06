@@ -43,6 +43,16 @@ export function Regenerate({
 }) {
   const [open, setOpen] = useState(false);
   const gate = view.regenerate;
+  useEffect(() => {
+    if (!gate.ok) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "r") return;
+      e.preventDefault();
+      setOpen(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [gate.ok]);
   if (!gate.ok) {
     return (
       <Hint label={blockedMessage(gate.reason, view.request?.request.n)}>
@@ -56,7 +66,7 @@ export function Regenerate({
   }
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint label="Send a request to the T3 thread">
+      <Hint label="Ask the agent for a new iteration" shortcut="Ctrl+R">
         <PopoverTrigger render={<Button variant="accent" data-regenerate-toggle />}>Regenerate</PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="end" data-regenerate-menu>

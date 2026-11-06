@@ -1,4 +1,4 @@
-import { Lightbulb, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -32,13 +32,26 @@ import {
 import type { Api } from "./api";
 import { CanvasHost, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
-import { Inspector } from "./Inspector";
+import { HomeOverview } from "./Home";
+import { usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
+import { Inspector, InspectorSkeleton } from "./Inspector";
 import { PendingOverrides } from "./overrides";
 import { AppSidebar, HomePanel, SessionPanel } from "./Sidebar";
 import { RequestDetail } from "./Regenerate";
 import { SessionBar, TopBar } from "./TopBar";
 
 const NOTICE_MS = 6000;
+/** How often an open brainstorm asks T3 whether its thread still exists, besides on window focus. */
+const THREAD_CHECK_MS = 15_000;
+
+const SIDEBAR: PaneLimits = { fallback: typeof innerWidth === "number" && innerWidth < 1280 ? 240 : 288, min: 200, max: 400 };
+const INSPECTOR: PaneLimits = { fallback: 280, min: 240, max: 480 };
+
+/**
+ * What the window shows. An open brainstorm keeps its canvas while the sidebar shows the home list, so going back to
+ * pick another one doesn't throw away the one on screen.
+ */
+type Nav = { readonly kind: "overview" } | { readonly kind: "brainstorm"; readonly id: SessionId; readonly panel: "session" | "home" };
 
 type CanvasInteraction =
   | { readonly kind: "view" }
@@ -48,13 +61,17 @@ type CanvasInteraction =
 const NO_PLACEMENT: Placement = { placed: new Set(), detached: new Set() };
 
 export function App({ api }: { api: Api }) {
-  const [sessions, setSessions] = useState<readonly SessionListing[]>([]);
-  const [sessionId, setSessionId] = useState<SessionId | null>(null);
+  const [sessions, setSessions] = useState<readonly SessionListing[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [nav, setNav] = useState<Nav>({ kind: "overview" });
   const [revision, setRevision] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = usePaneWidth("sidebar", SIDEBAR);
 
+  const sessionId = nav.kind === "brainstorm" ? nav.id : null;
   const current = useRef<SessionId | null>(null);
   current.current = sessionId;
+  const loaded = useRef(false);
 
   useEffect(() => {
     if (notice === null) return;
@@ -64,9 +81,15 @@ export function App({ api }: { api: Api }) {
 
   const refreshList = useCallback(async () => {
     const list = await api.sessions();
-    if (list.ok) setSessions(list.data);
-    else setNotice(list.error.message);
+    if (list.ok) {
+      loaded.current = true;
+      setSessions(list.data);
+      setListError(null);
+    } else if (loaded.current) setNotice(list.error.message);
+    else setListError(list.error.message);
   }, [api]);
+
+  useEffect(() => void refreshList(), [refreshList]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -84,31 +107,51 @@ export function App({ api }: { api: Api }) {
     return () => controller.abort();
   }, [api, refreshList]);
 
+  const openSession = (id: SessionId) => setNav({ kind: "brainstorm", id, panel: "session" });
+  const homePanel = (
+    <HomePanel
+      sessions={sessions}
+      current={sessionId}
+      overview={nav.kind === "overview"}
+      onOverview={() => setNav({ kind: "overview" })}
+      onSession={openSession}
+    />
+  );
+  const sidebar = (panel: ReactNode) => (
+    <AppSidebar width={sidebarWidth} limits={SIDEBAR} onWidth={setSidebarWidth}>
+      {panel}
+    </AppSidebar>
+  );
+  const listing = sessions?.find((s) => s.id === sessionId);
+
   return (
     <TooltipProvider>
-      <SidebarProvider className="h-svh min-h-0 overflow-hidden" style={{ "--sidebar-width": "18rem" } as CSSProperties}>
-        {sessionId === null ? (
+      <SidebarProvider className="h-svh min-h-0 overflow-hidden" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
+        {nav.kind === "overview" ? (
           <Shell
-            sidebar={<HomePanel sessions={sessions} onSession={setSessionId} />}
+            sidebar={sidebar(homePanel)}
             bar={
               <TopBar>
-                <h1 className="pl-1 text-sm font-medium">All brainstorms</h1>
+                <h1 className="pl-1 text-sm font-semibold">All brainstorms</h1>
               </TopBar>
             }
           >
-            <section className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Canvas" data-canvas-region>
-              <HomeEmpty hasSessions={sessions.length > 0} />
+            <section className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Brainstorms" data-canvas-region>
+              <HomeOverview sessions={sessions} error={listError} onRetry={() => void refreshList()} onSession={openSession} />
             </section>
           </Shell>
         ) : (
           <SessionWorkspace
-            key={sessionId}
+            key={nav.id}
             api={api}
-            sessionId={sessionId}
-            title={sessions.find((s) => s.id === sessionId)?.title ?? ""}
+            sessionId={nav.id}
+            title={listing?.title ?? ""}
+            project={listing === undefined ? null : (listing.projectName ?? "Other project")}
             revision={revision}
             showNotice={setNotice}
-            onHome={() => setSessionId(null)}
+            sidebar={sidebar}
+            homePanel={nav.panel === "home" ? homePanel : null}
+            onHome={() => setNav({ kind: "brainstorm", id: nav.id, panel: "home" })}
           />
         )}
       </SidebarProvider>
@@ -120,7 +163,7 @@ export function App({ api }: { api: Api }) {
 function Shell({ sidebar, bar, strip, children }: { sidebar: ReactNode; bar: ReactNode; strip?: ReactNode; children: ReactNode }) {
   return (
     <>
-      <AppSidebar>{sidebar}</AppSidebar>
+      {sidebar}
       <SidebarInset className="min-h-0 min-w-0 overflow-hidden ring-1 ring-border/70">
         {bar}
         {strip}
@@ -135,15 +178,22 @@ function SessionWorkspace({
   api,
   sessionId,
   title,
+  project,
   revision,
   showNotice,
+  sidebar,
+  homePanel,
   onHome,
 }: {
   api: Api;
   sessionId: SessionId;
   title: string;
+  project: string | null;
   revision: number;
   showNotice: (message: string) => void;
+  sidebar: (panel: ReactNode) => ReactNode;
+  /** Shown in place of the session panel while Rob looks for another brainstorm. */
+  homePanel: ReactNode | null;
   onHome: () => void;
 }) {
   const [view, setView] = useState<SessionView | null>(null);
@@ -155,10 +205,23 @@ function SessionWorkspace({
   const [focusedFeedback, setFocusedFeedback] = useState<FeedbackId | null>(null);
   const [pulse, setPulse] = useState<{ id: FeedbackId; seq: number } | null>(null);
   const canvasArea = useRef<HTMLElement>(null);
+  const [inspectorWidth, setInspectorWidth] = usePaneWidth("inspector", INSPECTOR);
 
   useEffect(() => {
     void api.view(sessionId).then((next) => (next.ok ? setView(next.data) : showNotice(next.error.message)));
   }, [api, sessionId, revision, showNotice]);
+
+  // A thread can vanish while nothing is in flight, so the open brainstorm asks T3 now and then. A failed check
+  // changes nothing on screen, so it shows no notice.
+  useEffect(() => {
+    const check = () => void api.act(sessionId, { kind: "check_thread" }).then((r) => r.ok && setView(r.data));
+    const timer = setInterval(check, THREAD_CHECK_MS);
+    window.addEventListener("focus", check);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", check);
+    };
+  }, [api, sessionId]);
 
   const send = useCallback(
     async (action: RobAction): Promise<SessionView | null> => {
@@ -253,19 +316,30 @@ function SessionWorkspace({
 
   return (
     <Shell
-      sidebar={
-        <SessionPanel
+      sidebar={sidebar(
+        homePanel ?? (
+          <SessionPanel
+            view={view}
+            slots={slots}
+            blocks={blocks}
+            blockErrors={blockErrors}
+            onHome={onHome}
+            selectedSlot={slot?.id ?? null}
+            onSlot={setSelectedSlot}
+            onVariant={onVariant}
+          />
+        ),
+      )}
+      bar={
+        <SessionBar
           title={view?.session.title ?? title}
+          project={project}
           view={view}
-          slots={slots}
-          blocks={blocks}
-          onHome={onHome}
-          selectedSlot={slot?.id ?? null}
-          onSlot={setSelectedSlot}
-          onVariant={onVariant}
+          selected={selectedBlock?.id ?? null}
+          send={send}
+          exportHtml={exportHtml}
         />
       }
-      bar={<SessionBar view={view} selected={selectedBlock?.id ?? null} send={send} exportHtml={exportHtml} />}
       strip={view !== null && <RequestDetail view={view} />}
     >
       <section ref={canvasArea} className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Canvas" data-canvas-region>
@@ -312,8 +386,13 @@ function SessionWorkspace({
           />
         )}
       </section>
-      {view !== null && (
+      {view === null ? (
+        <InspectorSkeleton width={inspectorWidth} />
+      ) : (
         <Inspector
+          width={inspectorWidth}
+          limits={INSPECTOR}
+          onWidth={setInspectorWidth}
           view={view}
           block={selectedBlock}
           props={selectedBlock === null ? null : (frameProps[selectedBlock.id] ?? null)}
@@ -335,24 +414,6 @@ function SessionWorkspace({
         </Inspector>
       )}
     </Shell>
-  );
-}
-
-function HomeEmpty({ hasSessions }: { hasSessions: boolean }) {
-  return (
-    <Empty className="size-full rounded-none bg-card" data-home-empty>
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Lightbulb aria-hidden />
-        </EmptyMedia>
-        <EmptyTitle>{hasSessions ? "Pick a brainstorm" : "No brainstorms yet"}</EmptyTitle>
-        <EmptyDescription>
-          {hasSessions ? "Open one from the sidebar. To start a new one, run " : "To start one, run "}
-          <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-fg">/ux-brainstorm</code> in a T3 thread on your
-          project. It appears in the sidebar as soon as the agent creates it.
-        </EmptyDescription>
-      </EmptyHeader>
-    </Empty>
   );
 }
 

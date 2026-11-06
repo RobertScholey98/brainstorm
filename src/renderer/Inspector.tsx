@@ -3,9 +3,12 @@ import type { Spec } from "@json-render/core";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
+import { ResizeHandle } from "@/components/ui/resize-handle";
+import { Skeleton } from "@/components/ui/skeleton";
 import { HEX_COLOR_PATTERN } from "../core/props";
 import type { AppearanceValue, BlockView, InapplicableOverride, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
 import { ControlScopeContext, controlRegistry, createBlockStore } from "./controls";
+import type { PaneLimits } from "./hooks/use-pane-width";
 
 const WHY: Record<OverrideMismatch, string> = {
   prop_removed: "the block no longer has this setting",
@@ -17,7 +20,42 @@ const WHY: Record<OverrideMismatch, string> = {
 
 const isHex = (value: AppearanceValue): value is string => typeof value === "string" && HEX_COLOR_PATTERN.test(value);
 
+/** The Inspector's column: its width, the drag handle on its left edge, and its scrolling body. */
+function Column({ width, handle, children }: { width: number; handle?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="relative flex min-h-0 shrink-0" style={{ width }}>
+      {handle}
+      <aside className="flex min-h-0 w-full flex-col overflow-y-auto border-l bg-card" aria-label="Inspector">
+        {children}
+      </aside>
+    </div>
+  );
+}
+
+/** The Inspector while the brainstorm opens, shaped like a block's header and a few controls. */
+export function InspectorSkeleton({ width }: { width: number }) {
+  return (
+    <Column width={width}>
+      <div className="grid gap-1.5 border-b px-4 py-3" data-inspector-loading>
+        <Skeleton className="h-3 w-1/3" />
+        <Skeleton className="h-4 w-1/2" />
+      </div>
+      <div className="grid gap-5 px-4 py-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="grid gap-2">
+            <Skeleton className="h-3 w-1/4" />
+            <Skeleton className="h-7 w-full" />
+          </div>
+        ))}
+      </div>
+    </Column>
+  );
+}
+
 export function Inspector({
+  width,
+  limits,
+  onWidth,
   view,
   block,
   props,
@@ -27,6 +65,9 @@ export function Inspector({
   onDismiss,
   children,
 }: {
+  width: number;
+  limits: PaneLimits;
+  onWidth: (width: number) => void;
   view: SessionView;
   block: BlockView | null;
   props: Props | null;
@@ -38,7 +79,10 @@ export function Inspector({
 }) {
   const blocks = view.iteration?.blocks ?? [];
   return (
-    <aside className="flex min-h-0 w-inspector shrink-0 flex-col overflow-y-auto border-l bg-card" aria-label="Inspector">
+    <Column
+      width={width}
+      handle={<ResizeHandle edge="left" value={width} min={limits.min} max={limits.max} reset={limits.fallback} onValueChange={onWidth} aria-label="Inspector width" />}
+    >
       {view.overrides.inapplicable.length > 0 && <Inapplicable items={view.overrides.inapplicable} blocks={blocks} onDismiss={onDismiss} />}
       {block === null || props === null ? (
         <p className="px-4 py-4 text-sm text-fg-muted">Select a frame to adjust it.</p>
@@ -46,7 +90,7 @@ export function Inspector({
         <BlockControls key={block.id} view={view} block={block} props={props} error={error} onSet={onSet} onReset={onReset} />
       )}
       {children}
-    </aside>
+    </Column>
   );
 }
 
@@ -86,7 +130,7 @@ function BlockControls({
 
   return (
     <div data-block={block.id}>
-      <header className="border-b px-4 pt-3 pb-3">
+      <header className="sticky top-0 z-sticky border-b bg-card px-4 pt-3 pb-3">
         <div className="text-xs font-medium text-fg-muted">{slot?.title ?? block.slot}</div>
         <h2 className="truncate pt-0.5 text-sm font-semibold">{block.title}</h2>
         {error !== null && (

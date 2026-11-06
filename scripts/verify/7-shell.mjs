@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "nod
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, checks, launch, openSession, root, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, root, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("shell");
@@ -70,15 +70,21 @@ try {
       })),
     );
   check("home groups every brainstorm under its project, newest activity first", await groups(), [
-    { label: "Other project", rows: ["Loose notesNo iterations yet"] },
-    { label: "kitchen", rows: ["Kitchen rotaNo iterations yet"] },
-    { label: "chores", rows: ["Start a taskIteration 1", "Chore rouletteIteration 1"] },
+    { label: "Other project", rows: ["Loose notesNo iterations yet·just now"] },
+    { label: "kitchen", rows: ["Kitchen rotaNo iterations yet·just now"] },
+    { label: "chores", rows: ["Start a taskIteration 1·just now", "Chore rouletteIteration 1·just now"] },
   ]);
   check(
     "with nothing open, the main panel says how to start one",
-    (await window.textContent("[data-home-empty]"))?.includes("run /ux-brainstorm in a T3 thread on your project"),
+    (await window.textContent("[data-home-hint]"))?.includes("run /ux-brainstorm in a T3 thread on your project"),
     true,
   );
+  check(
+    "and shows every brainstorm as a card, newest activity first",
+    await window.$$eval("[data-overview-session]", (els) => els.map((e) => e.dataset.overviewSession)),
+    [loose, kitchen, wide, roulette],
+  );
+  check("the overview is the active row in the sidebar", (await window.$("[data-overview][data-active]")) !== null, true);
   check("home shows no Regenerate or Export", [await window.$("[data-regenerate-toggle]"), await window.$("[data-export]")], [null, null]);
   await window.waitForTimeout(300);
   await shot(window, shots, "home-light");
@@ -92,8 +98,12 @@ try {
   const canvas = await openSession(window, wide);
   check(
     "clicking a brainstorm swaps the sidebar to it",
-    [await window.$('[data-sidebar-panel="home"]'), (await window.textContent("[data-session-title]"))?.trim(), (await window.textContent("[data-topbar] h1"))?.trim()],
-    [null, "Start a task", "Start a task"],
+    [
+      await window.$('[data-sidebar-panel="home"]'),
+      (await window.textContent("[data-topbar] [data-breadcrumb-project]"))?.trim(),
+      (await window.textContent("[data-topbar] h1"))?.trim(),
+    ],
+    [null, "chores", "Start a task"],
   );
   check(
     "the brainstorm sidebar shows the back control, the thread and the slot's variants",
@@ -154,9 +164,47 @@ try {
 
   await window.click("[data-back]");
   await window.waitForSelector('[data-sidebar-panel="home"]');
-  check("the back control returns home", [await window.isVisible("[data-home-empty]"), await window.$("iframe[title=Canvas]")], [true, null]);
+  check(
+    "the back control shows the home list and keeps the open brainstorm on screen",
+    [await window.isVisible("iframe[title=Canvas]"), (await window.$(`[data-session="${wide}"][data-active]`)) !== null],
+    [true, true],
+  );
+  await window.click(`[data-session="${wide}"]`);
+  await window.waitForSelector('[data-sidebar-panel="session"]');
+  check("its row goes back to the same brainstorm", (await window.textContent("[data-topbar] h1"))?.trim(), "Start a task");
+  await window.click("[data-back]");
+  await window.click("[data-overview]");
+  await window.waitForSelector("[data-home-overview]");
+  check("Overview closes it and returns home", await window.$("iframe[title=Canvas]"), null);
 
+  const rouletteCanvas = await openSession(window, roulette);
+  await rouletteCanvas.waitForSelector('[data-bid="wheel/neon"]');
+  await rouletteCanvas.click(inBlock("wheel/neon", "screen"));
+  await window.keyboard.press("Control+r");
+  await window.waitForSelector("[data-regenerate-menu]");
+  check("Ctrl+R opens Regenerate, even with the canvas focused", await window.isVisible("[data-regenerate-menu] [data-send]"), true);
+  await window.keyboard.press("Escape");
+  await window.waitForSelector("[data-regenerate-menu]", { state: "detached" });
+
+  const inspectorWidth = () => window.$eval("aside[aria-label=Inspector]", (el) => el.getBoundingClientRect().width);
+  const narrow = await inspectorWidth();
+  await window.focus('[data-slot="resize-handle"][aria-label="Inspector width"]');
+  await window.keyboard.press("ArrowLeft");
+  await window.keyboard.press("ArrowLeft");
+  check("the Inspector's handle widens it 16 px an arrow press", (await inspectorWidth()) - narrow, 32);
+  await window.click("[data-back]");
+  await (await openSession(window, wide)).waitForSelector('[data-bid="result/card"]');
+  check("another brainstorm opens with the same Inspector width", await inspectorWidth(), narrow + 32);
+  await window.click("[data-back]");
   await (await openSession(window, roulette)).waitForSelector('[data-bid="wheel/neon"]');
+  check(
+    "every slot marks its showing variant, and only the selected slot's row is tinted",
+    [
+      await window.$$eval("[data-variant][data-showing]", (els) => els.map((e) => e.dataset.variant)),
+      await window.$$eval("[data-variant][data-active]", (els) => els.map((e) => e.dataset.variant)),
+    ],
+    [["neon", "card"], ["neon"]],
+  );
   await window.emulateMedia({ colorScheme: "dark" });
   await window.waitForTimeout(400);
   await shot(window, shots, "session-dark");
@@ -177,7 +225,7 @@ try {
   t3.setMissing(LOOSE_THREAD, true);
   ({ app, window, errors } = await launch(home, env));
   await window.setViewportSize({ width: 1440, height: 900 });
-  await window.waitForSelector("[data-home-empty]");
+  await window.waitForSelector("[data-home-overview]");
   await window.click(`[data-session="${loose}"]`);
   await window.waitForSelector('[data-sidebar-panel="session"] [data-thread="lost"]');
   check("a brainstorm whose thread is gone says so in its sidebar", (await window.textContent('[data-thread="lost"]'))?.trim(), "Unattached");

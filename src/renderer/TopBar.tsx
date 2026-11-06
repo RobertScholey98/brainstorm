@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -10,12 +11,7 @@ export function TopBar({ actions, children }: { actions?: ReactNode; children: R
   const { state, isMobile } = useSidebar();
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b px-3" data-topbar>
-      {(state === "collapsed" || isMobile) && (
-        <>
-          <SidebarTrigger />
-          <Separator orientation="vertical" className="h-4 self-center" />
-        </>
-      )}
+      {(state === "collapsed" || isMobile) && <SidebarTrigger />}
       {children}
       <div className="ml-auto flex shrink-0 items-center gap-2">{actions}</div>
     </header>
@@ -23,11 +19,16 @@ export function TopBar({ actions, children }: { actions?: ReactNode; children: R
 }
 
 export function SessionBar({
+  title,
+  project,
   view,
   selected,
   send,
   exportHtml,
 }: {
+  title: string;
+  /** The project's label, or null until the list has loaded. */
+  project: string | null;
   view: SessionView | null;
   selected: BlockId | null;
   send: (action: RobAction) => Promise<SessionView | null>;
@@ -44,22 +45,32 @@ export function SessionBar({
         )
       }
     >
-      {view !== null && (
-        <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
-          <h1 className="shrink-0 truncate text-sm font-semibold">{view.session.title}</h1>
-          {view.iteration !== null && (
+      <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
+        <nav aria-label="Breadcrumb" className="flex min-w-0 shrink items-center gap-1 text-sm">
+          {project !== null && (
+            <>
+              <span className="truncate text-fg-muted" data-breadcrumb-project>
+                {project}
+              </span>
+              <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
+            </>
+          )}
+          <h1 className="truncate font-semibold" data-session-title>
+            {title}
+          </h1>
+        </nav>
+        {view !== null && view.iteration !== null && (
             <Badge variant="secondary" data-iteration>
               Iteration {view.iteration.n}
             </Badge>
-          )}
-          {view.request !== null && (
-            <>
-              <Separator orientation="vertical" className="h-4 self-center" />
-              <RequestStatus view={view} send={send} />
-            </>
-          )}
-        </div>
-      )}
+        )}
+        {view !== null && view.request !== null && (
+          <>
+            <Separator orientation="vertical" className="h-4 self-center" />
+            <RequestStatus view={view} send={send} />
+          </>
+        )}
+      </div>
     </TopBar>
   );
 }
