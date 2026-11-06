@@ -292,6 +292,8 @@ try {
     }),
     [28, 6, 6, "-6px", "6px"],
   );
+  // The pointer may still rest on the toggle from collapsing the sidebar, so come at it fresh.
+  await window.mouse.move(700, 20);
   await window.hover('[data-slot="sidebar"] [data-sidebar="trigger"]');
   await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
   check("a hint is 28 px tall, the height of the controls it labels", await window.$eval('[data-slot="tooltip-content"]', (t) => Math.round(t.getBoundingClientRect().height)), 28);
