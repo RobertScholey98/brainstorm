@@ -264,8 +264,13 @@ function OverviewCard({
           </span>
         )}
         <span className="mt-auto flex items-center gap-1 pt-1 text-xs whitespace-nowrap text-fg-muted" data-overview-footer>
-          <span className="tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
-          <span aria-hidden>·</span>
+          {/* A brainstorm with no iteration says so once, in its preview, so the footer gives only its age. */}
+          {s.latest !== null && (
+            <>
+              <span className="tabular-nums">Iteration {s.latest}</span>
+              <span aria-hidden>·</span>
+            </>
+          )}
           <span>{settledAt !== null ? `Settled ${age(settledAt, now)}` : age(s.activeAt, now)}</span>
         </span>
       </div>

@@ -7,6 +7,9 @@ const RETIRED: readonly { readonly pattern: RegExp; readonly say: string }[] = [
   { pattern: /adjustment/i, say: "setting" },
   { pattern: /just now/i, say: "now" },
   { pattern: />\s*Overview\s*</, say: "All brainstorms, the heading the page and Back already use" },
+  { pattern: /\b(?:min|days?|hours?|h) ago\b|\byesterday\b/i, say: "an age from time.ts, which every surface writes one way: 5m, 3h, 2d" },
+  { pattern: /toLocale(?:Date)?String/, say: "age from time.ts, whose months are all three letters" },
+  { pattern: /No iterations yet|agent's first commit/, say: "WAITING from Preview.tsx, the one name for a brainstorm with no iteration" },
 ];
 
 const sources = (dir: string): string[] =>

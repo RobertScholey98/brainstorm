@@ -42,6 +42,7 @@ import { fitPanes, usePaneWidth, type PaneLimits } from "./hooks/use-pane-width"
 import { Inspector, InspectorRail, InspectorSkeleton } from "./Inspector";
 import { failedTitle, type Notice } from "./notice";
 import { PendingOverrides } from "./overrides";
+import { WAITING } from "./Preview";
 import { AppSidebar, HomePanel, SessionPanel } from "./Sidebar";
 import { RequestDetail } from "./Regenerate";
 import { settleUndoes, useSettleShortcut } from "./settle";
@@ -713,14 +714,16 @@ function WaitingEmpty({ loading }: { loading: boolean }) {
   }
   return (
     <div className="flex size-full flex-col bg-canvas">
-      {/* An empty bar, so the card keeps its top rule and the Inspector's header still meets it across the seam. */}
-      <div className="h-10 shrink-0 border-b bg-card" data-canvas-bar />
+      {/* The bar keeps the card's top rule, so the Inspector's header still meets it across the seam, and says why it is bare. */}
+      <div className="flex h-10 shrink-0 items-center border-b bg-card px-3 text-sm text-fg-muted" data-canvas-bar>
+        No slots yet
+      </div>
       <Empty className="rounded-none">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <Loader2 aria-hidden className="animate-spin text-accent" />
           </EmptyMedia>
-          <EmptyTitle>Waiting for the agent's first commit</EmptyTitle>
+          <EmptyTitle>{WAITING}</EmptyTitle>
           <EmptyDescription>Blocks appear here as soon as it lands.</EmptyDescription>
         </EmptyHeader>
       </Empty>
