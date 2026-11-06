@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-4");
@@ -30,6 +30,7 @@ try {
   await window.setViewportSize({ width: 1440, height: 900 });
   const { session, work } = seedDemo(home, env);
   const canvas = await openSession(window, session);
+  await showBoard(window, canvas);
   await canvas.waitForSelector(HEADLINE);
 
   await window.click("[data-pick-toggle]");
@@ -48,6 +49,14 @@ try {
   await canvas.click(HEADLINE);
   await window.waitForSelector("[data-composer]");
   check("the composer names the picked part and block", (await window.textContent("[data-composer] p"))?.trim(), "headline in Assignment card");
+  const frameAt = await window.$eval("iframe[title=Canvas]", (el) => el.getBoundingClientRect().toJSON());
+  const part = await canvas.$eval(HEADLINE, (el) => el.getBoundingClientRect().toJSON());
+  const pending = await window.$eval("[data-composer-pin]", (el) => el.getBoundingClientRect().toJSON());
+  check(
+    "the pin to be sits on the element's top right corner, where the saved pin will land",
+    [Math.round(pending.x + pending.width / 2 - (frameAt.x + part.right)), Math.round(pending.y + pending.height / 2 - (frameAt.y + part.top))],
+    [0, 0],
+  );
   await window.keyboard.type("Make the headline louder");
   await shot(window, shots, "2-composer");
   await window.click('[data-composer] button:has-text("Pin comment")');
@@ -77,7 +86,27 @@ try {
   await window.click('[data-feedback="2"] button:has-text("Save")');
   await window.waitForFunction(() => document.querySelector('[data-feedback="2"] [data-feedback-text]')?.textContent === "Spin button needs more contrast");
   check("Edit rewrites an open comment", await itemText(window, 2, "text"), "Spin button needs more contrast");
-  await window.click('[data-feedback="2"] button:has-text("Delete")');
+  await window.click('[data-feedback="2"] [data-feedback-action="delete"]');
+  await window.waitForSelector('[data-feedback="2"] [data-feedback-confirm]');
+  check(
+    "Delete asks first, in place, with Cancel focused",
+    [(await window.innerText('[data-feedback="2"] [data-feedback-confirm]')).replace(/\s+/g, " "), await window.evaluate(() => document.activeElement?.hasAttribute("data-feedback-cancel"))],
+    ["Delete this comment? Delete Cancel", true],
+  );
+  await window.keyboard.press("Enter");
+  await window.waitForSelector('[data-feedback="2"] [data-feedback-confirm]', { state: "detached" });
+  check(
+    "Enter on the focused Cancel keeps the comment and puts focus back on Delete",
+    [await itemText(window, 2, "text"), await window.evaluate(() => document.activeElement?.dataset.feedbackAction)],
+    ["Spin button needs more contrast", "delete"],
+  );
+  await window.keyboard.press("Enter");
+  await window.waitForSelector('[data-feedback="2"] [data-feedback-confirm]');
+  await window.keyboard.press("Escape");
+  await window.waitForSelector('[data-feedback="2"] [data-feedback-confirm]', { state: "detached" });
+  check("Escape keeps it too", await window.$('[data-feedback="2"]') !== null, true);
+  await window.click('[data-feedback="2"] [data-feedback-action="delete"]');
+  await window.click('[data-feedback="2"] [data-feedback-delete]');
   await window.waitForSelector('[data-feedback="2"]', { state: "detached" });
   check("Delete removes it from the list and the canvas", await canvas.$('.bs-pin[data-pin="2"]'), null);
 
@@ -99,7 +128,11 @@ try {
   check("the headline moved down the card", after.part.y - before.part.y > 40, true);
   check("the pin followed it to its new position", overlaps(after), true);
   check("the pin is coloured addressed", await canvas.getAttribute(PIN, "data-status"), "addressed");
-  check("the list shows it addressed in iteration 2", await itemText(window, 1, "meta"), "Assignment card · headline · Addressed in 2");
+  check(
+    "the list shows it addressed in iteration 2, on a line of its own under where it is pinned",
+    [await itemText(window, 1, "meta"), await itemText(window, 1, "status")],
+    ["Assignment card · headline", "In iteration 2"],
+  );
   await shot(window, shots, "4-addressed");
 
   await window.click('[data-feedback="1"] [data-feedback-text]');
@@ -112,15 +145,19 @@ try {
 
   await window.click('[data-feedback="1"] button:has-text("Confirm")');
   await window.waitForSelector('[data-feedback="1"][data-status="confirmed"]');
-  check("Confirm moves it to confirmed", await itemText(window, 1, "meta"), "Assignment card · headline · Confirmed · addressed in 2");
+  check(
+    "Confirm moves it to confirmed",
+    [await window.getAttribute('[data-feedback="1"]', "data-status"), await itemText(window, 1, "status")],
+    ["confirmed", "Addressed in iteration 2"],
+  );
   const handle = '[data-slot="resize-handle"][aria-label="Inspector width"]';
   await window.focus(handle);
   await window.keyboard.press("Home");
   check(
-    "at its narrowest the Inspector cuts a long status line instead of scrolling sideways",
+    "at its narrowest the Inspector never scrolls sideways, and the status line wraps instead of cutting",
     await window.$eval('aside[aria-label="Inspector"]', (aside) => {
-      const meta = aside.querySelector('[data-feedback="1"] [data-feedback-meta]');
-      return [aside.scrollWidth <= aside.clientWidth, meta.scrollWidth > meta.clientWidth];
+      const status = aside.querySelector('[data-feedback="1"] [data-feedback-status]');
+      return [aside.scrollWidth <= aside.clientWidth, status.scrollWidth <= status.clientWidth];
     }),
     [true, true],
   );
@@ -131,7 +168,7 @@ try {
 
   await window.click('[data-feedback="1"] button:has-text("Reopen")');
   await window.waitForSelector('[data-feedback="1"][data-status="open"]');
-  check("Reopen moves it back to open, remembering where it was addressed", await itemText(window, 1, "meta"), "Assignment card · headline · Previously addressed in 2");
+  check("Reopen moves it back to open, remembering where it was addressed", await itemText(window, 1, "status"), "Previously addressed in iteration 2");
 
   const reordered = readFileSync(card, "utf8");
   writeFileSync(card, reordered.replace('className="headline" data-part="headline"', 'className="headline"'));

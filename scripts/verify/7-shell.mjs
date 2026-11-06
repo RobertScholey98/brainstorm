@@ -125,6 +125,21 @@ try {
   const region = await box("[data-canvas-region]");
   const inspector = await box("aside[aria-label=Inspector]");
   check("the canvas frame fills its region", [iframe.left === region.left, iframe.right === region.right], [true, true]);
+  check(
+    "the window header moves the window, and every control in it opts out",
+    await window.evaluate(() => {
+      const region = (el) => getComputedStyle(el).getPropertyValue("-webkit-app-region");
+      const header = document.querySelector("[data-topbar]");
+      return {
+        header: region(header),
+        sidebar: region(document.querySelector('[data-sidebar="header"]')),
+        controls: [...document.querySelectorAll("[data-topbar] button, [data-topbar] a, [data-sidebar='header'] button")].map(region).filter((r) => r !== "no-drag"),
+        top: Math.round(header.getBoundingClientRect().top),
+      };
+    }),
+    { header: "drag", sidebar: "drag", controls: [], top: 0 },
+  );
+  check("the Inspector toggle sits in the header, pressed while the Inspector shows", await window.getAttribute("[data-topbar] [data-inspector-toggle]", "aria-pressed"), "true");
   check("the canvas region ends where the Inspector starts", iframe.right <= inspector.left, true);
   const frameIn = (scroll) =>
     canvas.evaluate((x) => {
@@ -132,8 +147,24 @@ try {
       const r = document.querySelector(".bs-frame-body").getBoundingClientRect();
       return { left: r.left, right: r.right, width: r.width, viewport: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth };
     }, scroll);
+  const fit = () =>
+    canvas.evaluate(() => {
+      const body = document.querySelector('.bs-frame:not([data-offstage]) .bs-frame-body').getBoundingClientRect();
+      const de = document.documentElement;
+      return { sideways: de.scrollWidth > de.clientWidth, zoom: document.querySelector(".bs-frame-zoom")?.dataset.zoom ?? null, fits: body.left >= 0 && body.right <= de.clientWidth };
+    });
+  check("a brainstorm opens on the stage", await window.getAttribute("[data-canvas-region]", "data-canvas-view"), "stage");
+  check("the stage zooms the 980 px frame to fit, says by how much, and never scrolls sideways at 1440", await fit(), { sideways: false, zoom: "83", fits: true });
+  await window.setViewportSize({ width: 1100, height: 720 });
+  await canvas.waitForFunction(() => document.querySelector(".bs-frame-zoom")?.dataset.zoom !== "83");
+  check("and at 1100", await fit(), { sideways: false, zoom: "49", fits: true });
+  await window.setViewportSize({ width: 1440, height: 900 });
+  await canvas.waitForFunction(() => document.querySelector(".bs-frame-zoom")?.dataset.zoom === "83");
+  await window.click("[data-board-toggle]");
+  await canvas.waitForSelector('#canvas[data-view="board"]');
+  check("All slots shows the board, where a frame keeps its own size", [await window.getAttribute("[data-board-toggle]", "aria-pressed"), await canvas.$(".bs-frame-zoom")], ["true", null]);
   const start = await frameIn("start");
-  check("the 980 px frame is wider than the canvas, so the canvas scrolls", [start.width, start.scrollWidth > start.viewport], [980, true]);
+  check("the 980 px frame is wider than the board, so the board scrolls", [start.width, start.scrollWidth > start.viewport], [980, true]);
   check("scrolled to the start, the frame begins inside the canvas", start.left >= 0, true);
   const end = await frameIn("end");
   check(
@@ -149,6 +180,8 @@ try {
   );
   await window.waitForTimeout(300);
   await shot(window, shots, "session-light");
+  await window.click("[data-board-toggle]");
+  await canvas.waitForSelector('#canvas[data-view="stage"]');
 
   await window.click('[data-slot="sidebar"] [data-sidebar="trigger"]');
   await window.waitForSelector('[data-slot="sidebar"][data-state="collapsed"]');
@@ -179,6 +212,51 @@ try {
 
   const rouletteCanvas = await openSession(window, roulette);
   await rouletteCanvas.waitForSelector('[data-bid="wheel/neon"]');
+  const staged = () => rouletteCanvas.$$eval(".bs-frame:not([data-offstage])", (els) => els.map((e) => e.dataset.slot));
+  check("the stage shows the first slot alone, with a tab per slot", [await staged(), await window.$$eval("[data-slot-tab]", (els) => els.map((e) => e.dataset.slotTab))], [["wheel"], ["wheel", "result"]]);
+  await window.click('[data-slot-tab="result"]');
+  await rouletteCanvas.waitForSelector('.bs-frame[data-slot="result"]:not([data-offstage])');
+  check("a tab puts its slot on the stage and its block in the Inspector", [await staged(), await window.getAttribute("[data-block]", "data-block")], [["result"], "result/card"]);
+  await window.focus('[data-slot-tab="result"]');
+  await window.keyboard.press("ArrowLeft");
+  await rouletteCanvas.waitForSelector('.bs-frame[data-slot="wheel"]:not([data-offstage])');
+  check("arrow keys on the tabs move between slots", await staged(), ["wheel"]);
+  await window.click('[data-slot-step="next"]');
+  await rouletteCanvas.waitForSelector('.bs-frame[data-slot="result"]:not([data-offstage])');
+  check("the next arrow steps to the next slot, and stops at the last", [await staged(), await window.isDisabled('[data-slot-step="next"]')], [["result"], true]);
+  await window.click('[data-slot-step="previous"]');
+  await rouletteCanvas.waitForSelector('.bs-frame[data-slot="wheel"]:not([data-offstage])');
+
+  const pinAt = (id) =>
+    rouletteCanvas.evaluate((pinId) => {
+      const pin = document.querySelector(`.bs-pin[data-pin="${pinId}"]`);
+      const anchor = document.querySelector('[data-bid="wheel/neon"] [data-part="spin-button"]');
+      if (pin === null || !pin.hasAttribute("data-placed")) return null;
+      const p = pin.getBoundingClientRect();
+      const a = anchor.getBoundingClientRect();
+      return Math.abs(p.left + p.width / 2 - a.right) <= 2 && Math.abs(p.top + p.height / 2 - a.top) <= 2;
+    }, id);
+  await window.click("[data-pick-toggle]");
+  await rouletteCanvas.click(inBlock("wheel/neon", "spin-button"));
+  await window.waitForSelector("[data-composer]");
+  await window.keyboard.type("Spin should be bigger");
+  await window.keyboard.press("Control+Enter");
+  await window.waitForSelector('[data-feedback="1"]');
+  await rouletteCanvas.waitForSelector('.bs-pin[data-pin="1"][data-placed]');
+  check("a pin picked on the stage lands on its element's corner", await pinAt(1), true);
+  await window.click("[data-board-toggle]");
+  await rouletteCanvas.waitForSelector('#canvas[data-view="board"]');
+  check(
+    "on the board both slots sit side by side and fit at 1440, and the pin stays on its element",
+    [await staged(), await rouletteCanvas.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), await pinAt(1)],
+    [["wheel", "result"], true, true],
+  );
+  await window.click("[data-board-toggle]");
+  await rouletteCanvas.waitForSelector('#canvas[data-view="stage"]');
+
+  await window.click('[data-slot-tab="result"]');
+  await window.click("[data-board-toggle]");
+  await rouletteCanvas.waitForSelector('#canvas[data-view="board"]');
   await rouletteCanvas.click(inBlock("wheel/neon", "screen"));
   await window.keyboard.press("Control+r");
   await window.waitForSelector("[data-regenerate-menu]");
@@ -187,6 +265,11 @@ try {
   await window.waitForSelector("[data-regenerate-menu]", { state: "detached" });
 
   const inspectorWidth = () => window.$eval("aside[aria-label=Inspector]", (el) => el.getBoundingClientRect().width);
+  await window.click("[data-inspector-toggle]");
+  await window.waitForSelector("[data-inspector-rail]");
+  check("the Inspector collapses to a 40 px rail that counts the feedback", [await inspectorWidth(), (await window.textContent("[data-rail-count]"))?.trim()], [40, "1"]);
+  await window.click("[data-rail-expand]");
+  await window.waitForSelector("[data-feedback-panel]");
   const narrow = await inspectorWidth();
   await window.focus('[data-slot="resize-handle"][aria-label="Inspector width"]');
   await window.keyboard.press("ArrowLeft");
@@ -205,6 +288,32 @@ try {
     ],
     [["neon", "card"], ["neon"]],
   );
+  const note = () =>
+    window.$eval('[data-slot-id="wheel"] [data-about]', (el) => {
+      const body = el.querySelector("[data-about-body]");
+      const name = el.closest("li").querySelector("[data-variant-title]");
+      return {
+        cut: body.scrollHeight > body.clientHeight,
+        more: el.querySelector("[data-about-more]")?.textContent ?? null,
+        aligned: Math.round(body.getBoundingClientRect().left) === Math.round(name.getBoundingClientRect().left),
+        label: body.querySelector("p > strong:first-child")?.textContent ?? null,
+      };
+    });
+  check("a long variant note shows three lines under More, starting where the variant's name does, its label bold", await note(), {
+    cut: true,
+    more: "More",
+    aligned: true,
+    label: "Hypothesis:",
+  });
+  await window.click('[data-slot-id="wheel"] [data-about-more]');
+  check("More shows the whole note in place", await note(), { cut: false, more: "Less", aligned: true, label: "Hypothesis:" });
+  await window.click('[data-slot-id="wheel"] [data-about-more]');
+  check("and Less folds it", (await note()).more, "More");
+  check(
+    "the sidebar never scrolls sideways",
+    await window.$eval('[data-slot="sidebar-content"]', (el) => el.scrollWidth <= el.clientWidth),
+    true,
+  );
   await window.emulateMedia({ colorScheme: "dark" });
   await window.waitForTimeout(400);
   await shot(window, shots, "session-dark");
@@ -220,6 +329,45 @@ try {
   check("the built renderer has no Radix", bundle, []);
   check("the window logged no errors or warnings", errors, []);
 
+  await window.route("**/v1/ui/sessions/*/actions", (route) => route.abort());
+  await window.click('[data-slot-id="wheel"] [data-variant="reel"]');
+  await window.waitForSelector("[data-slot=toast]");
+  await window.click("[data-toast-close]");
+  await window.waitForSelector("[data-slot=toast]", { state: "detached" });
+  check("a notice closes from its close button", await window.$("[data-slot=toast]"), null);
+  await window.click('[data-slot-id="wheel"] [data-variant="reel"]');
+  await window.waitForSelector("[data-slot=toast]");
+  await window.waitForTimeout(7000);
+  check("and stays until then, however long it has been up", await window.isVisible("[data-slot=toast]"), true);
+  await window.unroute("**/v1/ui/sessions/*/actions");
+  await window.click('[data-slot-id="wheel"] [data-variant="reel"]');
+  await window.waitForSelector("[data-slot=toast]", { state: "detached" });
+  check("the next call that succeeds clears it", await window.$("[data-slot=toast]"), null);
+  await window.click('[data-slot-id="wheel"] [data-variant="neon"]');
+  await window.click("[data-inspector-toggle]");
+  await window.waitForSelector("[data-inspector-rail]");
+  const sidebarWidth = () => window.$eval('[data-slot="sidebar-container"]', (el) => el.getBoundingClientRect().width);
+  await window.focus('[data-slot="resize-handle"][aria-label="Sidebar width"]');
+  await window.keyboard.press("ArrowRight");
+  await window.waitForTimeout(600);
+  const widths = { sidebar: await sidebarWidth(), inspector: narrow + 32 };
+
+  // A restart moves the server to a new port, so the window's origin and its own storage change; the layout must not.
+  await app.close();
+  ({ app, window, errors } = await launch(home, env));
+  await window.setViewportSize({ width: 1440, height: 900 });
+  const again = await openSession(window, roulette);
+  await again.waitForSelector('#canvas[data-view="board"]');
+  check(
+    "after a restart the sidebar width, the rail and this brainstorm's board come back as Rob left them",
+    [await sidebarWidth(), (await window.$("[data-inspector-rail]")) !== null, await window.getAttribute("[data-board-toggle]", "aria-pressed")],
+    [widths.sidebar, true, "true"],
+  );
+  await window.click("[data-rail-expand]");
+  await window.waitForSelector("[data-feedback-panel]");
+  check("and so does the Inspector width", await inspectorWidth(), widths.inspector);
+  check("the window logged no errors or warnings across the restart", errors, []);
+
   // A fresh app asks T3 about each thread on first view, which is how a thread that vanished is found.
   await app.close();
   t3.setMissing(LOOSE_THREAD, true);
@@ -230,9 +378,9 @@ try {
   await window.waitForSelector('[data-sidebar-panel="session"] [data-thread="lost"]');
   check("a brainstorm whose thread is gone says so in its sidebar", (await window.textContent('[data-thread="lost"]'))?.trim(), "Unattached");
   check(
-    "the takeover phrase keeps the sidebar's width, with Copy phrase under it",
+    "the takeover phrase sits on its own line at the sidebar's width, with Copy phrase under it",
     await window.$eval("[data-takeover]", (el) => {
-      const phrase = el.querySelector("p:not([data-callout-tone])").getBoundingClientRect();
+      const phrase = el.querySelector("[data-takeover-phrase]").getBoundingClientRect();
       const copy = el.querySelector("button").getBoundingClientRect();
       return [phrase.width > el.getBoundingClientRect().width * 0.7, copy.top >= phrase.bottom];
     }),
@@ -254,13 +402,56 @@ try {
   await window.waitForSelector("[data-home-error]");
   check(
     "a list that fails at launch shows its error with Try again, and the sidebar stops loading",
-    [await window.isVisible("[data-home-retry]"), await window.isVisible("[data-home-loading]"), (await window.textContent('[data-sidebar-panel="home"]'))?.includes("once they load")],
+    [await window.isVisible("[data-home-retry]"), await window.isVisible("[data-home-loading]"), (await window.textContent('[data-sidebar-panel="home"]'))?.includes("The list didn't load")],
     [true, false, true],
   );
   serverDown = false;
   await window.click("[data-home-retry]");
   await window.waitForSelector("[data-overview-session]");
   check("Try again loads the overview and the sidebar list", await window.isVisible(`[data-session="${loose}"]`), true);
+
+  // No viewport emulation from here: the page must track the real window, as it does for Rob.
+  await app.close();
+  ({ app, window, errors } = await launch(home, env));
+  await window.waitForSelector("[data-overview-session]");
+  const sized = async (width, height) => {
+    const content = await app.evaluate(({ BrowserWindow }, [w, h]) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      win.setContentSize(w, h);
+      const b = win.getContentBounds();
+      return [b.width, b.height];
+    }, [width, height]);
+    await window.waitForFunction(([w, h]) => innerWidth === w && innerHeight === h, content).catch(() => {});
+    return [content, await window.evaluate(() => [innerWidth, innerHeight])];
+  };
+  for (const [w, h] of [[1300, 820], [1700, 1050]]) {
+    const [content, page] = await sized(w, h);
+    check(`resized to ${w} x ${h}, the page fills the window's content area`, page, content);
+  }
+  check(
+    "the window stops at the brief's 1100 x 720",
+    await app.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      win.setContentSize(800, 500);
+      return [win.getMinimumSize(), win.getContentSize().map((n, i) => n >= [1100, 720][i])];
+    }),
+    [[1100, 720], [true, true]],
+  );
+  await sized(1440, 900);
+  check(
+    "the native buttons overlay the header's right end, past the last control",
+    await window.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.style.cssText = "position:fixed;top:0;left:env(titlebar-area-x,0px);width:env(titlebar-area-width,100vw);height:1px";
+      document.body.append(probe);
+      const area = probe.getBoundingClientRect();
+      probe.remove();
+      const last = [...document.querySelectorAll("[data-topbar] button")].at(-1)?.getBoundingClientRect();
+      return { overlay: area.right < innerWidth - 100, clear: last === undefined || last.right <= area.right };
+    }),
+    { overlay: true, clear: true },
+  );
+  check("the window logged no errors or warnings at its real size", errors, []);
 } finally {
   await app.close();
 }

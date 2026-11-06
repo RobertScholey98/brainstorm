@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-5");
@@ -39,6 +39,7 @@ try {
   await window.setViewportSize({ width: 1440, height: 900 });
   const { session } = seedDemo(home, env);
   const canvas = await openSession(window, session);
+  await showBoard(window, canvas);
   await canvas.waitForSelector(inBlock("wheel/neon", "screen"));
   await canvas.waitForSelector(inBlock("result/card", "card"));
 
@@ -104,9 +105,9 @@ try {
     await window.evaluate(() => [document.querySelector("[data-session-title]"), document.querySelector("[data-request-message]")].map((el) => el.scrollWidth > el.clientWidth)),
     [true, false],
   );
-  await window.setViewportSize({ width: 780, height: 720 });
+  await window.setViewportSize({ width: 1100, height: 720 });
   check(
-    "in a narrow window the title and message give way, and the phase actions stay clear of Regenerate",
+    "in the narrowest window, 1100, the title and message give way, and the phase actions stay clear of Regenerate",
     await window.evaluate(() => {
       const last = [...document.querySelectorAll("[data-request-phase] [data-request-action]")].at(-1).getBoundingClientRect();
       return last.right <= document.querySelector("[data-regenerate-toggle]").getBoundingClientRect().left;
@@ -155,8 +156,8 @@ try {
   await window.waitForSelector('[data-feedback="1"][data-status="addressed"]');
   check(
     "the feedback it addressed is ready to confirm",
-    (await window.textContent('[data-feedback="1"] [data-feedback-meta]'))?.replace(/\s+/g, " ").trim(),
-    "Neon wheel · spin-button · Addressed in 2",
+    (await window.textContent('[data-feedback="1"] [data-feedback-status]'))?.trim(),
+    "In iteration 2",
   );
   check("Regenerate is enabled again", await window.isDisabled("[data-regenerate-toggle]"), false);
   await shot(window, shots, "3-fulfilled");
@@ -220,15 +221,15 @@ try {
   });
   check("the session shows as unattached", (await window.textContent('[data-thread="lost"]'))?.trim(), "Unattached");
   await window.click('[data-request-phase] [data-request-action="copy_phrase"]');
-  await window.waitForSelector('[data-request-phase] [data-request-action="copy_phrase"]:has-text("Copied")');
+  await window.waitForSelector('[data-request-phase] [data-request-action="copy_phrase"] [data-copied]');
   check("Copy phrase puts the takeover phrase on the clipboard", await app.evaluate(({ clipboard }) => clipboard.readText()), phrase);
   await shot(window, shots, "8-thread-lost");
   await window.click('[data-request-action="withdraw"]');
   await phase("withdrawn");
   check(
     "with no request open, the top bar still offers the takeover phrase",
-    (await window.textContent("[data-takeover]"))?.replace(/\s+/g, " ").trim(),
-    `Not attached to a threadIn a T3 thread on this project, say: ${phrase}Copy phrase`,
+    await window.$eval("[data-takeover]", (el) => [...el.querySelectorAll("p")].map((p) => p.textContent).concat(el.querySelector("button")?.innerText.trim())),
+    ["Not attached to a thread", "In a T3 thread on this project, say:", phrase, "Copy phrase"],
   );
   check("Regenerate is disabled while the session is unattached", await window.isDisabled("[data-regenerate-toggle]"), true);
   await shot(window, shots, "9-unattached");

@@ -1,5 +1,5 @@
 import { seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-2");
@@ -10,6 +10,7 @@ try {
   await window.setViewportSize({ width: 1440, height: 900 });
   const { session } = seedDemo(home, env);
   const canvas = await openSession(window, session);
+  await showBoard(window, canvas);
   await canvas.waitForSelector(inBlock("wheel/neon", "screen"));
   await canvas.waitForSelector(inBlock("result/card", "card"));
   await shot(window, shots, "1-seeded");

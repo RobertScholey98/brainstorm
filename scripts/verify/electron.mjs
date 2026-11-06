@@ -79,6 +79,12 @@ export async function openSession(window, id) {
   return canvasFrame(window);
 }
 
+/** A brainstorm opens on the stage; checks that span slots switch to the board, which then stays for that brainstorm. */
+export async function showBoard(window, canvas) {
+  if ((await window.getAttribute("[data-board-toggle]", "aria-pressed")) !== "true") await window.click("[data-board-toggle]");
+  await canvas.waitForSelector('#canvas[data-view="board"]');
+}
+
 export const inBlock = (blockId, part) => `div[data-bid="${blockId}"] [data-part="${part}"]`;
 
 export async function shot(window, shots, name) {

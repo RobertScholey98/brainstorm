@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-3");
@@ -25,6 +25,7 @@ async function neonState(window, canvas) {
 
 async function openNeon(window, session) {
   const canvas = await openSession(window, session);
+  await showBoard(window, canvas);
   await canvas.waitForSelector(inBlock("wheel/neon", "screen"));
   await canvas.click(inBlock("wheel/neon", "chore"));
   await window.waitForSelector('[data-block="wheel/neon"]');
@@ -97,8 +98,8 @@ try {
   await run.window.waitForSelector('[data-banner="inapplicable"] [data-override="wheel/neon:accent"]');
   check(
     "the banner names the dropped override and why",
-    (await run.window.textContent('[data-override="wheel/neon:accent"]'))?.replace(/\s+/g, " ").trim(),
-    "accent = #00F0FF on Neon wheel: the block no longer has this setting.Dismiss",
+    (await run.window.innerText('[data-override="wheel/neon:accent"]'))?.replace(/\s+/g, " ").trim(),
+    "accent = #00F0FF On Neon wheel: the block no longer has this setting. Dismiss",
   );
   check("the slider's value still applies", await run.window.getAttribute(slider, "aria-valuenow"), "3.4");
   check("the panel no longer has an accent control", await run.window.isVisible(hex), false);
