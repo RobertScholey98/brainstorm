@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, CircleAlert, ExternalLink, LayoutGrid } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ExternalLink, LayoutGrid, Undo2 } from "lucide-react";
 import { useMemo, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
@@ -27,7 +28,8 @@ import type { PaneLimits } from "./hooks/use-pane-width";
 import { Mark } from "./Mark";
 import { TakeoverPhrase } from "./Regenerate";
 import { SessionStatus } from "./SessionStatus";
-import { groupByProject } from "./sessionGroups";
+import { groupByProject, splitSettled } from "./sessionGroups";
+import { SETTLE_SHORTCUT, settleLabel, settleUndoes } from "./settle";
 import { age, useNow } from "./time";
 
 export function AppSidebar({
@@ -83,6 +85,7 @@ export function HomePanel({
   overview,
   onOverview,
   onSession,
+  onSettle,
 }: {
   /** Null while the first list is loading. */
   sessions: readonly SessionListing[] | null;
@@ -93,8 +96,13 @@ export function HomePanel({
   overview: boolean;
   onOverview: () => void;
   onSession: (id: SessionId) => void;
+  /** Settles a brainstorm, or brings a settled one back. */
+  onSettle: (session: SessionListing) => void;
 }) {
-  const groups = useMemo(() => groupByProject(sessions ?? []), [sessions]);
+  const { groups, settled } = useMemo(() => {
+    const split = splitSettled(sessions ?? []);
+    return { groups: groupByProject(split.active), settled: split.settled };
+  }, [sessions]);
   const now = useNow();
   return (
     <SidebarContent
@@ -127,7 +135,7 @@ export function HomePanel({
             ))}
           </SidebarMenu>
         </SidebarGroup>
-      ) : groups.length === 0 ? (
+      ) : groups.length === 0 && settled.length === 0 ? (
         <p className="px-4 py-3 text-sm/relaxed text-pretty text-fg-muted">Brainstorms you start appear here.</p>
       ) : (
         groups.map((group) => (
@@ -150,9 +158,7 @@ export function HomePanel({
               <SidebarGroupContent>
                 <SidebarMenu>
                   {group.sessions.map((s) => (
-                    <SidebarMenuItem key={s.id}>
-                      <SessionRow session={s} now={now} active={s.id === current} onOpen={() => onSession(s.id)} />
-                    </SidebarMenuItem>
+                    <SessionRow key={s.id} session={s} now={now} active={s.id === current} onOpen={() => onSession(s.id)} onSettle={() => onSettle(s)} />
                   ))}
                 </SidebarMenu>
               </SidebarGroupContent>
@@ -160,21 +166,81 @@ export function HomePanel({
           </Collapsible>
         ))
       )}
+      {groups.length === 0 && settled.length > 0 && (
+        <p className="px-4 py-3 text-sm/relaxed text-pretty text-fg-muted" data-all-settled>
+          Every brainstorm is settled.
+        </p>
+      )}
+      {settled.length > 0 && (
+        // As in T3 Code: below every project, shut until Rob opens it, its count always showing.
+        <Collapsible render={<SidebarGroup className="py-1" data-settled-group />}>
+          <SidebarGroupLabel render={<CollapsibleTrigger />} className="group/label w-full cursor-pointer gap-1 hover:bg-hover hover:text-fg" data-settled-label>
+            <span className="truncate">Settled</span>
+            <span className="ml-auto flex shrink-0 items-center gap-1.5">
+              <Badge data-settled-count>{settled.length}</Badge>
+              <ChevronRight aria-hidden className="size-4 transition-transform group-data-[panel-open]/label:rotate-90" />
+            </span>
+          </SidebarGroupLabel>
+          <CollapsibleContent>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {settled.map((s) => (
+                  <SessionRow key={s.id} session={s} now={now} active={s.id === current} onOpen={() => onSession(s.id)} onSettle={() => onSettle(s)} />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
       <BottomFade />
     </SidebarContent>
   );
 }
 
-/** One line, as T3 Code lists threads: the title, its live status, and how long ago it last moved, right-aligned. */
-function SessionRow({ session: s, now, active, onOpen }: { session: SessionListing; now: number; active: boolean; onOpen: () => void }) {
+/**
+ * One line, as T3 Code lists threads: the title, its live status, and how long ago it last moved, right-aligned. A
+ * settled row is muted and counts from when it was settled. On hover or focus the settle control takes the age's place.
+ */
+function SessionRow({
+  session: s,
+  now,
+  active,
+  onOpen,
+  onSettle,
+}: {
+  session: SessionListing;
+  now: number;
+  active: boolean;
+  onOpen: () => void;
+  onSettle: () => void;
+}) {
+  const since = s.settlement.state === "settled" ? s.settlement.at : s.activeAt;
+  const label = settleLabel(s);
   return (
-    <SidebarMenuButton isActive={active} onClick={onOpen} data-session={s.id} data-lost={s.lost || undefined}>
-      <span className="min-w-0 flex-1 truncate">{s.title}</span>
-      <SessionStatus session={s} compact />
-      <span className="shrink-0 text-xs font-normal text-fg-muted tabular-nums" data-age={s.activeAt}>
-        {age(s.activeAt, now)}
-      </span>
-    </SidebarMenuButton>
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        isActive={active}
+        tone={s.settlement.state === "settled" ? "quiet" : "default"}
+        onClick={onOpen}
+        data-session={s.id}
+        data-lost={s.lost || undefined}
+        data-settled={s.settlement.state === "settled" || undefined}
+      >
+        <span className="min-w-0 flex-1 truncate">{s.title}</span>
+        <SessionStatus session={s} compact />
+        <span
+          className="shrink-0 text-xs font-normal text-fg-muted tabular-nums group-focus-within/menu-item:invisible group-hover/menu-item:invisible"
+          data-age={since}
+        >
+          {age(since, now)}
+        </span>
+      </SidebarMenuButton>
+      <Hint label={label} shortcut={SETTLE_SHORTCUT} side="right">
+        <SidebarMenuAction showOnHover className="text-fg-muted" onClick={onSettle} aria-label={`${label} ${s.title}`} data-settle={s.id}>
+          {settleUndoes(s) ? <Undo2 aria-hidden /> : <CircleCheck aria-hidden />}
+        </SidebarMenuAction>
+      </Hint>
+    </SidebarMenuItem>
   );
 }
 

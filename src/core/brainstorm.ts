@@ -14,6 +14,7 @@ import {
   regenerateGate,
   requestFeedback,
   requestPhase,
+  settlementOf,
 } from "./machines";
 import { prefRows, readPrefs, type UiPrefs, type UiPrefsPatch } from "./prefs";
 import { projectNameAt } from "./projectName";
@@ -219,7 +220,30 @@ export class Brainstorm {
       if (!info.ok) return info;
       project = info.data.projectId;
     }
-    return ok(this.#store.sessions(project).map(({ openRequest, ...listing }) => ({ ...listing, request: openRequest ? this.#openPhase(listing.id) : null })));
+    return ok(this.#listings(project));
+  }
+
+  #listings(project: ProjectId | null): SessionListing[] {
+    return this.#store.sessions(project).map(({ openRequest, settledAt, unsettledAt, woken, ...listing }) => ({
+      ...listing,
+      request: openRequest ? this.#openPhase(listing.id) : null,
+      settlement: settlementOf({ settledAt, unsettledAt, woken, openRequest }),
+    }));
+  }
+
+  /**
+   * Settles a brainstorm, or brings it back with `settled: false`. Nothing else changes: its iterations, feedback and
+   * working copy stay as they are. Settling one that is already settled keeps when it was settled, as T3 does.
+   */
+  settle(id: SessionId, settled: boolean): Result<SessionListing> {
+    const listing = () => this.#listings(null).find((s) => s.id === id);
+    const before = listing();
+    if (before === undefined) return fail(notFound("session", `no session ${id}`));
+    const active = before.settlement.state === "active";
+    if (settled && active) this.#store.settle(id, this.#now());
+    else if (!settled && !active) this.#store.unsettle(id, this.#now());
+    this.#emit(id);
+    return ok(listing() ?? before);
   }
 
   /** The open request's phase from the thread as last seen, so a list shows what the brainstorm is waiting on. */

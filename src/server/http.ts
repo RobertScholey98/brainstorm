@@ -66,6 +66,7 @@ const newSessionBody = z.strictObject({
   project: z.string().nullable(),
 });
 const attachBody = z.strictObject({ ref: z.string().trim().min(1), thread: threadId });
+const settleBody = z.strictObject({ settled: z.boolean() });
 const workingCopyBody = z.strictObject({
   thread: threadId,
   files: z.record(z.string(), z.string()),
@@ -240,6 +241,15 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       handle: withSession(async (id, { body }) => {
         const action = parseAction(body);
         return action.ok ? service.act(id, action.data) : action;
+      }),
+    },
+    {
+      method: "POST",
+      path: /^\/v1\/ui\/sessions\/([^/]+)\/settle$/,
+      auth: "ui",
+      handle: withSession(async (id, { body }) => {
+        const b = parseBody(settleBody, body);
+        return b.ok ? service.settle(id, b.data.settled) : b;
       }),
     },
     { method: "GET", path: /^\/v1\/ui\/prefs$/, auth: "ui", handle: async () => service.prefs() },

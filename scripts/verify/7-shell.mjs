@@ -157,6 +157,71 @@ try {
   await window.click('[data-project="kitchen-proj"] [data-project-label]');
   await window.waitForSelector(`[data-session="${kitchen}"]`);
 
+  // Settle, as T3 settles a thread: the row leaves its project for a shut Settled group at the bottom, and comes back.
+  const settledRows = () => window.$$eval("[data-settled-group] [data-session]", (rows) => rows.map((r) => r.dataset.session));
+  await window.hover(`[data-session="${kitchen}"]`);
+  check(
+    "hovering a row swaps its age for the settle control",
+    await settled(() =>
+      window.evaluate((id) => {
+        const item = document.querySelector(`[data-session="${id}"]`).closest("li");
+        return [getComputedStyle(item.querySelector("[data-age]")).visibility, getComputedStyle(item.querySelector("[data-settle]")).opacity];
+      }, kitchen),
+    ),
+    ["hidden", "1"],
+  );
+  await window.hover(`[data-settle="${kitchen}"]`);
+  await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
+  check("its hint names the action and T3's chord", (await window.textContent('[data-slot="tooltip-content"]'))?.trim(), "SettleCtrl+Shift+S");
+  await shot(window, shots, "settle-action");
+  await window.click(`[data-settle="${kitchen}"]`);
+  await window.waitForSelector("[data-settled-group]");
+  check(
+    "a settled brainstorm leaves its project for the Settled group, which starts shut and shows its count",
+    [await window.$('[data-project="kitchen-proj"]'), (await window.textContent("[data-settled-count]"))?.trim(), await window.$(`[data-session="${kitchen}"]`)],
+    [null, "1", null],
+  );
+  check(
+    "the overview moves its card under the Settled heading, muted and marked",
+    await window.$$eval("[data-overview-settled] [data-overview-session]", (cards) => cards.map((c) => [c.dataset.overviewSession, c.dataset.settled, c.querySelector('[data-session-status="settled"]')?.textContent])),
+    [[kitchen, "true", "Settled"]],
+  );
+  await window.click("[data-settled-label]");
+  await window.waitForSelector(`[data-settled-group] [data-session="${kitchen}"][data-settled]`);
+  check(
+    "opened, it lists the settled row muted, its age counting from the settle",
+    await window.$eval(`[data-session="${kitchen}"]`, (r) => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--fg-muted)" }));
+      const muted = getComputedStyle(probe).color;
+      probe.remove();
+      return [getComputedStyle(r).color === muted, r.querySelector("[data-age]").textContent];
+    }),
+    [true, "now"],
+  );
+  await window.mouse.move(700, 600);
+  await window.waitForTimeout(300);
+  await shot(window, shots, "settled-sidebar");
+
+  await window.focus(`[data-session="${loose}"]`);
+  await window.keyboard.press("Control+Shift+S");
+  await window.waitForFunction((id) => document.querySelector(`[data-settled-group] [data-session="${id}"]`) !== null, loose);
+  check("Ctrl+Shift+S settles the focused row, and the newest settle lists first", await settledRows(), [loose, kitchen]);
+  await window.focus(`[data-session="${loose}"]`);
+  await window.keyboard.press("Control+Shift+S");
+  await window.waitForFunction((id) => document.querySelector(`[data-project] [data-session="${id}"]`) !== null, loose);
+  check("and on a settled row it brings it back to its project", [await settledRows(), (await window.textContent("[data-settled-count]"))?.trim()], [[kitchen], "1"]);
+  await window.hover(`[data-overview-session="${roulette}"]`);
+  await window.click(`[data-settle="${roulette}"]`);
+  await window.waitForFunction((id) => document.querySelector(`[data-settled-group] [data-session="${id}"]`) !== null, roulette);
+  await window.hover(`[data-overview-session="${roulette}"]`);
+  await window.click(`[data-settle="${roulette}"]`);
+  await window.waitForFunction((id) => document.querySelector(`[data-project] [data-session="${id}"]`) !== null, roulette);
+  check(
+    "a card's own control settles it and brings it back, and Rob's un-settle lists it first, as T3 lists a thread brought back",
+    await window.$$eval('[data-project] [data-session]', (rows) => rows[0]?.dataset.session),
+    roulette,
+  );
+
   const canvas = await openSession(window, wide);
   check(
     "clicking a brainstorm swaps the sidebar to it",
@@ -606,6 +671,14 @@ try {
   await window.waitForTimeout(300);
   check("and come back when it widens", [await sidebarWidth(), await inspectorWidth()], [widths.sidebar, widths.inspector]);
   check("the window logged no errors or warnings across the restart", errors, []);
+  await window.click("[data-back]");
+  await window.waitForSelector("[data-settled-group]");
+  check("a settle survives the restart", [(await window.textContent("[data-settled-count]"))?.trim(), await window.$(`[data-project] [data-session="${kitchen}"]`)], ["1", null]);
+  await window.click("[data-settled-label]");
+  await window.hover(`[data-session="${kitchen}"]`);
+  await window.click(`[data-settle="${kitchen}"]`);
+  await window.waitForSelector("[data-settled-group]", { state: "detached" });
+  check("un-settling the last one removes the Settled group and puts the row back under its project", await window.$(`[data-project="kitchen-proj"] [data-session="${kitchen}"]`) !== null, true);
 
   // A fresh app asks T3 about each thread on first view, which is how a thread that vanished is found.
   await app.close();

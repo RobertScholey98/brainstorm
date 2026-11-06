@@ -91,6 +91,17 @@ describe("http", () => {
     });
   });
 
+  test("settling is a UI route: only Rob's token settles, and the body names the direction", async () => {
+    const created = await call("POST", "/v1/agent/sessions", agentToken, { title: "Settled", brief: "", thread: T1, project: null });
+    const id = created.body.data.session.id;
+    expect((await call("POST", `/v1/ui/sessions/${id}/settle`, agentToken, { settled: true })).status).toBe(401);
+    expect((await call("POST", `/v1/ui/sessions/${id}/settle`, server.uiToken, {})).status).toBe(400);
+    const settled = await call("POST", `/v1/ui/sessions/${id}/settle`, server.uiToken, { settled: true });
+    expect([settled.status, settled.body.data.id, settled.body.data.settlement.state]).toEqual([200, id, "settled"]);
+    const back = await call("POST", `/v1/ui/sessions/${id}/settle`, server.uiToken, { settled: false });
+    expect(back.body.data.settlement.state).toBe("active");
+  });
+
   test("streams a session id over SSE when the session changes", async () => {
     const created = await call("POST", "/v1/agent/sessions", agentToken, { title: "Streamed", brief: "", thread: T1, project: null });
     const id = created.body.data.session.id;

@@ -16,6 +16,7 @@ import {
   type RequestPhaseAction,
   type RequestScope,
   type SessionId,
+  type Settlement,
   type ThreadSnapshot,
 } from "./types";
 
@@ -31,6 +32,20 @@ export const FEEDBACK_ACTIONS: { readonly [S in FeedbackStatus["state"]]: readon
   addressed: ["confirm", "reopen"],
   confirmed: ["reopen"],
 };
+
+/**
+ * A settle holds until something happens to the brainstorm afterwards (`woken`): Rob asks for a regenerate, or the agent
+ * commits other than to finish a request Rob made before settling. Those are what bring a T3 thread back: a new turn.
+ */
+export function settlementOf(state: {
+  readonly settledAt: string | null;
+  readonly unsettledAt: string | null;
+  readonly woken: boolean;
+  readonly openRequest: boolean;
+}): Settlement {
+  if (state.settledAt === null || state.woken) return { state: "active", unsettledAt: state.unsettledAt };
+  return { state: state.openRequest ? "settling" : "settled", at: state.settledAt };
+}
 
 export function canAppend(status: FeedbackStatus, kind: FeedbackEventKind): boolean {
   return LEGAL_EVENTS[status.state].includes(kind);

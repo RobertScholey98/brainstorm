@@ -4,10 +4,12 @@ import type { BlockView, RobAction } from "../core/types";
 export type Notice = { readonly title: string; readonly detail: string };
 
 /** The step that failed, named as Rob took it, so a notice that came while he looked elsewhere still says what was lost. */
-export function failedTitle(action: RobAction | "export" | "list" | "load", blocks: readonly BlockView[] = []): string {
+export function failedTitle(action: RobAction | "export" | "list" | "load" | "settle" | "unsettle", blocks: readonly BlockView[] = []): string {
   if (typeof action === "string") {
     if (action === "export") return "Couldn't export the brainstorm";
     if (action === "list") return "Couldn't refresh the brainstorms";
+    if (action === "settle") return "Couldn't settle the brainstorm";
+    if (action === "unsettle") return "Couldn't bring the brainstorm back";
     return "Couldn't load the brainstorm";
   }
   const setting = (blockId: string, prop: string) =>

@@ -5,6 +5,8 @@ export type Api = {
   sessions(): Promise<Result<SessionListing[]>>;
   view(id: SessionId): Promise<Result<SessionView>>;
   act(id: SessionId, action: RobAction): Promise<Result<SessionView>>;
+  /** Settles a brainstorm, or brings it back. */
+  settle(id: SessionId, settled: boolean): Promise<Result<SessionListing>>;
   exportHtml(id: SessionId): Promise<Result<ExportResult>>;
   prefs(): Promise<Result<UiPrefs>>;
   setPrefs(patch: UiPrefsPatch): Promise<Result<UiPrefs>>;
@@ -60,6 +62,7 @@ export function createApi(token: string): Api {
     sessions: () => call("GET", "/v1/ui/sessions"),
     view: (id) => call("GET", `/v1/ui/sessions/${id}`),
     act: (id, action) => call("POST", `/v1/ui/sessions/${id}/actions`, action),
+    settle: (id, settled) => call("POST", `/v1/ui/sessions/${id}/settle`, { settled }),
     exportHtml: (id) => call("POST", `/v1/ui/sessions/${id}/export`),
     prefs: () => call("GET", "/v1/ui/prefs"),
     setPrefs: (patch) => call("POST", "/v1/ui/prefs", patch),

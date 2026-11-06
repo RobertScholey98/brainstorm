@@ -387,6 +387,73 @@ describe("listSessions", () => {
   });
 });
 
+describe("settle", () => {
+  async function clocked() {
+    let minute = 0;
+    const tick = () => `2026-11-05T10:${String(minute++).padStart(2, "0")}:00.000Z`;
+    const ctx = await setup(undefined, tick);
+    data(await ctx.service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: null }));
+    data(await ctx.service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: null }));
+    const settlement = async () => data(await ctx.service.listSessions(null)).find((l) => l.id === S)?.settlement;
+    return { ...ctx, settlement };
+  }
+
+  test("settling keeps everything, a second settle keeps its time, and un-settling brings it back", async () => {
+    const { service, settlement } = await clocked();
+    expect(await settlement()).toEqual({ state: "active", unsettledAt: null });
+    expect(data(service.settle(S, true)).settlement).toEqual({ state: "settled", at: "2026-11-05T10:02:00.000Z" });
+    expect(data(service.settle(S, true)).settlement, "settling again keeps when it was settled").toEqual({ state: "settled", at: "2026-11-05T10:02:00.000Z" });
+    const view = data(await service.view(S));
+    expect([view.iteration?.n, view.iteration?.blocks.length, Object.keys(data(await service.pull(S)).files).length], "settling is not deleting").toEqual([1, 2, 7]);
+    const back = data(service.settle(S, false)).settlement;
+    expect(back.state === "active" && back.unsettledAt !== null && back.unsettledAt > "2026-11-05T10:02:00.000Z", "un-settling records when").toBe(true);
+    expect(data(service.settle(S, false)).settlement, "un-settling an active brainstorm changes nothing").toEqual(back);
+    expect(service.settle("s_nothere1" as SessionId, true)).toEqual({ ok: false, error: { code: "not_found", entity: "session", message: "no session s_nothere1" } });
+  });
+
+  test("a regenerate brings a settled brainstorm back, as a new turn brings back a T3 thread", async () => {
+    const { service, settlement } = await clocked();
+    data(service.settle(S, true));
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null }));
+    expect(await settlement()).toEqual({ state: "active", unsettledAt: null });
+  });
+
+  test("an agent commit that no request asked for brings it back", async () => {
+    const { service, settlement } = await clocked();
+    data(service.settle(S, true));
+    const edited = { "wheel/neon": { tsx: neonTsx.replace("Spin", "Go"), json: neonJson } };
+    data(await service.commit({ session: S, thread: T1, files: copy(1, edited), addresses: [], note: null }));
+    expect(await settlement()).toEqual({ state: "active", unsettledAt: null });
+    expect(data(service.settle(S, true)).settlement, "settling again starts a new settle").toEqual({ state: "settled", at: "2026-11-05T10:04:00.000Z" });
+  });
+
+  test("a settle during an open request waits for it: the commit that ends it settles, and a failed run keeps it in view", async () => {
+    const { service, bridge, settlement } = await clocked();
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null }));
+    data(service.settle(S, true));
+    expect(await settlement()).toEqual({ state: "settling", at: "2026-11-05T10:04:00.000Z" });
+
+    bridge.startRun(T1, "run:2");
+    bridge.endRun(T1, "failed");
+    await service.tick();
+    expect(data(await service.listSessions(null))[0]?.request, "the failed run is what the row shows").toBe("run_failed");
+    expect(await settlement()).toEqual({ state: "settling", at: "2026-11-05T10:04:00.000Z" });
+
+    data(await service.act(S, { kind: "retry_request" }));
+    const edited = { "wheel/neon": { tsx: neonTsx.replace("Spin", "Go"), json: neonJson } };
+    data(await service.commit({ session: S, thread: T1, files: copy(1, edited), addresses: [], note: null }));
+    expect(await settlement()).toEqual({ state: "settled", at: "2026-11-05T10:04:00.000Z" });
+  });
+
+  test("a settle survives a restart", async () => {
+    const { service, open } = await clocked();
+    data(service.settle(S, true));
+    service.close();
+    const reopened = await open();
+    expect(data(await reopened.listSessions(null))[0]?.settlement).toEqual({ state: "settled", at: "2026-11-05T10:02:00.000Z" });
+  });
+});
+
 describe("attach", () => {
   test("refuses a thread from another project", async () => {
     const { service } = await withIteration();

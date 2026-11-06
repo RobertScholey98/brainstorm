@@ -39,6 +39,7 @@ import { failedTitle, type Notice } from "./notice";
 import { PendingOverrides } from "./overrides";
 import { AppSidebar, HomePanel, SessionPanel } from "./Sidebar";
 import { RequestDetail } from "./Regenerate";
+import { settleUndoes, useSettleShortcut } from "./settle";
 import { SessionBar, TopBar } from "./TopBar";
 
 /** How often an open brainstorm asks T3 whether its thread still exists, besides on window focus. */
@@ -131,6 +132,21 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     return () => controller.abort();
   }, [api, refreshList]);
 
+  const toggleSettled = useCallback(
+    async (s: SessionListing) => {
+      const settle = !settleUndoes(s);
+      const result = await api.settle(s.id, settle);
+      if (!result.ok) {
+        setNotice({ title: failedTitle(settle ? "settle" : "unsettle"), detail: result.error.message });
+        return;
+      }
+      setNotice(null);
+      setSessions((list) => list?.map((x) => (x.id === s.id ? result.data : x)) ?? list);
+    },
+    [api],
+  );
+  useSettleShortcut(sessions, sessionId, (s) => void toggleSettled(s));
+
   const openSession = (id: SessionId) => setNav({ kind: "brainstorm", id, panel: "session" });
   const homePanel = (
     <HomePanel
@@ -140,6 +156,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
       overview={nav.kind === "overview"}
       onOverview={() => setNav({ kind: "overview" })}
       onSession={openSession}
+      onSettle={(s) => void toggleSettled(s)}
     />
   );
   const sidebar = (panel: ReactNode) => (
@@ -160,7 +177,13 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
             bar={<TopBar />}
           >
             <section className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Brainstorms" data-canvas-region>
-              <HomeOverview sessions={sessions} error={listError} onRetry={() => void refreshList()} onSession={openSession} />
+              <HomeOverview
+                sessions={sessions}
+                error={listError}
+                onRetry={() => void refreshList()}
+                onSession={openSession}
+                onSettle={(s) => void toggleSettled(s)}
+              />
               {toast}
             </section>
           </Shell>

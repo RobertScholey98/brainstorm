@@ -447,7 +447,18 @@ export type SessionListing = SessionSummary & {
   readonly activeAt: string;
   /** The open Regenerate request's phase, or null when none is open. */
   readonly request: OpenPhase | null;
+  readonly settlement: Settlement;
 };
+
+/**
+ * Whether Rob has put a brainstorm away, as T3 Code settles a thread (ADR 004). Settling while a request is open waits
+ * for it to close, as T3 settles a thread at turn end, so a request that ends needing Rob keeps it in view. `at` is when
+ * he settled it. `unsettledAt` is when he last brought it back, which lists it as freshly active without changing how
+ * long ago it last moved.
+ */
+export type Settlement =
+  | { readonly state: "active"; readonly unsettledAt: string | null }
+  | { readonly state: "settling" | "settled"; readonly at: string };
 
 /** The phases of a request that is still open. A fulfilled or withdrawn request has closed. */
 export type OpenPhase = Exclude<RequestPhase["phase"], "fulfilled" | "withdrawn">;

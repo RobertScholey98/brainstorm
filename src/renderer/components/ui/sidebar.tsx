@@ -590,7 +590,8 @@ function SidebarMenuAction({
     render,
     state: {
       slot: "sidebar-menu-action",
-      sidebar: "menu-action",
+      // A hover action takes the place of the row's trailing text, so the row keeps its padding.
+      sidebar: showOnHover ? "menu-reveal" : "menu-action",
     },
   })
 }

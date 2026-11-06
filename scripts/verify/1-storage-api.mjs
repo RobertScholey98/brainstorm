@@ -153,6 +153,7 @@ try {
           latest: null,
           activeAt: list.result.data[0].createdAt,
           request: null,
+          settlement: { state: "active", unsettledAt: null },
         },
       ],
     },

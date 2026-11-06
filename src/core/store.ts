@@ -61,6 +61,7 @@ const MIGRATIONS: readonly Migration[] = [
   `ALTER TABLE project ADD COLUMN name TEXT;`,
   `CREATE TABLE ui_pref(key TEXT PRIMARY KEY, value_json TEXT NOT NULL);`,
   dropVariantNotes,
+  `ALTER TABLE session ADD COLUMN settled_at TEXT; ALTER TABLE session ADD COLUMN unsettled_at TEXT;`,
 ];
 
 /**
@@ -131,8 +132,16 @@ const toSession = (r: Row): SessionSummary => ({
   createdAt: str(r.created_at),
 });
 
-/** A listing as the store holds it; the service reads an open request's phase from the thread. */
-export type StoredListing = Omit<SessionListing, "request"> & { readonly openRequest: boolean };
+/**
+ * A listing as the store holds it; the service reads an open request's phase from the thread and folds the settle.
+ * `woken` is whether anything that brings a settled brainstorm back has happened since `settledAt`.
+ */
+export type StoredListing = Omit<SessionListing, "request" | "settlement"> & {
+  readonly openRequest: boolean;
+  readonly settledAt: string | null;
+  readonly unsettledAt: string | null;
+  readonly woken: boolean;
+};
 
 const toListing = (r: Row): StoredListing => {
   const createdAt = str(r.created_at);
@@ -144,6 +153,9 @@ const toListing = (r: Row): StoredListing => {
     latest: r.latest_n === null ? null : (num(r.latest_n) as IterationN),
     activeAt: [strOrNull(r.latest_at), strOrNull(r.request_at)].reduce<string>((max, t) => (t !== null && t > max ? t : max), createdAt),
     openRequest: num(r.open_request) === 1,
+    settledAt: strOrNull(r.settled_at),
+    unsettledAt: strOrNull(r.unsettled_at),
+    woken: num(r.woken) === 1,
   };
 };
 
@@ -310,13 +322,29 @@ export class Store {
         (SELECT MAX(n) FROM iteration WHERE session_id = s.id) AS latest_n,
         (SELECT MAX(created_at) FROM iteration WHERE session_id = s.id) AS latest_at,
         (SELECT MAX(created_at) FROM request WHERE session_id = s.id) AS request_at,
-        EXISTS (SELECT 1 FROM request WHERE session_id = s.id AND ${OPEN_REQUEST}) AS open_request
+        EXISTS (SELECT 1 FROM request WHERE session_id = s.id AND ${OPEN_REQUEST}) AS open_request,
+        s.settled_at, s.unsettled_at,
+        s.settled_at IS NOT NULL AND (
+          EXISTS (SELECT 1 FROM request WHERE session_id = s.id AND created_at > s.settled_at)
+          OR EXISTS (
+            SELECT 1 FROM iteration i WHERE i.session_id = s.id AND i.created_at > s.settled_at
+              AND NOT EXISTS (SELECT 1 FROM request r WHERE r.session_id = s.id AND r.fulfilled_in = i.n AND r.created_at <= s.settled_at)
+          )
+        ) AS woken
       FROM session s JOIN project p ON p.id = s.project_id JOIN attachment a ON a.session_id = s.id AND a.detached_at IS NULL
       WHERE s.archived_at IS NULL AND (? IS NULL OR s.project_id = ?)
       ORDER BY s.created_at, s.id`,
       project,
       project,
     ).map(toListing);
+  }
+
+  settle(session: SessionId, at: string): void {
+    this.#run("UPDATE session SET settled_at = ? WHERE id = ?", at, session);
+  }
+
+  unsettle(session: SessionId, at: string): void {
+    this.#run("UPDATE session SET settled_at = NULL, unsettled_at = ? WHERE id = ?", at, session);
   }
 
   attachment(session: SessionId): Attachment {
