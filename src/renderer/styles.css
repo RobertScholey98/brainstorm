@@ -184,9 +184,42 @@ body[data-resizing] [data-slot="sidebar-container"] {
   scrollbar-gutter: stable both-edges;
 }
 
-/* A scroller whose top 8 px fade out, so content scrolled under a solid header edge never ends in a hard sliver. */
-@utility scroll-fade-top {
-  mask-image: linear-gradient(to bottom, transparent, black 8px);
+/*
+ * A scroller's edges fade only while there is more that way. Scrolled, the top hides 12 px and fades over a control
+ * row's 28 px, so a control cut by the header above leaves no legible sliver. Short of the end, the bottom fades over
+ * the sidebar's 32 px. A scroll timeline drives both, so neither needs a script.
+ */
+@property --fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes scroll-fade-top {
+  to {
+    --fade-top: 28px;
+  }
+}
+@keyframes scroll-fade-bottom {
+  from {
+    --fade-bottom: 32px;
+  }
+}
+@utility scroll-fades {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent calc(var(--fade-top) * 0.43),
+    black var(--fade-top),
+    black calc(100% - var(--fade-bottom)),
+    transparent
+  );
+  animation: scroll-fade-top linear both, scroll-fade-bottom linear both;
+  animation-timeline: scroll(self), scroll(self);
+  animation-range: 0 28px, calc(100% - 32px) 100%;
 }
 
 /*

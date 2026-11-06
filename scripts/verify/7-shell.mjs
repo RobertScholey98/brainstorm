@@ -414,6 +414,25 @@ try {
     ]).then(([zoom, ...rest]) => [Number(zoom) < 100, ...rest]),
     [true, { face: [20, 20], hit: [true, true] }, true],
   );
+  // A short window, so the Inspector has more than both fades' worth to scroll.
+  await window.setViewportSize({ width: 1100, height: 520 });
+  await settled(() => window.$eval("[data-inspector-body]", (el) => [el.scrollHeight, el.clientHeight]));
+  check(
+    "the Inspector's edges fade only while there is more that way: none at rest, a control row's 28 px at the top once scrolled, 32 px at the bottom short of the end",
+    await window.$eval("[data-inspector-body]", async (el) => {
+      const read = () => ["--fade-top", "--fade-bottom"].map((p) => getComputedStyle(el).getPropertyValue(p));
+      const at = async (y) => {
+        el.scrollTop = y;
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return read();
+      };
+      const result = { room: el.scrollHeight - el.clientHeight >= 60, top: await at(0), down: await at(28), end: await at(el.scrollHeight) };
+      await at(0);
+      return result;
+    }),
+    { room: true, top: ["0px", "32px"], down: ["28px", "32px"], end: ["28px", "0px"] },
+  );
+  await window.setViewportSize({ width: 1100, height: 720 });
   await window.click("[data-pick-toggle]");
   await window.waitForSelector("[data-pick-hint]");
   check(

@@ -124,7 +124,8 @@ function missing(name, reason) {
 const RUNNING_ANIMATIONS = () =>
   document
     .getAnimations()
-    .filter((a) => a.playState === "running" && a.effect?.getComputedTiming().iterations !== Infinity)
+    // A scroll-driven animation runs for as long as its scroller exists, so only time-driven ones count.
+    .filter((a) => a.timeline === document.timeline && a.playState === "running" && a.effect?.getComputedTiming().iterations !== Infinity)
     .map((a) => a.animationName || a.transitionProperty || "animation");
 
 const inFrames = (page, fn) => Promise.all(page.frames().map((f) => f.evaluate(fn).catch(() => null)));
