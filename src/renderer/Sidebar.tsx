@@ -404,7 +404,7 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
       )}
       {showTakeover && (
         <div className="pt-1" data-takeover>
-          <Callout tone="warning" actions={<TakeoverPhrase title={view.session.title} />}>
+          <Callout tone="warning" wide actions={<TakeoverPhrase title={view.session.title} />}>
             <p>In a T3 thread on this project, say:</p>
           </Callout>
         </div>

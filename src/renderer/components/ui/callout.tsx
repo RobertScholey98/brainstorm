@@ -6,7 +6,7 @@ type Tone = "danger" | "warning" | "info"
 
 const ICON: Record<Tone, LucideIcon> = { danger: CircleAlert, warning: AlertTriangle, info: Info }
 
-const calloutVariants = cva("flex items-start gap-2 text-xs/relaxed text-fg", {
+const calloutVariants = cva("grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-1 text-xs/relaxed text-fg", {
   variants: {
     tone: {
       danger: "bg-danger-subtle [&_[data-callout-tone]]:text-danger",
@@ -33,13 +33,15 @@ const calloutVariants = cva("flex items-start gap-2 text-xs/relaxed text-fg", {
  * request message under the top bar. `inset` sits inside a panel; `strip` runs edge to edge under a bar. Actions only
  * go in `actions`, which sit under the message, so a narrow panel keeps the message at full width. A callout that lists
  * several things, each with its own action, uses one `CalloutItem` per thing. lint:design fails a button written into
- * the message itself (`callout-actions`).
+ * the message itself (`callout-actions`). `wide` lets the actions run under the icon too, for a narrow panel such as
+ * the sidebar, where the text column alone would squeeze them.
  */
 function Callout({
   tone,
   layout = "inset",
   heading,
   actions,
+  wide = false,
   children,
   ...props
 }: Omit<ComponentProps<"div">, "className" | "title"> & {
@@ -47,6 +49,7 @@ function Callout({
   layout?: "inset" | "strip"
   heading?: ReactNode
   actions?: ReactNode
+  wide?: boolean
 }) {
   const Icon = ICON[tone]
   return (
@@ -59,8 +62,12 @@ function Callout({
           </p>
         )}
         {children}
-        {actions !== undefined && <CalloutActions>{actions}</CalloutActions>}
       </div>
+      {actions !== undefined && (
+        <div className={wide ? "col-span-2" : "col-start-2"}>
+          <CalloutActions>{actions}</CalloutActions>
+        </div>
+      )}
     </div>
   )
 }

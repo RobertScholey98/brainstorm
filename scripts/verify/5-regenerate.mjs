@@ -372,6 +372,22 @@ try {
     ["In a T3 thread on this project, say:", phrase, "Copy phrase"],
   );
   check("Regenerate is disabled while the session is unattached", await window.isDisabled("[data-regenerate-toggle]"), true);
+  await window.setViewportSize({ width: 1100, height: 720 });
+  check(
+    "in the 240 px sidebar at 1100 the phrase takes the callout's full width, under its icon too, and keeps to three lines",
+    await settled(() =>
+      window.$eval("[data-takeover]", (el) => {
+        const callout = el.querySelector("[data-slot=callout]").getBoundingClientRect();
+        const phrase = el.querySelector("[data-takeover-phrase]");
+        const box = phrase.getBoundingClientRect();
+        const style = getComputedStyle(phrase);
+        const lines = Math.round((box.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)) / parseFloat(style.lineHeight));
+        return [Math.round(box.left - callout.left), Math.round(callout.right - box.right) <= 12, lines <= 3];
+      }),
+    ),
+    [12, true, true],
+  );
+  await window.setViewportSize({ width: 1440, height: 900 });
   await shot(window, shots, "9-unattached");
 
   check("the window logged no errors or warnings", errors, []);
