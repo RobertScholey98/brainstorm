@@ -162,3 +162,12 @@ body[data-resizing] [data-slot="sidebar-container"] {
 @utility grid-overview {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
+
+/*
+ * The request status in the top bar: icon, message, then actions. The message's column can close to nothing, so the
+ * status is never narrower than its icon and actions, and a long title or narrow window cuts text, not buttons.
+ */
+@utility grid-phase {
+  grid-auto-flow: column;
+  grid-template-columns: auto minmax(0, max-content);
+}

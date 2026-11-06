@@ -253,14 +253,14 @@ export function RequestStatus({ view, send }: { view: SessionView; send: (action
   const { phase } = request;
   const detail = DETAIL[phase.phase];
   return (
-    <div className="flex min-w-0 items-center gap-2 text-sm" data-request-phase={phase.phase}>
+    <div className="grid-phase grid items-center gap-2 text-sm" data-request-phase={phase.phase}>
       <PhaseIcon phase={phase.phase} />
       {detail === undefined ? (
         <span className={`truncate ${TONE_TEXT[phase.phase] ?? "text-fg-muted"}`} data-request-message>
           {request.message}
         </span>
       ) : (
-        <span className={`shrink-0 font-medium ${TONE_TEXT[phase.phase]}`} data-request-label>
+        <span className={`truncate font-medium ${TONE_TEXT[phase.phase]}`} data-request-label>
           {detail.label}
         </span>
       )}
