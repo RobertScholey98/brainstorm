@@ -181,6 +181,11 @@ body[data-resizing] [data-slot="sidebar-container"] {
   scrollbar-gutter: stable;
 }
 
+/* A scroller whose top 8 px fade out, so content scrolled under a solid header edge never ends in a hard sliver. */
+@utility scroll-fade-top {
+  mask-image: linear-gradient(to bottom, transparent, black 8px);
+}
+
 /*
  * The window has no native title bar, so the app's header row moves it. Anything in it that takes a click or focus
  * opts out, so a control in the header never turns into a drag handle.

@@ -59,7 +59,7 @@ function Row({ bound, trailing, children }: { bound: Pick<Bound<AppearanceType>,
       <div className="relative flex h-6 items-center gap-1.5">
         {/* In the gutter, 6 px off the pane edge and 4 px before the label, so an overridden label keeps its edge. */}
         {overridden && <span aria-hidden className="absolute top-1/2 -left-2.5 size-1.5 -translate-y-1/2 rounded-full bg-fg" data-overridden-mark />}
-        <span className="truncate text-sm font-medium">{label}</span>
+        <span className="truncate text-sm" data-control-label>{label}</span>
         <span className="ml-auto flex items-center gap-1">
           {trailing}
           {/* Last in the row, so every reset sits at one x beside the value it resets. */}
@@ -217,7 +217,7 @@ function Section({ props, children }: BaseComponentProps<{ title: string | null 
   // A derived spec titles its one section with the block title, which the panel header already shows.
   const title = props.title === scope?.block.title ? null : props.title;
   return (
-    <section className="grid gap-4 border-b px-4 pt-4 pb-5 last:border-b-0">
+    <section className="grid gap-4 border-b pt-4 pb-5 last:border-b-0">
       {title !== null && <h3 className="text-xs font-semibold text-fg-muted">{title}</h3>}
       {children}
     </section>

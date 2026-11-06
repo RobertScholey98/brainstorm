@@ -190,10 +190,11 @@ try {
   await window.focus(handle);
   await window.keyboard.press("Home");
   check(
-    "at its narrowest the Inspector never scrolls sideways, and the status line wraps instead of cutting",
-    await window.$eval('aside[aria-label="Inspector"]', (aside) => {
-      const status = aside.querySelector('[data-feedback="1"] [data-feedback-status]');
-      return [aside.scrollWidth <= aside.clientWidth, status.scrollWidth <= status.clientWidth];
+    "at its narrowest nothing in the Inspector runs past its edge, and the status line wraps instead of cutting",
+    await window.$eval("[data-inspector-body]", (body) => {
+      const status = body.querySelector('[data-feedback="1"] [data-feedback-status]');
+      const edge = body.getBoundingClientRect().left + body.clientLeft + body.clientWidth;
+      return [[...body.querySelectorAll("*")].every((el) => el.getBoundingClientRect().right <= edge + 0.5), status.scrollWidth <= status.clientWidth];
     }),
     [true, true],
   );

@@ -133,11 +133,37 @@ try {
   );
 
   await canvas.waitForSelector('[data-bid="result/card"]');
-  await window.waitForSelector("[data-block] header");
+  await window.waitForSelector("[data-inspector-header]");
+  await window.waitForSelector("[data-control]");
   check(
     "the canvas bar and the Inspector header rule off at one height across the seam",
-    await window.evaluate(() => Math.round(document.querySelector("[data-block] header").getBoundingClientRect().bottom - document.querySelector("[data-canvas-bar]").getBoundingClientRect().bottom)),
+    await window.evaluate(() => Math.round(document.querySelector("[data-inspector-header]").getBoundingClientRect().bottom - document.querySelector("[data-canvas-bar]").getBoundingClientRect().bottom)),
     0,
+  );
+  check(
+    "the Inspector header sits above its scrolling body, not in it, so nothing scrolls into view over it",
+    await window.evaluate(() => [document.querySelector("[data-inspector-header]").closest("[data-inspector-body]"), document.querySelector("[data-block]").closest("[data-inspector-body]") !== null]),
+    [null, true],
+  );
+  check(
+    "the Inspector's content and its rules sit 16 px off both edges, the scrollbar gutter counted",
+    await window.evaluate(() => {
+      const aside = document.querySelector("aside[aria-label=Inspector]");
+      const pane = { left: aside.getBoundingClientRect().left + aside.clientLeft, right: aside.getBoundingClientRect().right };
+      const inset = (el) => [Math.round(el.getBoundingClientRect().left - pane.left), Math.round(pane.right - el.getBoundingClientRect().right)];
+      return { control: inset(document.querySelector("[data-control]")), rule: inset(document.querySelector("[data-feedback-panel]")) };
+    }),
+    { control: [16, 16], rule: [16, 16] },
+  );
+  check(
+    "the Inspector's type steps down from block title to control label",
+    await window.evaluate(() =>
+      ["[data-inspector-header] h2", "[data-feedback-panel] h2", "[data-control-label]"].map((s) => {
+        const c = getComputedStyle(document.querySelector(s));
+        return `${c.fontSize} ${c.fontWeight}`;
+      }),
+    ),
+    ["14px 600", "14px 600", "13px 400"],
   );
   check("a brainstorm with one slot shows no slot arrows", await window.$("[data-slot-step]"), null);
   const box = (selector) =>

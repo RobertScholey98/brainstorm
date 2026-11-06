@@ -5,10 +5,11 @@ import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Callout, CalloutItem } from "@/components/ui/callout";
 import { ResizeHandle } from "@/components/ui/resize-handle";
+import { ScrollPane } from "@/components/ui/scroll-pane";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { HEX_COLOR_PATTERN } from "../core/props";
-import type { AppearanceValue, BlockView, InapplicableOverride, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
+import type { AppearanceValue, BlockView, InapplicableOverride, Override, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
 import { ControlScopeContext, controlRegistry, createBlockStore } from "./controls";
 import type { PaneLimits } from "./hooks/use-pane-width";
 
@@ -22,16 +23,33 @@ const WHY: Record<OverrideMismatch, string> = {
 
 const isHex = (value: AppearanceValue): value is string => typeof value === "string" && HEX_COLOR_PATTERN.test(value);
 
-/** The Inspector's column: its width, the drag handle on its left edge, and its scrolling body. */
-function Column({ width, handle, children }: { width: number; handle?: ReactNode; children: ReactNode }) {
+/** The setting's label while the block still declares it; once it is gone, its prop name read as words, "Spin seconds". */
+function settingLabel(o: Override, blocks: readonly BlockView[]): string {
+  const declared = blocks.find((b) => b.id === o.blockId)?.props.appearance.find((p) => p.name === o.prop)?.label;
+  if (declared !== undefined) return declared;
+  const words = o.prop.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * The Inspector's column: its width, the drag handle on its left edge, a header that stays put, and its scrolling body.
+ * The header sits outside the scroller, so it never moves or lets content show above it as the body scrolls.
+ */
+function Column({ width, handle, header, children }: { width: number; handle?: ReactNode; header?: ReactNode; children: ReactNode }) {
   return (
     <div className="relative flex min-h-0 shrink-0" style={{ width }}>
       {handle}
-      <aside className="scroll-gutter flex min-h-0 w-full flex-col overflow-y-auto border-l bg-card" aria-label="Inspector">
-        {children}
+      <aside className="flex min-h-0 w-full flex-col border-l bg-card" aria-label="Inspector">
+        {header}
+        <ScrollPane data-inspector-body>{children}</ScrollPane>
       </aside>
     </div>
   );
+}
+
+/** One 40 px line, the canvas bar's height, so the two bars rule off at one height across the seam. */
+function Header({ children }: { children: ReactNode }) {
+  return <header className="flex h-10 shrink-0 items-center gap-2 border-b px-4" data-inspector-header>{children}</header>;
 }
 
 /**
@@ -58,12 +76,16 @@ export function InspectorRail({ open, onExpand }: { open: number; onExpand: () =
 /** The Inspector while the brainstorm opens, shaped like a block's header and a few controls. */
 export function InspectorSkeleton({ width }: { width: number }) {
   return (
-    <Column width={width}>
-      <div className="flex h-10 items-center justify-between border-b px-4" data-inspector-loading>
-        <Skeleton className="h-4 w-1/2" />
-        <Skeleton className="h-3 w-12" />
-      </div>
-      <div className="grid gap-5 px-4 py-4">
+    <Column
+      width={width}
+      header={
+        <Header>
+          <Skeleton className="h-4 w-1/2" data-inspector-loading />
+          <Skeleton className="ml-auto h-3 w-12" />
+        </Header>
+      }
+    >
+      <div className="grid gap-5 py-4">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="grid gap-2">
             <Skeleton className="h-3 w-1/4" />
@@ -103,15 +125,25 @@ export function Inspector({
   const blocks = view.iteration?.blocks ?? [];
   // It covers the whole session, removed blocks included, so it shows whatever is selected, under the block's header.
   const banner = view.overrides.inapplicable.length > 0 && <Inapplicable items={view.overrides.inapplicable} blocks={blocks} onDismiss={onDismiss} />;
+  const slot = block === null ? undefined : view.iteration?.slots.find((s) => s.id === block.slot);
   return (
     <Column
       width={width}
       handle={<ResizeHandle edge="left" value={width} min={limits.min} max={limits.max} reset={limits.fallback} onValueChange={onWidth} aria-label="Inspector width" />}
+      header={
+        block !== null &&
+        props !== null && (
+          <Header>
+            <h2 className="min-w-0 truncate text-base font-semibold">{block.title}</h2>
+            <span className="ml-auto shrink-0 text-xs text-fg-muted">{slot?.title ?? block.slot}</span>
+          </Header>
+        )
+      }
     >
       {block === null || props === null ? (
         <>
           {banner}
-          <p className="px-4 py-4 text-sm/relaxed text-fg-muted" data-inspector-empty>
+          <p className="py-4 text-sm/relaxed text-fg-muted" data-inspector-empty>
             {view.iteration === null ? "Each block's settings show here once the agent commits the first iteration." : "Select a frame to adjust it."}
           </p>
         </>
@@ -157,20 +189,10 @@ function BlockControls({
     }),
     [block, view.overrides.applicable, onReset],
   );
-  const slot = view.iteration?.slots.find((s) => s.id === block.slot);
-
   return (
     <div data-block={block.id}>
-      {/*
-        One 40 px line, the canvas bar's height, so the two bars rule off at one height across the seam. Stuck 1 px high:
-        at a fractional scroll offset, a top-0 header leaves a 1 px row of the content above it showing.
-      */}
-      <header className="sticky -top-px z-sticky flex h-10 items-center gap-2 border-b bg-card px-4">
-        <h2 className="min-w-0 truncate text-sm font-semibold">{block.title}</h2>
-        <span className="ml-auto shrink-0 text-xs text-fg-muted">{slot?.title ?? block.slot}</span>
-      </header>
       {error !== null && (
-        <div className="px-4 pt-3">
+        <div className="pt-3">
           <Callout tone="danger" role="alert" heading="This block failed to render">
             <p>The error shows in its frame on the canvas.</p>
           </Callout>
@@ -178,7 +200,7 @@ function BlockControls({
       )}
       {banner}
       {block.props.appearance.length === 0 ? (
-        <p className="px-4 py-4 text-sm text-fg-muted">This block has no adjustable settings.</p>
+        <p className="py-4 text-sm text-fg-muted">This block has no adjustable settings.</p>
       ) : (
         <ControlScopeContext.Provider value={scope}>
           <JSONUIProvider registry={controlRegistry} store={store}>
@@ -200,7 +222,7 @@ function Inapplicable({
   onDismiss: (o: InapplicableOverride) => void;
 }) {
   return (
-    <section aria-label="Adjustments that no longer apply" className="px-4 pt-3" data-banner="inapplicable">
+    <section aria-label="Adjustments that no longer apply" className="pt-3" data-banner="inapplicable">
       <Callout tone="warning" role="status" heading={items.length === 1 ? "An adjustment no longer applies" : `${items.length} adjustments no longer apply`}>
         <ul className="grid gap-2">
           {items.map((item) => {
@@ -218,7 +240,7 @@ function Inapplicable({
               >
                 <span className="flex items-center gap-1.5 font-medium">
                   {isHex(o.value) && <span aria-hidden className="size-3 shrink-0 rounded-sm inset-ring inset-ring-fg/15" style={{ background: o.value }} />}
-                  {o.prop} = {isHex(o.value) ? o.value.toUpperCase() : String(o.value)}
+                  {settingLabel(o, blocks)}: {isHex(o.value) ? o.value.toUpperCase() : String(o.value)}
                 </span>
                 On {title}: {WHY[reason]}.
               </CalloutItem>

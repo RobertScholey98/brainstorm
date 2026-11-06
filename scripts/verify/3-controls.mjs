@@ -115,9 +115,9 @@ try {
   );
   await run.window.waitForSelector('[data-banner="inapplicable"] [data-override="wheel/neon:accent"]');
   check(
-    "the banner names the dropped override and why",
+    "the banner names the dropped setting, as words, and why",
     (await run.window.innerText('[data-override="wheel/neon:accent"]'))?.replace(/\s+/g, " ").trim(),
-    "accent = #00F0FF On Neon wheel: the block no longer has this setting. Dismiss",
+    "Accent: #00F0FF On Neon wheel: the block no longer has this setting. Dismiss",
   );
   check("the slider's value still applies", await run.window.getAttribute(slider, "aria-valuenow"), "3.4");
   check("the panel no longer has an accent control", await run.window.isVisible(hex), false);

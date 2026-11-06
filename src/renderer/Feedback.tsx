@@ -82,8 +82,8 @@ export function FeedbackPanel({
 }) {
   return (
     <section className="border-t" aria-label="Feedback" data-feedback-panel>
-      <header className="flex items-center gap-2 px-4 pt-3 pb-2">
-        <h2 className="text-sm font-semibold">Feedback</h2>
+      <header className="flex items-center gap-2 pt-3 pb-2">
+        <h2 className="text-base font-semibold">Feedback</h2>
         {feedback.length > 0 && <Badge>{feedback.length}</Badge>}
         {canPin ? (
           <Button variant="outline" className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
@@ -102,7 +102,7 @@ export function FeedbackPanel({
         )}
       </header>
       {feedback.length === 0 ? (
-        <p className="px-4 pb-4 text-sm/relaxed text-fg-muted">
+        <p className="pb-4 text-sm/relaxed text-fg-muted">
           {canPin
             ? "Pin a comment to an element in the canvas. The agent sees it with your next Regenerate."
             : "Once the first iteration is on the canvas, pin comments to its elements here."}
@@ -113,7 +113,7 @@ export function FeedbackPanel({
           if (items.length === 0) return null;
           return (
             <div key={state} className="pb-2" data-group={state}>
-              <h3 className="flex items-center gap-1.5 px-4 pt-1 pb-1 text-xs font-medium">
+              <h3 className="flex items-center gap-1.5 pt-1 pb-1 text-xs font-medium">
                 {title}
                 <Badge>{items.length}</Badge>
               </h3>
@@ -187,7 +187,7 @@ function FeedbackItem({
       data-focused={focused || undefined}
       onPointerEnter={() => onHover(f.id)}
       onPointerLeave={() => onHover(null)}
-      className="group relative mx-2 rounded-lg px-2 py-2 hover:bg-hover/60 data-[focused]:bg-selected"
+      className="group relative -mx-1.5 rounded-lg px-1.5 py-2 hover:bg-hover/60 data-[focused]:bg-selected"
     >
       <div className="flex gap-2">
         <span
