@@ -113,6 +113,18 @@ try {
     ],
   );
   check(
+    "a short block in a tall frame fills its card's still as it fills its frame on the stage, with no page showing under it",
+    await window.$eval(`[data-overview-session="${wide}"] [data-preview="still"] img`, (img) => {
+      const canvas = document.createElement("canvas");
+      [canvas.width, canvas.height] = [img.naturalWidth, img.naturalHeight];
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const [r, g, b] = ctx.getImageData(Math.floor(canvas.width / 2), canvas.height - 2, 1, 1).data;
+      return (r + g + b) / 3 < 64;
+    }),
+    true,
+  );
+  check(
     "no preview frame is left running once every still is taken",
     await window.$$eval('iframe[title="Preview"]', (frames) => frames.length),
     0,

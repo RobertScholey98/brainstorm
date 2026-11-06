@@ -62,6 +62,8 @@ With the demo's blocks, which sit still once drawn, the two cost the same memory
 
 If a still fails, the card keeps its live frame, and gives its turn back, so one block that can't be drawn into an image still shows.
 
+The block is laid out in its slot's declared frame, height included, as on the stage, so a short block whose own background fills its frame fills the card too, rather than leaving the page showing under it. A block that throws is cached as failed beside the stills, so home coming back shows the failure at once and never runs a frame only to take a still of the canvas's error box.
+
 ### States
 
 - **Loading.** A skeleton fills the band until the still arrives.
@@ -72,8 +74,8 @@ If a still fails, the card keeps its live frame, and gives its turn back, so one
 
 ### Checks
 
-- `verify:2` holds a card's preview frame open and checks it shows the first slot's selected block with its real content and no canvas chrome, has an opaque origin, can't reach the parent document or the network, and is inert and hidden from assistive tech; that `/canvas/preview` carries the canvas CSP; that the still is a PNG with the block's colours and the frame is gone after; and that a click on the preview opens the brainstorm.
-- `verify:7` checks every card settles to a still or the waiting note with no frame left running, and that a settled card's preview is dimmed.
+- `verify:2` holds a card's preview frame open and checks it shows the first slot's selected block with its real content and no canvas chrome, has an opaque origin, can't reach the parent document or the network, and is inert and hidden from assistive tech; that `/canvas/preview` carries the canvas CSP; that the still is a PNG with the block's colours and the frame is gone after; that a click on the preview opens the brainstorm; and that a block that throws shows as failed, and again when home comes back, with no frame run.
+- `verify:7` checks every card settles to a still or the waiting note with no frame left running, that a short block in a 980 × 600 frame fills its still to the bottom, and that a settled card's preview is dimmed.
 - `test/brainstorm.test.ts` (`preview`), `test/http.test.ts`, `test/canvasDocument.test.ts` and `test/previewQueue.test.ts` cover the payload, the route behind the UI token, the preview document and its CSP, the three-frame limit and the still cache.
 
 ## Search and filters

@@ -48,15 +48,15 @@ export class PreviewTurns {
 }
 
 /** Stills by what they show, so a card that scrolls back, or another with the same block, needs no frame. */
-export class StillCache {
+export class StillCache<T> {
   readonly #limit: number;
-  readonly #images = new Map<string, string>();
+  readonly #images = new Map<string, T>();
 
   constructor(limit: number) {
     this.#limit = limit;
   }
 
-  get(key: string): string | undefined {
+  get(key: string): T | undefined {
     const image = this.#images.get(key);
     if (image !== undefined) {
       this.#images.delete(key);
@@ -65,7 +65,7 @@ export class StillCache {
     return image;
   }
 
-  set(key: string, image: string): void {
+  set(key: string, image: T): void {
     this.#images.delete(key);
     this.#images.set(key, image);
     for (const oldest of this.#images.keys()) {

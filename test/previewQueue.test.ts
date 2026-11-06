@@ -20,7 +20,7 @@ test("turns run up to the limit, then in the order asked, and a turn given back 
 });
 
 test("the still cache keeps the most recently used", () => {
-  const cache = new StillCache(2);
+  const cache = new StillCache<string>(2);
   cache.set("a", "A");
   cache.set("b", "B");
   cache.get("a");

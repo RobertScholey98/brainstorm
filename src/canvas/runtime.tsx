@@ -393,15 +393,15 @@ function Canvas() {
 }
 
 /**
- * The preview: the block at its frame's width, zoomed to the window's, so the card shows its top edge to edge. Its
- * frame keeps the declared height, so a short block still fills the card.
+ * The preview: the block in its frame's declared size, as on the stage, zoomed to the window's width, so the card
+ * shows its top edge to edge.
  */
 function Preview() {
   const s = useSyncExternalStore(subscribe, () => state);
   const frame = s.frames[0];
   if (frame === undefined) return null;
   return (
-    <div className="bs-preview" style={{ width: frame.frame.width, minHeight: frame.frame.height ?? undefined, zoom: innerWidth / frame.frame.width }}>
+    <div className="bs-preview" style={{ width: frame.frame.width, height: frame.frame.height ?? undefined, zoom: innerWidth / frame.frame.width }}>
       <Block frame={frame} hash={s.hashes.get(frame.blockId)} props={s.props[frame.blockId] ?? {}} />
     </div>
   );

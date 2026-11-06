@@ -6,7 +6,6 @@ import type { FrameToHost, HostToFrame, Result, SessionId, SessionPreview } from
 import { PREVIEW_FRAMES, PreviewTurns, StillCache } from "./previewQueue";
 
 const turns = new PreviewTurns(PREVIEW_FRAMES);
-const stills = new StillCache(200);
 /** A frame that hasn't painted by then gives its turn back and shows as failed. */
 const PAINT_MS = 10_000;
 
@@ -18,6 +17,10 @@ type Shown =
   | { readonly kind: "failed"; readonly message: string }
   | { readonly kind: "still"; readonly image: string }
   | { readonly kind: "live" };
+
+type Painted = Extract<Shown, { kind: "still" | "failed" }>;
+/** A block that throws is kept as failed too, so its card doesn't run a frame again only to show the canvas's error box. */
+const stills = new StillCache<Painted>(200);
 
 const DARK = "(prefers-color-scheme: dark)";
 function useDark(): boolean {
@@ -74,8 +77,7 @@ export function CardPreview({ id, revision, load, muted }: { id: SessionId; revi
     if (payload === null) return;
     if ("error" in payload) return setShown({ kind: "failed", message: payload.error });
     if (key === null) return setShown({ kind: "empty" });
-    const image = stills.get(key);
-    setShown(image === undefined ? { kind: "loading" } : { kind: "still", image });
+    setShown(stills.get(key) ?? { kind: "loading" });
   }, [payload, key]);
 
   // A card in view with nothing to show waits for a turn, then runs a frame until it paints.
@@ -98,6 +100,11 @@ export function CardPreview({ id, revision, load, muted }: { id: SessionId; revi
   sent.current = preview;
   useEffect(() => {
     if (!turn) return;
+    let failed = false;
+    const keep = (painted: Painted) => {
+      if (key !== null) stills.set(key, painted);
+      setShown(painted);
+    };
     const receive = (e: MessageEvent) => {
       if (frame.current === null || e.source !== frame.current.contentWindow) return;
       const message = e.data as FrameToHost;
@@ -107,10 +114,11 @@ export function CardPreview({ id, revision, load, muted }: { id: SessionId; revi
         post({ kind: "modules", modules: [p.module] });
         post({ kind: "state", frames: [p.frame], props: { [p.frame.blockId]: p.props }, selected: null, stage: null });
       } else if (message.kind === "block_error") {
-        setShown({ kind: "failed", message: message.message });
-      } else if (message.kind === "painted") {
-        if (message.image !== null && key !== null) stills.set(key, message.image);
-        setShown((s) => (s.kind === "failed" ? s : message.image === null ? { kind: "live" } : { kind: "still", image: message.image }));
+        failed = true;
+        keep({ kind: "failed", message: message.message });
+      } else if (message.kind === "painted" && !failed) {
+        if (message.image === null) setShown({ kind: "live" });
+        else keep({ kind: "still", image: message.image });
       }
     };
     window.addEventListener("message", receive);

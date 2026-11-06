@@ -252,6 +252,46 @@ try {
   check("and the count goes once they are in view", (await wrapped()).below, null);
   await window.setViewportSize({ width: 1440, height: 900 });
 
+  // A brainstorm whose block throws: its card says the preview failed, and says so again when home comes back,
+  // without running a frame only to take a still of the canvas's error box.
+  const broken = brainstorm(env, ["session", "new", "--title", "Broken card", "--json"]).json.data.session.id;
+  const brokenWork = join(home, "work", broken);
+  brainstorm(env, ["pull", broken, "--out", brokenWork, "--json"]);
+  cpSync(join(work, "slots", "result", "card"), join(brokenWork, "slots", "result", "card"), { recursive: true });
+  // The commit renders the block once to check it, so the throw waits for an effect, which that check doesn't run.
+  writeFileSync(
+    join(brokenWork, "slots", "result", "card", "block.tsx"),
+    'import { useEffect } from "react";\n\nexport default function Card() {\n  useEffect(() => {\n    throw new Error("verify: the card throws");\n  }, []);\n  return <div data-part="card">Card</div>;\n}\n',
+  );
+  const brokenManifest = JSON.parse(readFileSync(join(brokenWork, "brainstorm.json"), "utf8"));
+  writeFileSync(join(brokenWork, "brainstorm.json"), JSON.stringify({ ...brokenManifest, slots: [{ id: "result", title: "The result", frame: { width: 390 } }] }));
+  check("the agent commits a block that throws", brainstorm(env, ["commit", broken, "--from", brokenWork, "--note", "Broken", "--json"]).code, 0);
+  const failedPreview = `[data-overview-session="${broken}"] [data-preview="failed"]`;
+  await window.click("[data-back]");
+  await window.click("[data-overview]");
+  await window.waitForSelector(failedPreview);
+  check("a block that throws leaves its card saying the preview failed, with the error", await window.getAttribute(`${failedPreview} [data-preview-error]`, "data-preview-error"), "verify: the card throws");
+  await window.click(`[data-overview-session="${session}"] [data-card-open]`);
+  await window.waitForSelector('[data-sidebar-panel="session"]');
+  await window.evaluate(() => {
+    window.__previewFrames = 0;
+    new MutationObserver((records) => {
+      for (const r of records) for (const n of r.addedNodes) if (n instanceof Element && (n.matches('iframe[title="Preview"]') || n.querySelector('iframe[title="Preview"]'))) window.__previewFrames++;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  await window.click("[data-back]");
+  await window.click("[data-overview]");
+  await window.waitForSelector(`[data-overview-session="${broken}"] [data-preview]:not([data-preview="loading"])`);
+  await window.waitForTimeout(300);
+  check(
+    "back on home it still says so, from what home already knows, and runs no preview frame",
+    [await window.getAttribute(`[data-overview-session="${broken}"] [data-preview]`, "data-preview"), await window.evaluate(() => window.__previewFrames)],
+    ["failed", 0],
+  );
+  const thrown = errors.filter((e) => e.includes("verify: the card throws"));
+  check("the only errors logged are the thrown block's own", thrown.length > 0 && thrown.length === errors.length, true);
+  errors.length = 0;
+
   check("the window logged no errors or warnings", errors, []);
 } finally {
   await app.close();
