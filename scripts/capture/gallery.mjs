@@ -34,7 +34,7 @@ const PHASE_MS = 20_000;
 
 const SHOTS = [
   ["home-empty", "empty", "Home on a fresh install: no brainstorms in the sidebar, and the empty state says how to start one"],
-  ["home", "home", "Home: the overview of every brainstorm as cards, beside three project groups (chores, kitchen, Other project), a lost thread, and a long title that truncates"],
+  ["home", "home", "Home: every active brainstorm as a card with a still of its first block, under the search and filters, beside three project groups (chores, kitchen, Other project), a lost thread, a long title that truncates, a preview that failed, and the Settled group shut at the foot"],
   ["home-collapsed-group", "home", "Home with the kitchen project group collapsed"],
   ["sidebar-collapsed", "canvas", "The Chore roulette brainstorm with the sidebar collapsed, so the toggle sits in the top bar"],
   ["state-hover-row", "home", "Home with the pointer over the Chore roulette session row"],
@@ -97,6 +97,12 @@ const SHOTS = [
   ["inspector-rail", "canvas", "The Inspector collapsed to its rail, with the feedback count"],
   ["feedback-delete-confirm", "canvas", "Delete on a feedback item asking in place, with Cancel focused"],
   ["prefs-restored", "restart", "After a restart: the wider sidebar and Inspector, and the board, come back as Rob left them"],
+  ["home-search-results", "home", "Home's search with rota typed: the cards whose title or brief match, and each status counting what the search leaves"],
+  ["home-search-empty", "home", "Home's search with nothing matching: the empty state and Clear search and filters"],
+  ["home-filter-menu", "home", "The project filter open: each project with how many brainstorms it holds, and Show all"],
+  ["home-settled", "home", "Home showing All: the settled Laundry tracker under its own Settled heading, muted, and the sidebar's Settled group open with its row muted"],
+  ["state-settle-action", "home", "The pointer over a sidebar row's settle control: the age gives way to it, and its hint names Ctrl+Shift+S"],
+  ["state-hover-card", "home", "The pointer over an overview card: its ring and its settle control in the corner"],
 ].map(([name, scene, about], i) => ({ name, scene, about, file: `${String(i + 1).padStart(2, "0")}-${name}` }));
 const byName = new Map(SHOTS.map((s) => [s.name, s]));
 /** name -> { status: "captured" } | { status: "missing" | "partial", reason } */
@@ -144,6 +150,13 @@ async function untilStill(page, deadline = Date.now() + SETTLE_MS) {
   }
 }
 
+/** A card's preview waits for its card to scroll into view, so a skeleton below the fold is never going to clear. */
+const SKELETON_IN_VIEW = () =>
+  [...document.querySelectorAll("[data-slot=skeleton], .animate-pulse")].some((el) => {
+    const r = el.getBoundingClientRect();
+    return r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+  });
+
 /** Null once the page is settled, else why it never did. A `loading` shot is of the skeletons, so it doesn't wait them out. */
 async function settle(page, { keepFocus, loading = false }) {
   const deadline = Date.now() + SETTLE_MS;
@@ -151,7 +164,7 @@ async function settle(page, { keepFocus, loading = false }) {
   let clearSince = Date.now();
   while (!loading && Date.now() - clearSince < 1000) {
     if (Date.now() > deadline) return "a loading skeleton kept showing";
-    if (await page.evaluate(() => document.querySelector("[data-slot=skeleton], .animate-pulse") !== null)) clearSince = Date.now();
+    if (await page.evaluate(SKELETON_IN_VIEW)) clearSince = Date.now();
     await sleep(100);
   }
   if (!keepFocus) await inFrames(page, () => document.activeElement instanceof HTMLElement && document.activeElement.blur());
@@ -397,13 +410,22 @@ function seedAll(home, env, t3) {
       },
     ],
   }).id;
+  sessions.laundry = seed(home, env, {
+    title: "Laundry tracker",
+    thread: DEMO_THREAD,
+    project: chores,
+    brief: "Whose wash is in the machine, and when it's free.",
+    slots: [{ id: "result", title: "The result", frame: { width: 390 }, variants: { receipt: { from: demo("result", "receipt") } } }],
+  }).id;
   sessions.roulette = seed(home, env, { title: "Chore roulette", thread: DEMO_THREAD, project: chores, brief, slots: demoSlots, note: "Three wheels and two results" });
   return sessions;
 }
 
 const HOUR = 3_600_000;
 /** How long ago each seeded brainstorm last moved, so home reads like weeks of work, not one minute of seeding. */
-const AGES = { kitchen: 3 * HOUR, longTitle: 0.7 * HOUR, wide: 26 * HOUR, desktop: 50 * HOUR, multi: 5 * 24 * HOUR, broken: 9 * 24 * HOUR, list: 20 * 24 * HOUR, loose: 45 * 24 * HOUR };
+const AGES = { kitchen: 3 * HOUR, longTitle: 0.7 * HOUR, wide: 26 * HOUR, desktop: 50 * HOUR, multi: 5 * 24 * HOUR, broken: 9 * 24 * HOUR, list: 20 * 24 * HOUR, loose: 45 * 24 * HOUR, laundry: 12 * 24 * HOUR };
+/** How long ago Rob settled each settled seed, after its last activity. */
+const SETTLED = { laundry: 8 * 24 * HOUR };
 
 /** Moves each seeded brainstorm's history back by its age. The app must be closed, since the store is its database. */
 function ageSeeds(home, sessions) {
@@ -417,6 +439,7 @@ function ageSeeds(home, sessions) {
       for (const row of rows) db.prepare(`UPDATE ${table} SET created_at = ? WHERE rowid = ?`).run(back(row.created_at, ms), row.rowid);
     }
   }
+  for (const [name, ms] of Object.entries(SETTLED)) db.prepare("UPDATE session SET settled_at = ? WHERE id = ?").run(back(new Date().toISOString(), ms), sessions[name]);
   db.close();
 }
 
@@ -506,6 +529,44 @@ function scenes(page, home, env, t3, sessions) {
       await page.waitForSelector('[data-sidebar-panel="home"]');
       await capture(page, "home-session-kept");
       await goHome();
+
+      await page.fill("[data-home-search]", "rota");
+      await page.waitForFunction(() => document.querySelectorAll("[data-home-results] [data-overview-session]").length === 5);
+      await capture(page, "home-search-results");
+      await page.fill("[data-home-search]", "zebra");
+      await page.waitForSelector('[data-home-none="no-match"]');
+      await capture(page, "home-search-empty");
+      await page.fill("[data-home-search]", "");
+      await page.waitForSelector("[data-home-results]");
+
+      const filterOpen = async () => {
+        if ((await page.$("[data-project-menu]")) === null) await page.click("[data-project-filter]");
+        await page.waitForSelector("[data-project-menu]");
+      };
+      await capture(page, "home-filter-menu", { keepFocus: true, each: filterOpen });
+      await page.keyboard.press("Escape");
+      await page.waitForSelector("[data-project-menu]", { state: "detached" });
+
+      await page.click('[data-home-status="all"]');
+      await page.waitForSelector(`[data-overview-settled] [data-overview-session="${sessions.laundry}"]`);
+      await page.click("[data-settled-label]");
+      await page.waitForSelector(`[data-session="${sessions.laundry}"]`);
+      await capture(page, "home-settled", { each: () => page.$eval("[data-overview-settled]", (el) => el.scrollIntoView({ block: "start" })) });
+      await page.$eval("[data-home-overview]", (el) => el.querySelector("[data-home-filters]").scrollIntoView({ block: "end" }));
+      await page.click("[data-settled-label]");
+      await page.waitForSelector(`[data-session="${sessions.laundry}"]`, { state: "detached" });
+      await page.click('[data-home-status="active"]');
+      await page.waitForSelector("[data-overview-settled]", { state: "detached" });
+
+      const row = `[data-session="${sessions.roulette.id}"]`;
+      await capture(page, "state-settle-action", {
+        each: async () => {
+          await page.hover(row);
+          await page.hover(`[data-slot="sidebar"] [data-settle="${sessions.roulette.id}"]`);
+          await page.waitForSelector("[data-slot=tooltip-content]");
+        },
+      });
+      await capture(page, "state-hover-card", { each: () => page.hover(`[data-overview-session="${sessions.roulette.id}"] [data-card-open]`) });
     },
 
     async views() {
