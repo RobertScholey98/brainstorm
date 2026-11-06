@@ -42,6 +42,8 @@ try {
     canvas: { transition: "transform 2.4s cubic-bezier(0.12, 0.7, 0.14, 1)", accent: "#ff2bd6" },
   });
 
+  const valueRight = () => run.window.$eval('[data-control="spinSeconds"] [data-value]', (el) => Math.round(el.getBoundingClientRect().right));
+  const valueAt = [await valueRight()];
   await run.window.focus(slider);
   for (let i = 0; i < 10; i++) await run.window.keyboard.press("ArrowRight");
   check(
@@ -62,6 +64,8 @@ try {
   await run.window.keyboard.press("Enter");
   await run.window.waitForSelector('[data-control="spinSeconds"][data-overridden]');
   await run.window.waitForSelector('[data-control="accent"][data-overridden]');
+  valueAt.push(await valueRight());
+  check("a slider's value keeps its right edge once it is overridden", new Set(valueAt).size, 1);
   check(
     "each overridden row puts its reset last, at one x, and its dot 6 px off the pane edge",
     await run.window.evaluate(() => {

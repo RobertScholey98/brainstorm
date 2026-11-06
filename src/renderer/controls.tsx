@@ -51,7 +51,18 @@ function useBound<T extends AppearanceType>({ props, bindings }: ControlProps, t
   };
 }
 
-function Row({ bound, trailing, children }: { bound: Pick<Bound<AppearanceType>, "scope" | "spec" | "label">; trailing?: ReactNode; children?: ReactNode }) {
+/** `holdReset` keeps the reset's place while nothing is overridden, so a value beside it never jumps when one is set. */
+function Row({
+  bound,
+  trailing,
+  holdReset = false,
+  children,
+}: {
+  bound: Pick<Bound<AppearanceType>, "scope" | "spec" | "label">;
+  trailing?: ReactNode;
+  holdReset?: boolean;
+  children?: ReactNode;
+}) {
   const { scope, spec, label } = bound;
   const overridden = scope.overridden.has(spec.name);
   return (
@@ -63,12 +74,14 @@ function Row({ bound, trailing, children }: { bound: Pick<Bound<AppearanceType>,
         <span className="ml-auto flex items-center gap-1">
           {trailing}
           {/* Last in the row, so every reset sits at one x beside the value it resets. */}
-          {overridden && (
+          {overridden ? (
             <Hint label="Reset to the agent's value" side="left">
               <Button variant="ghost" size="icon-xs" aria-label={`Reset ${label}`} onClick={() => scope.reset(spec.name)} data-control-reset>
                 <RotateCcw aria-hidden />
               </Button>
             </Hint>
+          ) : (
+            holdReset && <span aria-hidden className="size-6" data-reset-slot />
           )}
         </span>
       </div>
@@ -89,6 +102,7 @@ function Slider(control: ControlProps) {
   return (
     <Row
       bound={bound}
+      holdReset
       trailing={
         <span className="text-xs tabular-nums text-fg-muted" data-value>
           {formatNumber(value, spec.step)}
