@@ -1116,7 +1116,7 @@ describe("vary", () => {
     ]);
     data(await service.act(S, { kind: "mark_seen", blocks: ["wheel/spin-button-a" as BlockId] }));
     expect((await blocks())?.filter(([, isNew]) => isNew).map(([id]) => id)).toEqual(["wheel/spin-button-b", "wheel/spin-button-c"]);
-    expect(data(await service.view(S)).request?.message).toBe("Iteration 2 · changed Spin button A, Spin button B and 1 more");
+    expect(data(await service.view(S)).request?.message).toBe("Iteration 2 · 3 new variants of Spin button");
 
     data(await service.act(S, { kind: "vary", target: { blockId: NEON, part: "spin-button" as PartName }, count: 2, direction: null }));
     const again = data(await service.view(S)).request?.request.scope;
