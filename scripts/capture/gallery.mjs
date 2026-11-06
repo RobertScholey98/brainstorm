@@ -199,7 +199,14 @@ async function handTo(page, frame, selector) {
   const el = await frame.waitForSelector(selector);
   await el.scrollIntoViewIfNeeded();
   const box = await el.boundingBox();
+  // A pointer that crosses into the frame on its first step never leaves the host element it clicked, so that keeps
+  // its hover. It sets off from the park spot in the host instead.
+  await park(page, page.viewportSize());
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 12 });
+  const stale = await page.evaluate(() =>
+    [...document.querySelectorAll(":is(button, a, input, select, textarea, [role], [tabindex]):hover")].map((e) => e.outerHTML.slice(0, 80)),
+  );
+  if (stale.length) throw new Error(`the pointer is in the canvas but the host still hovers ${stale.join(", ")}`);
 }
 
 async function setCombo(page, c) {
