@@ -156,8 +156,11 @@ async function settle(page, { keepFocus, loading = false }) {
   return null;
 }
 
-/** Moves the pointer onto the top bar's empty middle, where nothing reacts to hover. */
-const park = (page, c) => page.mouse.move(Math.round(c.width * 0.55), 24);
+/**
+ * Moves the pointer into the 8 px of window under the main card, where nothing reacts to hover. The top bar's middle
+ * holds the request phase and its actions, so a pointer parked there left a hover fill on the lead action.
+ */
+const park = (page, c) => page.mouse.move(Math.round(c.width * 0.55), c.height - 3);
 
 async function setCombo(page, c) {
   await page.setViewportSize({ width: c.width, height: c.height });
