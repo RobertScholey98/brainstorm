@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
-import { PREVIEW_FRAMES, PreviewTurns, StillCache } from "../src/renderer/previewQueue";
+import type { SessionPreview } from "../src/core/types";
+import { PREVIEW_FRAMES, PreviewTurns, StillCache, stillKey } from "../src/renderer/previewQueue";
 
 test("home runs at most three preview frames at once", () => {
   expect(PREVIEW_FRAMES).toBe(3);
@@ -26,4 +27,20 @@ test("the still cache keeps the most recently used", () => {
   cache.get("a");
   cache.set("c", "C");
   expect([cache.get("a"), cache.get("b"), cache.get("c")]).toEqual(["A", undefined, "C"]);
+});
+
+test("a strip thumbnail and a card keep their own stills of one block, which a theme or a setting also splits", () => {
+  const preview = {
+    frame: { slot: "wheel", title: "The wheel", frame: { width: 390, height: 760 }, blockId: "wheel/neon" },
+    module: { blockId: "wheel/neon", hash: "h1", compiled: "", css: null },
+    props: { glow: 18 },
+  } as unknown as SessionPreview;
+  const keys = [
+    stillKey(preview, { dark: false, compact: true }),
+    stillKey(preview, { dark: false, compact: false }),
+    stillKey(preview, { dark: true, compact: false }),
+    stillKey({ ...preview, props: { glow: 20 } } as unknown as SessionPreview, { dark: false, compact: false }),
+  ];
+  expect(new Set(keys).size).toBe(4);
+  expect(stillKey(preview, { dark: false, compact: false })).toBe(keys[1]);
 });

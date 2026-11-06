@@ -1,3 +1,5 @@
+import type { SessionPreview } from "../core/types";
+
 /** How many preview frames run at once. Each is a sandboxed page with its own copy of React. */
 export const PREVIEW_FRAMES = 3;
 
@@ -73,4 +75,12 @@ export class StillCache<T> {
       this.#images.delete(oldest);
     }
   }
+}
+
+/**
+ * What a still is kept under: the block's content, Rob's settings, its frame width and the theme, and whether it is a
+ * strip thumbnail or a card, since a still is drawn at its box's size and a thumbnail blown up to a card is a blur.
+ */
+export function stillKey(preview: SessionPreview, { dark, compact }: { readonly dark: boolean; readonly compact: boolean }): string {
+  return `${compact ? "thumb" : "card"}:${dark ? "dark" : "light"}:${preview.module.hash}:${preview.frame.frame.width}:${JSON.stringify(preview.props)}`;
 }

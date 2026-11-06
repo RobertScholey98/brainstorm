@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { cn } from "cn";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { FrameToHost, HostToFrame, Result, SessionId, SessionPreview } from "../core/types";
-import { PREVIEW_FRAMES, PreviewTurns, StillCache } from "./previewQueue";
+import { PREVIEW_FRAMES, PreviewTurns, StillCache, stillKey } from "./previewQueue";
 
 const turns = new PreviewTurns(PREVIEW_FRAMES);
 /** A frame that hasn't painted by then gives its turn back and shows as failed. */
@@ -105,7 +105,7 @@ function Still({
   }, [inView, revision, load]);
 
   const preview = payload !== null && "preview" in payload ? payload.preview : null;
-  const key = preview === null ? null : `${dark ? "dark" : "light"}:${preview.module.hash}:${preview.frame.frame.width}:${JSON.stringify(preview.props)}`;
+  const key = preview === null ? null : stillKey(preview, { dark, compact });
 
   useEffect(() => {
     if (payload === null) return;

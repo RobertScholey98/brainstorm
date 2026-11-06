@@ -41,9 +41,23 @@ export function Filmstrip({
   const list = useRef<HTMLDivElement>(null);
   const latest = iterations.at(-1)?.n;
 
-  // The option on the canvas stays in view as Rob steps, and the strip starts at its newest end.
+  const scroller = useRef<HTMLDivElement>(null);
+  // The option on the canvas stays in view as Rob steps and as the window resizes, so the strip opens at its newest
+  // end. Only the strip scrolls: scrollIntoView would move the panes around it too.
   useEffect(() => {
-    list.current?.querySelector<HTMLElement>(`[data-history-n="${showing}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const box = scroller.current;
+    if (box === null) return;
+    const reveal = () => {
+      const option = box.querySelector<HTMLElement>(`[data-history-n="${showing}"]`);
+      if (option === null) return;
+      const [edge, at] = [box.getBoundingClientRect(), option.getBoundingClientRect()];
+      if (at.right > edge.right) box.scrollLeft += at.right - edge.right;
+      else if (at.left < edge.left) box.scrollLeft -= edge.left - at.left;
+    };
+    reveal();
+    const observer = new ResizeObserver(reveal);
+    observer.observe(box);
+    return () => observer.disconnect();
   }, [showing, iterations.length]);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -68,7 +82,7 @@ export function Filmstrip({
           {forks.length > 0 && ` · ${forks.length} ${forks.length === 1 ? "fork" : "forks"}`}
         </span>
       </h2>
-      <div className="flex min-w-0 items-start gap-2 overflow-x-auto pb-1" data-history-scroll>
+      <div ref={scroller} className="flex min-w-0 items-start gap-2 overflow-x-auto pb-1" data-history-scroll>
         {view.fork !== null && <ForkStub view={view} onOpen={onOpen} />}
         <div
           ref={list}
