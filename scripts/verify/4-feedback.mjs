@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, showBoard, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, outsideBox, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-4");
@@ -71,6 +71,7 @@ try {
     [0, 0],
   );
   await window.keyboard.type("Make the headline louder");
+  check("nothing in the composer runs past its box", await outsideBox(window, "[data-composer]"), []);
   await shot(window, shots, "2-composer");
   await window.click('[data-composer] button:has-text("Pin comment")');
   await window.waitForSelector('[data-feedback="1"][data-status="open"]');

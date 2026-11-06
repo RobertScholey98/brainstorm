@@ -22,6 +22,8 @@
 //                    every page title has one size
 //   inline-size      an inline style that sets a size to a number or a named constant, outside components/ui; a fixed
 //                    size is a step on the closed scales, and only a measured size goes inline
+//   overlay-kit      an overlaySurface() call outside components/ui; an overlay is the kit's PopoverContent, or
+//                    OverlayPanel for one its caller places, so it keeps the popover's column and nothing leaves its box
 //   frame-sandbox    an iframe anywhere in the renderer that isn't the canvas's: its src must be /canvas or
 //                    /canvas/preview and its sandbox exactly "allow-scripts", so agent code always runs in an opaque
 //                    origin under the canvas CSP, a home preview included
@@ -108,7 +110,7 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
     });
   }
   problems.push(...chipRecipe(source, lits), ...frameSandbox(source));
-  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source));
+  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source));
   return problems.sort((a, b) => a.line - b.line);
 }
 
@@ -177,6 +179,15 @@ function inlineSize(source) {
       .filter((a) => a.name === "style")
       .flatMap((attr) => [...source.slice(attr.start, attr.end).matchAll(SIZE_KEY)].filter((m) => FIXED.test(m[2].trim())).map((m) => ({ attr, m })))
       .map(({ attr, m }) => ({ rule: "inline-size", line: attr.line, text: `<${el.tag}> ${m[1]}: ${m[2].trim()}`, message: "a fixed size is a step on the closed scales; only a measured size goes inline" })),
+  );
+}
+
+/** An overlay built by hand from the surface recipe, outside the kit components that lay it out. */
+function overlayKit(source) {
+  return source.split("\n").flatMap((text, i) =>
+    /\boverlaySurface\(/.test(text)
+      ? [{ rule: "overlay-kit", line: i + 1, text: "overlaySurface()", message: "an overlay is the kit's PopoverContent, or OverlayPanel for one placed by hand" }]
+      : [],
   );
 }
 

@@ -2,7 +2,7 @@ import { cpSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, canvasFrame, checks, inBlock, launch, openSession, settled, showBoard, shot, workspace } from "./electron.mjs";
+import { build, canvasFrame, checks, inBlock, launch, openSession, outsideBox, settled, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-8");
@@ -254,7 +254,17 @@ try {
   check(
     "the vary popover names the element and its block, asks for 3 by default, and says where they land",
     await window.$eval("[data-vary-composer]", (el) => [el.querySelector("#vary-title").textContent.trim(), Number(el.querySelector("[data-vary-count]").dataset.varyCount), el.querySelector("[data-vary-hint]").textContent.trim()]),
-    ["Vary Spin button", 3, "New variants land in The wheel"],
+    ["Vary Spin button", 3, "Variants land in The wheel"],
+  );
+  check("nothing in the vary popover runs past its box: the direction field, its optional label and Send all sit inside", await outsideBox(window, "[data-vary-composer]"), []);
+  check(
+    "and it opens clear of the element it varies",
+    await settled(async () => {
+      const panel = await window.$eval("[data-vary-composer]", (p) => p.getBoundingClientRect().toJSON());
+      const outline = await window.$eval("[data-vary-outline]", (o) => o.getBoundingClientRect().toJSON());
+      return panel.top >= outline.bottom || panel.bottom <= outline.top;
+    }),
+    true,
   );
   await shot(window, shots, "8-vary-composer");
   await window.keyboard.press("Escape");

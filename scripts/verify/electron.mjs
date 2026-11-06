@@ -106,6 +106,24 @@ export async function settled(read, { quietMs = 400, timeoutMs = 6000 } = {}) {
 
 export const inBlock = (blockId, part) => `div[data-bid="${blockId}"] [data-part="${part}"]`;
 
+/**
+ * What in the overlay at `selector` reaches past its box, by tag and text, once its layout has settled: empty when
+ * every field, label and button sits inside it.
+ */
+export const outsideBox = (window, selector) =>
+  settled(() =>
+    window.$eval(selector, (box) => {
+      const b = box.getBoundingClientRect();
+      return [...box.querySelectorAll("*")]
+        .filter((el) => el.getClientRects().length > 0)
+        .filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.left < b.left - 0.5 || r.right > b.right + 0.5 || r.top < b.top - 0.5 || r.bottom > b.bottom + 0.5;
+        })
+        .map((el) => `${el.tagName.toLowerCase()} ${el.textContent.trim().slice(0, 32)}`);
+    }),
+  );
+
 export async function shot(window, shots, name) {
   await window.screenshot({ path: join(shots, `${name}.png`) });
 }

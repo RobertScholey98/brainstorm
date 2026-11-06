@@ -69,6 +69,15 @@ function PopoverHeader({ heading, description }: { heading: React.ReactNode; des
   )
 }
 
+/**
+ * A popover placed by its caller rather than a Popover's positioner, such as the pin composer at the element Rob
+ * picked: the same surface, widths, padding and gap. It is a flex column like PopoverContent, so a long row truncates
+ * inside it; a grid's track would widen to the row and run its controls past the box's edge.
+ */
+function OverlayPanel({ size = "sm", ...props }: Omit<React.ComponentProps<"div">, "className"> & { size?: keyof typeof WIDTH }) {
+  return <div data-slot="overlay-panel" className={cn(overlaySurface(), "absolute z-popover flex flex-col gap-3 p-3 text-sm", WIDTH[size])} {...props} />
+}
+
 /** The popover header on an overlay that isn't a Popover, such as the pin composer, which it titles by `id`. */
 function OverlayHeader({ id, heading, description }: { id: string; heading: React.ReactNode; description: React.ReactNode }) {
   return (
@@ -95,6 +104,7 @@ function PopoverFooter({ hint, children }: { hint?: React.ReactNode; children: R
 
 export {
   OverlayHeader,
+  OverlayPanel,
   Popover,
   PopoverContent,
   PopoverFooter,

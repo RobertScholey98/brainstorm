@@ -2,13 +2,13 @@ import { MessageSquarePlus, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, CanvasRect, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
-import { composerPlace } from "./placement";
+import { POPOVER_WIDTH } from "./placement";
+import { useComposerPlace } from "./useComposerPlace";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
-import { overlaySurface } from "@/components/ui/overlay";
-import { OverlayHeader, PopoverFooter } from "@/components/ui/popover";
+import { OverlayHeader, OverlayPanel, PopoverFooter } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Hint } from "@/components/ui/tooltip";
 import type { Placement } from "./CanvasHost";
@@ -372,7 +372,7 @@ export function PinComposer({
   onSave: (text: string) => Promise<void>;
   onCancel: () => void;
 }) {
-  const { left, top } = composerPlace(at, rect, bounds);
+  const { ref, left, top } = useComposerPlace(at, rect, bounds, POPOVER_WIDTH.sm);
   return (
     <>
       {/* The pin to be, where the saved pin will land: on the element's top right corner, not over its text. */}
@@ -384,17 +384,10 @@ export function PinComposer({
       >
         <Plus className="size-3" />
       </span>
-      <div
-        role="dialog"
-        aria-labelledby="composer-title"
-        data-composer
-        data-open=""
-        className={cn(overlaySurface(), "absolute z-popover grid w-popover-sm gap-3 p-3 text-sm")}
-        style={{ left, top }}
-      >
+      <OverlayPanel ref={ref} role="dialog" aria-labelledby="composer-title" data-composer data-open="" style={{ left, top }}>
         <OverlayHeader id="composer-title" heading="New comment" description={pinWhere(pin, block)} />
         <TextEditor overlay initial="" placeholder="What should change here?" submitLabel="Pin comment" onSubmit={onSave} onCancel={onCancel} />
-      </div>
+      </OverlayPanel>
     </>
   );
 }

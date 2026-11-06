@@ -1,16 +1,15 @@
 import { Minus, Plus, Shuffle } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
-import { overlaySurface } from "@/components/ui/overlay";
-import { OverlayHeader, PopoverFooter } from "@/components/ui/popover";
+import { OverlayHeader, OverlayPanel, PopoverFooter } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { Hint } from "@/components/ui/tooltip";
 import { partLabel, VARY_MAX } from "../core/fork";
 import type { BlockView, CanvasRect, Pin, SlotView } from "../core/types";
-import { composerPlace } from "./placement";
+import { POPOVER_WIDTH } from "./placement";
+import { useComposerPlace } from "./useComposerPlace";
 
 const DEFAULT_COUNT = 3;
 
@@ -67,7 +66,7 @@ export function VaryComposer({
   onSend: (count: number, direction: string | null) => Promise<void>;
   onCancel: () => void;
 }) {
-  const { left, top } = composerPlace(at, rect, bounds);
+  const { ref, left, top } = useComposerPlace(at, rect, bounds, POPOVER_WIDTH.md);
   const [count, setCount] = useState(DEFAULT_COUNT);
   const [direction, setDirection] = useState("");
   const [busy, setBusy] = useState(false);
@@ -97,15 +96,7 @@ export function VaryComposer({
         style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
         data-vary-outline
       />
-      <div
-        role="dialog"
-        aria-labelledby="vary-title"
-        data-vary-composer
-        data-open=""
-        className={cn(overlaySurface(), "absolute z-popover grid w-popover-sm gap-3 p-3 text-sm")}
-        style={{ left, top }}
-        onKeyDown={onKey}
-      >
+      <OverlayPanel ref={ref} size="md" role="dialog" aria-labelledby="vary-title" data-vary-composer data-open="" style={{ left, top }} onKeyDown={onKey}>
         <OverlayHeader id="vary-title" heading={`Vary ${what}`} description={`${block?.title ?? pin.blockId} · ${slotTitle}. Everything else stays.`} />
         <div className="grid gap-1.5">
           <span className="text-xs font-medium" id="vary-count-label">
@@ -130,7 +121,7 @@ export function VaryComposer({
           </span>
           <Input ref={field} value={direction} onChange={(e) => setDirection(e.target.value)} placeholder="bolder, calmer, more playful…" data-vary-direction />
         </label>
-        <PopoverFooter hint={<span data-vary-hint>{`New variants land in ${slotTitle}`}</span>}>
+        <PopoverFooter hint={<span data-vary-hint>{`Variants land in ${slotTitle}`}</span>}>
           <Kbd disabled={busy}>Ctrl+Enter</Kbd>
           <Button variant="ghost" onClick={onCancel}>
             Cancel
@@ -140,7 +131,7 @@ export function VaryComposer({
             {busy ? "Sending…" : "Send"}
           </Button>
         </PopoverFooter>
-      </div>
+      </OverlayPanel>
     </>
   );
 }
