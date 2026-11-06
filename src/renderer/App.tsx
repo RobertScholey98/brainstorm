@@ -189,6 +189,8 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
                 onSettle={(s) => void toggleSettled(s)}
                 revisions={revisions}
                 loadPreview={api.preview}
+                query={prefs.home}
+                onQuery={(home) => savePrefs({ home })}
               />
               {toast}
             </section>

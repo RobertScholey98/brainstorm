@@ -1,5 +1,5 @@
-import { CircleCheck, CloudOff, Lightbulb, Undo2 } from "lucide-react";
-import { useMemo } from "react";
+import { CircleCheck, CloudOff, Lightbulb, SearchX, Undo2 } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,11 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ScrollPane } from "@/components/ui/scroll-pane";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
+import { DEFAULT_HOME, type HomeQuery, type HomeStatus } from "../core/prefs";
 import type { SessionId, SessionListing } from "../core/types";
+import { HomeFilters, useSearchShortcut } from "./HomeFilters";
+import { liveProjects, projectOptions, queryHome } from "./homeQuery";
 import { markdownText } from "./markdownSubset";
-import { splitSettled } from "./sessionGroups";
 import { CardPreview, type LoadPreview } from "./Preview";
 import { SessionStatus } from "./SessionStatus";
 import { SETTLE_SHORTCUT, settleLabel, settleUndoes } from "./settle";
@@ -24,8 +26,8 @@ const START = (
 );
 
 /**
- * The main panel with no brainstorm open: every brainstorm as a card, newest activity first, then the settled ones,
- * newest settled first, under their own heading.
+ * The main panel with no brainstorm open: the brainstorms that match home's search and filters, as cards. Under All,
+ * the settled ones follow under their own heading.
  */
 export function HomeOverview({
   sessions,
@@ -35,6 +37,8 @@ export function HomeOverview({
   onSettle,
   revisions,
   loadPreview,
+  query,
+  onQuery,
 }: {
   sessions: readonly SessionListing[] | null;
   error: string | null;
@@ -44,9 +48,17 @@ export function HomeOverview({
   /** Bumped for a brainstorm whenever it changes, so its preview reloads. */
   revisions: ReadonlyMap<SessionId, number>;
   loadPreview: LoadPreview;
+  query: HomeQuery;
+  onQuery: (query: HomeQuery) => void;
 }) {
   const now = useNow();
-  const { active, settled } = useMemo(() => splitSettled(sessions ?? []), [sessions]);
+  const [search, setSearch] = useState("");
+  const field = useRef<HTMLInputElement>(null);
+  useSearchShortcut(field);
+  const all = sessions ?? [];
+  const result = useMemo(() => queryHome(all, query, search), [all, query, search]);
+  const projects = useMemo(() => projectOptions(all), [all]);
+  const selected = useMemo(() => liveProjects(query, all), [query, all]);
   const card = (s: SessionListing) => (
     <li key={s.id} className="grid min-w-0">
       <OverviewCard
@@ -61,6 +73,12 @@ export function HomeOverview({
   );
   const failed = sessions === null && error !== null;
   const empty = sessions !== null && sessions.length === 0;
+  const narrowed = search.trim() !== "" || selected.size > 0;
+  const nothing = sessions !== null && result.shown.length === 0 && result.settled.length === 0;
+  const clear = () => {
+    setSearch("");
+    onQuery({ ...query, status: DEFAULT_HOME.status, projects: [] });
+  };
   // The heading holds in every state, so loading, empty and failed home keep the page's frame. Empty drops the hint,
   // which its own message says.
   return (
@@ -70,17 +88,40 @@ export function HomeOverview({
           heading="All brainstorms"
           description={failed || empty ? undefined : <span data-home-hint>To start a new brainstorm, {START}.</span>}
         />
+        {!failed && !empty && (
+          <HomeFilters
+            field={field}
+            search={search}
+            onSearch={setSearch}
+            query={query}
+            onQuery={onQuery}
+            counts={result.counts}
+            projects={projects}
+            selected={selected}
+          />
+        )}
         {failed ? (
           <ListError message={error} onRetry={onRetry} />
         ) : empty ? (
           <HomeEmpty />
-        ) : sessions !== null && active.length === 0 ? (
-          <p className="text-sm text-fg-muted" data-all-settled>
-            Every brainstorm is settled.
-          </p>
+        ) : nothing && !narrowed && query.status === "active" && result.counts.settled > 0 ? (
+          <NoneShown
+            title="Every brainstorm is settled"
+            description="Settled brainstorms wait under Settled. A new request or commit brings one back on its own."
+            action="Show settled"
+            onAction={() => onQuery({ ...query, status: "settled" })}
+            data="all-settled"
+          />
+        ) : nothing ? (
+          <NoneShown
+            title="No brainstorms match"
+            description={narrowed ? "Nothing matches the search and filters as they are." : `Nothing is ${STATUS_WORDS[query.status]} right now.`}
+            action="Clear search and filters"
+            onAction={clear}
+            data="no-match"
+          />
         ) : (
-          // Cards hug their own content, so a card with no brief never carries a blank band to match its row.
-          <ul className="grid-overview grid gap-3" aria-busy={sessions === null || undefined}>
+          <ul className="grid-overview grid gap-3" aria-busy={sessions === null || undefined} data-home-results>
             {sessions === null
               ? [true, false, false, true, false, false].map((brief, i) => (
                   <li key={i} className="flex flex-col rounded-lg bg-card ring-1 ring-border" data-overview-skeleton>
@@ -95,20 +136,42 @@ export function HomeOverview({
                     </div>
                   </li>
                 ))
-              : active.map(card)}
+              : result.shown.map(card)}
           </ul>
         )}
-        {settled.length > 0 && (
+        {result.settled.length > 0 && (
           <section className="flex flex-col gap-3" aria-labelledby="settled-heading" data-overview-settled>
             <h2 id="settled-heading" className="flex items-center gap-2 text-sm font-medium text-fg-muted">
               Settled
-              <Badge>{settled.length}</Badge>
+              <Badge>{result.settled.length}</Badge>
             </h2>
-            <ul className="grid-overview grid gap-3">{settled.map(card)}</ul>
+            <ul className="grid-overview grid gap-3">{result.settled.map(card)}</ul>
           </section>
         )}
       </div>
     </ScrollPane>
+  );
+}
+
+const STATUS_WORDS: Record<HomeStatus, string> = { active: "active", attention: "waiting on you", settled: "settled", all: "here" };
+
+/** Home with cards to show but none the search and filters let through, and the one step that shows some again. */
+function NoneShown({ title, description, action, onAction, data }: { title: string; description: string; action: string; onAction: () => void; data: string }) {
+  return (
+    <Empty className="rounded-none" data-home-none={data}>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <SearchX aria-hidden />
+        </EmptyMedia>
+        <EmptyTitle>{title}</EmptyTitle>
+        <EmptyDescription>{description}</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button variant="outline" onClick={onAction} data-home-none-action>
+          {action}
+        </Button>
+      </EmptyContent>
+    </Empty>
   );
 }
 

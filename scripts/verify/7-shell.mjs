@@ -198,7 +198,14 @@ try {
     [null, "1", null],
   );
   check(
-    "the overview moves its card under the Settled heading, muted and marked, its preview dimmed",
+    "home shows active brainstorms by default, so the settled card leaves it, and the Settled filter counts it",
+    [await window.$(`[data-overview-session="${kitchen}"]`), (await window.textContent('[data-home-status="settled"] [data-status-count]'))?.trim()],
+    [null, "1"],
+  );
+  await window.click('[data-home-status="all"]');
+  await window.waitForSelector("[data-overview-settled]");
+  check(
+    "under All, the overview lists it under the Settled heading, muted and marked, its preview dimmed",
     await window.$$eval("[data-overview-settled] [data-overview-session]", (cards) =>
       cards.map((c) => [c.dataset.overviewSession, c.dataset.settled, c.querySelector('[data-session-status="settled"]')?.textContent, getComputedStyle(c.querySelector("[data-preview]")).opacity]),
     ),
@@ -239,6 +246,70 @@ try {
     await window.$$eval('[data-project] [data-session]', (rows) => rows[0]?.dataset.session),
     roulette,
   );
+
+  // Search and filters. Each read waits for the grid to settle, since the list refetches on every change event.
+  await window.click('[data-home-status="active"]');
+  const cards = () => settled(() => window.$$eval("[data-home-results] [data-overview-session]", (cs) => cs.map((c) => c.dataset.overviewSession)));
+  const inSearch = () => window.evaluate(() => document.activeElement?.hasAttribute("data-home-search") ?? false);
+  await window.click("[data-home-overview] h1");
+  await window.keyboard.press("/");
+  check("/ puts Rob in home's search", await inSearch(), true);
+  await window.keyboard.type("chore");
+  check("the search narrows home as Rob types, by title", await cards(), [roulette]);
+  await window.fill("[data-home-search]", "PHONE cyberpunk");
+  check("and by the words of a brief, in any order and any case", await cards(), [roulette]);
+  check(
+    "each status counts what the search leaves",
+    await window.$$eval("[data-home-status] [data-status-count]", (counts) => counts.map((c) => c.textContent)),
+    ["1", "0", "0", "1"],
+  );
+  await window.waitForTimeout(300);
+  await shot(window, shots, "search-results");
+  await window.fill("[data-home-search]", "zebra");
+  await window.waitForSelector('[data-home-none="no-match"]');
+  check("a search with no match says so, with one way out", (await window.textContent('[data-home-none="no-match"] [data-home-none-action]'))?.trim(), "Clear search and filters");
+  await shot(window, shots, "search-empty");
+  await window.keyboard.press("Escape");
+  check("Escape clears the search, and every active brainstorm is back", [await window.inputValue("[data-home-search]"), (await cards()).length], ["", 3]);
+  await window.keyboard.press("Escape");
+  check("a second Escape leaves the field", await inSearch(), false);
+  await window.keyboard.press("Control+f");
+  check("Ctrl+F puts Rob in the search too", await inSearch(), true);
+  await window.keyboard.press("Escape");
+
+  await window.click("[data-project-filter]");
+  await window.waitForSelector("[data-project-menu]");
+  check(
+    "the project filter lists every project by name, with how many brainstorms each holds",
+    await window.$$eval("[data-project-option]", (rows) => rows.map((r) => r.textContent)),
+    ["chores2", "kitchen1", "Other project1"],
+  );
+  await window.waitForTimeout(300);
+  await shot(window, shots, "filter-menu");
+  await window.click('[data-project-option="chore-roulette"]');
+  check(
+    "checking a project shows only its brainstorms, and the filter names it",
+    [await cards(), (await window.textContent("[data-project-filter]"))?.trim()],
+    [[roulette, wide], "chores"],
+  );
+  await window.keyboard.press("Escape");
+  await window.click("[data-home-sort]");
+  await window.click('[data-sort-option="title"]');
+  check("sorting by title reorders the cards", await cards(), [roulette, wide]);
+  await window.click('[data-home-status="settled"]');
+  await window.waitForSelector('[data-home-none="no-match"]');
+  await window.click("[data-home-none-action]");
+  check(
+    "clearing brings back every active brainstorm and keeps the sort",
+    [await cards(), await window.getAttribute('[data-home-status="active"]', "aria-pressed"), (await window.textContent("[data-home-sort] [data-slot=select-value]"))?.trim()],
+    [[roulette, loose, wide], "true", "Title"],
+  );
+  // Left as Rob would leave it, to come back after the restart below.
+  await window.click("[data-project-filter]");
+  await window.click('[data-project-option="chore-roulette"]');
+  await window.keyboard.press("Escape");
+  await window.click('[data-home-status="all"]');
+  await window.fill("[data-home-search]", "roulette");
 
   const canvas = await openSession(window, wide);
   check(
@@ -668,6 +739,23 @@ try {
   await app.close();
   ({ app, window, errors } = await launch(home, env));
   await window.setViewportSize({ width: 1440, height: 900 });
+  await window.waitForSelector("[data-home-filters]");
+  check(
+    "home's status, projects and sort survive the restart, and the search starts empty",
+    [
+      await window.getAttribute('[data-home-status="all"]', "aria-pressed"),
+      (await window.textContent("[data-project-filter]"))?.trim(),
+      (await window.textContent("[data-home-sort] [data-slot=select-value]"))?.trim(),
+      await window.inputValue("[data-home-search]"),
+    ],
+    ["true", "chores", "Title", ""],
+  );
+  await window.click("[data-project-filter]");
+  await window.click("[data-project-all]");
+  await window.keyboard.press("Escape");
+  await window.click('[data-home-status="active"]');
+  await window.click("[data-home-sort]");
+  await window.click('[data-sort-option="recent"]');
   const again = await openSession(window, roulette);
   await again.waitForSelector('#canvas[data-view="board"]');
   check(
