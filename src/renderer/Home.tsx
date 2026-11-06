@@ -80,10 +80,10 @@ export function HomeOverview({
     onQuery({ ...query, status: DEFAULT_HOME.status, projects: [] });
   };
   // The heading holds in every state, so loading, empty and failed home keep the page's frame. Empty drops the hint,
-  // which its own message says.
+  // which its own message says. The heading and the query row stay put, and only what they find scrolls under them.
   return (
-    <ScrollPane inset={6} className="size-full" data-home-overview>
-      <div className="flex min-h-full flex-col gap-5 py-6">
+    <div className="flex size-full flex-col" data-home-overview>
+      <div className="flex shrink-0 flex-col gap-5 px-6 pt-6 pb-2" data-home-head>
         <PageHeader
           heading="All brainstorms"
           description={failed || empty ? undefined : <span data-home-hint>To start a new brainstorm, {START}.</span>}
@@ -100,55 +100,59 @@ export function HomeOverview({
             selected={selected}
           />
         )}
-        {failed ? (
-          <ListError message={error} onRetry={onRetry} />
-        ) : empty ? (
-          <HomeEmpty />
-        ) : nothing && !narrowed && query.status === "active" && result.counts.settled > 0 ? (
-          <NoneShown
-            title="Every brainstorm is settled"
-            description="Settled brainstorms wait under Settled. A new request or commit brings one back on its own."
-            action="Show settled"
-            onAction={() => onQuery({ ...query, status: "settled" })}
-            data="all-settled"
-          />
-        ) : nothing ? (
-          <NoneShown
-            title="No brainstorms match"
-            description={noMatch(query.status, search.trim() !== "", selected.size > 0)}
-            action={clearLabel(search.trim() !== "", selected.size > 0 || query.status !== DEFAULT_HOME.status)}
-            onAction={clear}
-            data="no-match"
-          />
-        ) : (
-          <ul className="grid-overview grid gap-3" aria-busy={sessions === null || undefined} data-home-results>
-            {sessions === null
-              ? [true, false, false, true, false, false].map((brief, i) => (
-                  <li key={i} className="flex flex-col rounded-lg bg-card shadow-xs ring-1 ring-border" data-overview-skeleton>
-                    <PreviewSkeleton />
-                    {/* One bar a line, each as tall as the card's text, so the cards that replace these don't move. */}
-                    <div className="flex flex-col gap-1.5 p-4">
-                      <Skeleton className="h-4 w-1/3" />
-                      <Skeleton className="h-5 w-2/3" />
-                      <Skeleton className={cn("h-4.5", brief ? "w-full" : "invisible")} />
-                      <Skeleton className="mt-1 h-4 w-1/3" />
-                    </div>
-                  </li>
-                ))
-              : result.shown.map(card)}
-          </ul>
-        )}
-        {result.settled.length > 0 && (
-          <section className="flex flex-col gap-3" aria-labelledby="settled-heading" data-overview-settled>
-            <h2 id="settled-heading" className="flex items-center gap-2 text-sm font-medium text-fg-muted">
-              Settled
-              <Badge>{result.settled.length}</Badge>
-            </h2>
-            <ul className="grid-overview grid gap-3">{result.settled.map(card)}</ul>
-          </section>
-        )}
       </div>
-    </ScrollPane>
+      <ScrollPane inset={6} data-home-scroll>
+        <div className="flex min-h-full flex-col gap-5 pt-3 pb-6">
+          {failed ? (
+            <ListError message={error} onRetry={onRetry} />
+          ) : empty ? (
+            <HomeEmpty />
+          ) : nothing && !narrowed && query.status === "active" && result.counts.settled > 0 ? (
+            <NoneShown
+              title="Every brainstorm is settled"
+              description="Settled brainstorms wait under Settled. A new request or commit brings one back on its own."
+              action="Show settled"
+              onAction={() => onQuery({ ...query, status: "settled" })}
+              data="all-settled"
+            />
+          ) : nothing ? (
+            <NoneShown
+              title="No brainstorms match"
+              description={noMatch(query.status, search.trim() !== "", selected.size > 0)}
+              action={clearLabel(search.trim() !== "", selected.size > 0 || query.status !== DEFAULT_HOME.status)}
+              onAction={clear}
+              data="no-match"
+            />
+          ) : (
+            <ul className="grid-overview grid gap-3" aria-busy={sessions === null || undefined} data-home-results>
+              {sessions === null
+                ? [true, false, false, true, false, false].map((brief, i) => (
+                    <li key={i} className="flex flex-col rounded-lg bg-card shadow-xs ring-1 ring-border" data-overview-skeleton>
+                      <PreviewSkeleton />
+                      {/* One bar a line, each as tall as the card's text, so the cards that replace these don't move. */}
+                      <div className="flex flex-col gap-1.5 p-4">
+                        <Skeleton className="h-4 w-1/3" />
+                        <Skeleton className="h-5 w-2/3" />
+                        <Skeleton className={cn("h-4.5", brief ? "w-full" : "invisible")} />
+                        <Skeleton className="mt-1 h-4 w-1/3" />
+                      </div>
+                    </li>
+                  ))
+                : result.shown.map(card)}
+            </ul>
+          )}
+          {result.settled.length > 0 && (
+            <section className="flex flex-col gap-3" aria-labelledby="settled-heading" data-overview-settled>
+              <h2 id="settled-heading" className="flex items-center gap-2 text-sm font-medium text-fg-muted">
+                Settled
+                <Badge>{result.settled.length}</Badge>
+              </h2>
+              <ul className="grid-overview grid gap-3">{result.settled.map(card)}</ul>
+            </section>
+          )}
+        </div>
+      </ScrollPane>
+    </div>
   );
 }
 

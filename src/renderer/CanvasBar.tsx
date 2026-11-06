@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Segmented } from "@/components/ui/segmented";
+import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
 import { Hint } from "@/components/ui/tooltip";
 import type { CanvasLayout } from "../core/prefs";
@@ -80,6 +81,8 @@ export function CanvasBar({
             <Button variant="ghost" onClick={onCancelPick}>
               Cancel
             </Button>
+            {/* Pick mode's own controls, then the view's, as the header divides a request's actions from Regenerate. */}
+            {several && <Separator orientation="vertical" className="h-4 self-center" data-pick-divider />}
           </span>
         )}
         {pct < 100 && (

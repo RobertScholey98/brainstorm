@@ -181,6 +181,17 @@ try {
     ),
     { sidebar: [8, 8], overview: [24, 24], thumbOffCard: 6 },
   );
+  await window.setViewportSize({ width: 1440, height: 400 });
+  const filtersTop = () => settled(() => window.$eval("[data-home-filters]", (f) => Math.round(f.getBoundingClientRect().top)));
+  const restTop = await filtersTop();
+  await window.$eval("[data-home-scroll]", (el) => el.scrollTo(0, el.scrollHeight));
+  check(
+    "scrolled down the cards, home's search and filters stay where they were, over what scrolls",
+    [await window.$eval("[data-home-scroll]", (el) => el.scrollTop > 0), await filtersTop()],
+    [true, restTop],
+  );
+  await window.$eval("[data-home-scroll]", (el) => el.scrollTo(0, 0));
+  await window.setViewportSize({ width: 1440, height: 900 });
   check("home shows no Regenerate or Export", [await window.$("[data-regenerate-toggle]"), await window.$("[data-export]")], [null, null]);
   await window.waitForTimeout(300);
   await shot(window, shots, "home-light");
@@ -326,6 +337,12 @@ try {
       })),
     );
   const switchAt = [await statusSwitch()];
+  await window.hover('[data-home-status="attention"]');
+  check(
+    "Attention's hint says it is the part of Active waiting on Rob",
+    await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" }).then((h) => h.textContent()),
+    "The active brainstorms waiting on you",
+  );
   await window.click('[data-home-status="attention"]');
   switchAt.push(await statusSwitch());
   check(
@@ -683,6 +700,15 @@ try {
     }, id);
   await window.click("[data-pick-toggle]");
   check("pick mode says so in the canvas bar, where it covers no frame", await window.$eval("[data-pick-hint]", (h) => h.closest("[data-canvas-bar]") !== null), true);
+  check(
+    "a divider stands between pick mode's Cancel and the view switch, so the bar reads as two groups",
+    await window.evaluate(() => {
+      const r = (s) => document.querySelector(s)?.getBoundingClientRect();
+      const [cancel, divider, view] = [r("[data-pick-hint] button"), r("[data-pick-divider]"), r("[data-view-option]")];
+      return divider !== undefined && cancel.right < divider.left && divider.right < view.left;
+    }),
+    true,
+  );
   await rouletteCanvas.click(inBlock("wheel/neon", "spin-button"));
   await window.waitForSelector("[data-composer]");
   await window.keyboard.type("Spin should be bigger");
@@ -932,6 +958,22 @@ try {
     ["true", "chores", "Title", ""],
   );
   await window.click("[data-project-filter]");
+  await window.waitForSelector("[data-project-all]");
+  check(
+    "in the project menu, Show all's words end on the counts' edge above them",
+    await settled(() =>
+      window.evaluate(() => {
+        const ink = (el) => {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          return Math.round(range.getBoundingClientRect().right);
+        };
+        const counts = [...document.querySelectorAll("[data-project-option] > span:last-child")].map(ink);
+        return [new Set(counts).size, Math.abs(ink(document.querySelector("[data-project-all]")) - counts[0]) <= 1];
+      }),
+    ),
+    [1, true],
+  );
   await window.click("[data-project-all]");
   check("Show all shows every project, then leaves the footer, since with none checked it has nothing to do", await window.$("[data-project-all]"), null);
   await window.keyboard.press("Escape");

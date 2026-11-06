@@ -4,8 +4,10 @@ import type { ReactNode } from "react"
 import { Toggle as TogglePrimitive } from "@base-ui/react/toggle"
 import { ToggleGroup as ToggleGroupPrimitive } from "@base-ui/react/toggle-group"
 import { cn } from "cn"
+import { Hint } from "@/components/ui/tooltip"
 
-type Option<T extends string> = { readonly value: T; readonly label: ReactNode }
+/** `hint` says what a segment's label alone can't, such as how one choice relates to another. */
+type Option<T extends string> = { readonly value: T; readonly label: ReactNode; readonly hint?: string }
 
 /**
  * One choice out of a few, always one on: the Inspector's enum controls and the Regenerate scope. The chosen segment
@@ -38,19 +40,28 @@ function Segmented<T extends string>({
       onValueChange={(next) => next[0] !== undefined && onValueChange(next[0] as T)}
       className={cn("h-7 gap-0.5 rounded-md bg-canvas p-0.5 inset-ring inset-ring-border dark:bg-app", fit === "content" ? "flex w-fit shrink-0" : fit ? "grid w-fit shrink-0 auto-cols-fr grid-flow-col" : "flex w-full items-stretch")}
     >
-      {options.map((o) => (
-        <TogglePrimitive
-          key={o.value}
-          value={o.value}
-          {...(itemData === undefined ? {} : { [`data-${itemData}`]: o.value })}
-          className={cn(
-            "min-w-0 truncate rounded-sm whitespace-nowrap px-2 text-sm text-fg-muted transition-colors outline-none select-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring data-pressed:bg-card data-pressed:text-fg data-pressed:shadow-xs data-pressed:inset-ring data-pressed:inset-ring-border-strong dark:data-pressed:bg-muted",
-            fit === "content" ? "flex-none" : "flex-1 data-pressed:font-medium"
-          )}
-        >
-          {o.label}
-        </TogglePrimitive>
-      ))}
+      {options.map((o) => {
+        const segment = (
+          <TogglePrimitive
+            key={o.value}
+            value={o.value}
+            {...(itemData === undefined ? {} : { [`data-${itemData}`]: o.value })}
+            className={cn(
+              "min-w-0 truncate rounded-sm whitespace-nowrap px-2 text-sm text-fg-muted transition-colors outline-none select-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring data-pressed:bg-card data-pressed:text-fg data-pressed:shadow-xs data-pressed:inset-ring data-pressed:inset-ring-border-strong dark:data-pressed:bg-muted",
+              fit === "content" ? "flex-none" : "flex-1 data-pressed:font-medium"
+            )}
+          >
+            {o.label}
+          </TogglePrimitive>
+        )
+        return o.hint === undefined ? (
+          segment
+        ) : (
+          <Hint key={o.value} label={o.hint} side="bottom">
+            {segment}
+          </Hint>
+        )
+      })}
     </ToggleGroupPrimitive>
   )
 }

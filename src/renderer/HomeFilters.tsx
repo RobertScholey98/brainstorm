@@ -12,9 +12,9 @@ import type { HomeQuery, HomeSort, HomeStatus } from "../core/prefs";
 import type { ProjectId } from "../core/types";
 import type { ProjectOption } from "./homeQuery";
 
-const STATUSES: readonly { readonly value: HomeStatus; readonly label: string }[] = [
+const STATUSES: readonly { readonly value: HomeStatus; readonly label: string; readonly hint?: string }[] = [
   { value: "active", label: "Active" },
-  { value: "attention", label: "Attention" },
+  { value: "attention", label: "Attention", hint: "The active brainstorms waiting on you" },
   { value: "settled", label: "Settled" },
   { value: "all", label: "All" },
 ];
@@ -109,7 +109,7 @@ export function HomeFilters({
         fit="content"
         value={query.status}
         onValueChange={(status) => onQuery({ ...query, status })}
-        options={STATUSES.map((s) => ({ value: s.value, label: <StatusLabel label={s.label} count={counts?.[s.value] ?? null} /> }))}
+        options={STATUSES.map((s) => ({ value: s.value, hint: s.hint, label: <StatusLabel label={s.label} count={counts?.[s.value] ?? null} /> }))}
         itemData="home-status"
         aria-label="Show"
       />
@@ -179,7 +179,8 @@ function ProjectFilter({
         {/* Show all only once a project is checked: a dead action reads as a live one in dark. */}
         <PopoverFooter hint={names.length === 0 ? "Showing every project" : `Showing ${names.length} of ${projects.length}`}>
           {names.length > 0 && (
-            <Button variant="ghost" onClick={() => onChange([])} data-project-all>
+            // Its box reaches past the column by its padding, so its words end on the counts' edge above.
+            <Button variant="ghost" className="-mr-2" onClick={() => onChange([])} data-project-all>
               Show all
             </Button>
           )}
