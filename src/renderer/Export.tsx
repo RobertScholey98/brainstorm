@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { Fragment, useRef, useState } from "react";
 import { cn } from "cn";
 import { chip } from "@/components/ui/chip";
@@ -45,7 +46,15 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
           </>
         ) : (
           <>
-            <PopoverHeader heading="Exported" description="One HTML file that opens offline, with your settings and variant choices." />
+            <PopoverHeader
+              heading={
+                <span className="flex items-center gap-1.5" data-exported-title>
+                  <Check aria-hidden className="size-4 text-success" />
+                  Exported
+                </span>
+              }
+              description="One HTML file that opens offline, with your settings and variant choices."
+            />
             <ExportPath path={done.path} />
             <PopoverFooter>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>

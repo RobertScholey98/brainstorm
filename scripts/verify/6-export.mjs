@@ -53,6 +53,16 @@ try {
     [opened[0], opened[1] !== closed[1], opened[2] !== closed[2]],
     ["true", true, true],
   );
+  check(
+    "Exported leads with a success check, as Copied does",
+    await window.$eval("[data-exported-title]", (t) => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--success)" }));
+      const success = getComputedStyle(probe).color;
+      probe.remove();
+      return [t.textContent.trim(), t.firstElementChild?.tagName.toLowerCase(), getComputedStyle(t.firstElementChild).color === success];
+    }),
+    ["Exported", "svg", true],
+  );
   exported = (await window.textContent("[data-export-path]"))?.trim();
   const name = exported?.slice(join(home, "exports").length + 1);
   check("the file lands in exports, named by session, iteration and time", /^s_[0-9a-z]+-i1-\d{8}-\d{6}\.html$/.test(name ?? "") && name.startsWith(`${session}-i1-`), true);
