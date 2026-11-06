@@ -85,3 +85,27 @@ The majors are:
 - **Sonnet A:** home rows are 48 px and repeat their meta, and home has no page heading.
 
 The light 1440 slice scored lowest for both Claude members.
+
+## Round 4 (captures round-4, after two round 3 fix passes)
+
+Same slices as round 3. No read failed. Each score below is the member's lowest across its slices.
+
+| Area | Claude Opus 5.5 | GPT-6.1 Sol | Claude Sonnet 5.5 |
+| --- | --- | --- | --- |
+| Shell | 8.5 | 9.5 | 8.0 |
+| Navigation and lists | 8.5 | 9.5 | 8.0 |
+| Canvas chrome | 8.0 | 8.9 | 8.0 |
+| Inspector and controls | 8.5 | 9.6 | 8.0 |
+| Overlays | 8.5 | 9.5 | 8.0 |
+| Feedback | 8.5 | 9.3 | 8.0 |
+| States and request phases | 8.0 | 9.6 | 8.0 |
+| Dark mode | 9.0 | 9.5 | 8.0 |
+| Self-consistency | 8.5 | 9.4 | 8.0 |
+| Fitness for all-day use | 8.5 | 9.3 | 8.0 |
+| Completely happy | no | no | no |
+| Blocker / major / minor / nit (all slices) | 0 / 1 / 27 / 45 | 0 / 0 / 1 / 1 | 0 / 0 / 16 / 32 |
+| Comparison sheets won | 2 of 4 (both sessions; lost both homes) | 3 of 4 (lost vs-claude-home) | 4 of 4 named, none ahead in every area |
+
+The major is from Opus D. Canvas pins shrink with their frame's zoom, so on the 64% board at 1100 they render at about 13 px.
+
+Every Claude slice found the blocked-Regenerate hint covering Open thread and Withdraw. The home sheets lose or tie on navigation and lists. The exemplars' homes show previews, live status and search, and Brainstorm's overview repeats the sidebar as text cards.
