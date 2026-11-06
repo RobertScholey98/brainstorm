@@ -6,7 +6,7 @@
 // sheets at 1440 for a quick check that every shot settled. Those outputs are rebuilt on every run, and the round's reviews
 // and worklist beside them are kept.
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -60,7 +60,7 @@ const SHOTS = [
   ["phase-queued", "phases", "Request phase: queued in T3"],
   ["phase-working", "phases", "Request phase: the agent is working"],
   ["phase-asking", "phases", "Request phase: the agent is asking something in T3"],
-  ["phase-run-failed", "phases", "Request phase: the agent's run failed, with Retry and Withdraw, and the strip links to the thread"],
+  ["phase-run-failed", "phases", "Request phase: the agent's run failed; the bar holds Retry, Open thread and Withdraw, and the strip says where to see why"],
   ["phase-send-failed", "phases", "Request phase: the send failed; the bar names it with Retry, and the strip under it holds the whole error"],
   ["phase-no-change", "phases", "Request phase: the agent replied without changing the design; the bar names it, the strip says it in full"],
   ["phase-fulfilled", "phases", "Request phase: fulfilled, naming the new iteration and the block that changed"],
@@ -79,8 +79,8 @@ const SHOTS = [
   ["state-hover-variant", "canvas", "The pointer over a variant row that isn't showing"],
   ["state-resize-handle", "canvas", "The Inspector's resize handle under the pointer, with its line"],
   ["state-shortcut-hint", "canvas", "The Regenerate hint, naming its Ctrl+R shortcut"],
-  ["state-hover-pin", "canvas", "The pointer over a pin on the canvas"],
-  ["state-hover-feedback", "canvas", "The pointer over a feedback item in the Inspector"],
+  ["state-hover-pin", "canvas", "The pointer over pin 2 on the wheel stage, so pin 2 grows"],
+  ["state-hover-feedback", "canvas", "The pointer over feedback item 1 in the Inspector, so pin 1 grows on the result stage and pin 3 stays at rest"],
   ["state-feedback-edit", "canvas", "A feedback item in Edit mode"],
   ["state-regenerate-invalid", "canvas", "Regenerate with Describe it and no text yet, so Send is disabled"],
   ["state-export-failed", "canvas", "Export when the server doesn't answer: the popover closes and the failure toast says why"],
@@ -128,6 +128,10 @@ const RUNNING_ANIMATIONS = () =>
     // A scroll-driven animation runs for as long as its scroller exists, so only time-driven ones count.
     .filter((a) => a.timeline === document.timeline && a.playState === "running" && a.effect?.getComputedTiming().iterations !== Infinity)
     .map((a) => a.animationName || a.transitionProperty || "animation");
+
+/** Waits out a pin's hover scale, so the shot shows it grown rather than partway there. */
+const grown = (canvas, n) =>
+  canvas.waitForFunction((n) => getComputedStyle(document.querySelector(`.bs-pin[data-pin="${n}"]`)).scale === "1.15", n);
 
 const inFrames = (page, fn) => Promise.all(page.frames().map((f) => f.evaluate(fn).catch(() => null)));
 
@@ -424,7 +428,7 @@ function ageSeeds(home, sessions) {
   const db = new DatabaseSync(join(home, "brainstorm.db"));
   const back = (iso, ms) => new Date(Date.parse(iso) - ms).toISOString();
   for (const [name, ms] of Object.entries(AGES)) {
-    const id = sessions[name];
+    const id = sessions[name].id ?? sessions[name];
     for (const table of ["session", "iteration", "request"]) {
       const key = table === "session" ? "id" : "session_id";
       const rows = db.prepare(`SELECT rowid, created_at FROM ${table} WHERE ${key} = ?`).all(id);
@@ -606,9 +610,10 @@ function scenes(page, home, env, t3, sessions) {
           await page.keyboard.press("Shift");
         },
       });
-      // The rest of this scene pins and selects across both slots, as the board shows them.
       await showView(canvas, "board");
       await capture(page, "session-board");
+      // Only the board shot is about the board; the rest show the stage, the view a brainstorm opens in.
+      await showView(canvas, "stage");
 
       await capture(page, "state-select-open", {
         each: async () => {
@@ -657,6 +662,7 @@ function scenes(page, home, env, t3, sessions) {
       await page.waitForSelector('[data-slot="sidebar"][data-state="expanded"]');
       await untilStill(page);
 
+      await page.click('[data-slot-tab="result"]');
       await ensurePicking();
       await capture(page, "state-pick-mode", {
         each: async () => {
@@ -675,9 +681,11 @@ function scenes(page, home, env, t3, sessions) {
       });
       await page.click('[data-composer] button:has-text("Pin comment")');
       await page.waitForSelector('[data-feedback="1"][data-status="open"]');
+      await page.click('[data-slot-tab="wheel"]');
       await pinComment(canvas, inBlock("wheel/neon", "spin-button"), "The spin button is too quiet next to the wheel");
       await page.keyboard.press("Control+Enter");
       await page.waitForSelector('[data-feedback="2"]');
+      await page.click('[data-slot-tab="result"]');
       await pinComment(canvas, inBlock("result/card", "chore"), "The chore should read bigger than the winner's name");
       await page.keyboard.press("Control+Enter");
       await page.waitForSelector('[data-feedback="3"]');
@@ -695,13 +703,22 @@ function scenes(page, home, env, t3, sessions) {
       await capture(page, "feedback-list", {
         each: () => page.$eval("[data-feedback-panel]", (el) => el.scrollIntoView({ block: "end" })),
       });
-      await capture(page, "state-hover-pin", { each: () => canvas.hover('.bs-pin[data-pin="2"]') });
+      await capture(page, "state-hover-pin", {
+        each: async () => {
+          await page.click('[data-slot-tab="wheel"]');
+          await canvas.hover('.bs-pin[data-pin="2"]');
+          await grown(canvas, 2);
+        },
+      });
       // Hovering scrolls pin 2 into view; later shots start from the top like the earlier ones.
       await canvas.evaluate(() => scrollTo(0, 0));
       await capture(page, "state-hover-feedback", {
         each: async () => {
+          await page.click('[data-slot-tab="result"]');
           await page.$eval("[data-feedback-panel]", (el) => el.scrollIntoView({ block: "end" }));
-          await page.hover('[data-feedback="2"]');
+          // Another pin than the pin hover shot's, so the two shots differ in which pin grows.
+          await page.hover('[data-feedback="1"]');
+          await grown(canvas, 1);
         },
       });
       await page.click('[data-feedback="1"] [data-feedback-action="edit"]');
@@ -786,7 +803,8 @@ function scenes(page, home, env, t3, sessions) {
 
     async phases() {
       const { id } = sessions.roulette;
-      const canvas = await open(id, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card")], "board");
+      const canvas = await open(id, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card")]);
+      await page.click('[data-slot-tab="result"]');
 
       t3.setHold(["send"]);
       await regenerate("all", "Make the spin feel less random");
@@ -914,18 +932,60 @@ async function runScene(name, fn) {
   }
 }
 
-/** Copies a physical-pixel rectangle of the screen to a PNG, as a DPI-aware process so the rectangle isn't rescaled. */
-function screenGrab({ x, y, width, height }, path) {
-  const script = [
-    "Add-Type -AssemblyName System.Drawing",
-    "Add-Type -Namespace Grab -Name Dpi -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware();'",
-    "[Grab.Dpi]::SetProcessDPIAware() | Out-Null",
-    `$b = New-Object System.Drawing.Bitmap ${width}, ${height}`,
-    "$g = [System.Drawing.Graphics]::FromImage($b)",
-    `$g.CopyFromScreen(${x}, ${y}, 0, 0, $b.Size)`,
-    `$b.Save('${path.replace(/'/g, "''")}', [System.Drawing.Imaging.ImageFormat]::Png)`,
-  ].join("; ");
-  execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { stdio: "ignore" });
+/**
+ * Lists the classes of visible windows stacked above \`hwnd\` that cross the rectangle, so a notification or another
+ * always-on-top window over the shot is caught. Read as a DPI-aware process, so the rectangles are physical pixels.
+ */
+const ABOVE = String.raw`
+using System; using System.Runtime.InteropServices; using System.Text;
+public static class Above {
+  [StructLayout(LayoutKind.Sequential)] public struct R { public int L, T, Rt, B; }
+  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint c);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out R r);
+  [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
+  [DllImport("user32.dll")] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int a, out int v, int s);
+  public static string Over(long own, int x, int y, int w, int h) {
+    var hits = new StringBuilder();
+    for (var p = GetWindow(new IntPtr(own), 3); p != IntPtr.Zero; p = GetWindow(p, 3)) {
+      int cloaked;
+      if (!IsWindowVisible(p) || (DwmGetWindowAttribute(p, 14, out cloaked, 4) == 0 && cloaked != 0)) continue;
+      if ((GetWindowLong(p, -20) & 0x20) != 0) continue;
+      R r;
+      if (!GetWindowRect(p, out r) || r.Rt <= x || r.L >= x + w || r.B <= y || r.T >= y + h) continue;
+      var c = new StringBuilder(256);
+      GetClassName(p, c, 256);
+      hits.Append(c).Append(' ');
+    }
+    return hits.ToString().Trim();
+  }
+}
+`;
+
+/**
+ * Copies a physical-pixel rectangle of the screen to a PNG, as a DPI-aware process so the rectangle isn't rescaled.
+ * Returns the classes of any windows over the rectangle before or after the copy, empty when the shot is clean.
+ */
+function screenGrab(hwnd, { x, y, width, height }, path) {
+  const script = join(temp, "bs-capture-grab.ps1");
+  writeFileSync(
+    script,
+    [
+      "Add-Type -AssemblyName System.Drawing",
+      `Add-Type -TypeDefinition @'\n${ABOVE}\n'@`,
+      "[Above]::SetProcessDPIAware() | Out-Null",
+      `$before = [Above]::Over(${hwnd}, ${x}, ${y}, ${width}, ${height})`,
+      `$b = New-Object System.Drawing.Bitmap ${width}, ${height}`,
+      "$g = [System.Drawing.Graphics]::FromImage($b)",
+      `$g.CopyFromScreen(${x}, ${y}, 0, 0, $b.Size)`,
+      `$b.Save('${path.replace(/'/g, "''")}', [System.Drawing.Imaging.ImageFormat]::Png)`,
+      `$after = [Above]::Over(${hwnd}, ${x}, ${y}, ${width}, ${height})`,
+      "Write-Output (($before, $after) -join ' ').Trim()",
+    ].join("\n"),
+  );
+  return execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script], { encoding: "utf8" }).trim();
 }
 
 const consoleNotes = [];
@@ -933,7 +993,9 @@ const firstLine = (label) => (e) => `${label}: ${e.split("\n")[0]}`;
 
 build();
 
-const emptyHome = mkdtempSync(join(tmpdir(), "bs-capture-empty-"));
+/** The temp folder by its long name: Windows can hand it out as an 8.3 short path, which the shots then print. */
+const temp = realpathSync.native(tmpdir());
+const emptyHome = mkdtempSync(join(temp, "bs-capture-empty-"));
 const emptyEnv = appEnv(emptyHome);
 {
   const run = await start(emptyHome, emptyEnv);
@@ -964,7 +1026,7 @@ const emptyEnv = appEnv(emptyHome);
   });
 }
 
-const home = mkdtempSync(join(tmpdir(), "bs-capture-"));
+const home = mkdtempSync(join(temp, "bs-capture-"));
 const env = appEnv(home);
 const t3 = fakeT3(env.BRAINSTORM_FAKE_T3_STATE);
 let run = await start(home, env);
@@ -999,8 +1061,9 @@ try {
     await run.window.click(`[data-session="${sessions.roulette.id}"]`);
     await (await canvasFrame(run.window)).waitForSelector(inBlock("result/card", "card"));
     const shot = shotOf("window-title-bar");
+    const problems = [];
     for (const c of COMBOS) {
-      const { rect, size } = await run.app.evaluate(({ BrowserWindow, nativeTheme, screen }, [w, h, theme]) => {
+      const { rect, size, hwnd } = await run.app.evaluate(({ BrowserWindow, nativeTheme, screen }, [w, h, theme]) => {
         nativeTheme.themeSource = theme;
         const win = BrowserWindow.getAllWindows()[0];
         win.setContentSize(w, h);
@@ -1009,7 +1072,9 @@ try {
         win.setIgnoreMouseEvents(true);
         win.focus();
         const content = win.getContentBounds();
-        return { rect: screen.dipToScreenRect(win, content), size: [content.width, content.height] };
+        const handle = win.getNativeWindowHandle();
+        const hwnd = String(handle.length === 8 ? handle.readBigUInt64LE() : handle.readUInt32LE());
+        return { rect: screen.dipToScreenRect(win, content), size: [content.width, content.height], hwnd };
       }, [c.width, c.height, c.theme]);
       // Playwright pins the page to light until told otherwise; nativeTheme alone themes the native buttons.
       await run.window.emulateMedia({ colorScheme: c.theme });
@@ -1017,11 +1082,22 @@ try {
       await run.window.waitForFunction(([w, h]) => Math.abs(innerWidth - w) <= 1 && Math.abs(innerHeight - h) <= 1, size);
       await untilStill(run.window);
       await sleep(800);
-      screenGrab(rect, join(comboDir(c), `${shot.file}.png`));
+      // A notification from another app can land over the window mid-run; it clears in seconds, so the shot waits it out.
+      const png = join(comboDir(c), `${shot.file}.png`);
+      let over = screenGrab(hwnd, rect, png);
+      for (let tries = 0; over !== "" && tries < 10; tries++) {
+        await sleep(3000);
+        over = screenGrab(hwnd, rect, png);
+      }
+      if (over !== "") {
+        rmSync(png);
+        writeFileSync(join(comboDir(c), `${shot.file}.missing.txt`), `Another window stayed over this one: ${over}\n`);
+        problems.push(`${c.theme} ${c.width}: covered by ${over}`);
+      }
     }
     await run.app.evaluate(({ nativeTheme }) => (nativeTheme.themeSource = "system"));
-    outcomes.set("window-title-bar", { status: "captured" });
-    console.log(`shot    ${shot.file}`);
+    outcomes.set("window-title-bar", problems.length === 0 ? { status: "captured" } : { status: problems.length === COMBOS.length ? "missing" : "partial", reason: problems.join("; ") });
+    console.log(`${problems.length === 0 ? "shot   " : "PARTIAL"} ${shot.file}${problems.length === 0 ? "" : `: ${problems.join("; ")}`}`);
   });
   consoleNotes.push(...run.errors.map(firstLine("window")));
 } finally {
