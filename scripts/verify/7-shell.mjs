@@ -819,6 +819,7 @@ try {
   );
   await window.click("[data-project-filter]");
   await window.click("[data-project-all]");
+  check("Show all shows every project, then leaves the footer, since with none checked it has nothing to do", await window.$("[data-project-all]"), null);
   await window.keyboard.press("Escape");
   await window.click('[data-home-status="active"]');
   await window.click("[data-home-sort]");

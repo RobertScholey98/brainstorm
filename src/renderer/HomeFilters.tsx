@@ -176,10 +176,13 @@ function ProjectFilter({
             </label>
           ))}
         </div>
+        {/* Show all only once a project is checked: a dead action reads as a live one in dark. */}
         <PopoverFooter hint={names.length === 0 ? "Showing every project" : `Showing ${names.length} of ${projects.length}`}>
-          <Button variant="ghost" disabled={names.length === 0} onClick={() => onChange([])} data-project-all>
-            Show all
-          </Button>
+          {names.length > 0 && (
+            <Button variant="ghost" onClick={() => onChange([])} data-project-all>
+              Show all
+            </Button>
+          )}
         </PopoverFooter>
       </PopoverContent>
     </Popover>
