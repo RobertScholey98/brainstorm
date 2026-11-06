@@ -1,5 +1,5 @@
-import { AlertTriangle, Check, CircleAlert, CircleHelp, CircleSlash, Clock, Info } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { AlertTriangle, Check, CircleAlert, CircleHelp, CircleSlash, Clock, ExternalLink, Info, RotateCw, Send, Trash2, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Hint } from "@/components/ui/tooltip";
 import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
+import { COMPACT, COMPACT_LABEL } from "./headerAction";
 import type { BlockId, BlockView, IterationN, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
 /** Vary has its own pick and popover, so Regenerate offers the other three. */
@@ -255,6 +256,23 @@ const ACTION_LABEL: Record<RequestPhaseAction, string> = {
   discard: "Discard fork",
 };
 
+/** What each action does, for its hint once a narrow header leaves it its icon alone. */
+const ACTION_HINT: Record<Exclude<RequestPhaseAction, "copy_phrase">, string> = {
+  retry: "Send the request again",
+  resend: "Send the request to the thread that took over",
+  withdraw: "Withdraw the request",
+  open_thread: "Open the attached thread in T3",
+  discard: "Discard this fork",
+};
+
+const ACTION_ICON: Partial<Record<RequestPhaseAction, LucideIcon>> = {
+  retry: RotateCw,
+  resend: Send,
+  withdraw: CircleSlash,
+  open_thread: ExternalLink,
+  discard: Trash2,
+};
+
 type Tone = "danger" | "warning" | "info";
 
 /**
@@ -367,28 +385,29 @@ function PhaseAction({
   send: (action: RobAction) => Promise<unknown>;
   onDiscard: () => void;
 }) {
-  const label = ACTION_LABEL[action];
   switch (action) {
     case "retry":
     case "resend":
-      return <ActionButton action={action} onClick={() => void send({ kind: "retry_request" })}>{label}</ActionButton>;
+      return <ActionButton action={action} onClick={() => void send({ kind: "retry_request" })} />;
     case "withdraw":
-      return <ActionButton action={action} onClick={() => void send({ kind: "withdraw_request" })}>{label}</ActionButton>;
+      return <ActionButton action={action} onClick={() => void send({ kind: "withdraw_request" })} />;
     case "open_thread":
       return <OpenThread view={view} />;
     case "copy_phrase":
       return <CopyPhrase title={view.session.title} />;
     case "discard":
-      return <ActionButton action={action} onClick={onDiscard}>{label}</ActionButton>;
+      return <ActionButton action={action} onClick={onDiscard} />;
   }
 }
 
 function OpenThread({ view }: { view: SessionView }) {
   if (view.thread === null) return null;
   return (
-    <Button variant="outline" nativeButton={false} render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-request-action="open_thread">
-      {ACTION_LABEL.open_thread}
-    </Button>
+    <Hint label={ACTION_HINT.open_thread} side="left">
+      <Button variant="outline" className={COMPACT} nativeButton={false} render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-request-action="open_thread">
+        <ActionLabel action="open_thread" />
+      </Button>
+    </Hint>
   );
 }
 
@@ -418,7 +437,7 @@ function CopyPhrase({ title }: { title: string }) {
     return () => clearTimeout(t);
   }, [copied]);
   return (
-    <ActionButton action="copy_phrase" onClick={() => void navigator.clipboard.writeText(takeoverPhrase(title)).then(() => setCopied(true))}>
+    <Button variant="outline" onClick={() => void navigator.clipboard.writeText(takeoverPhrase(title)).then(() => setCopied(true))} data-request-action="copy_phrase">
       {/* Both labels share one cell, so the button keeps the wider one's width and nothing beside it moves. */}
       <span className="grid *:col-start-1 *:row-start-1" data-copied={copied || undefined}>
         <span className={copied ? "invisible" : undefined}>{ACTION_LABEL.copy_phrase}</span>
@@ -427,15 +446,28 @@ function CopyPhrase({ title }: { title: string }) {
           Copied
         </span>
       </span>
-    </ActionButton>
+    </Button>
   );
 }
 
 /** Phase actions are full-height outline buttons, the same size as Regenerate and Export beside them. */
-function ActionButton({ action, onClick, children }: { action: RequestPhaseAction; onClick: () => void; children: ReactNode }) {
+function ActionButton({ action, onClick }: { action: Exclude<RequestPhaseAction, "copy_phrase">; onClick: () => void }) {
   return (
-    <Button variant="outline" onClick={onClick} data-request-action={action}>
-      {children}
-    </Button>
+    <Hint label={ACTION_HINT[action]} side="left">
+      <Button variant="outline" className={COMPACT} onClick={onClick} data-request-action={action}>
+        <ActionLabel action={action} />
+      </Button>
+    </Hint>
+  );
+}
+
+/** An action's icon and name, the name given up for the icon alone in a narrow header, as Fork and Export do. */
+function ActionLabel({ action }: { action: RequestPhaseAction }) {
+  const Icon = ACTION_ICON[action];
+  return (
+    <>
+      {Icon !== undefined && <Icon data-icon="inline-start" aria-hidden />}
+      <span className={COMPACT_LABEL}>{ACTION_LABEL[action]}</span>
+    </>
   );
 }

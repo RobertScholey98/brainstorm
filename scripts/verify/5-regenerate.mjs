@@ -159,9 +159,18 @@ try {
   check("the agent picking it up shows as working", await phase("working"), { message: "The agent is working", actions: ["open_thread", "withdraw"] });
   await window.setViewportSize({ width: 1100, height: 720 });
   check(
-    "when the top bar runs short, in the narrowest window, the title gives way before the status message",
-    await settled(() => window.evaluate(() => [document.querySelector("[data-session-title]"), document.querySelector("[data-request-message]")].map((el) => el.scrollWidth > el.clientWidth))),
-    [true, false],
+    "at 1100 with a request open the phase actions give up their labels for icons, so the title keeps 160 px or reads whole, and the status message reads whole",
+    await settled(() =>
+      window.evaluate(() => {
+        const [title, message] = [document.querySelector("[data-session-title]"), document.querySelector("[data-request-message]")];
+        return [
+          [...document.querySelectorAll("[data-phase-actions] [data-request-action]")].map((a) => Math.round(a.getBoundingClientRect().width)),
+          title.scrollWidth <= title.clientWidth || title.clientWidth >= 160,
+          message.scrollWidth <= message.clientWidth,
+        ];
+      }),
+    ),
+    [[28, 28], true, true],
   );
   check(
     "in the narrowest window, 1100, the title and message give way, and the phase actions stay clear of Regenerate",
