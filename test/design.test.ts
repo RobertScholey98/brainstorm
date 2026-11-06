@@ -29,7 +29,7 @@ function paintedSurfaces(theme: (typeof THEMES)[number]): Record<string, string>
   const out: Record<string, string> = Object.fromEntries(SURFACES.map((s) => [s, c[s]!]));
   for (const [, name = "", a = "", p = "", b = ""] of designCss().matchAll(/--([\w-]+): color-mix\(in oklab, var\(--([\w-]+)\) (\d+)%, (transparent|var\(--([\w-]+)\))\)/g)) {
     const pct = Number(p) / 100;
-    if (name.startsWith("scrollbar") || name === "accent-hover") continue;
+    if (name.startsWith("scrollbar") || name === "accent-hover" || name === "separator") continue;
     if (b === "transparent") for (const base of ["app", "card"]) out[`${name} on ${base}`] = srgbOver(c[a]!, pct, c[base]!);
     else out[name] = mixOklab(c[a]!, pct, c[b.slice(6, -1)]!);
   }
@@ -115,6 +115,13 @@ describe("design tokens", () => {
       // components/ui/chip.ts: a card fill inside a border-strong edge.
       const c = solidColours(theme);
       const faint = SURFACES.filter((s) => deltaE2000(lab(c["border-strong"]!), lab(c[s]!)) < MIN_SUBTLE_DISTANCE);
+      expect(faint).toEqual([]);
+    });
+
+    it(`draws a vertical separator at 1.5:1 or more on the window, the canvas and the card in ${theme}`, () => {
+      const c = solidColours(theme);
+      const [, a = "", p = ""] = /--separator: color-mix\(in oklab, var\(--([\w-]+)\) (\d+)%, transparent\)/.exec(designCss()) ?? [];
+      const faint = ["app", "canvas", "card"].filter((s) => contrast(srgbOver(c[a]!, Number(p) / 100, c[s]!), c[s]!) < 1.5);
       expect(faint).toEqual([]);
     });
 

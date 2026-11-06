@@ -86,6 +86,8 @@ const DERIVED: Readonly<Record<string, (v: (name: string) => string) => string>>
   "warning-subtle": (v) => `color-mix(in oklab, ${v("warning")} 12%, ${v("card")})`,
   "danger-subtle": (v) => `color-mix(in oklab, ${v("danger")} 12%, ${v("card")})`,
   "info-subtle": (v) => `color-mix(in oklab, ${v("info")} 12%, ${v("card")})`,
+  // A vertical rule between control groups, in a tone that still reads at 1.5:1 or more on the window.
+  separator: (v) => `color-mix(in oklab, ${v("fg-muted")} 40%, transparent)`,
   "scrollbar-thumb": (v) => `color-mix(in oklab, ${v("fg")} 22%, transparent)`,
   "scrollbar-thumb-hover": (v) => `color-mix(in oklab, ${v("fg")} 36%, transparent)`,
 };

@@ -103,6 +103,7 @@
   --color-fg-muted: var(--fg-muted);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-separator: var(--separator);
   --color-ring: var(--ring);
   --color-inverse: var(--inverse);
   --color-inverse-fg: var(--inverse-fg);
