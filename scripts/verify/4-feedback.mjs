@@ -107,15 +107,16 @@ try {
   check(
     "Delete asks first, in place, with Cancel focused",
     [(await window.innerText('[data-feedback="2"] [data-feedback-confirm]')).replace(/\s+/g, " "), await window.evaluate(() => document.activeElement?.hasAttribute("data-feedback-cancel"))],
-    ["Delete this comment? Cancel Delete", true],
+    ["Delete it? Cancel Delete", true],
   );
   check(
-    "The question, Cancel and Delete sit on one line in the Inspector",
+    "The question, Cancel and Delete sit on one line in the Inspector, and the question isn't cut",
     await window.evaluate(() => {
       const tops = [...document.querySelectorAll('[data-feedback="2"] [data-feedback-confirm] > *')].map((el) => Math.round(el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2));
-      return new Set(tops).size;
+      const q = document.querySelector('[data-feedback="2"] [data-feedback-question]');
+      return [new Set(tops).size, q.scrollWidth <= q.clientWidth];
     }),
-    1,
+    [1, true],
   );
   await window.keyboard.press("Enter");
   await window.waitForSelector('[data-feedback="2"] [data-feedback-confirm]', { state: "detached" });

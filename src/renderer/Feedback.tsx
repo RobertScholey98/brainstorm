@@ -265,7 +265,9 @@ function DeleteConfirm({ onDelete, onCancel }: { onDelete: () => void; onCancel:
         if (e.key === "Escape") onCancel();
       }}
     >
-      <span className="mr-auto min-w-0 truncate text-xs text-fg">Delete this comment?</span>
+      <span className="mr-auto min-w-0 truncate text-xs text-fg" data-feedback-question>
+        Delete it?
+      </span>
       <Button ref={cancel} onClick={onCancel} data-feedback-cancel>
         Cancel
       </Button>
@@ -326,7 +328,9 @@ export function TextEditor({
       </Button>
     </>
   );
-  const field = <Textarea ref={area} rows={3} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} className="resize-none" />;
+  const field = (
+    <Textarea ref={area} rows={3} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} className="resize-none" />
+  );
   return overlay ? (
     <>
       {field}
