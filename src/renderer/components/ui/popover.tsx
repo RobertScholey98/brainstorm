@@ -92,10 +92,13 @@ function OverlayHeader({ id, heading, description }: { id: string; heading: Reac
   )
 }
 
-/** A hint on the left, then the actions: the dismiss before the primary. */
+/**
+ * A hint on the left, then the actions: the dismiss before the primary. The hint stands 16 px off them, well over the
+ * 6 px inside the group, so its last words never read as one phrase with the Ctrl+Enter key.
+ */
 function PopoverFooter({ hint, children }: { hint?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div data-slot="popover-footer" className="-mx-3 -mb-3 flex items-center gap-2 border-t px-3 py-2">
+    <div data-slot="popover-footer" className="-mx-3 -mb-3 flex items-center gap-4 border-t px-3 py-2">
       {hint !== undefined && <span className="min-w-0 truncate text-xs text-fg-muted">{hint}</span>}
       <span className="ml-auto flex shrink-0 items-center gap-1.5">{children}</span>
     </div>
