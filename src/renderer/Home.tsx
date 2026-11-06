@@ -167,10 +167,13 @@ const clearLabel = (searched: boolean, filtered: boolean) =>
   searched && filtered ? "Clear search and filters" : searched ? "Clear search" : "Clear filters";
 
 /** Home with cards to show but none the search and filters let through, and the one step that shows some again. */
+/** Every message home shows in place of cards sits just under what is above it, so the page top never moves. */
+const MESSAGE = "flex-none rounded-none py-12";
+
 function NoneShown({ title, description, action, onAction, data }: { title: string; description: string; action: string; onAction: () => void; data: string }) {
   return (
     // Under the query row it answers, not mid-page: the page's height says nothing about this.
-    <Empty className="flex-none rounded-none py-12" data-home-none={data}>
+    <Empty className={MESSAGE} data-home-none={data}>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <SearchX aria-hidden />
@@ -287,7 +290,7 @@ function OverviewCard({
 
 function HomeEmpty() {
   return (
-    <Empty className="rounded-none" data-home-empty>
+    <Empty className={MESSAGE} data-home-empty>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Lightbulb aria-hidden />
@@ -301,7 +304,7 @@ function HomeEmpty() {
 
 function ListError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <Empty className="rounded-none" data-home-error>
+    <Empty className={MESSAGE} data-home-error>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <CloudOff aria-hidden className="text-danger" />

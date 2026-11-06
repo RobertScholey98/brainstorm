@@ -962,6 +962,11 @@ try {
   );
   check("a failed home keeps its page heading over the error", (await window.textContent("[data-home-overview] h1"))?.trim(), "All brainstorms");
   check(
+    "and its message sits under the heading as a no-match sits under the query row, not down the page",
+    await window.evaluate(() => Math.round(document.querySelector("[data-home-error]").getBoundingClientRect().top - document.querySelector("[data-slot=page-header]").getBoundingClientRect().bottom)),
+    20,
+  );
+  check(
     "its icon tile takes the chip recipe, so it reads off the canvas",
     await window.$eval('[data-home-error] [data-slot="empty-icon"]', (tile) => {
       const style = getComputedStyle(tile);
