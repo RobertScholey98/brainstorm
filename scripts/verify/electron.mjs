@@ -45,10 +45,13 @@ export function checks() {
   };
 }
 
-/** `sessions` handles the session list requests from the first load on, for launch states a running app can't reach. */
-export async function launch(home, env, { sessions } = {}) {
+/**
+ * `sessions` handles the session list requests from the first load on, for launch states a running app can't reach.
+ * `args` are extra Chromium switches.
+ */
+export async function launch(home, env, { sessions, args = [] } = {}) {
   const startedAt = Date.now();
-  const app = await _electron.launch({ args: [root], env, cwd: root });
+  const app = await _electron.launch({ args: [root, ...args], env, cwd: root });
   if (sessions !== undefined) await app.context().route("**/v1/ui/sessions", sessions);
   const window = await app.firstWindow();
   const errors = [];

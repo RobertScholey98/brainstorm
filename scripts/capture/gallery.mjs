@@ -198,6 +198,12 @@ function must(step, r) {
   return r.json.data;
 }
 
+/**
+ * Page shots render at one device pixel per CSS pixel. On a scaled display a 1 px rule is one device pixel, which a
+ * shot at CSS size blends to about two thirds of its token, and reviewers measured those blends as the colours.
+ */
+const PIXELS = ["--force-device-scale-factor=1"];
+
 /** The fake T3's environment for a home, minus ELECTRON_RUN_AS_NODE, which would start Electron as plain Node. */
 const appEnv = (home) => (({ ELECTRON_RUN_AS_NODE: _, ...rest }) => rest)(demoEnv(home));
 
@@ -206,7 +212,7 @@ const appEnv = (home) => (({ ELECTRON_RUN_AS_NODE: _, ...rest }) => rest)(demoEn
  * route goes on before the window's first load.
  */
 async function startRouted(env, route) {
-  const app = await _electron.launch({ args: [root], env, cwd: root });
+  const app = await _electron.launch({ args: [root, ...PIXELS], env, cwd: root });
   await app.context().route("**/v1/ui/sessions", route);
   const window = await app.firstWindow();
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setIgnoreMouseEvents(true));
@@ -215,7 +221,7 @@ async function startRouted(env, route) {
 }
 
 async function start(home, env) {
-  const run = await launch(home, env);
+  const run = await launch(home, env, { args: PIXELS });
   // The window is real and on screen, so the desk's own pointer would otherwise leave hover states in the shots.
   await run.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setIgnoreMouseEvents(true));
   await setCombo(run.window, COMBOS[0]);
