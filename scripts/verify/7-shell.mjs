@@ -170,13 +170,16 @@ try {
           const [e, p] = [el.getBoundingClientRect(), pane.getBoundingClientRect()];
           return [Math.round(e.left - p.left), Math.round(p.right - e.right)];
         };
+        const scroller = document.querySelector('[data-slot="sidebar-content"]').getBoundingClientRect();
         return {
           sidebar: inset(document.querySelector("[data-overview]"), document.querySelector('[data-slot="sidebar-inner"]')),
           overview: inset(document.querySelector("[data-home-overview] ul"), document.querySelector("[data-home-overview]")),
+          // The thumb is inset 2 px in its 10 px gutter, so a scroller ending 4 px short of the card puts it 6 px off.
+          thumbOffCard: Math.round(document.querySelector('[data-slot="sidebar-inset-card"]').getBoundingClientRect().left - scroller.right) + 2,
         };
       }),
     ),
-    { sidebar: [8, 8], overview: [24, 24] },
+    { sidebar: [8, 8], overview: [24, 24], thumbOffCard: 6 },
   );
   check("home shows no Regenerate or Export", [await window.$("[data-regenerate-toggle]"), await window.$("[data-export]")], [null, null]);
   await window.waitForTimeout(300);

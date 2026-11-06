@@ -371,7 +371,7 @@ function SidebarSeparator({
     <Separator
       data-slot="sidebar-separator"
       data-sidebar="separator"
-      className={cn("mx-2 bg-border data-horizontal:w-auto", className)}
+      className={cn("mr-0.5 ml-2 bg-border data-horizontal:w-auto", className)}
       {...props}
     />
   )
@@ -383,8 +383,10 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="sidebar-content"
       data-sidebar="content"
       className={cn(
-        // Out into the container's padding by the gutter, so a row's fill sits as far off both edges.
-        "scroll-gutter -mx-(--scrollbar) flex min-h-0 flex-1 flex-col gap-0 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+        // Out into the container's padding by the gutter on the left, and only 4 px on the right, where the main card
+        // starts: a group pads its right side 6 px less, so a row's fill sits as far off both edges and the thumb
+        // stands 6 px off the card, as the card's own thumbs stand off its edge.
+        "scroll-gutter -mr-1 -ml-(--scrollbar) flex min-h-0 flex-1 flex-col gap-0 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
         className
       )}
       {...props}
@@ -397,7 +399,7 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-group"
       data-sidebar="group"
-      className={cn("relative flex w-full min-w-0 flex-col p-2", className)}
+      className={cn("relative flex w-full min-w-0 flex-col py-2 pr-0.5 pl-2", className)}
       {...props}
     />
   )
