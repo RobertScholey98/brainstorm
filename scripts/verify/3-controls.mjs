@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, showBoard, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, settled, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-3");
@@ -44,6 +44,11 @@ try {
 
   const valueRight = () => run.window.$eval('[data-control="spinSeconds"] [data-value]', (el) => Math.round(el.getBoundingClientRect().right));
   const valueAt = [await valueRight()];
+  check(
+    "at rest a slider's value ends on the column's right edge, with every other control",
+    await run.window.$eval('[data-control="spinSeconds"]', (row) => Math.round(row.getBoundingClientRect().right - row.querySelector("[data-value]").getBoundingClientRect().right)),
+    0,
+  );
   await run.window.focus(slider);
   for (let i = 0; i < 10; i++) await run.window.keyboard.press("ArrowRight");
   check(
@@ -55,9 +60,19 @@ try {
   );
   await run.window.click(hex);
   check(
-    "a focused text field takes a 1 px ring outside its ring-coloured edge, not a 2 px one",
-    await run.window.$eval('[data-control="accent"] div:has(> input)', (el) => getComputedStyle(el).boxShadow.match(/0px 0px 0px [1-9]px/g)),
-    ["0px 0px 0px 1px"],
+    "a focused text field turns its 1 px edge the ring tone and adds no ring, so it is no heavier than the edges round it",
+    // Read once its colour transition has finished.
+    await settled(() =>
+      run.window.$eval('[data-control="accent"] div:has(> input)', (el) => {
+        const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--ring)" }));
+        const ring = getComputedStyle(probe).color;
+        probe.remove();
+        const style = getComputedStyle(el);
+        const rest = getComputedStyle(document.querySelector('[data-slot="select-trigger"]')).borderTopWidth;
+        return [style.borderTopWidth === rest, style.borderTopColor === ring, /0px 0px 0px [1-9]/.test(style.boxShadow)];
+      }),
+    ),
+    [true, true, false],
   );
   await run.window.keyboard.press("Control+A");
   await run.window.keyboard.type("#00f0ff");
@@ -67,17 +82,21 @@ try {
   valueAt.push(await valueRight());
   check("a slider's value keeps its right edge once it is overridden", new Set(valueAt).size, 1);
   check(
-    "each overridden row puts its reset last, at one x, and its dot 6 px off the pane edge",
+    "each overridden row opens its reset just before the row's end, which keeps the column edge, and its dot 6 px off the pane edge",
     await run.window.evaluate(() => {
       const aside = document.querySelector("aside[aria-label=Inspector]");
       const pane = { left: aside.getBoundingClientRect().left + aside.clientLeft };
       const rows = [...document.querySelectorAll("[data-control][data-overridden]")];
       return {
-        resets: new Set(rows.map((r) => Math.round(r.querySelector("[data-control-reset]").getBoundingClientRect().right))).size,
+        ends: rows.map((r) => {
+          const line = r.firstElementChild.getBoundingClientRect();
+          const end = r.firstElementChild.lastElementChild.lastElementChild.getBoundingClientRect();
+          return [Math.round(line.right - end.right), r.querySelector("[data-control-reset]").getBoundingClientRect().right <= end.right];
+        }),
         dots: rows.map((r) => Math.round(r.querySelector("[data-overridden-mark]").getBoundingClientRect().left - pane.left)),
       };
     }),
-    { resets: 1, dots: [6, 6] },
+    { ends: [[0, true], [0, true]], dots: [6, 6] },
   );
   const adjusted = {
     panel: { spinSeconds: "3.4", accent: "#00f0ff" },

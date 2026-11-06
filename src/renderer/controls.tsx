@@ -51,16 +51,17 @@ function useBound<T extends AppearanceType>({ props, bindings }: ControlProps, t
   };
 }
 
-/** `holdReset` keeps the reset's place while nothing is overridden, so a value beside it never jumps when one is set. */
+/**
+ * A control's label line: the label, then the row's end, which keeps the column's right edge: a slider's value, a
+ * switch, or for a field, its reset. An overridden row's reset opens just before that end, so the end never moves.
+ */
 function Row({
   bound,
   trailing,
-  holdReset = false,
   children,
 }: {
   bound: Pick<Bound<AppearanceType>, "scope" | "spec" | "label">;
   trailing?: ReactNode;
-  holdReset?: boolean;
   children?: ReactNode;
 }) {
   const { scope, spec, label } = bound;
@@ -72,17 +73,14 @@ function Row({
         {overridden && <span aria-hidden className="absolute top-1/2 -left-2.5 size-1.5 -translate-y-1/2 rounded-full bg-fg" data-overridden-mark />}
         <span className="truncate text-sm" data-control-label>{label}</span>
         <span className="ml-auto flex items-center gap-1">
-          {trailing}
-          {/* Last in the row, so every reset sits at one x beside the value it resets. */}
-          {overridden ? (
+          {overridden && (
             <Hint label="Reset to the agent's value" side="left">
               <Button variant="ghost" size="icon-xs" aria-label={`Reset ${label}`} onClick={() => scope.reset(spec.name)} data-control-reset>
                 <RotateCcw aria-hidden />
               </Button>
             </Hint>
-          ) : (
-            holdReset && <span aria-hidden className="size-6" data-reset-slot />
           )}
+          {trailing}
         </span>
       </div>
       {children}
@@ -102,7 +100,6 @@ function Slider(control: ControlProps) {
   return (
     <Row
       bound={bound}
-      holdReset
       trailing={
         <span className="text-xs tabular-nums text-fg-muted" data-value>
           {formatNumber(value, spec.step)}
@@ -197,7 +194,7 @@ function ColourField({ bound }: { bound: Bound<"color"> }) {
   };
   return (
     <Row bound={bound}>
-      <div className="flex h-7 items-center gap-2 rounded-md border border-border-strong pr-2 pl-1 transition-colors focus-within:border-ring focus-within:ring-1 focus-within:ring-ring dark:bg-border-strong/30">
+      <div className="flex h-7 items-center gap-2 rounded-md border border-border-strong pr-2 pl-1 transition-colors focus-within:border-ring dark:bg-border-strong/30">
         <input
           type="color"
           aria-label={`${label} colour`}
