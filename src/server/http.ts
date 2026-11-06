@@ -153,6 +153,7 @@ export type HttpOptions = { readonly service: Brainstorm; readonly agentToken: s
 export function createHttpHandler(options: HttpOptions, port: () => number) {
   const { service } = options;
   const streams = new Set<ServerResponse>();
+  let closing = false;
 
   const withSession =
     (fn: (id: SessionId, input: { query: URLSearchParams; body: unknown }) => Promise<Result<unknown>>) =>
@@ -266,6 +267,12 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
   };
 
   const openEvents = (req: IncomingMessage, res: ServerResponse) => {
+    // The window reopens its stream as soon as one ends, and one that opens during shutdown would hold the server open.
+    if (closing) {
+      res.writeHead(503, { connection: "close" });
+      res.end();
+      return;
+    }
     res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     res.write(": connected\n\n");
     streams.add(res);
@@ -312,6 +319,7 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
   return {
     listener: (req: IncomingMessage, res: ServerResponse) => void listener(req, res),
     closeStreams: () => {
+      closing = true;
       for (const res of streams) res.end();
       streams.clear();
     },
