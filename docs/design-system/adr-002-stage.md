@@ -38,7 +38,7 @@ Measured in the round 3 capture, with the panes at their default widths for each
 
 ### Why zoom, not transform
 
-`zoom` changes layout size, so the frame body's box is the scaled size and the canvas scrollbars, centring and sticky title all follow it. A `transform: scale()` leaves the unscaled box in layout, which would bring back the sideways scroll the stage exists to remove. Pins are placed inside the frame body, so the runtime divides its rect deltas by the body's measured scale (`getBoundingClientRect().width ÷ offsetWidth`) and a pin stays on its element at any zoom.
+`zoom` changes layout size, so the frame body's box is the scaled size and the canvas scrollbars, centring and sticky title all follow it. A `transform: scale()` leaves the unscaled box in layout, which would bring back the sideways scroll the stage exists to remove. Pins are chrome, not design, so they keep one size at any zoom. A pin stays inside the frame body, so it scrolls and clips with it, and takes `zoom: 1 / scale` itself, so its 20 px face and 26 px hit area are screen pixels. The runtime places it in viewport pixels from the body's corner, scaling the body's own scroll offsets by its measured scale (`getBoundingClientRect().width ÷ offsetWidth`), so a pin stays on its element at any zoom. Round 4 found pins shrinking to 13 px on the 64% board before this.
 
 ### What keeps working
 

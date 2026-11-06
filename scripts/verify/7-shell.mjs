@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "nod
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, root, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, root, settled, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("shell");
@@ -367,6 +367,19 @@ try {
     "at 1100 beside the Inspector the board zooms both frames to fit one row, says so in the bar, and never scrolls sideways",
     [await row(), await pinAt(1)],
     [{ sideways: false, tops: 1, inside: true }, true],
+  );
+  check(
+    "a pin on the zoomed board keeps its 20 px face and 26 px hit area, on its element",
+    await settled(async () => [
+      await window.getAttribute("[data-canvas-zoom]", "data-canvas-zoom"),
+      await rouletteCanvas.$eval('.bs-pin[data-pin="1"]', (p) => {
+        const r = p.getBoundingClientRect();
+        const hit = (x, y) => document.elementFromPoint(x, y) === p;
+        return { face: [Math.round(r.width), Math.round(r.height)], hit: [hit(r.left - 2.5, r.top + r.height / 2), hit(r.left + r.width / 2, r.bottom + 2.5)] };
+      }),
+      await pinAt(1),
+    ]).then(([zoom, ...rest]) => [Number(zoom) < 100, ...rest]),
+    [true, { face: [20, 20], hit: [true, true] }, true],
   );
   await window.click("[data-pick-toggle]");
   await window.waitForSelector("[data-pick-hint]");

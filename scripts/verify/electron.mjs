@@ -88,6 +88,22 @@ export async function showBoard(window, canvas) {
   await canvas.waitForSelector('#canvas[data-view="board"]');
 }
 
+/**
+ * Reads `read` until it gives the same value for `quietMs`, so a check after a resize or an animation sees where the
+ * layout came to rest, not a value from partway through. Gives the last value read at the timeout.
+ */
+export async function settled(read, { quietMs = 400, timeoutMs = 6000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let last = JSON.stringify(await read());
+  let since = Date.now();
+  while (Date.now() - since < quietMs && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 50));
+    const next = JSON.stringify(await read());
+    if (next !== last) [last, since] = [next, Date.now()];
+  }
+  return last === undefined ? undefined : JSON.parse(last);
+}
+
 export const inBlock = (blockId, part) => `div[data-bid="${blockId}"] [data-part="${part}"]`;
 
 export async function shot(window, shots, name) {

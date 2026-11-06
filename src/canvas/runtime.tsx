@@ -312,6 +312,8 @@ function Canvas() {
                     key={p.id}
                     type="button"
                     className="bs-pin"
+                    // The pin undoes its frame's zoom, so it keeps one size and hit area at any fit.
+                    style={zoom === undefined ? undefined : { zoom: 1 / zoom }}
                     ref={(el) => {
                       if (el === null) return;
                       markers.set(p.id, el);
@@ -398,20 +400,21 @@ function layoutPins(): void {
     const index = stacked.get(anchor) ?? 0;
     stacked.set(anchor, index + 1);
     const b = body.getBoundingClientRect();
+    // The body's own sizes and scroll offsets are in its unzoomed px, rects in the viewport's. The pin undoes the zoom,
+    // so it is placed in viewport px from the body's corner.
+    const k = body instanceof HTMLElement && body.offsetWidth > 0 ? b.width / body.offsetWidth : 1;
     let x: number;
     let y: number;
     if (anchor === body) {
-      x = body.clientWidth - PIN_SIZE - 6;
+      x = body.clientWidth * k - PIN_SIZE - 6;
       y = 6;
     } else {
-      // Rects are in the viewport, the pin is placed inside a frame body the stage may have zoomed.
-      const k = body instanceof HTMLElement && body.offsetWidth > 0 ? b.width / body.offsetWidth : 1;
       const r = anchor.getBoundingClientRect();
-      x = (r.right - b.left) / k - body.clientLeft + body.scrollLeft - PIN_SIZE / 2;
-      y = (r.top - b.top) / k - body.clientTop + body.scrollTop - PIN_SIZE / 2;
+      x = r.right - b.left + (body.scrollLeft - body.clientLeft) * k - PIN_SIZE / 2;
+      y = r.top - b.top + (body.scrollTop - body.clientTop) * k - PIN_SIZE / 2;
     }
-    x = Math.min(Math.max(x - index * (PIN_SIZE + 2), 2), body.scrollWidth - PIN_SIZE - 2);
-    y = Math.min(Math.max(y, 2), body.scrollHeight - PIN_SIZE - 2);
+    x = Math.min(Math.max(x - index * (PIN_SIZE + 2), 2), body.scrollWidth * k - PIN_SIZE - 2);
+    y = Math.min(Math.max(y, 2), body.scrollHeight * k - PIN_SIZE - 2);
     // The translate property, not transform: a hover or pulse scale applies inside it, so it never scales the offset.
     const translate = `${Math.round(x)}px ${Math.round(y)}px`;
     if (marker.style.translate !== translate) marker.style.translate = translate;
@@ -564,7 +567,8 @@ body {
   box-shadow: var(--bs-elevation-sm); cursor: pointer; scroll-margin: 48px; transition: scale 120ms ease-out, box-shadow 120ms ease-out;
 }
 .bs-pin[data-placed] { display: grid; }
-.bs-pin::after { content: ""; position: absolute; inset: -3px; }
+/* The hit area sits 3 px past the face; an inset is measured inside the 2 px border, so it is 5 px. */
+.bs-pin::after { content: ""; position: absolute; inset: -5px; }
 .bs-pin[data-status="addressed"] { background: var(--bs-card); color: var(--bs-accent); border-color: var(--bs-accent); }
 .bs-pin[data-status="confirmed"] {
   background: var(--bs-muted); color: var(--bs-fg-muted);
