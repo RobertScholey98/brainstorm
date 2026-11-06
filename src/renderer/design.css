@@ -1,7 +1,7 @@
 /* Generated from src/core/design.ts by npm run design:tokens. Edit that file, not this one. */
 :root {
-  --app: #f6f5f2;
-  --canvas: #efeeea;
+  --app: #eae9e4;
+  --canvas: #f6f5f2;
   --card: #ffffff;
   --raised: #ffffff;
   --muted: #f1f0ec;
@@ -9,12 +9,12 @@
   --fg-muted: #66655f;
   --border: #e6e5e1;
   --border-strong: #d4d3cd;
-  --ring: #7a7973;
+  --ring: #73726c;
   --inverse: #1f1f1e;
   --inverse-fg: #fafaf9;
-  --success: #4e7514;
+  --success: #497011;
   --warning: #8a5300;
-  --danger: #c03a2f;
+  --danger: #bb372c;
   --info: #2f63c4;
   --elevation-xs: 0 1px 2px rgb(0 0 0 / 0.06);
   --elevation-sm: 0 1px 3px rgb(0 0 0 / 0.08), 0 1px 2px rgb(0 0 0 / 0.04);
@@ -23,7 +23,7 @@
   --accent: #0b7570;
   --accent-fg: #ffffff;
   --hover: color-mix(in oklab, var(--fg) 6%, transparent);
-  --selected: color-mix(in oklab, var(--accent) 14%, transparent);
+  --selected: color-mix(in oklab, var(--accent) 18%, transparent);
   --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--fg));
   --success-subtle: color-mix(in oklab, var(--success) 12%, var(--card));
   --warning-subtle: color-mix(in oklab, var(--warning) 12%, var(--card));
@@ -37,16 +37,16 @@
 :root { color-scheme: light; }
 @media (prefers-color-scheme: dark) {
   :root {
-    --app: #1c1c1a;
-    --canvas: #21211f;
-    --card: #262624;
-    --raised: #30302d;
-    --muted: #32322e;
+    --app: #1a1a18;
+    --canvas: #232321;
+    --card: #2b2b29;
+    --raised: #343431;
+    --muted: #383834;
     --fg: #ecebe8;
     --fg-muted: #a8a7a1;
     --border: #3a3a36;
     --border-strong: #55554f;
-    --ring: #8a8983;
+    --ring: #94938d;
     --inverse: #ecebe8;
     --inverse-fg: #1f1f1d;
     --success: #9ccc5a;

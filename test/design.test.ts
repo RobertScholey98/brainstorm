@@ -10,6 +10,8 @@ const MIN_HUE_DISTANCE = 20;
 const STATUSES = ["success", "warning", "danger", "info"] as const;
 /** Two subtle fills closer than this read as one tint at a glance. */
 const MIN_SUBTLE_DISTANCE = 5;
+/** The smallest surface step that reads without leaning on a border. */
+const MIN_STEP = 2.5;
 
 const srgbOver = (fg: string, alpha: number, base: string) => {
   const ch = (hex: string, i: number) => Number.parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
@@ -89,6 +91,22 @@ describe("design tokens", () => {
           .filter((p) => p.distance < MIN_SUBTLE_DISTANCE),
       );
       expect(close).toEqual([]);
+    });
+
+    it(`makes the card the brightest layer and lets the window recede behind the canvas in ${theme}`, () => {
+      const c = solidColours(theme);
+      const L = (s: string) => lab(c[s]!)[0];
+      expect(L("card")).toBeGreaterThan(L("canvas"));
+      expect(L("canvas")).toBeGreaterThan(L("app"));
+      expect(deltaE2000(lab(c.card!), lab(c.canvas!)), "a home card lifts off the canvas").toBeGreaterThanOrEqual(MIN_STEP);
+      expect(deltaE2000(lab(c.canvas!), lab(c.app!)), "the canvas steps off the window").toBeGreaterThanOrEqual(MIN_STEP);
+    });
+
+    it(`keeps a selected row apart from a hovered one in ${theme}`, () => {
+      const painted = paintedSurfaces(theme);
+      for (const base of ["app", "card"]) {
+        expect(deltaE2000(lab(painted[`selected on ${base}`]!), lab(painted[`hover on ${base}`]!)), base).toBeGreaterThanOrEqual(MIN_SUBTLE_DISTANCE);
+      }
     });
 
     it(`keeps the accent and every status colour at least ${MIN_HUE_DISTANCE} CIEDE2000 apart in ${theme}`, () => {

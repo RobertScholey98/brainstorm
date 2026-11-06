@@ -1,4 +1,4 @@
-# ADR 001: Colour tokens, closed scales and the accent
+| `info` | 4.67, 5.20, 5.67, 5.67, 4.97 | 7.89, 7.13, 6.43, 5.66, 5.33 || `danger` | 4.67, 5.21, 5.68, 5.68, 4.98 | 7.63, 6.89, 6.21, 5.47, 5.16 || `warning` | 5.21, 5.81, 6.33, 6.33, 5.55 | 9.79, 8.85, 7.97, 7.02, 6.62 || `success` | 4.79, 5.34, 5.82, 5.82, 5.10 | 9.29, 8.40, 7.56, 6.66, 6.28 || `accent` | 4.55, 5.08, 5.54, 5.54, 4.86 | 8.16, 7.37, 6.64, 5.85, 5.51 || `ring` | 3.97, 4.43, 4.82, 4.82, 4.23 | 5.66, 5.11, 4.61, 4.05, 3.82 || `fg-muted` | 4.81, 5.36, 5.85, 5.85, 5.13 | 7.23, 6.53, 5.88, 5.18, 4.88 || `fg` | 14.18, 15.81, 17.24, 17.24, 15.12 | 14.62, 13.21, 11.90, 10.48, 9.88 |# ADR 001: Colour tokens, closed scales and the accent
 
 Status: accepted. Rob picked the Lagoon accent at the foundation checkpoint on 2026-11-05, and approved the rest of the direction.
 
@@ -22,28 +22,28 @@ Each colour has one meaning. A role is named for what it does, not for its shade
 
 | Role | Light | Dark | Meaning |
 | --- | --- | --- | --- |
-| `app` | `#f6f5f2` | `#1c1c1a` | The window behind everything, and the sidebar |
-| `canvas` | `#efeeea` | `#21211f` | The canvas behind the frames |
-| `card` | `#ffffff` | `#262624` | A frame body, the inspector and inputs |
-| `raised` | `#ffffff` | `#30302d` | Popovers, menus and the select list |
-| `muted` | `#f1f0ec` | `#32322e` | A quiet fill, such as a secondary button or a confirmed pin |
+| `app` | `#eae9e4` | `#1a1a18` | The window behind everything, and the sidebar |
+| `canvas` | `#f6f5f2` | `#232321` | The canvas behind the frames |
+| `card` | `#ffffff` | `#2b2b29` | A frame body, the inspector and inputs |
+| `raised` | `#ffffff` | `#343431` | Popovers, menus and the select list |
+| `muted` | `#f1f0ec` | `#383834` | A quiet fill, such as a secondary button or a confirmed pin |
 | `hover` | `fg` at 6% | same mix | The pointer is over it |
-| `selected` | `accent` at 14% | same mix | It is the chosen item |
+| `selected` | `accent` at 18% | same mix | It is the chosen item |
 | `fg` | `#1b1b1a` | `#ecebe8` | Body text |
 | `fg-muted` | `#66655f` | `#a8a7a1` | Secondary text and icons |
 | `border` | `#e6e5e1` | `#3a3a36` | Dividers and card edges |
 | `border-strong` | `#d4d3cd` | `#55554f` | Input and control edges |
-| `ring` | `#7a7973` | `#8a8983` | The focus ring, always at full strength |
+| `ring` | `#73726c` | `#94938d` | The focus ring, always at full strength |
 | `inverse`, `inverse-fg` | `#1f1f1e`, `#fafaf9` | `#ecebe8`, `#1f1f1d` | The neutral solid fill of the default button, a checked checkbox and an on switch |
 | `accent`, `accent-fg`, `accent-hover` | see below | see below | Brainstorm itself: the mark, the primary action, open pins, selection |
-| `success` | `#4e7514` | `#9ccc5a` | Attached, confirmed, done |
+| `success` | `#497011` | `#9ccc5a` | Attached, confirmed, done |
 | `warning` | `#8a5300` | `#f2b860` | Needs Rob before it can continue |
-| `danger` | `#c03a2f` | `#ff8a7f` | Failed, destructive |
+| `danger` | `#bb372c` | `#ff8a7f` | Failed, destructive |
 | `info` | `#2f63c4` | `#86aeff` | Neutral status, such as the agent asking a question |
 
 Each status colour has a `-subtle` partner, the status mixed 12% into `card`, for a tinted box behind status text. Every derived token is a `color-mix` in oklab over the solids, the same expression in both themes, so a derived value can't drift from its solid.
 
-The neutrals are warm greys, a little yellow, so the app sits next to Claude desktop without looking cold beside it. In dark, each layer is lighter than the one below it, `app` to `card` to `raised`, because a shadow barely shows on a dark ground. The canvas is one step darker than the window in light, so white frames stand out, and one step lighter in dark, so a frame no longer reads as a hole (W15, W16).
+The neutrals are warm greys, a little yellow, so the app sits next to Claude desktop without looking cold beside it. In both themes the layers step up from `app` to `canvas` to `card`, and in dark on to `raised`, because a shadow barely shows on a dark ground. The window and sidebar recede, and the card is the brightest layer, the way both exemplars draw it. Each step is at least 2.5 CIEDE2000, a test in `test/design.test.ts` checks the order and the steps, and the amendment below says why the order changed in round 3.
 
 Contrast, measured with `contrast()` in `design.ts` against `app`, `canvas`, `card`, `raised` and `muted` in that order:
 
@@ -153,3 +153,28 @@ These are open and belong to later phases.
 - The selected segment in a toggle group now uses `bg-selected`, but the group's track and the segment's edge need the kit pass to read clearly (W6, kit).
 - Tooltips use `bg-fg text-card` and sit on `z-popover`, the same layer as popovers. The kit pass moves them to `inverse` and `z-tooltip`.
 - The sheet scrim maps `bg-black/10` to `bg-fg/10`, which lightens the backdrop in dark. Nothing opens a sheet at desktop widths today.
+
+## Amendments
+
+### Round 3: the card is the brightest layer (2026-11-06)
+
+Round 3 found that in light the main card read as a recessed beige hole (SA3-1, U1). The window and sidebar were `#f6f5f2`, and the canvas that fills the main card was one step darker at `#efeeea`, so home put white cards in a well darker than the sidebar beside it. Both exemplars do the opposite. Their sidebar recedes and the main area is the brightest thing on screen. In dark the home cards barely lifted off the canvas (OA3-16, U28), and hover and selected rows read alike (SC3-3, U29).
+
+The surfaces now step up in one order in both themes, `app` to `canvas` to `card`.
+
+| Token | Light, old | Light, new | Dark, old | Dark, new |
+| --- | --- | --- | --- | --- |
+| `app` | `#f6f5f2` | `#eae9e4` | `#1c1c1a` | `#1a1a18` |
+| `canvas` | `#efeeea` | `#f6f5f2` | `#21211f` | `#232321` |
+| `card` | `#ffffff` | `#ffffff` | `#262624` | `#2b2b29` |
+| `raised` | `#ffffff` | `#ffffff` | `#30302d` | `#343431` |
+| `muted` | `#f1f0ec` | `#f1f0ec` | `#32322e` | `#383834` |
+| `ring` | `#7a7973` | `#73726c` | `#8a8983` | `#94938d` |
+| `success` | `#4e7514` | `#497011` | unchanged | unchanged |
+| `danger` | `#c03a2f` | `#bb372c` | unchanged | unchanged |
+| `selected` | `accent` at 14% | `accent` at 18% | same mix | same mix |
+
+- **The steps.** Card to canvas is 2.53 CIEDE2000 in both themes, canvas to window 2.75 in light and 2.83 in dark. The old dark card sat 1.6 off the canvas.
+- **What moved with them.** A darker light window took `success` and `danger` under 4.5:1 on it, so both went one step darker. They keep their 20 CIEDE2000 from the accent and each other. The selected tint went from 14% to 18%, so it sits at least 5 CIEDE2000 from hover on the window and the card. That took the ring under 3:1 on the selected fill, so the ring went one step darker in light and lighter in dark.
+- **The tests.** `test/design.test.ts` checks the order, the 2.5 step between each pair of layers, and the hover to selected distance, beside the contrast and hue tests it already ran.
+
