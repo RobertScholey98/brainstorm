@@ -175,12 +175,16 @@ try {
   const withdrawAt = () => window.$eval('[data-request-action="withdraw"]', (el) => Math.round(el.getBoundingClientRect().left));
   const at = [await withdrawAt()];
   check(
-    "the request's actions sit in the header's right cluster, a divider between them and Regenerate",
+    "the request's actions sit in the header's right cluster, a border-strong divider between them and Regenerate",
     await window.evaluate(() => {
       const right = (s) => document.querySelector(s).getBoundingClientRect();
-      return [right("[data-phase-actions]").right <= right("[data-phase-divider]").left, right("[data-phase-divider]").right <= right("[data-regenerate-toggle]").left];
+      return [
+        right("[data-phase-actions]").right <= right("[data-phase-divider]").left,
+        right("[data-phase-divider]").right <= right("[data-regenerate-toggle]").left,
+        getComputedStyle(document.querySelector("[data-phase-divider]")).backgroundColor === getComputedStyle(document.querySelector("[data-export]")).borderTopColor,
+      ];
     }),
-    [true, true],
+    [true, true, true],
   );
   await window.click('[data-request-action="open_thread"]');
   await window.waitForTimeout(300);
