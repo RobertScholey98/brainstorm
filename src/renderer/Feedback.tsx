@@ -187,13 +187,15 @@ function FeedbackItem({
       data-focused={focused || undefined}
       onPointerEnter={() => onHover(f.id)}
       onPointerLeave={() => onHover(null)}
-      className="group relative -mx-1 rounded-lg px-1 py-2 hover:bg-hover/60 data-[focused]:bg-selected"
+      className="group relative -mx-1 rounded-lg px-1 py-2 hover:bg-hover/60 data-[focused]:bg-selected scrolling:mr-1"
     >
       <div className="flex gap-2">
-        <PinNumber aria-hidden n={f.id} state={f.status.state} className="mt-px" />
+        {/* On the first line of text: the comment's at rest, the field's while editing it. */}
+        <PinNumber aria-hidden n={f.id} state={f.status.state} className={editing ? "mt-1.5" : "mt-px"} />
         <div className="min-w-0 flex-1">
           {editing ? (
             <TextEditor
+              row
               initial={f.text}
               submitLabel="Save"
               onCancel={() => setEditing(false)}
@@ -238,12 +240,24 @@ function FeedbackItem({
                   }}
                 />
               ) : (
-                <div className="flex gap-1 pt-1.5 empty:hidden">
-                  {FEEDBACK_ACTIONS[f.status.state].map((action) => (
-                    <Button key={action} variant={action === "delete" ? "destructive" : "outline"} onClick={() => run(action)} data-feedback-action={action}>
-                      {ACTION_LABEL[action]}
-                    </Button>
-                  ))}
+                <div className="flex gap-2 pt-1.5 empty:hidden">
+                  {FEEDBACK_ACTIONS[f.status.state].map((action) =>
+                    action === "edit" ? (
+                      // Held as wide as the Cancel that takes its place, so Delete stays under the pointer when it asks.
+                      <span key={action} className="grid *:col-start-1 *:row-start-1">
+                        <Button variant="outline" onClick={() => run(action)} data-feedback-action={action}>
+                          {ACTION_LABEL[action]}
+                        </Button>
+                        <span aria-hidden className="invisible flex">
+                          <Button variant="ghost">Cancel</Button>
+                        </span>
+                      </span>
+                    ) : (
+                      <Button key={action} variant={action === "delete" ? "destructive" : "outline"} onClick={() => run(action)} data-feedback-action={action}>
+                        {ACTION_LABEL[action]}
+                      </Button>
+                    ),
+                  )}
                 </div>
               )}
             </>
@@ -254,7 +268,10 @@ function FeedbackItem({
   );
 }
 
-/** Delete asks once, in place, with Cancel focused so a second Enter keeps the comment. */
+/**
+ * Delete asks once, in place, with Cancel focused so a second Enter keeps the comment. Cancel takes Edit's place and
+ * Delete stays where it was, so the pointer that pressed Delete is still on it; the question follows them.
+ */
 function DeleteConfirm({ onDelete, onCancel }: { onDelete: () => void; onCancel: () => void }) {
   const cancel = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => cancel.current?.focus(), []);
@@ -262,21 +279,21 @@ function DeleteConfirm({ onDelete, onCancel }: { onDelete: () => void; onCancel:
     <div
       role="group"
       aria-label="Delete this comment?"
-      className="flex items-center gap-1 pt-1.5"
+      className="flex items-center gap-2 pt-1.5"
       data-feedback-confirm
       onKeyDown={(e) => {
         if (e.key === "Escape") onCancel();
       }}
     >
-      <span className="mr-auto min-w-0 truncate text-xs text-fg" data-feedback-question>
-        Delete it?
-      </span>
       <Button ref={cancel} variant="ghost" onClick={onCancel} data-feedback-cancel>
         Cancel
       </Button>
       <Button variant="destructive" onClick={onDelete} data-feedback-delete>
         Delete
       </Button>
+      <span className="min-w-0 truncate text-xs text-fg" data-feedback-question>
+        Delete it?
+      </span>
     </div>
   );
 }
@@ -290,6 +307,7 @@ export function TextEditor({
   placeholder,
   submitLabel,
   overlay = false,
+  row = false,
   onSubmit,
   onCancel,
 }: {
@@ -297,6 +315,8 @@ export function TextEditor({
   placeholder?: string;
   submitLabel: string;
   overlay?: boolean;
+  /** In a feedback row, beside its pin's disc: the field pads 6 px, so its first line sits where the disc can meet it. */
+  row?: boolean;
   onSubmit: (text: string) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -332,7 +352,7 @@ export function TextEditor({
     </>
   );
   const field = (
-    <Textarea ref={area} rows={3} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} className="resize-none" />
+    <Textarea ref={area} rows={3} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} className={row ? "resize-none py-1.5" : "resize-none"} />
   );
   return overlay ? (
     <>

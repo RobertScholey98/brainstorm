@@ -682,7 +682,7 @@ body {
 .bs-pin::after { content: ""; position: absolute; inset: -5px; }
 .bs-pin[data-status="addressed"] { background: var(--bs-card); color: var(--bs-accent); border-color: var(--bs-accent); }
 .bs-pin[data-status="confirmed"] {
-  background: var(--bs-muted); color: var(--bs-fg-muted);
+  background: var(--bs-muted); color: var(--bs-fg);
   box-shadow: 0 0 0 1px var(--bs-fg-muted), var(--bs-elevation-sm);
 }
 /* Hovered here, or through its feedback item in the Inspector. */

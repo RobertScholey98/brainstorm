@@ -97,7 +97,27 @@ try {
   await window.keyboard.type("Spin button is too quiet");
   await window.keyboard.press("Control+Enter");
   await window.waitForSelector('[data-feedback="2"]');
+  check(
+    "an open comment's Edit and Delete stand 8 px apart, the gap of every row of buttons",
+    await window.$eval('[data-feedback="2"]', (li) => {
+      const [edit, del] = ['[data-feedback-action="edit"]', '[data-feedback-action="delete"]'].map((s) => li.querySelector(s).getBoundingClientRect());
+      return Math.round(del.left - edit.right);
+    }),
+    8,
+  );
+  const deleteAt = await window.$eval('[data-feedback="2"] [data-feedback-action="delete"]', (b) => Math.round(b.getBoundingClientRect().left));
   await window.click('[data-feedback="2"] button:has-text("Edit")');
+  check(
+    "while editing, the pin's disc centres on the field's first line, as it does on the comment's at rest",
+    await window.$eval('[data-feedback="2"]', (li) => {
+      const disc = li.querySelector("[data-pin-number]").getBoundingClientRect();
+      const area = li.querySelector("textarea");
+      const style = getComputedStyle(area);
+      const line = area.getBoundingClientRect().top + parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop) + parseFloat(style.lineHeight) / 2;
+      return Math.abs(disc.top + disc.height / 2 - line) <= 1;
+    }),
+    true,
+  );
   check(
     "the edit field keeps the card's fill, not the row's tint, with Ctrl+Enter beside Cancel",
     await window.$eval('[data-feedback="2"]', (li) => {
@@ -116,7 +136,12 @@ try {
   check(
     "Delete asks first, in place, with Cancel focused",
     [(await window.innerText('[data-feedback="2"] [data-feedback-confirm]')).replace(/\s+/g, " "), await window.evaluate(() => document.activeElement?.hasAttribute("data-feedback-cancel"))],
-    ["Delete it? Cancel Delete", true],
+    ["Cancel Delete Delete it?", true],
+  );
+  check(
+    "asking leaves Delete where it was, under the pointer that pressed it",
+    await window.$eval('[data-feedback="2"] [data-feedback-delete]', (b) => Math.round(b.getBoundingClientRect().left)),
+    deleteAt,
   );
   check(
     "The question, Cancel and Delete sit on one line in the Inspector, and the question isn't cut",
@@ -187,16 +212,22 @@ try {
   await canvas.click(PIN);
   await window.waitForSelector('[data-feedback="1"][data-focused]');
   check("clicking the pin focuses its comment in the list", await window.isVisible('[data-feedback="1"][data-focused]'), true);
-  check(
-    "the focused comment's fill overhangs the column by 4 px a side, so 12 px stays clear of the Inspector's edge",
-    await window.$eval('[data-feedback="1"][data-focused]', (li) => {
-      const pane = li.closest("aside");
-      const aside = pane.getBoundingClientRect();
-      const r = li.getBoundingClientRect();
-      return [Math.round(r.left - aside.left - pane.clientLeft), Math.round(aside.right - r.right)];
-    }),
-    [12, 12],
-  );
+  // The thumb stands 2 px in from the 10 px bar's far edge, so it starts 8 px in from the pane's edge.
+  const fillAir = () =>
+    settled(() =>
+      window.$eval('[data-feedback="1"][data-focused]', (li) => {
+        const pane = li.closest("aside");
+        const body = li.closest("[data-inspector-body]");
+        const aside = pane.getBoundingClientRect();
+        const r = li.getBoundingClientRect();
+        const scrolls = body.scrollHeight > body.clientHeight;
+        return { scrolls, air: [Math.round(r.left - aside.left - pane.clientLeft), Math.round(aside.right - (scrolls ? 8 : 0) - r.right)] };
+      }),
+    );
+  check("the focused comment's fill stands 12 px clear of the Inspector's edge on both sides", await fillAir(), { scrolls: false, air: [12, 12] });
+  await window.setViewportSize({ width: 1440, height: 560 });
+  check("and 12 px clear of the scrollbar's thumb once the Inspector scrolls", await fillAir(), { scrolls: true, air: [12, 12] });
+  await window.setViewportSize({ width: 1440, height: 900 });
 
   await window.click('[data-feedback="1"] button:has-text("Confirm")');
   await window.waitForSelector('[data-feedback="1"][data-status="confirmed"]');
@@ -220,6 +251,19 @@ try {
   await window.dblclick(handle);
   await canvas.waitForSelector(`${PIN}[data-status="confirmed"]`);
   check("the pin is coloured confirmed", await canvas.getAttribute(PIN, "data-status"), "confirmed");
+  check(
+    "a confirmed pin's numeral is the full-strength text colour, in the list and on the canvas",
+    [
+      await window.evaluate(() => getComputedStyle(document.querySelector('[data-feedback="1"] [data-pin-number]')).color === getComputedStyle(document.body).color),
+      await canvas.evaluate((pin) => {
+        const probe = document.body.appendChild(Object.assign(document.createElement("i"), { style: "color: var(--bs-fg)" }));
+        const fg = getComputedStyle(probe).color;
+        probe.remove();
+        return getComputedStyle(document.querySelector(pin)).color === fg;
+      }, PIN),
+    ],
+    [true, true],
+  );
   await shot(window, shots, "5-confirmed");
 
   await window.click('[data-feedback="1"] button:has-text("Reopen")');

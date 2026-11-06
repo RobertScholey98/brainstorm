@@ -6,7 +6,8 @@ import type { FeedbackId, FeedbackStatus } from "../core/types";
 const PIN_FORM: Record<FeedbackStatus["state"], string> = {
   open: "bg-accent text-accent-fg",
   addressed: "bg-card text-accent inset-ring-2 inset-ring-accent",
-  confirmed: "bg-muted text-fg-muted",
+  // The full-strength numeral, so the receding grey disc still reads; the rim is the canvas pin's.
+  confirmed: "bg-muted text-fg inset-ring-1 inset-ring-fg-muted",
 };
 
 /** A pin's number in its pin's disc, so a list that names a pin shows the mark Rob sees on the canvas. */
