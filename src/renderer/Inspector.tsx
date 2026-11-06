@@ -10,7 +10,7 @@ import { ScrollPane } from "@/components/ui/scroll-pane";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { HEX_COLOR_PATTERN } from "../core/props";
-import type { AppearanceValue, BlockView, InapplicableOverride, Override, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
+import type { AppearanceValue, BlockView, InapplicableOverride, IterationN, Override, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
 import { ControlScopeContext, controlRegistry, createBlockStore } from "./controls";
 import type { PaneLimits } from "./hooks/use-pane-width";
 
@@ -100,6 +100,8 @@ export function Inspector({
   limits,
   onWidth,
   view,
+  blocks,
+  readOnly,
   block,
   props,
   error,
@@ -112,6 +114,10 @@ export function Inspector({
   limits: PaneLimits;
   onWidth: (width: number) => void;
   view: SessionView;
+  /** The blocks on the canvas: the latest iteration's, or the past one's Rob is looking at. */
+  blocks: readonly BlockView[];
+  /** The past iteration on the canvas, whose settings show but can't change. */
+  readOnly: IterationN | null;
   block: BlockView | null;
   props: Props | null;
   error: string | null;
@@ -120,10 +126,16 @@ export function Inspector({
   onDismiss: (o: InapplicableOverride) => void;
   children: ReactNode;
 }) {
-  const blocks = view.iteration?.blocks ?? [];
   // It covers the whole session, removed blocks included, so it shows whatever is selected, under the block's header.
   const banner = view.overrides.inapplicable.length > 0 && <Inapplicable items={view.overrides.inapplicable} blocks={blocks} onDismiss={onDismiss} />;
   const slot = block === null ? undefined : view.iteration?.slots.find((s) => s.id === block.slot);
+  const past = readOnly !== null && (
+    <div className="pt-3" data-inspector-past={readOnly}>
+      <Callout tone="info">
+        <p>Iteration {readOnly} is read-only. Its settings travel with a fork.</p>
+      </Callout>
+    </div>
+  );
   return (
     <Column
       width={width}
@@ -144,13 +156,17 @@ export function Inspector({
     >
       {block === null || props === null ? (
         <>
+          {past}
           {banner}
           <p className="py-4 text-sm/relaxed text-fg-muted" data-inspector-empty>
             {view.iteration === null ? "Each block's settings show here once the agent commits the first iteration." : "Select a frame to adjust it."}
           </p>
         </>
       ) : (
-        <BlockControls key={block.id} view={view} block={block} props={props} error={error} banner={banner} onSet={onSet} onReset={onReset} />
+        <>
+          {past}
+          <BlockControls key={block.id} view={view} block={block} props={props} error={error} banner={banner} readOnly={readOnly !== null} onSet={onSet} onReset={onReset} />
+        </>
       )}
       {children}
     </Column>
@@ -163,6 +179,7 @@ function BlockControls({
   props,
   error,
   banner,
+  readOnly,
   onSet,
   onReset,
 }: {
@@ -171,6 +188,7 @@ function BlockControls({
   props: Props;
   error: string | null;
   banner: ReactNode;
+  readOnly: boolean;
   onSet: (block: BlockView, prop: PropName, value: AppearanceValue) => void;
   onReset: (block: BlockView, prop: PropName) => void;
 }) {
@@ -204,11 +222,14 @@ function BlockControls({
       {block.props.appearance.length === 0 ? (
         <p className="py-4 text-sm text-fg-muted">This block has no adjustable settings.</p>
       ) : (
-        <ControlScopeContext.Provider value={scope}>
-          <JSONUIProvider registry={controlRegistry} store={store}>
-            <Renderer spec={block.controls as unknown as Spec} registry={controlRegistry} />
-          </JSONUIProvider>
-        </ControlScopeContext.Provider>
+        // A past iteration's controls show its values but take no input, so history stays as it was.
+        <div inert={readOnly} className={readOnly ? "opacity-60" : undefined} data-controls-readonly={readOnly || undefined}>
+          <ControlScopeContext.Provider value={scope}>
+            <JSONUIProvider registry={controlRegistry} store={store}>
+              <Renderer spec={block.controls as unknown as Spec} registry={controlRegistry} />
+            </JSONUIProvider>
+          </ControlScopeContext.Provider>
+        </div>
       )}
     </div>
   );

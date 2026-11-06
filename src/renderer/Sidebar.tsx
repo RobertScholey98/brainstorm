@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ExternalLink, LayoutGrid, Undo2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ExternalLink, GitBranch, LayoutGrid, Undo2 } from "lucide-react";
 import { useMemo, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
-import { blockIdOf, type BlockId, type BlockView, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
+import { blockIdOf, isPendingThread, type BlockView, type ContentHash, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
 import type { PaneLimits } from "./hooks/use-pane-width";
 import { Mark } from "./Mark";
 import { TakeoverPhrase } from "./Regenerate";
@@ -226,6 +226,14 @@ function SessionRow({
         data-lost={s.lost || undefined}
         data-settled={s.settlement.state === "settled" || undefined}
       >
+        {s.fork !== null && (
+          <span className="flex shrink-0 text-fg-muted" data-row-fork>
+            <GitBranch aria-hidden />
+            <span className="sr-only">
+              Fork of {s.fork.parentTitle} · iteration {s.fork.from}:
+            </span>
+          </span>
+        )}
         <span className="min-w-0 flex-1 truncate">{s.title}</span>
         <SessionStatus session={s} compact />
         <span
@@ -250,6 +258,7 @@ export function SessionPanel({
   blocks,
   blockErrors,
   onHome,
+  onOpen,
   selectedSlot,
   onSlot,
   onVariant,
@@ -257,8 +266,10 @@ export function SessionPanel({
   view: SessionView | null;
   slots: readonly SlotView[];
   blocks: readonly BlockView[];
-  blockErrors: ReadonlyMap<BlockId, string>;
+  blockErrors: ReadonlyMap<ContentHash, string>;
   onHome: () => void;
+  /** Opens another brainstorm: a fork's parent. */
+  onOpen: (id: SessionId) => void;
   selectedSlot: SlotId | null;
   onSlot: (slot: SlotId) => void;
   onVariant: (slot: SlotId, variant: VariantKey) => void;
@@ -306,7 +317,7 @@ export function SessionPanel({
           ))}
         </div>
       ) : (
-        <ThreadSection view={view} />
+        <ThreadSection view={view} onOpen={onOpen} />
       )}
       {slots.map((slot) => (
         <SlotSection
@@ -328,8 +339,12 @@ export function SessionPanel({
  * The brainstorm's T3 thread. An attached thread is a link out to it. A lost one is a status, not a control: one line
  * that says "Thread lost", the term the bar and home use, and under it the phrase that takes the brainstorm over.
  */
-function ThreadSection({ view }: { view: SessionView }) {
+function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: SessionId) => void }) {
   const lost = view.attachment.lostAt !== null;
+  // A fork has no thread until T3 starts one; the bar says how that is going, so this names the state only.
+  const pending = isPendingThread(view.attachment.threadId);
+  const failed = view.request?.phase.phase === "start_failed";
+  const fork = view.fork;
   // A lost thread with a request in flight already says so, with the phrase, in the request strip.
   const showTakeover = lost && view.request?.phase.phase !== "thread_lost";
   return (
@@ -337,7 +352,14 @@ function ThreadSection({ view }: { view: SessionView }) {
       <SidebarGroupLabel>Thread</SidebarGroupLabel>
       <SidebarMenu>
         <SidebarMenuItem>
-          {lost || view.thread === null ? (
+          {pending ? (
+            <div className="flex h-8 items-center gap-2 px-2 text-sm" data-thread-link>
+              <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", failed ? "bg-danger" : "bg-accent")} />
+              <span className={failed ? "font-medium text-danger" : "text-fg-muted"} data-thread={failed ? "start_failed" : "starting"}>
+                {failed ? "New thread didn't start" : "New thread · starting"}
+              </span>
+            </div>
+          ) : lost || view.thread === null ? (
             // T3 may not have answered yet for an attached thread, so it shows the state without a name or a link.
             <div className="flex h-8 items-center gap-2 px-2 text-sm" data-thread-link>
               <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", lost ? "bg-warning" : "bg-success")} />
@@ -359,6 +381,27 @@ function ThreadSection({ view }: { view: SessionView }) {
           )}
         </SidebarMenuItem>
       </SidebarMenu>
+      {fork !== null && (
+        <SidebarMenu>
+          <SidebarMenuItem>
+            {fork.parent.state === "gone" ? (
+              <div className="flex h-8 items-center gap-2 px-2 text-xs text-fg-muted" data-forked-from="gone">
+                <GitBranch aria-hidden className="size-3.5 shrink-0" />
+                <span className="truncate">
+                  Forked from {fork.parent.title} · iteration {fork.from}, since discarded
+                </span>
+              </div>
+            ) : (
+              <SidebarMenuButton tone="quiet" onClick={() => onOpen(fork.parent.id)} data-forked-from={fork.parent.id}>
+                <GitBranch aria-hidden />
+                <span className="truncate text-xs">
+                  Forked from {fork.parent.title} · iteration {fork.from}
+                </span>
+              </SidebarMenuButton>
+            )}
+          </SidebarMenuItem>
+        </SidebarMenu>
+      )}
       {showTakeover && (
         <div className="pt-1" data-takeover>
           <Callout tone="warning" actions={<TakeoverPhrase title={view.session.title} />}>
@@ -379,8 +422,8 @@ function SlotSection({
   onVariant,
 }: {
   slot: SlotView;
-  blocks: ReadonlyMap<BlockId, BlockView>;
-  blockErrors: ReadonlyMap<BlockId, string>;
+  blocks: ReadonlyMap<string, BlockView>;
+  blockErrors: ReadonlyMap<ContentHash, string>;
   selected: boolean;
   onSlot: () => void;
   onVariant: (variant: VariantKey) => void;
@@ -410,7 +453,7 @@ function SlotSection({
           {slot.variants.map((variant) => {
             const block = blocks.get(blockIdOf(slot.id, variant));
             const active = variant === slot.active;
-            const failed = block !== undefined && blockErrors.has(block.id);
+            const failed = block !== undefined && blockErrors.has(block.hash);
             return (
               <SidebarMenuItem key={variant}>
                 <SidebarMenuButton
@@ -427,6 +470,11 @@ function SlotSection({
                   <span className="min-w-0 flex-1 truncate" data-variant-title>
                     {block?.title ?? variant}
                   </span>
+                  {block?.isNew === true && (
+                    <span className="shrink-0 rounded-full bg-accent px-1.5 text-2xs font-medium text-accent-fg" data-variant-new>
+                      new
+                    </span>
+                  )}
                   {failed && (
                     <Hint label="This block failed to render" side="right">
                       <CircleAlert aria-label="Failed to render" className="text-danger" data-variant-error />

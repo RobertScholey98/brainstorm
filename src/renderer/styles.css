@@ -179,6 +179,11 @@ body[data-resizing] [data-slot="sidebar-container"] {
   grid-template-columns: auto minmax(0, max-content);
 }
 
+/* The Fork popover's carry list: a label column as wide as "Open pins", then what carries, which can shrink. */
+@utility grid-carry {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
 /*
  * A scroller keeps its scrollbar's room on both sides whether or not it overflows, so its content never shifts
  * sideways and sits as far off each edge. Its padding is its inset less the gutter (--scrollbar).

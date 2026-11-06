@@ -60,6 +60,7 @@ export function FeedbackPanel({
   blocks,
   place,
   canPin,
+  pinBlocked = "There is nothing on the canvas to pin to yet",
   picking,
   focused,
   onHover,
@@ -72,6 +73,8 @@ export function FeedbackPanel({
   place: (f: Feedback) => PinPlace;
   /** False before the first iteration, when the canvas has nothing to pin to. */
   canPin: boolean;
+  /** Why Pin comment is off, when it is. */
+  pinBlocked?: string;
   picking: boolean;
   focused: FeedbackId | null;
   /** The item under the pointer, so its pin can echo the hover on the canvas. */
@@ -91,7 +94,7 @@ export function FeedbackPanel({
             {picking ? "Picking…" : "Pin comment"}
           </Button>
         ) : (
-          <Hint label="There is nothing on the canvas to pin to yet" side="left">
+          <Hint label={pinBlocked} side="left">
             <span tabIndex={0} className="ml-auto" data-pick-blocked>
               <Button variant="outline" disabled data-pick-toggle>
                 <MessageSquarePlus data-icon="inline-start" aria-hidden />

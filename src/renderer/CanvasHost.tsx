@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { BlockId, BlockView, CanvasFrame, CanvasMode, CanvasPin, CanvasRect, FeedbackId, FrameToHost, HostToFrame, Pin, Props, SlotId } from "../core/types";
+import type { BlockId, BlockView, CanvasFrame, CanvasMode, CanvasPin, CanvasRect, ContentHash, FeedbackId, FrameToHost, HostToFrame, Pin, Props, SlotId } from "../core/types";
 
 export type Placement = { readonly placed: ReadonlySet<FeedbackId>; readonly detached: ReadonlySet<FeedbackId> };
 
@@ -49,7 +49,8 @@ export function CanvasHost({
   onBelow: (count: number) => void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
-  const sent = useRef(new Set<string>());
+  // The version of each block the frame holds. A past iteration can bring back an older one, so it is sent again.
+  const sent = useRef(new Map<BlockId, ContentHash>());
   const [readyCount, setReadyCount] = useState(0);
   const handlers = useRef({ onSelect, onBlockError, onPicked, onPinClicked, onPlacement, onZooms, onBelow });
   handlers.current = { onSelect, onBlockError, onPicked, onPinClicked, onPlacement, onZooms, onBelow };
@@ -103,10 +104,10 @@ export function CanvasHost({
 
   useEffect(() => {
     if (readyCount === 0) return;
-    const fresh = blocks.filter((b) => !sent.current.has(`${b.id}@${b.hash}`));
+    const fresh = blocks.filter((b) => sent.current.get(b.id) !== b.hash);
     if (fresh.length === 0) return;
     post({ kind: "modules", modules: fresh.map((b) => ({ blockId: b.id, hash: b.hash, compiled: b.compiled, css: b.css })) });
-    for (const b of fresh) sent.current.add(`${b.id}@${b.hash}`);
+    for (const b of fresh) sent.current.set(b.id, b.hash);
   }, [readyCount, blocks]);
 
   useEffect(() => {

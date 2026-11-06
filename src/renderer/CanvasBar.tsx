@@ -37,7 +37,8 @@ export function CanvasBar({
   zoom: number | null;
   /** Board frames wholly below the visible canvas, which a wrapped board has no other way to show. */
   below: number;
-  picking: boolean;
+  /** What a pick is for, while the canvas is in pick mode. */
+  picking: "comment" | "vary" | null;
   onSlot: (slot: SlotId) => void;
   onView: (view: CanvasLayout["view"]) => void;
   onCancelPick: () => void;
@@ -75,9 +76,9 @@ export function CanvasBar({
       <Tabs value={current} onValueChange={onSlot} tabs={slots.map((s) => ({ value: s.id, label: s.title }))} itemData="slot-tab" aria-label="Slots" />
       {/* It takes only the room the tabs leave, so in a narrow window the pick hint's text gives way, never a tab. */}
       <div className="flex flex-1 items-center justify-end gap-2 pl-2">
-        {picking && (
+        {picking !== null && (
           <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-fg-muted" role="status" data-pick-hint>
-            <span className="w-0 flex-1 truncate text-right">Click an element to pin a comment</span>
+            <span className="w-0 flex-1 truncate text-right">{picking === "vary" ? "Click an element to vary" : "Click an element to pin a comment"}</span>
             <Kbd>Esc</Kbd>
             <Button variant="ghost" onClick={onCancelPick}>
               Cancel

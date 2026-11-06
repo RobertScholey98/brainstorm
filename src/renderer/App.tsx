@@ -13,9 +13,13 @@ import {
   type BlockView,
   type CanvasRect,
   type CanvasPin,
+  type ContentHash,
   type Feedback,
   type FeedbackId,
+  type ForkInput,
   type InapplicableOverride,
+  type IterationN,
+  type IterationView,
   type Pin,
   type PropName,
   type Props,
@@ -31,6 +35,7 @@ import type { Api } from "./api";
 import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
+import { Filmstrip, PastBar } from "./History";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
 import { fitPanes, usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
@@ -41,9 +46,13 @@ import { AppSidebar, HomePanel, SessionPanel } from "./Sidebar";
 import { RequestDetail } from "./Regenerate";
 import { settleUndoes, useSettleShortcut } from "./settle";
 import { SessionBar, TopBar } from "./TopBar";
+import { VaryComposer, VarySection } from "./Vary";
+import { blockedMessage } from "../core/machines";
 
 /** How often an open brainstorm asks T3 whether its thread still exists, besides on window focus. */
 const THREAD_CHECK_MS = 15_000;
+/** How long a new variant shows before it counts as seen, so its mark doesn't vanish the moment Rob opens it. */
+const SEEN_MS = 1500;
 
 /** Below 1280 px the sidebar starts narrower, so the canvas keeps room for a second frame. */
 const SIDEBAR_WIDE: PaneLimits = { fallback: 288, min: 200, max: 400 };
@@ -58,10 +67,20 @@ const RAIL = 40;
  */
 type Nav = { readonly kind: "overview" } | { readonly kind: "brainstorm"; readonly id: SessionId; readonly panel: "session" | "home" };
 
+type Picked = { readonly pin: Pin; readonly at: { readonly x: number; readonly y: number }; readonly rect: CanvasRect };
+
+/** Pin comment and Vary share the canvas's pick mode; each opens its own popover where Rob picked. */
 type CanvasInteraction =
   | { readonly kind: "view" }
-  | { readonly kind: "picking" }
-  | { readonly kind: "composing"; readonly pin: Pin; readonly at: { readonly x: number; readonly y: number }; readonly rect: CanvasRect };
+  | { readonly kind: "picking"; readonly for: "comment" | "vary" }
+  | ({ readonly kind: "composing" } & Picked)
+  | ({ readonly kind: "varying" } & Picked);
+
+/**
+ * A past iteration on the canvas, read-only. Rob's picks there change only what shows, never the stored slot choice,
+ * and the Fork popover forks what shows. `iteration` is null while it loads.
+ */
+type Past = { readonly n: IterationN; readonly iteration: IterationView | null; readonly picks: Readonly<Record<string, VariantKey>> };
 
 const NO_PLACEMENT: Placement = { placed: new Set(), detached: new Set() };
 
@@ -209,6 +228,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
             layout={prefs.canvas[nav.id]}
             onLayout={(layout) => savePrefs({ canvas: { session: nav.id, layout } })}
             inspector={{ width: fitted.inspector, onWidth: setInspectorWidth, rail, onRail: (inspectorRail) => savePrefs({ inspectorRail }) }}
+            history={{ open: prefs.historyStrip, onToggle: () => savePrefs({ historyStrip: !prefs.historyStrip }) }}
             sidebar={sidebar}
             homePanel={nav.panel === "home" ? homePanel : null}
             onHome={() => setNav({ kind: "brainstorm", id: nav.id, panel: "home" })}
@@ -245,6 +265,7 @@ function SessionWorkspace({
   layout,
   onLayout,
   inspector,
+  history,
   sidebar,
   homePanel,
   onHome,
@@ -263,6 +284,8 @@ function SessionWorkspace({
   layout: CanvasLayout | undefined;
   onLayout: (layout: CanvasLayout) => void;
   inspector: { width: number; onWidth: (width: number) => void; rail: boolean; onRail: (rail: boolean) => void };
+  /** Whether the history filmstrip shows, one choice for every brainstorm, kept in `ui_pref`. */
+  history: { open: boolean; onToggle: () => void };
   sidebar: (panel: ReactNode) => ReactNode;
   /** Shown in place of the session panel while Rob looks for another brainstorm. */
   homePanel: ReactNode | null;
@@ -273,12 +296,13 @@ function SessionWorkspace({
   const [view, setView] = useState<SessionView | null>(null);
   // A failed setting is named by its control's label, read when the failure comes back.
   const blocksNow = useRef<readonly BlockView[]>([]);
-  blocksNow.current = view?.iteration?.blocks ?? [];
   // Selection is a slot, so switching variants keeps the controls on the slot's new block.
   const [selectedSlot, setSelectedSlot] = useState<SlotId | null>(layout?.slot ?? null);
   const [canvasView, setCanvasView] = useState<CanvasLayout["view"]>(layout?.view ?? "stage");
-  const [blockErrors, setBlockErrors] = useState<ReadonlyMap<BlockId, string>>(new Map());
+  // Keyed by content, since a past iteration's block has the latest one's id and maybe other code.
+  const [blockErrors, setBlockErrors] = useState<ReadonlyMap<ContentHash, string>>(new Map());
   const [interaction, setInteraction] = useState<CanvasInteraction>({ kind: "view" });
+  const [past, setPast] = useState<Past | null>(null);
   const [placement, setPlacement] = useState<Placement>(NO_PLACEMENT);
   const [focusedFeedback, setFocusedFeedback] = useState<FeedbackId | null>(null);
   const [hoveredFeedback, setHoveredFeedback] = useState<FeedbackId | null>(null);
@@ -323,9 +347,43 @@ function SessionWorkspace({
     if (view !== null) pending.settle(view);
   }, [pending, view]);
 
-  const iteration = view?.iteration ?? null;
+  const latest = view?.iteration ?? null;
+  const showLatest = useCallback(() => setPast(null), []);
+  // A stored iteration never changes, so each is fetched once.
+  const fetched = useRef(new Map<IterationN, IterationView>());
+  const showIteration = useCallback(
+    (n: IterationN) => {
+      setInteraction({ kind: "view" });
+      if (n === latest?.n) return setPast(null);
+      const known = fetched.current.get(n) ?? null;
+      setPast((p) => (p?.n === n ? p : { n, iteration: known, picks: {} }));
+      if (known !== null) return;
+      void api.iteration(sessionId, n).then((r) => {
+        if (!r.ok) {
+          setPast(null);
+          return showNotice({ title: failedTitle("history"), detail: r.error.message });
+        }
+        fetched.current.set(n, r.data);
+        setPast((p) => (p?.n === n ? { ...p, iteration: r.data } : p));
+      });
+    },
+    [api, sessionId, latest?.n, showNotice],
+  );
+  // While a past iteration loads, the canvas keeps what it showed, so its frame isn't torn down and built again.
+  const shown = useRef<IterationView | null>(null);
+  // The past is read-only, so what shows there is the stored iteration with Rob's picks laid over its slots.
+  const iteration = useMemo<IterationView | null>(() => {
+    if (past === null) return latest;
+    if (past.iteration === null) return shown.current;
+    return { ...past.iteration, slots: past.iteration.slots.map((s) => ({ ...s, active: past.picks[s.id] ?? s.active })) };
+  }, [past, latest]);
+  useEffect(() => {
+    shown.current = iteration;
+  }, [iteration]);
+  const readOnly = past === null ? null : past.n;
   const slots = iteration?.slots ?? [];
   const blocks = iteration?.blocks ?? [];
+  blocksNow.current = blocks;
   const slot = slots.find((s) => s.id === selectedSlot) ?? slots[0] ?? null;
   const selectedBlock = slot === null ? null : (blocks.find((b) => b.id === blockIdOf(slot.id, slot.active)) ?? null);
   // With one slot the board and the stage are the same, so the bar offers no switch and the canvas shows the stage.
@@ -342,39 +400,60 @@ function SessionWorkspace({
     const out: Record<string, Props> = {};
     for (const f of frames) {
       const b = blocks.find((x) => x.id === f.blockId);
-      if (b !== undefined) out[b.id] = pending.effective(b.id, b.effectiveProps);
+      if (b !== undefined) out[b.id] = past === null ? pending.effective(b.id, b.effectiveProps) : b.effectiveProps;
     }
     return out;
-  }, [frames, blocks, pending, pendingVersion]);
+  }, [frames, blocks, pending, pendingVersion, past]);
 
   const onSet = useCallback((block: BlockView, prop: PropName, value: AppearanceValue) => pending.set(block.id, prop, value), [pending]);
   const onReset = useCallback((block: BlockView, prop: PropName) => pending.reset(block.id, prop), [pending]);
   const onDismiss = (o: InapplicableOverride) => void send({ kind: "dismiss_inapplicable", blockId: o.override.blockId, prop: o.override.prop });
   const onVariant = (slotId: SlotId, variant: VariantKey) => {
     setSelectedSlot(slotId);
+    if (past !== null) return setPast({ ...past, picks: { ...past.picks, [slotId]: variant } });
     void send({ kind: "select_variant", slot: slotId, variant });
   };
   const onSelectBlock = useCallback(
     (blockId: BlockId) => setSelectedSlot((blocks.find((b) => b.id === blockId)?.slot ?? null) as SlotId | null),
     [blocks],
   );
-  const onBlockError = useCallback((blockId: BlockId, message: string) => setBlockErrors((m) => new Map(m).set(blockId, message)), []);
+  const onBlockError = useCallback((blockId: BlockId, message: string) => {
+    const hash = blocksNow.current.find((b) => b.id === blockId)?.hash;
+    if (hash !== undefined) setBlockErrors((m) => new Map(m).set(hash, message));
+  }, []);
 
   const feedback = view?.feedback ?? [];
-  const pins = useMemo<CanvasPin[]>(() => feedback.map((f) => ({ id: f.id, pin: f.pin, status: f.status.state })), [feedback]);
+  // Pins belong to the latest iteration; the past shows its blocks as they were, unpinned.
+  const pins = useMemo<CanvasPin[]>(() => (past !== null ? [] : feedback.map((f) => ({ id: f.id, pin: f.pin, status: f.status.state }))), [feedback, past]);
   const activeBlocks = useMemo(() => new Set(frames.map((f) => f.blockId)), [frames]);
 
+  // A new variant counts as seen once it has been on the canvas for a moment: on the stage, or anywhere on the board.
+  const unseen = past !== null ? [] : blocks.filter((b) => b.isNew && activeBlocks.has(b.id) && (stage === null || b.slot === stage)).map((b) => b.id);
+  const unseenKey = unseen.join(" ");
   useEffect(() => {
-    if (interaction.kind !== "picking") return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setInteraction({ kind: "view" });
+    const [first, ...rest] = unseen;
+    if (first === undefined) return;
+    const timer = setTimeout(() => void send({ kind: "mark_seen", blocks: [first, ...rest] }), SEEN_MS);
+    return () => clearTimeout(timer);
+  }, [unseenKey, send]);
+
+  // Escape backs out one layer at a time: an open popover closes itself, then a pick or a popover on the canvas, then
+  // the past.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector("[data-slot=popover-content]") !== null) return;
+      if (interaction.kind === "picking") return setInteraction({ kind: "view" });
+      if (interaction.kind === "view" && past !== null) showLatest();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [interaction.kind]);
+  }, [interaction.kind, past, showLatest]);
 
   const onPicked = useCallback(
     (pin: Pin, at: { x: number; y: number }, rect: CanvasRect) => {
       onSelectBlock(pin.blockId);
-      setInteraction({ kind: "composing", pin, at, rect });
+      setInteraction((i) => ({ kind: i.kind === "picking" && i.for === "vary" ? "varying" : "composing", pin, at, rect }));
     },
     [onSelectBlock],
   );
@@ -396,6 +475,30 @@ function SessionWorkspace({
   const saveComment = async (pin: Pin, text: string) => {
     if ((await send({ kind: "add_feedback", pin, text })) !== null) setInteraction({ kind: "view" });
   };
+  const sendVary = async (pin: Pin, count: number, direction: string | null) => {
+    if ((await send({ kind: "vary", target: pin, count, direction })) !== null) setInteraction({ kind: "view" });
+  };
+  const togglePick = (kind: "comment" | "vary") =>
+    setInteraction((i) => (i.kind === "picking" && i.for === kind ? { kind: "view" } : { kind: "picking", for: kind }));
+  const varyBlocked =
+    iteration === null
+      ? "There is nothing on the canvas to vary yet"
+      : past !== null
+        ? "Back to latest to vary an element"
+        : view !== null && !view.regenerate.ok
+          ? blockedMessage(view.regenerate.reason, view.request?.request.n)
+          : null;
+
+  const fork = async (input: ForkInput): Promise<boolean> => {
+    const result = await api.fork(sessionId, input);
+    if (!result.ok) {
+      showNotice({ title: failedTitle("fork"), detail: result.error.message });
+      return false;
+    }
+    clearNotice();
+    onOpen(result.data.fork);
+    return true;
+  };
 
   const discard = async () => {
     const result = await api.discard(sessionId);
@@ -411,6 +514,14 @@ function SessionWorkspace({
     return result.ok ? result.data : null;
   };
 
+  const loadStill = useCallback(
+    (at: { n: IterationN; slot: SlotId | null }) => api.preview(sessionId, { n: at.n, ...(at.slot === null ? {} : { slot: at.slot }) }),
+    [api, sessionId],
+  );
+  const showing = past?.n ?? latest?.n ?? null;
+  const strip = history.open && view !== null && showing !== null && view.history.iterations.length > 0;
+  const picking = interaction.kind === "picking" ? interaction.for : null;
+
   return (
     <Shell
       sidebar={sidebar(
@@ -421,6 +532,7 @@ function SessionWorkspace({
             blocks={blocks}
             blockErrors={blockErrors}
             onHome={onHome}
+            onOpen={onOpen}
             selectedSlot={slot?.id ?? null}
             onSlot={setSelectedSlot}
             onVariant={onVariant}
@@ -432,11 +544,17 @@ function SessionWorkspace({
           title={view?.session.title ?? title}
           project={project}
           view={view}
+          iteration={iteration}
+          past={readOnly}
           selected={selectedBlock?.id ?? null}
+          blockErrors={blockErrors}
           send={send}
+          fork={fork}
           exportHtml={exportHtml}
           panel={{ open: !inspector.rail, onToggle: () => inspector.onRail(!inspector.rail) }}
+          history={history}
           onDiscard={() => void discard()}
+          onOpen={onOpen}
         />
       }
       strip={view !== null && <RequestDetail view={view} />}
@@ -449,21 +567,24 @@ function SessionWorkspace({
             view={shownView}
             zoom={slot === null ? null : (zooms[slot.id] ?? null)}
             below={shownView === "board" ? below : 0}
-            picking={interaction.kind === "picking"}
+            picking={picking}
             onSlot={setSelectedSlot}
             onView={setCanvasView}
             onCancelPick={() => setInteraction({ kind: "view" })}
           />
         )}
+        {past !== null && <PastBar n={past.n} onLatest={showLatest} />}
         <section
           ref={canvasArea}
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-canvas"
           aria-label="Canvas"
           data-canvas-region
           data-canvas-view={iteration === null ? undefined : shownView}
+          data-canvas-iteration={iteration?.n}
+          data-canvas-past={readOnly ?? undefined}
         >
         {iteration === null ? (
-          <WaitingEmpty loading={view === null} />
+          <WaitingEmpty loading={view === null || past !== null} />
         ) : (
           <CanvasHost
             blocks={blocks}
@@ -497,8 +618,32 @@ function SessionWorkspace({
             onCancel={() => setInteraction({ kind: "view" })}
           />
         )}
+        {interaction.kind === "varying" && (
+          <VaryComposer
+            key={JSON.stringify(interaction)}
+            pin={interaction.pin}
+            at={interaction.at}
+            rect={interaction.rect}
+            block={blocks.find((b) => b.id === interaction.pin.blockId) ?? null}
+            slot={slots.find((s) => s.id === blocks.find((b) => b.id === interaction.pin.blockId)?.slot) ?? null}
+            bounds={{ width: canvasArea.current?.clientWidth ?? 0, height: canvasArea.current?.clientHeight ?? 0 }}
+            onSend={(count, direction) => sendVary(interaction.pin, count, direction)}
+            onCancel={() => setInteraction({ kind: "view" })}
+          />
+        )}
         {toast}
         </section>
+        {strip && (
+          <Filmstrip
+            view={view}
+            showing={showing}
+            slot={slot?.id ?? null}
+            revision={revision}
+            loadStill={loadStill}
+            onShow={showIteration}
+            onOpen={onOpen}
+          />
+        )}
       </div>
       {view === null ? (
         <InspectorSkeleton width={inspector.width} />
@@ -510,22 +655,26 @@ function SessionWorkspace({
           limits={INSPECTOR}
           onWidth={inspector.onWidth}
           view={view}
+          blocks={blocks}
+          readOnly={readOnly}
           block={selectedBlock}
           props={selectedBlock === null ? null : (frameProps[selectedBlock.id] ?? null)}
-          error={selectedBlock === null ? null : (blockErrors.get(selectedBlock.id) ?? null)}
+          error={selectedBlock === null ? null : (blockErrors.get(selectedBlock.hash) ?? null)}
           onSet={onSet}
           onReset={onReset}
           onDismiss={onDismiss}
         >
+          <VarySection picking={picking === "vary"} blocked={varyBlocked} onPickToggle={() => togglePick("vary")} />
           <FeedbackPanel
             feedback={feedback}
             blocks={blocks}
             place={(f) => pinPlace(f, blocks, activeBlocks, placement)}
-            canPin={iteration !== null}
-            picking={interaction.kind === "picking"}
+            canPin={iteration !== null && past === null}
+            pinBlocked={past !== null ? "Back to latest to pin a comment" : undefined}
+            picking={picking === "comment"}
             focused={focusedFeedback}
             onHover={setHoveredFeedback}
-            onPickToggle={() => setInteraction((i) => (i.kind === "picking" ? { kind: "view" } : { kind: "picking" }))}
+            onPickToggle={() => togglePick("comment")}
             onOpen={openFeedback}
             send={send}
           />

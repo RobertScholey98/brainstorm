@@ -1,4 +1,4 @@
-import { CircleCheck, CloudOff, Lightbulb, SearchX, Undo2 } from "lucide-react";
+import { CircleCheck, CloudOff, GitBranch, Lightbulb, SearchX, Undo2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
@@ -230,6 +230,15 @@ function OverviewCard({
         >
           {s.title}
         </button>
+        {/* Forks sit flat among the rest, so each says where it came from. */}
+        {s.fork !== null && (
+          <span className="flex min-w-0 items-center gap-1 text-xs text-fg-muted" data-fork-of={s.fork.from}>
+            <GitBranch aria-hidden className="size-3 shrink-0" />
+            <span className="truncate">
+              Fork of {s.fork.parentTitle} · iteration {s.fork.from}
+            </span>
+          </span>
+        )}
         {brief !== "" && <span className="line-clamp-2 text-sm text-fg-muted">{brief}</span>}
         <span className="mt-auto flex items-center gap-1 pt-1 text-xs whitespace-nowrap text-fg-muted" data-overview-footer>
           <span className="tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>

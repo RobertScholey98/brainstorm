@@ -13,7 +13,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Hint } from "@/components/ui/tooltip";
 import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
-import type { BlockId, BlockView, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
+import type { BlockId, BlockView, IterationN, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
 /** Vary has its own pick and popover, so Regenerate offers the other three. */
 type ScopeKind = Exclude<RequestBody["scope"]["kind"], "vary">;
@@ -40,16 +40,19 @@ function requestBody(scope: RequestScope | null, text: string): RequestBody | nu
 export function Regenerate({
   view,
   selected,
+  past,
   send,
 }: {
   view: SessionView;
   selected: BlockId | null;
+  /** A past iteration on the canvas: history is read-only, so Regenerate waits for Back to latest. */
+  past: IterationN | null;
   send: (action: RobAction) => Promise<SessionView | null>;
 }) {
   const [open, setOpen] = useState(false);
-  const gate = view.regenerate;
+  const gate = past === null ? view.regenerate : null;
   useEffect(() => {
-    if (!gate.ok) return;
+    if (gate === null || !gate.ok) return;
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "r") return;
       e.preventDefault();
@@ -57,10 +60,10 @@ export function Regenerate({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [gate.ok]);
-  if (!gate.ok) {
+  }, [gate?.ok]);
+  if (gate === null || !gate.ok) {
     return (
-      <Hint label={blockedMessage(gate.reason, view.request?.request.n)} side="left">
+      <Hint label={gate === null ? `Back to latest to regenerate. You are viewing iteration ${past}.` : blockedMessage(gate.reason, view.request?.request.n)} side="left">
         <span tabIndex={0} data-regenerate-blocked>
           <Button variant="accent" disabled data-regenerate-toggle>
             Regenerate

@@ -1,5 +1,5 @@
 import { CircleAlert, Hourglass } from "lucide-react";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "cn";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { FrameToHost, HostToFrame, Result, SessionId, SessionPreview } from "../core/types";
@@ -10,6 +10,7 @@ const turns = new PreviewTurns(PREVIEW_FRAMES);
 const PAINT_MS = 10_000;
 
 export type LoadPreview = (id: SessionId) => Promise<Result<SessionPreview | null>>;
+type LoadStill = () => Promise<Result<SessionPreview | null>>;
 
 type Shown =
   | { readonly kind: "loading" }
@@ -53,6 +54,39 @@ function useInView(target: React.RefObject<Element | null>): boolean {
  * in it can be pressed or focused: a click lands on the card.
  */
 export function CardPreview({ id, revision, load, muted }: { id: SessionId; revision: number; load: LoadPreview; muted: boolean }) {
+  const loadStill = useCallback(() => load(id), [load, id]);
+  return (
+    <Still
+      load={loadStill}
+      revision={revision}
+      className={cn("h-preview shrink-0 rounded-t-lg border-b", muted && "opacity-60")}
+      empty="Waiting for the first commit"
+    />
+  );
+}
+
+/**
+ * A filmstrip still: one past iteration's slot, through the same frames, turns and cache as a home card, so stepping
+ * back through history costs no more than scrolling home.
+ */
+export function IterationStill({ load, revision }: { load: LoadStill; revision: number }) {
+  return <Still load={load} revision={revision} compact className="h-16 w-12 shrink-0 rounded-sm ring-1 ring-border" />;
+}
+
+function Still({
+  load,
+  revision,
+  className,
+  empty = "",
+  compact = false,
+}: {
+  load: LoadStill;
+  revision: number;
+  className: string;
+  empty?: string;
+  /** A thumbnail: its states show as an icon alone. */
+  compact?: boolean;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const inView = useInView(box);
@@ -64,11 +98,11 @@ export function CardPreview({ id, revision, load, muted }: { id: SessionId; revi
   useEffect(() => {
     if (!inView) return;
     let current = true;
-    void load(id).then((r) => current && setPayload(r.ok ? { preview: r.data } : { error: r.error.message }));
+    void load().then((r) => current && setPayload(r.ok ? { preview: r.data } : { error: r.error.message }));
     return () => {
       current = false;
     };
-  }, [inView, id, revision, load]);
+  }, [inView, revision, load]);
 
   const preview = payload !== null && "preview" in payload ? payload.preview : null;
   const key = preview === null ? null : `${dark ? "dark" : "light"}:${preview.module.hash}:${preview.frame.frame.width}:${JSON.stringify(preview.props)}`;
@@ -129,7 +163,7 @@ export function CardPreview({ id, revision, load, muted }: { id: SessionId; revi
     <div
       ref={box}
       aria-hidden
-      className={cn("relative h-preview shrink-0 overflow-hidden rounded-t-lg border-b bg-canvas", muted && "opacity-60")}
+      className={cn("relative overflow-hidden bg-canvas", className)}
       data-preview={shown.kind}
     >
       {shown.kind === "still" && <img src={shown.image} alt="" className="size-full object-cover object-top" draggable={false} />}
@@ -144,17 +178,17 @@ export function CardPreview({ id, revision, load, muted }: { id: SessionId; revi
           className={cn("pointer-events-none absolute inset-0 size-full border-0", shown.kind !== "live" && "opacity-0")}
         />
       )}
-      {shown.kind === "loading" && <Skeleton className="absolute inset-3 rounded-sm" />}
+      {shown.kind === "loading" && <Skeleton className={cn("absolute rounded-sm", compact ? "inset-1" : "inset-3")} />}
       {shown.kind === "empty" && (
         <span className="flex size-full items-center justify-center gap-1.5 text-xs text-fg-muted">
           <Hourglass aria-hidden className="size-3.5" />
-          Waiting for the first commit
+          {!compact && empty}
         </span>
       )}
       {shown.kind === "failed" && (
-        <span className="flex size-full items-center justify-center gap-1.5 px-4 text-xs text-fg-muted" data-preview-error={shown.message}>
+        <span className={cn("flex size-full items-center justify-center gap-1.5 text-xs text-fg-muted", !compact && "px-4")} data-preview-error={shown.message}>
           <CircleAlert aria-hidden className="size-3.5 shrink-0 text-danger" />
-          <span className="truncate">The preview failed to render</span>
+          {!compact && <span className="truncate">The preview failed to render</span>}
         </span>
       )}
     </div>
