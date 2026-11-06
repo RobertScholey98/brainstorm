@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronLeft, ChevronRight, CircleAlert, ExternalLink, LayoutGrid } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleAlert, ExternalLink, LayoutGrid } from "lucide-react";
 import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -74,7 +74,7 @@ function arrowFocus(e: KeyboardEvent<HTMLElement>, selector: string): HTMLElemen
 
 /** The sidebar's end: room after the last row, and a soft edge over rows that scroll under it, so a cut row reads as cut. */
 function BottomFade() {
-  return <div aria-hidden className="pointer-events-none sticky bottom-0 h-6 shrink-0 bg-linear-to-t from-app" />;
+  return <div aria-hidden className="pointer-events-none sticky bottom-0 h-8 shrink-0 bg-linear-to-t from-app" data-sidebar-fade />;
 }
 
 export function HomePanel({
@@ -138,8 +138,12 @@ export function HomePanel({
               className="group/label w-full cursor-pointer gap-1 hover:bg-hover hover:text-fg"
               data-project-label
             >
-              <span className="truncate">{group.label}</span>
+              {/* First, so every group's chevron sits at one x whatever its label's length. */}
               <ChevronRight aria-hidden className="transition-transform group-data-[panel-open]/label:rotate-90" />
+              <span className="truncate">{group.label}</span>
+              <span className="ml-auto pl-2 font-normal text-fg-muted tabular-nums group-data-[panel-open]/label:hidden" data-project-count>
+                {group.sessions.length}
+              </span>
             </SidebarGroupLabel>
             <CollapsibleContent>
               <SidebarGroupContent>
@@ -417,6 +421,7 @@ function About({ source }: { source: string }) {
         {long && (
           <Button variant="ghost" className="-ml-2" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} data-about-more>
             {open ? "Less" : "More"}
+            {open ? <ChevronUp data-icon="inline-end" aria-hidden /> : <ChevronDown data-icon="inline-end" aria-hidden />}
           </Button>
         )}
       </div>

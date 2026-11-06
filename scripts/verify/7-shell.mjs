@@ -65,7 +65,7 @@ try {
   const groups = () =>
     window.$$eval("[data-project]", (els) =>
       els.map((g) => ({
-        label: g.querySelector("[data-project-label]")?.textContent?.trim(),
+        label: g.querySelector("[data-project-label]")?.innerText?.trim(),
         rows: [...g.querySelectorAll("[data-session]")].map((r) => r.textContent?.replace(/\s+/g, " ").trim()),
       })),
     );
@@ -124,6 +124,19 @@ try {
   await window.click('[data-project="kitchen-proj"] [data-project-label]');
   await window.waitForSelector(`[data-session="${kitchen}"]`, { state: "detached" });
   check("a project group collapses", await window.isVisible('[data-project="kitchen-proj"] [data-project-label]'), true);
+  check(
+    "a collapsed group counts what it hides, an open one doesn't, and every group's chevron leads at one x",
+    await window.evaluate(() => {
+      const labels = [...document.querySelectorAll("[data-project-label]")];
+      const shown = (el) => el.checkVisibility();
+      return {
+        counts: labels.map((l) => l.querySelector("[data-project-count]")).filter(shown).map((c) => c.textContent),
+        chevrons: new Set(labels.map((l) => Math.round(l.querySelector("svg").getBoundingClientRect().left))).size,
+        first: labels.every((l) => l.firstElementChild.tagName === "svg"),
+      };
+    }),
+    { counts: ["1"], chevrons: 1, first: true },
+  );
   await window.click('[data-project="kitchen-proj"] [data-project-label]');
   await window.waitForSelector(`[data-session="${kitchen}"]`);
 
@@ -399,20 +412,38 @@ try {
       return {
         cut: body.scrollHeight > body.clientHeight,
         more: el.querySelector("[data-about-more]")?.textContent ?? null,
+        chevron: el.querySelector("[data-about-more] svg[data-icon=inline-end]") !== null,
+        fill: el.querySelector("[data-about-more]") === null ? null : getComputedStyle(el.querySelector("[data-about-more]")).backgroundColor,
         aligned: Math.round(body.getBoundingClientRect().left) === Math.round(name.getBoundingClientRect().left),
         label: body.querySelector("p > strong:first-child")?.textContent ?? null,
       };
     });
-  check("a long variant note shows three lines under More, starting where the variant's name does, its label bold", await note(), {
+  await window.mouse.move(700, 20);
+  check("a long variant note shows three lines under More, starting where the variant's name does, its label bold, More with a chevron", await note(), {
     cut: true,
     more: "More",
+    chevron: true,
+    fill: "rgba(0, 0, 0, 0)",
     aligned: true,
     label: "Hypothesis:",
   });
   await window.click('[data-slot-id="wheel"] [data-about-more]');
-  check("More shows the whole note in place", await note(), { cut: false, more: "Less", aligned: true, label: "Hypothesis:" });
+  await window.mouse.move(700, 20);
+  check("More shows the whole note in place, and Less is a disclosure with no pressed fill", await note(), {
+    cut: false,
+    more: "Less",
+    chevron: true,
+    fill: "rgba(0, 0, 0, 0)",
+    aligned: true,
+    label: "Hypothesis:",
+  });
   await window.click('[data-slot-id="wheel"] [data-about-more]');
   check("and Less folds it", (await note()).more, "More");
+  check(
+    "the sidebar ends in a 32 px fade that sticks to its bottom edge, so a row cut there reads as cut",
+    await window.$eval('[data-slot="sidebar-content"] [data-sidebar-fade]', (fade) => [Math.round(fade.getBoundingClientRect().height), getComputedStyle(fade).position, getComputedStyle(fade).bottom]),
+    [32, "sticky", "0px"],
+  );
   check(
     "the sidebar never scrolls sideways",
     await window.$eval('[data-slot="sidebar-content"]', (el) => el.scrollWidth <= el.clientWidth),
