@@ -46,7 +46,7 @@ export function SessionBar({
       }
     >
       <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
-        <nav aria-label="Breadcrumb" className="flex min-w-0 shrink items-center gap-1 text-sm">
+        <nav aria-label="Breadcrumb" className="flex min-w-0 max-w-fit flex-1 items-center gap-1 text-sm">
           {project !== null && (
             <>
               <span className="truncate text-fg-muted" data-breadcrumb-project>
