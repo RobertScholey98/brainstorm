@@ -28,3 +28,13 @@ export function useNow(): number {
   }, []);
   return now;
 }
+
+/** `ago` in the few characters a list row has room for: now, 5m, 3h, 2d, then the date. */
+export function age(iso: string, now: number): string {
+  const ms = Math.max(0, now - Date.parse(iso));
+  if (ms < MINUTE) return "now";
+  if (ms < HOUR) return `${Math.floor(ms / MINUTE)}m`;
+  if (ms < DAY) return `${Math.floor(ms / HOUR)}h`;
+  if (ms < 7 * DAY) return `${Math.floor(ms / DAY)}d`;
+  return ago(iso, now);
+}

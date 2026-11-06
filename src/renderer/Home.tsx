@@ -32,19 +32,23 @@ export function HomeOverview({
   if (sessions !== null && sessions.length === 0) return <HomeEmpty />;
   return (
     <div className="size-full overflow-y-auto" data-home-overview>
-      <div className="grid gap-4 p-6">
-        <p className="text-sm text-fg-muted" data-home-hint>
-          To start a new brainstorm, {START}.
-        </p>
-        <ul className="grid-overview grid gap-3" aria-busy={sessions === null || undefined}>
+      <div className="grid gap-5 p-6">
+        <header className="grid gap-1">
+          <h1 className="text-lg font-semibold">All brainstorms</h1>
+          <p className="text-sm text-fg-muted" data-home-hint>
+            To start a new brainstorm, {START}.
+          </p>
+        </header>
+        {/* Cards hug their own content, so a card with no brief never carries a blank band to match its row. */}
+        <ul className="grid-overview grid items-start gap-3" aria-busy={sessions === null || undefined}>
           {sessions === null
-            ? [0, 1, 2, 3, 4, 5].map((i) => (
+            ? [true, false, false, true, false, false].map((brief, i) => (
                 <li key={i} className="flex flex-col gap-1.5 rounded-lg bg-card p-4 ring-1 ring-border" data-overview-skeleton>
                   {/* One bar a line, each as tall as the card's text, so the cards that replace these don't move. */}
                   <Skeleton className="h-4 w-1/3" />
                   <Skeleton className="h-5 w-2/3" />
-                  <Skeleton className="h-4.5 w-full" />
-                  <Skeleton className="h-4.5 w-1/2" />
+                  {brief && <Skeleton className="h-4.5 w-full" />}
+                  {brief && <Skeleton className="h-4.5 w-1/2" />}
                   <Skeleton className="mt-1 h-4 w-1/3" />
                 </li>
               ))
@@ -118,9 +122,9 @@ function ListError({ message, onRetry }: { message: string; onRetry: () => void 
     <Empty className="size-full rounded-none" data-home-error>
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <CloudOff aria-hidden />
+          <CloudOff aria-hidden className="text-danger" />
         </EmptyMedia>
-        <EmptyTitle>Couldn't load your brainstorms</EmptyTitle>
+        <EmptyTitle>Your brainstorms didn't load</EmptyTitle>
         <EmptyDescription>{message}</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>

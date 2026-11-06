@@ -7,6 +7,7 @@ import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Hint } from "@/components/ui/tooltip";
 import type { BlockId, ExportResult, RobAction, SessionView } from "../core/types";
 import { ExportButton } from "./Export";
+import { Mark } from "./Mark";
 import { Regenerate, RequestStatus } from "./Regenerate";
 
 /** The right panel's toggle, as T3 Code has it: pressed while the panel shows. */
@@ -16,11 +17,17 @@ export type PanelToggle = { readonly open: boolean; readonly onToggle: () => voi
  * The window header: the native title bar is gone, so this row moves the window, and the native buttons overlay its
  * right end. The sidebar's toggle comes here when the sidebar is hidden, and the Inspector's toggle sits last.
  */
-export function TopBar({ actions, panel, children }: { actions?: ReactNode; panel?: PanelToggle; children: ReactNode }) {
+export function TopBar({ actions, panel, children }: { actions?: ReactNode; panel?: PanelToggle; children?: ReactNode }) {
   const { state, isMobile } = useSidebar();
   return (
     <header className="titlebar-inset flex h-12 shrink-0 items-center gap-3 pl-1" data-topbar data-drag-region>
-      {(state === "collapsed" || isMobile) && <SidebarTrigger />}
+      {/* With the sidebar away, its toggle and the mark move here, so the window still says whose it is. */}
+      {(state === "collapsed" || isMobile) && (
+        <>
+          <SidebarTrigger />
+          <Mark size={20} />
+        </>
+      )}
       {children}
       <div className="ml-auto flex shrink-0 items-center gap-2">
         {actions}

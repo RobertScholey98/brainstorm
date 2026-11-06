@@ -6,6 +6,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { overlaySurface } from "@/components/ui/overlay";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Toast } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -150,11 +151,8 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
         {nav.kind === "overview" ? (
           <Shell
             sidebar={sidebar(homePanel)}
-            bar={
-              <TopBar>
-                <h1 className="pl-1 text-sm font-semibold">All brainstorms</h1>
-              </TopBar>
-            }
+            // The overview carries its own page heading, so the header holds only the window's controls.
+            bar={<TopBar />}
           >
             <section className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Brainstorms" data-canvas-region>
               <HomeOverview sessions={sessions} error={listError} onRetry={() => void refreshList()} onSession={openSession} />
@@ -484,9 +482,24 @@ function SessionWorkspace({
   );
 }
 
-/** While the brainstorm loads, the Inspector's skeletons are the only loading cue; the canvas stays a quiet surface. */
+/** While the brainstorm loads, the canvas shows the shape it will take: the slot bar, and one frame on the stage. */
 function WaitingEmpty({ loading }: { loading: boolean }) {
-  if (loading) return <div className="size-full bg-canvas" aria-busy data-canvas-loading />;
+  if (loading) {
+    return (
+      <div className="flex size-full flex-col bg-canvas" aria-busy data-canvas-loading>
+        <div className="flex h-10 shrink-0 items-center gap-4 border-b bg-card px-10">
+          <Skeleton className="h-3.5 w-16" />
+          <Skeleton className="h-3.5 w-16" />
+        </div>
+        <div className="flex min-h-0 flex-1 justify-center p-6">
+          <div className="flex w-full max-w-popover-md flex-col gap-2">
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="flex-1 rounded-sm" />
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <Empty className="size-full rounded-none bg-canvas">
       <EmptyHeader>

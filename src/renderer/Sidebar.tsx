@@ -20,6 +20,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { takeoverPhrase } from "../core/machines";
 import { blockIdOf, type BlockId, type BlockView, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
@@ -29,7 +30,7 @@ import { Markdown } from "./Markdown";
 import { parseMarkdown, withLeadLabel } from "./markdownSubset";
 import { CopyPhrase } from "./Regenerate";
 import { groupByProject } from "./sessionGroups";
-import { ago, useNow } from "./time";
+import { age, useNow } from "./time";
 
 export function AppSidebar({
   width,
@@ -117,10 +118,13 @@ export function HomePanel({
         <p className="px-4 py-3 text-sm/relaxed text-pretty text-fg-muted">The list didn't load. Try again from the overview.</p>
       ) : sessions === null ? (
         <SidebarGroup data-home-loading>
+          <div className="flex h-8 items-center px-2">
+            <Skeleton className="h-3 w-16" />
+          </div>
           <SidebarMenu>
-            {[0, 1, 2, 3].map((i) => (
+            {(["w-3/4", "w-1/2", "w-2/3", "w-3/4", "w-1/2"] as const).map((width, i) => (
               <SidebarMenuItem key={i}>
-                <SidebarMenuSkeleton />
+                <SidebarMenuSkeleton width={width} />
               </SidebarMenuItem>
             ))}
           </SidebarMenu>
@@ -157,34 +161,27 @@ export function HomePanel({
   );
 }
 
+/** One line, as T3 Code lists threads: the title, its live status, and how long ago it last moved, right-aligned. */
 function SessionRow({ session: s, now, active, onOpen }: { session: SessionListing; now: number; active: boolean; onOpen: () => void }) {
   return (
-    <SidebarMenuButton size="tall" isActive={active} onClick={onOpen} data-session={s.id} data-lost={s.lost || undefined}>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex items-center gap-1.5">
-          <span className="truncate">{s.title}</span>
-          {s.openRequest && (
-            <span className="flex shrink-0 items-center" data-session-busy>
-              <span aria-hidden className="size-1.5 rounded-full bg-accent" />
-              <span className="sr-only">Waiting on the agent</span>
-            </span>
-          )}
+    <SidebarMenuButton isActive={active} onClick={onOpen} data-session={s.id} data-lost={s.lost || undefined}>
+      <span className="min-w-0 flex-1 truncate">{s.title}</span>
+      {/* A lost thread outranks a wait, since nobody can answer it. */}
+      {s.lost ? (
+        <span className="flex shrink-0 items-center text-warning" data-session-lost>
+          <AlertTriangle aria-hidden className="size-3.5!" />
+          <span className="sr-only">Thread lost</span>
         </span>
-        <span className="flex min-w-0 items-center gap-1 text-xs font-normal text-fg-muted">
-          {/* A row has room for two facts, and a lost thread matters more than which iteration is showing. */}
-          {s.lost ? (
-            <span className="flex min-w-0 items-center gap-1 text-warning" data-session-lost>
-              <AlertTriangle aria-hidden className="size-3! shrink-0" />
-              <span className="truncate">Thread lost</span>
-            </span>
-          ) : (
-            <span className="truncate tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
-          )}
-          <span aria-hidden>·</span>
-          <span className="shrink-0" data-age={s.activeAt}>
-            {ago(s.activeAt, now)}
+      ) : (
+        s.openRequest && (
+          <span className="flex shrink-0 items-center" data-session-busy>
+            <span aria-hidden className="size-1.5 rounded-full bg-accent" />
+            <span className="sr-only">Waiting on the agent</span>
           </span>
-        </span>
+        )
+      )}
+      <span className="shrink-0 text-xs font-normal text-fg-muted tabular-nums" data-age={s.activeAt}>
+        {age(s.activeAt, now)}
       </span>
     </SidebarMenuButton>
   );
@@ -223,15 +220,30 @@ export function SessionPanel({
         </SidebarMenu>
       </SidebarGroup>
       {view === null ? (
-        <SidebarGroup data-session-loading>
-          <SidebarMenu>
-            {[0, 1, 2, 3, 4].map((i) => (
-              <SidebarMenuItem key={i}>
-                <SidebarMenuSkeleton />
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
+        <div data-session-loading>
+          {/* The panel it stands for: the thread, then each slot's heading and variant rows. */}
+          <SidebarGroup className="py-1">
+            <div className="flex h-8 items-center px-2">
+              <Skeleton className="h-3 w-12" />
+            </div>
+            <SidebarMenuSkeleton width="w-2/3" trailing={false} />
+          </SidebarGroup>
+          {[3, 2].map((rows, slot) => (
+            <SidebarGroup key={slot}>
+              <div className="flex h-8 items-center justify-between px-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-3 w-12" />
+              </div>
+              <SidebarMenu>
+                {(["w-1/2", "w-2/3", "w-1/2"] as const).slice(0, rows).map((width, i) => (
+                  <SidebarMenuItem key={i}>
+                    <SidebarMenuSkeleton width={width} />
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          ))}
+        </div>
       ) : (
         <ThreadSection view={view} />
       )}

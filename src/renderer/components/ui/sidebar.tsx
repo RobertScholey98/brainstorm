@@ -612,16 +612,12 @@ function SidebarMenuBadge({
 }
 
 /** A two-line session row while the list loads: the title, then the meta line, at the real row's height. */
-function SidebarMenuSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+/** A row that hasn't loaded: one line as tall as a menu row, with the short trailing text a row ends in. */
+function SidebarMenuSkeleton({ width = "w-3/4", trailing = true }: { width?: "w-1/2" | "w-2/3" | "w-3/4"; trailing?: boolean }) {
   return (
-    <div
-      data-slot="sidebar-menu-skeleton"
-      data-sidebar="menu-skeleton"
-      className={cn("grid h-12 content-center gap-1.5 rounded-md px-2", className)}
-      {...props}
-    >
-      <Skeleton className="h-3.5 w-3/4" data-sidebar="menu-skeleton-text" />
-      <Skeleton className="h-3 w-1/2" />
+    <div data-slot="sidebar-menu-skeleton" data-sidebar="menu-skeleton" className="flex h-8 items-center gap-2 px-2">
+      <Skeleton className={cn("h-3.5", width)} data-sidebar="menu-skeleton-text" />
+      {trailing && <Skeleton className="ml-auto h-3 w-6" />}
     </div>
   )
 }

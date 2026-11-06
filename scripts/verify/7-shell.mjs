@@ -70,10 +70,22 @@ try {
       })),
     );
   check("home groups every brainstorm under its project, newest activity first", await groups(), [
-    { label: "Other project", rows: ["Loose notesNo iterations yet·just now"] },
-    { label: "kitchen", rows: ["Kitchen rotaNo iterations yet·just now"] },
-    { label: "chores", rows: ["Start a taskIteration 1·just now", "Chore rouletteIteration 1·just now"] },
+    { label: "Other project", rows: ["Loose notesnow"] },
+    { label: "kitchen", rows: ["Kitchen rotanow"] },
+    { label: "chores", rows: ["Start a tasknow", "Chore roulettenow"] },
   ]);
+  check(
+    "each home row is one 32 px line, its age at the right end",
+    await window.$$eval("[data-session]", (rows) =>
+      rows.every((r) => {
+        const row = r.getBoundingClientRect();
+        const age = r.querySelector("[data-age]").getBoundingClientRect();
+        return Math.round(row.height) === 32 && row.right - age.right < 12;
+      }),
+    ),
+    true,
+  );
+  check("the overview carries the page heading", (await window.textContent("[data-home-overview] h1"))?.trim(), "All brainstorms");
   check(
     "with nothing open, the main panel says how to start one",
     (await window.textContent("[data-home-hint]"))?.includes("run /ux-brainstorm in a T3 thread on your project"),
