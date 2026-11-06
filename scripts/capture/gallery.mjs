@@ -718,7 +718,7 @@ function scenes(page, home, env, t3, sessions) {
         },
       });
       await page.unroute("**/v1/ui/sessions/*/actions");
-      await page.click("[data-toast-close]");
+      if ((await page.$("[data-slot=toast]")) !== null) await page.click("[data-toast-close]");
       await page.waitForSelector("[data-slot=toast]", { state: "detached" });
 
       let release;
@@ -748,7 +748,8 @@ function scenes(page, home, env, t3, sessions) {
         },
       });
       await page.unroute("**/v1/ui/sessions/*/export");
-      await page.click("[data-toast-close]");
+      // The thread check every 15 s is a successful call, which may already have cleared the notice.
+      if ((await page.$("[data-slot=toast]")) !== null) await page.click("[data-toast-close]");
       await page.waitForSelector("[data-slot=toast]", { state: "detached" });
     },
 
