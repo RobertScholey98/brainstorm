@@ -153,6 +153,21 @@ describe("design lint", () => {
     expect(rules(source, true)).toEqual([]);
   });
 
+  it("inline-size: fails an inline size that is a number or a named constant, and allows a measured one and the kit", () => {
+    const source = [
+      `<div style={{ left, top, width: COMPOSER.width }} />`,
+      `<div style={{ minHeight: 120, maxWidth: "20rem" }} />`,
+      `<div style={{ width }} />`,
+      `<div style={{ width: frame.width * zoom, height: rect.height }} />`,
+    ].join("\n");
+    expect(rules(source)).toEqual([
+      { rule: "inline-size", line: 1, text: "<div> width: COMPOSER.width" },
+      { rule: "inline-size", line: 2, text: "<div> minHeight: 120" },
+      { rule: "inline-size", line: 2, text: `<div> maxWidth: "20rem"` },
+    ]);
+    expect(rules(source, true)).toEqual([]);
+  });
+
   it("passes on the renderer as it stands", async () => {
     expect(await lintRenderer()).toEqual([]);
   });

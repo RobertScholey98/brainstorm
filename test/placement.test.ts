@@ -1,9 +1,16 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { composerPlace } from "../src/renderer/placement";
+import { COMPOSER, composerPlace } from "../src/renderer/placement";
 
 const bounds = { width: 1000, height: 700 };
 
 describe("composerPlace", () => {
+  it("places the composer at the overlay width it renders at", () => {
+    const step = /--spacing-popover-sm:\s*(\d+)px/.exec(readFileSync("src/renderer/styles.css", "utf8"))?.[1];
+    expect(COMPOSER.width).toBe(Number(step));
+    expect(readFileSync("src/renderer/Feedback.tsx", "utf8")).toContain("w-popover-sm");
+  });
+
   it("puts the composer 12 px under the picked element, left-aligned with it", () => {
     expect(composerPlace({ x: 120, y: 110 }, { x: 100, y: 100, width: 80, height: 20 }, bounds)).toEqual({ left: 100, top: 132 });
   });
@@ -17,7 +24,7 @@ describe("composerPlace", () => {
   });
 
   it("keeps a 12 px margin from the canvas edges", () => {
-    expect(composerPlace({ x: 990, y: 20 }, { x: 960, y: 10, width: 30, height: 20 }, bounds)).toEqual({ left: 688, top: 42 });
+    expect(composerPlace({ x: 990, y: 20 }, { x: 960, y: 10, width: 30, height: 20 }, bounds)).toEqual({ left: 668, top: 42 });
     expect(composerPlace({ x: 5, y: 20 }, { x: -40, y: 10, width: 60, height: 20 }, bounds).left).toBe(12);
   });
 });

@@ -1,6 +1,7 @@
 import type { CanvasRect } from "../core/types";
 
-export const COMPOSER = { width: 300, height: 180, gap: 12, margin: 12 } as const;
+/** `width` is the popover-sm step the composer takes, which placement needs as a number. */
+export const COMPOSER = { width: 320, height: 180, gap: 12, margin: 12 } as const;
 
 /**
  * Where the pin composer goes: under the picked element so the element stays visible, above it when there's no room

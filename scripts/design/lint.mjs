@@ -20,6 +20,8 @@
 //                    header, outside components/ui
 //   page-title       the title step of the type scale outside components/ui; a page heading comes from PageHeader, so
 //                    every page title has one size
+//   inline-size      an inline style that sets a size to a number or a named constant, outside components/ui; a fixed
+//                    size is a step on the closed scales, and only a measured size goes inline
 //
 // A string counts as classes inside className, cn, cva, cx and clsx. Elsewhere it counts when every word in it is a
 // Tailwind candidate and at least one generates CSS, so `align="end"` and `data-icon="inline-start"` aren't classes.
@@ -101,7 +103,7 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
     });
   }
   problems.push(...chipRecipe(source, lits));
-  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file));
+  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source));
   return problems.sort((a, b) => a.line - b.line);
 }
 
@@ -140,6 +142,20 @@ function chipRecipe(source, lits) {
         .filter((token) => /^bg-/.test(splitClass(token).utility))
         .map((token) => ({ rule: "chip-recipe", line: attr.line, text: `<${el.tag}> ${token}`, message: "take the chip recipe: Code, Kbd, Badge or chip from components/ui/chip.ts" })),
     );
+}
+
+const SIZE_KEY = /\b((?:min|max)?(?:Width|Height)|width|height|inlineSize|blockSize)\s*:\s*([^,}]+)/g;
+/** A literal or a CONSTANT_CASE name, possibly a member of one, as opposed to a value measured at run time. */
+const FIXED = /^(?:-?\d[\d.]*|["'`][^"'`]*["'`]|[A-Z][A-Z0-9_]*(?:\.\w+)*)$/;
+
+/** An inline style may size an element only by a measured value; a fixed size comes from the scales. */
+function inlineSize(source) {
+  return jsxElements(source).flatMap((el) =>
+    el.attrs
+      .filter((a) => a.name === "style")
+      .flatMap((attr) => [...source.slice(attr.start, attr.end).matchAll(SIZE_KEY)].filter((m) => FIXED.test(m[2].trim())).map((m) => ({ attr, m })))
+      .map(({ attr, m }) => ({ rule: "inline-size", line: attr.line, text: `<${el.tag}> ${m[1]}: ${m[2].trim()}`, message: "a fixed size is a step on the closed scales; only a measured size goes inline" })),
+  );
 }
 
 /** A Hint names its side, and on the window header that side is left or right. */

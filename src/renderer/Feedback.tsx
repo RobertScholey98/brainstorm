@@ -2,7 +2,7 @@ import { MessageSquarePlus, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, CanvasRect, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
-import { COMPOSER, composerPlace } from "./placement";
+import { composerPlace } from "./placement";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -386,8 +386,8 @@ export function PinComposer({
         aria-labelledby="composer-title"
         data-composer
         data-open=""
-        className={cn(overlaySurface(), "absolute z-popover grid gap-3 p-3 text-sm")}
-        style={{ left, top, width: COMPOSER.width }}
+        className={cn(overlaySurface(), "absolute z-popover grid w-popover-sm gap-3 p-3 text-sm")}
+        style={{ left, top }}
       >
         <OverlayHeader id="composer-title" heading="New comment" description={pinWhere(pin, block)} />
         <TextEditor overlay initial="" placeholder="What should change here?" submitLabel="Pin comment" onSubmit={onSave} onCancel={onCancel} />
