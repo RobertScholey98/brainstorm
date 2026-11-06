@@ -232,7 +232,7 @@ try {
   check("with one slot both views are the same, so the bar shows no view switch", await window.$("[data-view-option]"), null);
   check("the stage zooms the 980 px frame to fit, says by how much in the canvas bar, and never scrolls sideways at 1440", await fit(), { sideways: false, zoom: "83", fits: true });
   await window.setViewportSize({ width: 1100, height: 720 });
-  await window.waitForFunction(() => document.querySelector("[data-canvas-zoom]")?.dataset.canvasZoom !== "83");
+  await window.waitForFunction(() => document.querySelector("[data-canvas-zoom]")?.dataset.canvasZoom === "49", null, { timeout: 5000 }).catch(() => {});
   check("and at 1100", await fit(), { sideways: false, zoom: "49", fits: true });
   await window.setViewportSize({ width: 1440, height: 900 });
   await window.waitForFunction(() => document.querySelector("[data-canvas-zoom]")?.dataset.canvasZoom === "83");
