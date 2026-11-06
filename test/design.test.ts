@@ -67,6 +67,12 @@ describe("design tokens", () => {
     expect(layers.some((l) => l.blur >= 20 && l.alpha >= 0.12 && l.y >= 6)).toBe(true);
   });
 
+  it("hides the outer half of each scroll fade outright, so a control cut at either edge leaves no sliver", () => {
+    const fades = /@utility scroll-fades \{[^}]*\}/.exec(readFileSync("src/renderer/styles.css", "utf8"))?.[0] ?? "";
+    const hidden = [...fades.matchAll(/transparent calc\((?:100% - )?var\(--fade-(top|bottom)\) \* ([\d.]+)\)/g)].map(([, end, share]) => [end, Number(share) >= 0.5]);
+    expect(hidden).toEqual([["top", true], ["bottom", true]]);
+  });
+
   it("prefixes every variable for the canvas, so block code can't pick one up by accident", () => {
     const css = designCss("bs-");
     expect(css).toContain("--bs-accent: #");
