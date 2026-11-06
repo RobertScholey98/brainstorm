@@ -4,11 +4,14 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+/** Under a minute, both formats say this, so a row and a card never disagree on the same brainstorm. */
+const NOW = "now";
+
 /** How long ago `iso` was, the way a list of recent work says it. Past a week it gives the date instead. */
 export function ago(iso: string, now: number): string {
   const then = Date.parse(iso);
   const ms = Math.max(0, now - then);
-  if (ms < MINUTE) return "just now";
+  if (ms < MINUTE) return NOW;
   if (ms < HOUR) return `${Math.floor(ms / MINUTE)} min ago`;
   if (ms < DAY) return `${Math.floor(ms / HOUR)} h ago`;
   const days = Math.floor(ms / DAY);
@@ -32,7 +35,7 @@ export function useNow(): number {
 /** `ago` in the few characters a list row has room for: now, 5m, 3h, 2d, then the date. */
 export function age(iso: string, now: number): string {
   const ms = Math.max(0, now - Date.parse(iso));
-  if (ms < MINUTE) return "now";
+  if (ms < MINUTE) return NOW;
   if (ms < HOUR) return `${Math.floor(ms / MINUTE)}m`;
   if (ms < DAY) return `${Math.floor(ms / HOUR)}h`;
   if (ms < 7 * DAY) return `${Math.floor(ms / DAY)}d`;

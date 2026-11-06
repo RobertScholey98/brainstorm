@@ -9,6 +9,7 @@ import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { parseArgs } from "node:util";
 import { _electron, chromium } from "playwright";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
@@ -412,6 +413,25 @@ function seedAll(home, env, t3) {
   }).id;
   sessions.roulette = seed(home, env, { title: "Chore roulette", thread: DEMO_THREAD, project: chores, brief, slots: demoSlots, note: "Three wheels and two results" });
   return sessions;
+}
+
+const HOUR = 3_600_000;
+/** How long ago each seeded brainstorm last moved, so home reads like weeks of work, not one minute of seeding. */
+const AGES = { kitchen: 3 * HOUR, longTitle: 0.7 * HOUR, wide: 26 * HOUR, desktop: 50 * HOUR, multi: 5 * 24 * HOUR, broken: 9 * 24 * HOUR, list: 20 * 24 * HOUR, loose: 45 * 24 * HOUR };
+
+/** Moves each seeded brainstorm's history back by its age. The app must be closed, since the store is its database. */
+function ageSeeds(home, sessions) {
+  const db = new DatabaseSync(join(home, "brainstorm.db"));
+  const back = (iso, ms) => new Date(Date.parse(iso) - ms).toISOString();
+  for (const [name, ms] of Object.entries(AGES)) {
+    const id = sessions[name];
+    for (const table of ["session", "iteration", "request"]) {
+      const key = table === "session" ? "id" : "session_id";
+      const rows = db.prepare(`SELECT rowid, created_at FROM ${table} WHERE ${key} = ?`).all(id);
+      for (const row of rows) db.prepare(`UPDATE ${table} SET created_at = ? WHERE rowid = ?`).run(back(row.created_at, ms), row.rowid);
+    }
+  }
+  db.close();
 }
 
 const HEADLINE = inBlock("result/card", "headline");
@@ -954,6 +974,7 @@ try {
   t3.setMissing(LOOSE_THREAD, true);
   consoleNotes.push(...run.errors.map(firstLine("seeding")));
   await run.app.close();
+  ageSeeds(home, sessions);
   run = await start(home, env);
   for (const [name, fn] of Object.entries(scenes(run.window, home, env, t3, sessions))) {
     await runScene(name, fn);
