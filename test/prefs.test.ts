@@ -24,14 +24,15 @@ async function withServer<T>(home: string, fn: (call: (method: string, body?: un
 }
 
 describe("UI prefs", () => {
-  test("pane widths, the Inspector rail, a brainstorm's canvas view and home's filters survive a restart", async () => {
+  test("pane widths, the Inspector rail, the history strip, a brainstorm's canvas view and home's filters survive a restart", async () => {
     const home = mkdtempSync(join(tmpdir(), "bs-prefs-"));
     await withServer(home, async (call) => {
-      expect((await call("GET")).body).toEqual({ ok: true, data: { panes: { sidebar: null, inspector: null }, inspectorRail: false, canvas: {}, home: { status: "active", projects: [], sort: "recent" } } });
+      expect((await call("GET")).body).toEqual({ ok: true, data: { panes: { sidebar: null, inspector: null }, inspectorRail: false, historyStrip: true, canvas: {}, home: { status: "active", projects: [], sort: "recent" } } });
       await call("POST", { panes: { sidebar: 312 } });
       await call("POST", { panes: { inspector: 344 }, inspectorRail: true });
       await call("POST", { canvas: { session: "s_abcdefgh", layout: { view: "board", slot: "wheel" } } });
       await call("POST", { home: { status: "settled", projects: ["proj-a"], sort: "title" } });
+      await call("POST", { historyStrip: false });
     });
     await withServer(home, async (call) => {
       expect((await call("GET")).body).toEqual({
@@ -39,6 +40,7 @@ describe("UI prefs", () => {
         data: {
           panes: { sidebar: 312, inspector: 344 },
           inspectorRail: true,
+          historyStrip: false,
           canvas: { s_abcdefgh: { view: "board", slot: "wheel" } },
           home: { status: "settled", projects: ["proj-a"], sort: "title" },
         },
@@ -69,7 +71,7 @@ describe("UI prefs", () => {
       { key: "canvas.s_zzzzzzzz", json: '{"view":"zoom"}' },
       { key: "home.query", json: '{"status":"snoozed","projects":[],"sort":"recent"}' },
     ];
-    expect(readPrefs(rows)).toEqual({ panes: { sidebar: 264, inspector: null }, inspectorRail: false, canvas: { s_abcdefgh: { view: "stage", slot: null } }, home: { status: "active", projects: [], sort: "recent" } });
+    expect(readPrefs(rows)).toEqual({ panes: { sidebar: 264, inspector: null }, inspectorRail: false, historyStrip: true, canvas: { s_abcdefgh: { view: "stage", slot: null } }, home: { status: "active", projects: [], sort: "recent" } });
   });
 });
 
@@ -83,6 +85,7 @@ describe("applyPrefs", () => {
     expect(applyPrefs(before, patch)).toEqual({
       panes: { sidebar: 264, inspector: 320 },
       inspectorRail: false,
+      historyStrip: true,
       canvas: { s_abcdefgh: { view: "stage", slot: "wheel" }, s_zzzzzzzz: { view: "board", slot: null } },
       home: { status: "active", projects: [], sort: "recent" },
     });

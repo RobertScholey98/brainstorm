@@ -153,13 +153,15 @@ Rules the server enforces:
   4. If there's no change and `--addresses` adds nothing, return the latest iteration with `created: false`. That's an idempotent replay, and it comes before the base check, so a replay converges even when the CLI died before rewriting `base`.
   5. Refuse a stale base, then check every new content hash in the worker. Every error comes back in one `validation_failed`.
   6. In one transaction, re-check the owner and the latest iteration (the check awaited the worker), insert the iteration and its blocks, append `address` events, and fulfil the open request.
-  7. Return the warnings (`override_dropped`, `pin_lost`, `duplicate_part`, `out_of_scope`, `not_addressed`, `uncontrolled_prop`).
+  7. Return the warnings (`override_dropped`, `pin_lost`, `duplicate_part`, `out_of_scope`, `not_addressed`, `uncontrolled_prop`, `vary_mismatch`). For a vary request, any block but the asked-for variants is `out_of_scope`, and each asked-for variant that is missing, titled otherwise, or no longer renders the varied `data-part` is `vary_mismatch`.
+- A fork's new thread has no session, so its first message tells the agent to `session attach` first. That attach adopts the thread when the app hasn't yet, and changes nothing when it has (`#adopt` in the service).
 
 ### Context
 
 `context` returns `AgentContext`:
 - the session (id, title, brief), the latest iteration, and whether the caller is attached
-- the open request, with its scope, free text, the requested feedback (id, block, part, text and history) and Rob's applicable overrides on in-scope blocks
+- `fork`: for a fork, its parent (id and title), the iteration it came from, and the settings baked into its defaults; null otherwise
+- the open request, with its scope, free text, the requested feedback (id, block, part, text and history) and Rob's applicable overrides on in-scope blocks. A vary's target block is in scope, so its copies can start from Rob's settings; the text output spells a vary out as the slot, the target, the part and each new variant's key and title
 - all open and addressed feedback
 - `controlVocabulary()`
 - `next`, the exact commands to run
@@ -173,7 +175,16 @@ Text output prints this readably, ending with the `next` commands.
 Handle with the ux-brainstorm skill: run `brainstorm context s_8f2k3a`.
 ```
 
-The scope is `all`, a block-id list, or `described` (the free text defines it). `formatRequestMessage` and `parseRequestMarker` live in one module. The marker `session <id> · request <n>` is how the tracker finds the message in a thread.
+The scope is `all`, a block-id list, `described` (the free text defines it), or a vary: `vary wheel/neon [spin-button] as spin-button-a, spin-button-b, spin-button-c`, the target block, its part when there is one, and the keys the app named. `formatRequestMessage` and `parseRequestMarker` live in one module. The marker `session <id> · request <n>` is how the tracker finds the message in a thread.
+
+A fork's request 1 is its new thread's first message, sent by `t3 thread start`. It adds `fork of <parent> iteration <n>` after the marker, and its second line has the agent attach before reading context:
+
+```
+[brainstorm] session s_9c1d2e · request 1 · fork of s_8f2k3a iteration 4 · scope: all · feedback: #1 #2 · freetext: "Try it as a slot machine"
+Handle with the ux-brainstorm skill: this thread is new, so run `brainstorm session attach s_9c1d2e`, then `brainstorm context s_9c1d2e`.
+```
+
+When the app runs on a home other than the default, a third line names `BRAINSTORM_HOME`, since T3 starts agents with its own environment.
 
 ## Storage (`node:sqlite`, `PRAGMA user_version` migrations)
 
@@ -207,13 +218,20 @@ request(session_id TEXT NOT NULL, n INTEGER NOT NULL, body_json TEXT NOT NULL, f
         error TEXT, sent_at TEXT, fulfilled_in INTEGER, created_at TEXT NOT NULL, PRIMARY KEY(session_id, n))
   -- UNIQUE INDEX one_open_request ON request(session_id) WHERE state IN ('sending','sent','send_failed')
 ui_pref(key TEXT PRIMARY KEY, value_json TEXT NOT NULL)                          -- migration 3; how Rob left the window
+fork(session_id TEXT PRIMARY KEY REFERENCES session, parent_id TEXT NOT NULL REFERENCES session,
+        parent_n INTEGER NOT NULL, baked_json TEXT NOT NULL, created_at TEXT NOT NULL,
+        FOREIGN KEY(parent_id, parent_n) REFERENCES iteration(session_id, n))   -- migration 6 (ADR 005)
+variant_seen(session_id TEXT NOT NULL REFERENCES session, block_id TEXT NOT NULL,
+        PRIMARY KEY(session_id, block_id))                                       -- migration 6; seeded with every block that existed
 ```
+
+A fork is a session like any other, plus its `fork` row. `createFork` writes the session, the `fork` row, its iteration 1 (the source iteration narrowed to one variant per slot, with Rob's settings baked into the picked variants' `block.json` defaults and re-checked), his open pins on those variants as new feedback numbered from 1, and request 1, all in one transaction, attached to the sentinel thread `pending:<sessionId>`. The sentinel fails the thread-id pattern, so the bridge refuses to send to it or show it, and the attachment invariant holds while no thread exists yet. An iteration's origin is derived, never stored: the request it fulfilled, a fork's iteration 1, a root's iteration 1 from the brief, or else the agent's own commit and its note. A block is new while it first appeared after iteration 1 and has no `variant_seen` row.
 
 Each actor writes its own rows:
 - The agent's commit writes `block_content`, `iteration`, `iteration_block`, the `address` events and the request's `fulfilled`.
-- Rob writes `slot_choice`, `override`, `feedback`, `confirm`/`reopen` events and request creation, retry and withdrawal, and `session.settled_at` and `unsettled_at` through `POST /v1/ui/sessions/:id/settle` (`{ settled }`). Whether a settle still holds is derived on read: a request created after it, or an iteration that didn't fulfil a request made before it, brings the brainstorm back (`settlementOf` in `machines.ts`, ADR 004).
+- Rob writes `slot_choice`, `override`, `feedback`, `confirm`/`reopen` events, `variant_seen` (`mark_seen`), a fork and its discard (`POST /v1/ui/sessions/:id/fork` with `{ from, picks, instruction }`, and `POST …/discard`, which archives a fork whose thread never started), and request creation, retry and withdrawal, and `session.settled_at` and `unsettled_at` through `POST /v1/ui/sessions/:id/settle` (`{ settled }`). Whether a settle still holds is derived on read: a request created after it, or an iteration that didn't fulfil a request made before it, brings the brainstorm back (`settlementOf` in `machines.ts`, ADR 004).
 - The tracker writes `sent`/`send_failed` and `attachment.lost_at`.
-- The window writes `ui_pref` through `POST /v1/ui/prefs` (read back with `GET /v1/ui/prefs`): `pane.sidebar` and `pane.inspector` (widths, 120 to 1200), `inspector.rail`, `canvas.<sessionId>` (`{ view: "stage" | "board", slot }`), and `home.query` (`{ status, projects, sort }`, home's filters; never the search text). One row per preference, so a change never rewrites another. `readPrefs` in `src/core/prefs.ts` skips a row in a shape it doesn't know. They live on the server because the window's origin changes with each launch's port, so its own storage would forget them.
+- The window writes `ui_pref` through `POST /v1/ui/prefs` (read back with `GET /v1/ui/prefs`): `pane.sidebar` and `pane.inspector` (widths, 120 to 1200), `inspector.rail`, `canvas.<sessionId>` (`{ view: "stage" | "board", slot }`), `history.strip` (whether the history filmstrip shows; open by default), and `home.query` (`{ status, projects, sort }`, home's filters; never the search text). One row per preference, so a change never rewrites another. `readPrefs` in `src/core/prefs.ts` skips a row in a shape it doesn't know. They live on the server because the window's origin changes with each launch's port, so its own storage would forget them.
 
 ## State models (`src/core/machines.ts`, pure)
 
@@ -233,11 +251,15 @@ Each actor writes its own rows:
 | sent | marker's run ended, thread `failed` | "The agent's run failed in T3" | Retry, Withdraw |
 | sent | marker's run ended, no commit | "The agent replied in T3 without changing the design" | Retry, Withdraw |
 | fulfilled | none | "Iteration n · changed …" | none |
+| sending | a fork's thread hasn't started | "Starting a T3 thread…" | none |
+| send_failed | a fork's thread hasn't started | "Couldn't start a T3 thread (<error>). The fork is saved." | Retry, Discard fork |
 
 `observeRequest(sessionId, n, snapshot)` finds the user message containing the marker and compares its `runId` with `thread.activeRunId`.
 - **Retry or resend** first checks whether the marker already arrived, so it never double-sends blindly.
 - **On startup,** every request left in `sending` gets the same check and becomes `sent` or `send_failed`.
 - **One open request per session.** Regenerate is disabled while one is open, and the UI shows that request with Withdraw.
+- **A fork's thread start.** The fork's request 1 starts its thread. Its success, a retry or restart that finds the thread, and the new agent's own `session attach` all adopt the thread through one idempotent step, which reattaches the session and marks the request sent. A retry, and startup, first list the project's threads created from a minute before the request and look for its marker in the newest ten, so a start whose reply was lost never makes a second thread. Startup never starts a thread itself; one it can't find becomes `send_failed` ("Brainstorm stopped before its thread started"). A fork's thread can't be withdrawn to, so its only ways out are Retry and Discard.
+- **Vary.** A vary is a request whose scope is `{ kind: "vary", target: Pin, variants }`. The server names the variants when Rob sends (`varyNames` in `fork.ts`): the element's `data-part` (or the block's variant key) plus the next free letters, titled "Spin button A" and so on. It carries no feedback, and shares Regenerate's gate and every phase.
 
 **Attachment.** `attached` or `lost`, where lost means `lost_at` is set. It becomes lost only when the bridge reports the thread missing. It recovers when that thread is seen again, commits, or another thread attaches.
 
@@ -254,12 +276,14 @@ Each actor writes its own rows:
   - The three boundary parsers (`parsePropsSchema`, `validateControls`, `parseWorkingCopy`) return `Parsed<T>`: `{ ok: true, value, warnings }` or `{ ok: false, issues }`.
   - `store.ts`: SQL only, private to the service
   - `brainstorm.ts`: the `Brainstorm` service. It has one method per agent command (`newSession`, `listSessions`, `attach`, `context`, `pull`, `validate`, `commit`), plus `view(sessionId)`, `act(sessionId, RobAction) → SessionView`, `exportHtml(sessionId) → { path, file }`, `prefs()` and `setPrefs(patch)`, `tick()` for the tracker poll, and `subscribe(listener)`. `view()` reuses the last thread snapshot. It asks T3 itself only for a thread it has never seen, or one whose last check failed or came back missing at least 10 s ago, so a T3 outage doesn't spawn `t3` on every view. `tick`, `check_thread`, retry and startup always ask. Listeners hear a session once per microtask, however many writes made it change.
-  - `bridge/t3.ts`: the only file that knows the `t3` CLI. It runs `cmd.exe /d /s /c <t3.cmd> …` with the message on stdin, and checks thread ids against `^[0-9a-f-]{36}$`. The path comes from `BRAINSTORM_T3_CLI`, then `T3CODE_CLI_PATH`, then `%USERPROFILE%\.t3\bin\t3.cmd`.
+  - `bridge/t3.ts`: the only file that knows the `t3` CLI. It runs `cmd.exe /d /s /c <t3.cmd> …` with the message on stdin, and checks thread ids against `^[0-9a-f-]{36}$`. Besides `send` and `snapshot` it has `start({ project, title, message })` and `list(project)`; project ids must match `PROJECT_PATTERN` and a title passes through `safeTitle` before it reaches the command line. The path comes from `BRAINSTORM_T3_CLI`, then `T3CODE_CLI_PATH`, then `%USERPROFILE%\.t3\bin\t3.cmd`.
 - `src/server/http.ts`: auth, Host/Origin checks, body parsing into domain types, `Failure` → HTTP status, SSE, static files. It is adaptation, not a pass-through.
 - `src/server/headless.ts`: starts the server with no window and prints the UI URL.
 - `src/canvas/runtime.tsx` is bundled with React into `dist/canvas/runtime.js`. `buildCanvasDocument(payload, mode: "live" | "export")` returns the HTML for `/canvas` and for an export file, so the two can't drift.
 
-`RobAction` is `set_override | clear_override | dismiss_inapplicable | select_variant | add_feedback | edit_feedback | delete_feedback | confirm_feedback | reopen_feedback | regenerate { scope, freetext } | retry_request | withdraw_request | check_thread`.
+`RobAction` is `set_override | clear_override | dismiss_inapplicable | select_variant | add_feedback | edit_feedback | delete_feedback | confirm_feedback | reopen_feedback | regenerate { scope, freetext } | vary { target, count, direction } | mark_seen { blocks } | retry_request | withdraw_request | check_thread`. A vary asks for 1 to 6 variants (`VARY_MAX`).
+
+The service also has `fork(parentId, { from, picks, instruction })`, `discard(id)`, `iteration(id, n)` (a past iteration, read-only, at `GET /v1/ui/sessions/:id/iterations/:n`) and `preview(id, { n?, slot? })` (`GET …/preview?n=&slot=`, a filmstrip still). `fork.ts` holds the pure rules a fork and a vary share with the window: `carryOver` (what the Fork popover lists and the service writes, so the two can't disagree), `bakeDefaults`, `forkTitle` (the instruction's first clause, at most 48 characters), `partLabel` and `varyNames`. `SessionView` carries `fork` (parent, its state `active | settled | gone`, and the source iteration), `lineage` (every ancestor, oldest first) and `history` (`iterations` with each one's origin, and the `forks` made from this brainstorm).
 
 `FEEDBACK_ACTIONS` in `machines.ts` maps each feedback status to what Rob may do: open to edit and delete, addressed to confirm and reopen, confirmed to reopen. `act` refuses anything else, and the feedback list draws its buttons from the same table. `regenerateGate` decides `SessionView.regenerate`: no iteration, then an open request, then a lost attachment each block it, and `regenerate` refuses the same cases (`not_found`, `request_open`, `thread_lost`). `requestFeedback(feedback, scope)` is the one rule for which open feedback a request carries.
 
@@ -307,7 +331,7 @@ The Export button shows the file's path with Show in folder. The renderer has no
 
 ## Verification harness
 
-- **Fake T3.** `test/fake-t3/t3.cmd` plus `fake-t3.mjs` drive threads from a JSON state file named in `BRAINSTORM_FAKE_T3_STATE`. Each thread has `projectId`, `status`, `activeRunId`, `pendingRequestCount`, `messages` and `missing`. `send` appends messages and records them. A `fail` flag forces exit 1: `true` for every command, or a list such as `["send"]`. `failAfter: ["send"]` delivers and then exits 1, as when the CLI loses the reply. `test/fake-t3/control.mjs` moves a thread the way T3 does for verify scripts: a run takes the queued messages, can wait for an answer (`pendingRequestCount`), and ends completed or failed. Its JSON mirrors the real shapes recorded in `docs/t3-cli.md`.
+- **Fake T3.** `test/fake-t3/t3.cmd` plus `fake-t3.mjs` drive threads from a JSON state file named in `BRAINSTORM_FAKE_T3_STATE`. Each thread has `projectId`, `status`, `activeRunId`, `pendingRequestCount`, `messages` and `missing`. `send` appends messages and records them. `start` makes a thread in a known project with its first message, records it in `started` and prints `--json` as the real one does, and `list` adds each thread's `createdAt`. A `fail` flag forces exit 1: `true` for every command, or a list such as `["send"]`. `failAfter: ["send"]` delivers and then exits 1, as when the CLI loses the reply. `test/fake-t3/control.mjs` moves a thread the way T3 does for verify scripts: a run takes the queued messages, can wait for an answer (`pendingRequestCount`), and ends completed or failed. Its JSON mirrors the real shapes recorded in `docs/t3-cli.md`.
 - **Unit tests** use `vitest` on `src/core` against literal expected values.
 - **Verify scripts.** `npm run verify:<n>` (`scripts/verify/<n>-*.mjs`) starts the real artifact with a temp `BRAINSTORM_HOME`. That's the headless server plus the real CLI for item 1, and Playwright `_electron` for the app items. Each script prints `VERIFIED` or exits non-zero with what failed. The app scripts save screenshots to `test-results/verify-<n>/` and fail on any error or warning the window logs. They open the seeded session from the home sidebar, as Rob does. `verify:7` checks the shell itself and saves its light and dark screenshots to `test-results/shell/`.
 - **Design lint.** `npm run lint:design` (`scripts/design/lint.mjs`) fails on an arbitrary-value utility in `src/renderer` outside `components/ui`, a raw hex or colour function in any renderer string, and any utility the closed theme in `styles.css` doesn't generate, with numeric `z-*`, sizing-only steps on padding, margin or gap, and rings wider than 2 px. It also fails a raised fill or floating shadow outside `components/ui/overlay.ts`, which owns the one surface every popover, menu, tooltip and toast is drawn on (`surface-recipe`); a native `title=` hint on an element or kit component, where the kit `Hint` belongs (`title-hint`); a class that restyles a kit component with variants instead of placing it (`kit-override`); a focus ring in any colour but the full-strength `ring` token (`focus-ring`); and a button written into a `Callout`'s message instead of its `actions` or a `CalloutItem`'s (`callout-actions`). It fails any iframe that isn't a canvas page, `/canvas` or `/canvas/preview`, under `sandbox="allow-scripts"` and nothing more (`frame-sandbox`), so a preview can never run agent code with more privilege than the canvas. `test/design-lint.test.ts` runs it on the renderer, so `npm test` fails too. The tokens live in `src/core/design.ts`; `npm run design:tokens` regenerates `src/renderer/design.css` and a test fails if it is stale. `scripts/design/codemod.mjs` moves classes onto the scales, and `npm run design:checkpoint` builds the before and after sheets in `design-review/checkpoint/`. `docs/design-system/adr-001-foundation.md` records why.

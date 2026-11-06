@@ -5,9 +5,11 @@ import {
   foldFeedback,
   formatRequestMessage,
   observeRequest,
+  originText,
   parseRequestMarker,
   phaseMessage,
   requestPhase,
+  scopeText,
 } from "../src/core/machines";
 import type {
   Attachment,
@@ -16,6 +18,7 @@ import type {
   FeedbackId,
   IterationN,
   Observation,
+  PartName,
   Request,
   RequestN,
   RequestState,
@@ -24,6 +27,7 @@ import type {
   ThreadId,
   ThreadMessage,
   ThreadSnapshot,
+  VariantKey,
 } from "../src/core/types";
 
 const it = (n: number) => n as IterationN;
@@ -304,5 +308,58 @@ describe("the [brainstorm] message", () => {
     expect(parseRequestMarker("please [brainstorm] session s_abc123 · request 12 · scope: all")).toEqual({ session: "s_abc123", n: 12 });
     expect(parseRequestMarker("[brainstorm] session nope · request 5")).toBe(null);
     expect(parseRequestMarker("just chatting")).toBe(null);
+  });
+});
+
+describe("a fork's thread start", () => {
+  const pending = `pending:${session}` as ThreadId;
+  const unstarted: Attachment = { ...attached, threadId: pending };
+
+  test("starting has nothing to press, and a failed start offers Retry and Discard only", () => {
+    expect(seen({ state: "sending" }, unstarted, null, pending)).toEqual({ phase: "starting", actions: [], message: "Starting a T3 thread…" });
+    expect(seen({ state: "send_failed", error: "t3 exited 1" }, unstarted, null, pending)).toEqual({
+      phase: "start_failed",
+      actions: ["retry", "discard"],
+      message: "Couldn't start a T3 thread (t3 exited 1). The fork is saved.",
+    });
+  });
+
+  test("the first message says where the fork came from and has the new agent attach", () => {
+    const first = formatRequestMessage(
+      { ...request({ state: "sending" }), n: 1 as RequestN, scope: { kind: "all" }, feedbackIds: [], freetext: "slot machine" },
+      { fork: { parent: "s_parent1" as SessionId, from: 3 as IterationN } },
+    );
+    expect(first).toBe(
+      '[brainstorm] session s_8f2k3a · request 1 · fork of s_parent1 iteration 3 · scope: all · freetext: "slot machine"\n' +
+        "Handle with the ux-brainstorm skill: this thread is new, so run `brainstorm session attach s_8f2k3a`, then `brainstorm context s_8f2k3a`.",
+    );
+    expect(parseRequestMarker(first)).toEqual({ session: "s_8f2k3a", n: 1 });
+  });
+});
+
+describe("vary and history text", () => {
+  const vary = {
+    kind: "vary" as const,
+    target: { blockId: "wheel/neon" as BlockId, part: "spin-button" as PartName },
+    variants: [
+      { key: "spin-button-a" as VariantKey, title: "Spin button A" },
+      { key: "spin-button-b" as VariantKey, title: "Spin button B" },
+    ] as const,
+  };
+
+  test("a vary's scope names the target and the keys it asks for", () => {
+    expect(scopeText(vary)).toBe("vary wheel/neon [spin-button] as spin-button-a, spin-button-b");
+    expect(scopeText({ ...vary, target: { ...vary.target, part: null } })).toBe("vary wheel/neon as spin-button-a, spin-button-b");
+  });
+
+  test("originText says where each iteration came from", () => {
+    expect(originText({ kind: "brief" })).toBe("First designs, from the brief");
+    expect(originText({ kind: "fork", parent: "Chore wheel", from: 2 as IterationN })).toBe("Forked from Chore wheel · iteration 2");
+    expect(originText({ kind: "agent", note: null })).toBe("The agent's own commit");
+    expect(originText({ kind: "agent", note: "tidied" })).toBe("tidied");
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: null } })).toBe("Everything");
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null } })).toBe("Selected blocks");
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: "calmer" } })).toBe("calmer");
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: vary, freetext: "bouncier" } })).toBe("Vary Spin button ×2 · bouncier");
   });
 });

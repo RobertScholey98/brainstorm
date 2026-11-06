@@ -9,8 +9,10 @@ import {
   parseThreadId,
   THREAD_ID_PATTERN,
   type AgentBridge,
+  type ListResult,
   type SendResult,
   type SnapshotResult,
+  type StartResult,
   type ThreadId,
   type ThreadSnapshot,
   type ThreadStatus,
@@ -76,9 +78,9 @@ function toSnapshot(raw: z.infer<typeof showShape>): ThreadSnapshot {
 type Run = { code: number | null; stdout: string; stderr: string; timedOut: boolean };
 
 /**
- * Runs `<t3.cmd> thread <args>` through cmd.exe, which a .cmd needs. Every argument is a fixed token or a thread id
- * checked against THREAD_ID_PATTERN, and the only free text travels on stdin, so nothing user-written reaches the
- * command line.
+ * Runs `<t3.cmd> thread <args>` through cmd.exe, which a .cmd needs. Every argument is a fixed token, an id checked
+ * against its pattern, or a thread title cut down by `safeTitle` and quoted. Messages travel on stdin, so no other
+ * user-written text reaches the command line.
  */
 function runThread(cli: string, args: readonly string[], stdin: string, timeoutMs: number): Promise<Run> {
   return new Promise((resolve) => {
@@ -108,6 +110,35 @@ function runThread(cli: string, args: readonly string[], stdin: string, timeoutM
     child.stdin.end(stdin, "utf8");
   });
 }
+
+const startShape = z.object({ threadId: zBranded(z.string(), parseThreadId, "thread id") });
+const listShape = z.array(z.object({ threadId: zBranded(z.string(), parseThreadId, "thread id"), createdAt: z.string() }));
+
+/** T3 project ids seen so far are UUIDs; anything else cmd.exe might misread is refused before it reaches a command line. */
+const PROJECT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const TITLE_MAX = 80;
+
+/**
+ * A thread title is Rob's words, so before it goes on the command line it keeps only characters cmd.exe treats as
+ * plain inside quotes. An empty result leaves the title to T3, which takes the message's first line.
+ */
+export function safeTitle(title: string): string | null {
+  const kept = title.replace(/[^A-Za-z0-9 ,.'()?+=/_-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, TITLE_MAX).trim();
+  return kept.length === 0 ? null : kept;
+}
+
+const parseJson = <T>(stdout: string, shape: z.ZodType<T>, command: string): { ok: true; value: T } | { ok: false; error: string } => {
+  let json: unknown;
+  try {
+    json = JSON.parse(stdout);
+  } catch {
+    return { ok: false, error: `t3 thread ${command} printed something other than JSON: ${stdout.slice(0, 200)}` };
+  }
+  const parsed = shape.safeParse(json);
+  return parsed.success
+    ? { ok: true, value: parsed.data }
+    : { ok: false, error: `t3 thread ${command} changed shape: ${parsed.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}` };
+};
 
 const describeFailure = (run: Run, timeoutMs: number): string =>
   run.timedOut
@@ -141,17 +172,28 @@ export function createT3Bridge(options: { cli?: string; timeoutMs?: number } = {
       if (run.code !== 0 || run.timedOut) {
         return MISSING.test(run.stderr) ? { kind: "missing" } : { kind: "failed", error: describeFailure(run, timeoutMs) };
       }
-      let json: unknown;
-      try {
-        json = JSON.parse(run.stdout);
-      } catch {
-        return { kind: "failed", error: `t3 thread show printed something other than JSON: ${run.stdout.slice(0, 200)}` };
-      }
-      const parsed = showShape.safeParse(json);
-      if (!parsed.success) {
-        return { kind: "failed", error: `t3 thread show changed shape: ${parsed.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}` };
-      }
-      return { kind: "found", snapshot: toSnapshot(parsed.data) };
+      const parsed = parseJson(run.stdout, showShape, "show");
+      return parsed.ok ? { kind: "found", snapshot: toSnapshot(parsed.value) } : { kind: "failed", error: parsed.error };
+    },
+
+    async start({ project, title, message }): Promise<StartResult> {
+      if (!usable) return { kind: "failed", error: `the t3 CLI path ${JSON.stringify(cli)} contains characters cmd.exe would misread` };
+      if (!PROJECT_PATTERN.test(project)) return { kind: "failed", error: `"${project}" is not a T3 project id` };
+      const safe = safeTitle(title);
+      const args = ["start", ...(safe === null ? [] : ["--title", `"${safe}"`]), "--json", project, "-"];
+      const run = await runThread(cli, args, message, timeoutMs);
+      if (run.code !== 0 || run.timedOut) return { kind: "failed", error: describeFailure(run, timeoutMs) };
+      const parsed = parseJson(run.stdout, startShape, "start");
+      return parsed.ok ? { kind: "started", thread: parsed.value.threadId } : { kind: "failed", error: parsed.error };
+    },
+
+    async list(project): Promise<ListResult> {
+      if (!usable) return { kind: "failed", error: `the t3 CLI path ${JSON.stringify(cli)} contains characters cmd.exe would misread` };
+      if (!PROJECT_PATTERN.test(project)) return { kind: "failed", error: `"${project}" is not a T3 project id` };
+      const run = await runThread(cli, ["list", "--project", project, "--json"], "", timeoutMs);
+      if (run.code !== 0 || run.timedOut) return { kind: "failed", error: describeFailure(run, timeoutMs) };
+      const parsed = parseJson(run.stdout, listShape, "list");
+      return parsed.ok ? { kind: "found", threads: parsed.value } : { kind: "failed", error: parsed.error };
     },
   };
 }

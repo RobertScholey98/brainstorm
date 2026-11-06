@@ -19,6 +19,21 @@ A missing or deleted thread exits 1 and prints `Thread <id> is no longer availab
 
 Prints an array of thread objects shaped like `thread` above. An unknown project exits 1 and prints `No T3 Code project matches '<p>'. Pass a project id or a path inside a project.`
 
+Each object also carries `createdAt` and `updatedAt` (ISO times), `createdBy`, `creationSource`, `settled`, `snoozed`, `parentThreadId` and `relationshipToParent`. The bridge reads only `threadId` and `createdAt`, which a fork's retry uses to find a thread that `thread start` made while its reply was lost. A project argument of `.` from a worktree folder failed with the unknown-project message, so Brainstorm always passes the project id.
+
+## `t3 thread start [flags] <project> <message|->`
+
+Observed on 2026-11-06 (`t3 v0.1.8-nightly.20261104.4179`). It starts a thread in the project and prints its id. `<project>` is a project id or a path inside the project. `-` reads the message from stdin.
+
+- `--title <t>` names the thread. Without it the title is the message's first line.
+- Without `--worktree` the thread runs in the project folder. `--worktree <base-ref>` runs it in a new git worktree based on that branch, tag or commit, and `--branch <name>` names that worktree's branch (it needs `--worktree`).
+- `--provider <id>` and `--model <slug>` go together; the model defaults to the project's.
+- `--wait` waits for the reply, exiting 1 if the run fails and 2 if the agent waits for an answer.
+- `--json` prints `{ "threadId": "…", "projectId": "…", "runId": "…" | null }`.
+- `--base-dir <dir>` picks another T3 data directory, like `T3CODE_HOME`.
+
+Brainstorm runs `thread start --title "<safe title>" --json <projectId> -` for a fork, with the fork's request 1 on stdin, no `--worktree` (the parent's agent ran in the project too) and no `--wait`. The title goes on the command line, so `safeTitle` in the bridge keeps only letters, digits, spaces and `,.'()?+=/_-`, cut to 80 characters, and quotes it. The bridge reads only `threadId`.
+
 ## `t3 thread send <thread> <message|->`
 
 A busy thread gets the message as its next turn. `--wait` exits 1 if the run fails and 2 if the agent waits for an answer. Brainstorm sends without `--wait`, with the message on stdin (`-`).

@@ -6,10 +6,12 @@ import { buildCanvasDocument, CANVAS_CSP } from "../canvas/document";
 import { packageRoot } from "../core/packageRoot";
 import type { Brainstorm } from "../core/brainstorm";
 import { zBranded } from "../core/parse";
+import { VARY_MAX } from "../core/fork";
 import { uiPrefsPatch } from "../core/prefs";
 import {
   parseBlockId,
   parseFeedbackId,
+  parseIterationN,
   parsePartName,
   parsePropName,
   parseSessionId,
@@ -18,9 +20,11 @@ import {
   parseVariantKey,
   type Failure,
   type FailureCode,
+  type IterationN,
   type Result,
   type RobAction,
   type SessionId,
+  type SlotId,
 } from "../core/types";
 
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
@@ -67,6 +71,12 @@ const newSessionBody = z.strictObject({
 });
 const attachBody = z.strictObject({ ref: z.string().trim().min(1), thread: threadId });
 const settleBody = z.strictObject({ settled: z.boolean() });
+const iterationN = zBranded(z.number(), parseIterationN, "iteration number");
+const forkBody = z.strictObject({
+  from: iterationN,
+  picks: z.record(z.string(), zBranded(z.string(), parseVariantKey, "variant key")).default({}),
+  instruction: z.string().trim().min(1, "say what the fork should try"),
+});
 const workingCopyBody = z.strictObject({
   thread: threadId,
   files: z.record(z.string(), z.string()),
@@ -112,6 +122,16 @@ const ACTIONS: { readonly [K in RobAction["kind"]]: z.ZodType<Extract<RobAction,
   retry_request: z.strictObject({ kind: z.literal("retry_request") }),
   withdraw_request: z.strictObject({ kind: z.literal("withdraw_request") }),
   check_thread: z.strictObject({ kind: z.literal("check_thread") }),
+  vary: z.strictObject({
+    kind: z.literal("vary"),
+    target: pin,
+    count: z.number().int().min(1).max(VARY_MAX),
+    direction: z
+      .string()
+      .nullable()
+      .transform((d) => (d === null || d.trim() === "" ? null : d.trim())),
+  }),
+  mark_seen: z.strictObject({ kind: z.literal("mark_seen"), blocks: z.tuple([blockId], blockId) }),
 };
 
 const isActionKind = (k: unknown): k is RobAction["kind"] => typeof k === "string" && Object.hasOwn(ACTIONS, k);
@@ -121,6 +141,17 @@ function parseAction(raw: unknown): Result<RobAction> {
   if (!isActionKind(kind)) return usage(`kind must be one of ${Object.keys(ACTIONS).join(", ")}`);
   const schema: z.ZodType<RobAction> = ACTIONS[kind];
   return parseBody(schema, raw);
+}
+
+/** `?n=&slot=` picks a past iteration's still and the slot it shows; both are optional. */
+function previewAt(query: URLSearchParams): Result<{ n?: IterationN; slot?: SlotId }> {
+  const rawN = query.get("n");
+  const rawSlot = query.get("slot");
+  const n = rawN === null ? undefined : parseIterationN(Number(rawN));
+  const slot = rawSlot === null ? undefined : parseSlotId(rawSlot);
+  if (n === null) return usage(`"${rawN}" is not an iteration number`);
+  if (slot === null) return usage(`"${rawSlot}" is not a slot id`);
+  return { ok: true, data: { ...(n === undefined ? {} : { n }), ...(slot === undefined ? {} : { slot }) } };
 }
 
 const usage = (message: string): { ok: false; error: Failure } => ({ ok: false, error: { code: "usage", message } });
@@ -158,7 +189,7 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
   let closing = false;
 
   const withSession =
-    (fn: (id: SessionId, input: { query: URLSearchParams; body: unknown }) => Promise<Result<unknown>>) =>
+    (fn: (id: SessionId, input: { params: string[]; query: URLSearchParams; body: unknown }) => Promise<Result<unknown>>) =>
     async ({ params, query, body }: { params: string[]; query: URLSearchParams; body: unknown }) => {
       const raw = params[0] ?? "";
       const decoded = decodeSegment(raw);
@@ -166,7 +197,7 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       const id = parseSessionId(decoded);
       return id === null
         ? ({ ok: false, error: { code: "not_found", entity: "session", message: `"${params[0]}" is not a session id` } } as const)
-        : fn(id, { query, body });
+        : fn(id, { params, query, body });
     };
 
   const queryThread = (query: URLSearchParams, required: boolean): Result<ReturnType<typeof parseThreadId>> => {
@@ -263,7 +294,34 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       },
     },
     { method: "POST", path: /^\/v1\/ui\/sessions\/([^/]+)\/export$/, auth: "ui", handle: withSession((id) => service.exportHtml(id)) },
-    { method: "GET", path: /^\/v1\/ui\/sessions\/([^/]+)\/preview$/, auth: "ui", handle: withSession(async (id) => service.preview(id)) },
+    {
+      method: "GET",
+      path: /^\/v1\/ui\/sessions\/([^/]+)\/preview$/,
+      auth: "ui",
+      handle: withSession(async (id, { query }) => {
+        const at = previewAt(query);
+        return at.ok ? service.preview(id, at.data) : at;
+      }),
+    },
+    {
+      method: "GET",
+      path: /^\/v1\/ui\/sessions\/([^/]+)\/iterations\/(\d+)$/,
+      auth: "ui",
+      handle: withSession(async (id, { params }) => {
+        const n = parseIterationN(Number(params[1]));
+        return n === null ? usage(`"${params[1]}" is not an iteration number`) : service.iteration(id, n);
+      }),
+    },
+    {
+      method: "POST",
+      path: /^\/v1\/ui\/sessions\/([^/]+)\/fork$/,
+      auth: "ui",
+      handle: withSession(async (id, { body }) => {
+        const b = parseBody(forkBody, body);
+        return b.ok ? service.fork(id, b.data) : b;
+      }),
+    },
+    { method: "POST", path: /^\/v1\/ui\/sessions\/([^/]+)\/discard$/, auth: "ui", handle: withSession(async (id) => service.discard(id)) },
     {
       method: "GET",
       path: /^\/health$/,

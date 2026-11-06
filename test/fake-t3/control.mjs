@@ -21,6 +21,7 @@ export function fakeT3(statePath) {
   return {
     state: load,
     sent: () => load().sent ?? [],
+    started: () => load().started ?? [],
     messages: (id) => thread(load(), id).messages ?? [],
     addThread: (id, fields) =>
       update((s) => {

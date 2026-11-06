@@ -2,6 +2,7 @@ import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type {
   AppearanceValue,
   Attachment,
+  BakedSetting,
   BlockFiles,
   BlockId,
   ContentHash,
@@ -62,6 +63,15 @@ const MIGRATIONS: readonly Migration[] = [
   `CREATE TABLE ui_pref(key TEXT PRIMARY KEY, value_json TEXT NOT NULL);`,
   dropVariantNotes,
   `ALTER TABLE session ADD COLUMN settled_at TEXT; ALTER TABLE session ADD COLUMN unsettled_at TEXT;`,
+  // Every block that exists already counts as seen, so nothing old lights up as new.
+  `
+  CREATE TABLE fork(session_id TEXT PRIMARY KEY REFERENCES session, parent_id TEXT NOT NULL REFERENCES session,
+    parent_n INTEGER NOT NULL, baked_json TEXT NOT NULL, created_at TEXT NOT NULL,
+    FOREIGN KEY(parent_id, parent_n) REFERENCES iteration(session_id, n));
+  CREATE INDEX fork_parent ON fork(parent_id);
+  CREATE TABLE variant_seen(session_id TEXT NOT NULL REFERENCES session, block_id TEXT NOT NULL, PRIMARY KEY(session_id, block_id));
+  INSERT INTO variant_seen(session_id, block_id) SELECT DISTINCT session_id, block_id FROM iteration_block;
+  `,
 ];
 
 /**
@@ -132,6 +142,25 @@ const toSession = (r: Row): SessionSummary => ({
   createdAt: str(r.created_at),
 });
 
+/** A fork's link to its parent. `baked` names the settings that became its defaults, for the agent. */
+export type StoredFork = {
+  readonly parent: SessionId;
+  readonly from: IterationN;
+  readonly baked: readonly BakedSetting[];
+  readonly createdAt: string;
+};
+
+/** Everything a fork is made of, written in one transaction before its thread starts. */
+export type NewFork = {
+  readonly session: SessionSummary;
+  readonly fork: StoredFork;
+  readonly iteration: StoredIteration;
+  readonly blocks: readonly IterationBlock[];
+  readonly contents: readonly StoredContent[];
+  readonly feedback: readonly { readonly pin: Pin; readonly text: string }[];
+  readonly request: { readonly body: RequestBody; readonly at: string };
+};
+
 /**
  * A listing as the store holds it; the service reads an open request's phase from the thread and folds the settle.
  * `woken` is whether anything that brings a settled brainstorm back has happened since `settledAt`.
@@ -156,6 +185,7 @@ const toListing = (r: Row): StoredListing => {
     settledAt: strOrNull(r.settled_at),
     unsettledAt: strOrNull(r.unsettled_at),
     woken: num(r.woken) === 1,
+    fork: r.fork_from === null ? null : { parentTitle: str(r.fork_parent_title), from: num(r.fork_from) as IterationN },
   };
 };
 
@@ -330,13 +360,93 @@ export class Store {
             SELECT 1 FROM iteration i WHERE i.session_id = s.id AND i.created_at > s.settled_at
               AND NOT EXISTS (SELECT 1 FROM request r WHERE r.session_id = s.id AND r.fulfilled_in = i.n AND r.created_at <= s.settled_at)
           )
-        ) AS woken
+        ) AS woken,
+        f.parent_n AS fork_from, (SELECT title FROM session WHERE id = f.parent_id) AS fork_parent_title
       FROM session s JOIN project p ON p.id = s.project_id JOIN attachment a ON a.session_id = s.id AND a.detached_at IS NULL
+        LEFT JOIN fork f ON f.session_id = s.id
       WHERE s.archived_at IS NULL AND (? IS NULL OR s.project_id = ?)
       ORDER BY s.created_at, s.id`,
       project,
       project,
     ).map(toListing);
+  }
+
+  /** The fork, its iteration 1 with carried feedback, then request 1, so the iteration can't fulfil the request. */
+  createFork(input: NewFork, thread: ThreadId): void {
+    const { session, fork, iteration } = input;
+    this.tx(() => {
+      this.createSession(session, thread);
+      this.#run(
+        "INSERT INTO fork(session_id, parent_id, parent_n, baked_json, created_at) VALUES (?, ?, ?, ?, ?)",
+        session.id,
+        fork.parent,
+        fork.from,
+        JSON.stringify(fork.baked),
+        fork.createdAt,
+      );
+      this.insertIteration({ session: session.id, iteration, blocks: input.blocks, contents: input.contents, addresses: [] });
+      const ids = input.feedback.map((f) => this.insertFeedback(session.id, { pin: f.pin, text: f.text, createdIn: iteration.n, at: fork.createdAt }));
+      this.insertRequest(session.id, { body: input.request.body, feedbackIds: ids, base: iteration.n, threadId: thread, at: input.request.at });
+    });
+  }
+
+  fork(session: SessionId): StoredFork | null {
+    const r = this.#get("SELECT * FROM fork WHERE session_id = ?", session);
+    if (r === undefined) return null;
+    return {
+      parent: str(r.parent_id) as SessionId,
+      from: num(r.parent_n) as IterationN,
+      baked: JSON.parse(str(r.baked_json)) as BakedSetting[],
+      createdAt: str(r.created_at),
+    };
+  }
+
+  /** Forks made from `parent` that still exist, oldest first. */
+  forksOf(parent: SessionId): { id: SessionId; title: string; from: IterationN }[] {
+    return this.#all(
+      `SELECT s.id, s.title, f.parent_n FROM fork f JOIN session s ON s.id = f.session_id
+       WHERE f.parent_id = ? AND s.archived_at IS NULL ORDER BY f.created_at, s.id`,
+      parent,
+    ).map((r) => ({ id: str(r.id) as SessionId, title: str(r.title), from: num(r.parent_n) as IterationN }));
+  }
+
+  /** A session's title and whether it is gone, read even once archived, so a fork can still name its parent. */
+  sessionName(id: SessionId): { title: string; gone: boolean } | null {
+    const r = this.#get("SELECT title, archived_at FROM session WHERE id = ?", id);
+    return r === undefined ? null : { title: str(r.title), gone: r.archived_at !== null };
+  }
+
+  archive(session: SessionId, at: string): void {
+    this.#run("UPDATE session SET archived_at = ? WHERE id = ?", at, session);
+  }
+
+  /** Each block id's first iteration, for whether it is new. */
+  introducedIn(session: SessionId): Map<BlockId, IterationN> {
+    return new Map(
+      this.#all("SELECT block_id, MIN(n) AS n FROM iteration_block WHERE session_id = ? GROUP BY block_id", session).map((r) => [
+        str(r.block_id) as BlockId,
+        num(r.n) as IterationN,
+      ]),
+    );
+  }
+
+  seen(session: SessionId): Set<BlockId> {
+    return new Set(this.#all("SELECT block_id FROM variant_seen WHERE session_id = ?", session).map((r) => str(r.block_id) as BlockId));
+  }
+
+  markSeen(session: SessionId, blocks: readonly BlockId[]): void {
+    this.tx(() => {
+      for (const b of blocks) this.#run("INSERT OR IGNORE INTO variant_seen(session_id, block_id) VALUES (?, ?)", session, b);
+    });
+  }
+
+  /** Every iteration's metadata, oldest first. */
+  iterations(session: SessionId): StoredIteration[] {
+    return this.#all("SELECT * FROM iteration WHERE session_id = ? ORDER BY n", session).map(toIteration);
+  }
+
+  requests(session: SessionId): Request[] {
+    return this.#all("SELECT * FROM request WHERE session_id = ? ORDER BY n", session).map(toRequest);
   }
 
   settle(session: SessionId, at: string): void {

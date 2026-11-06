@@ -91,6 +91,26 @@ describe("http", () => {
     });
   });
 
+  test("fork, discard, a past iteration and a past still are UI routes that check their input", async () => {
+    const created = await call("POST", "/v1/agent/sessions", agentToken, { title: "Fork me", brief: "", thread: T1, project: null });
+    const id = created.body.data.session.id;
+    const ui = (method: string, path: string, body?: unknown) => call(method, `/v1/ui/sessions/${id}${path}`, server.uiToken, body);
+    expect(await ui("POST", "/fork", { from: 1, picks: {}, instruction: "  " })).toEqual({
+      status: 400,
+      body: { ok: false, error: { code: "usage", message: "instruction: say what the fork should try" } },
+    });
+    expect((await ui("POST", "/fork", { from: 0, instruction: "x" })).status).toBe(400);
+    expect((await ui("POST", "/fork", { from: 1, instruction: "x" })).body.error).toEqual({ code: "not_found", entity: "iteration", message: `${id} has no iteration 1` });
+    expect((await call("POST", "/v1/agent/sessions/" + id + "/fork", agentToken, { from: 1, instruction: "x" })).status, "only Rob forks").toBe(400);
+    expect((await ui("GET", "/iterations/1")).status).toBe(404);
+    expect((await ui("GET", "/preview?n=zero")).body.error.message).toBe(`"zero" is not an iteration number`);
+    expect((await ui("GET", "/preview?slot=Bad%20Slot")).status).toBe(400);
+    expect((await ui("POST", "/discard")).body.error).toEqual({ code: "invalid_action", message: `${id}'s thread has started; settle it instead` });
+    const vary = (count: number) => ui("POST", "/actions", { kind: "vary", target: { blockId: "wheel/neon", part: null }, count, direction: "  " });
+    expect((await vary(7)).status).toBe(400);
+    expect((await vary(3)).body.error.code, "a valid vary reaches the service").toBe("not_found");
+  });
+
   test("settling is a UI route: only Rob's token settles, and the body names the direction", async () => {
     const created = await call("POST", "/v1/agent/sessions", agentToken, { title: "Settled", brief: "", thread: T1, project: null });
     const id = created.body.data.session.id;

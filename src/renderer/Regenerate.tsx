@@ -15,7 +15,8 @@ import { Hint } from "@/components/ui/tooltip";
 import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
 import type { BlockId, BlockView, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
-type ScopeKind = RequestBody["scope"]["kind"];
+/** Vary has its own pick and popover, so Regenerate offers the other three. */
+type ScopeKind = Exclude<RequestBody["scope"]["kind"], "vary">;
 
 const SCOPES: readonly { value: ScopeKind; label: string }[] = [
   { value: "all", label: "Everything" },
@@ -24,7 +25,7 @@ const SCOPES: readonly { value: ScopeKind; label: string }[] = [
 ];
 
 function scopeOf(kind: ScopeKind, chosen: readonly BlockId[]): RequestScope | null {
-  if (kind !== "blocks") return { kind };
+  if (kind === "all" || kind === "described") return { kind };
   const [first, ...rest] = chosen;
   return first === undefined ? null : { kind, blocks: [first, ...rest] };
 }
@@ -212,6 +213,7 @@ function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
   const cls = "size-4 shrink-0";
   switch (phase) {
     case "sending":
+    case "starting":
       return <Spinner className={`${cls} text-accent`} aria-hidden data-progress />;
     case "working":
       return (
@@ -232,6 +234,7 @@ function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
       // A state, not an action, so not the undo arrow a button would carry.
       return <CircleSlash className={`${cls} text-fg-muted`} aria-hidden />;
     case "send_failed":
+    case "start_failed":
     case "run_failed":
       return <CircleAlert className={`${cls} text-danger`} aria-hidden />;
     case "previous_thread":
@@ -246,6 +249,7 @@ const ACTION_LABEL: Record<RequestPhaseAction, string> = {
   withdraw: "Withdraw",
   open_thread: "Open thread",
   copy_phrase: "Copy phrase",
+  discard: "Discard fork",
 };
 
 type Tone = "danger" | "warning" | "info";
@@ -258,6 +262,7 @@ type Tone = "danger" | "warning" | "info";
  */
 const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; readonly tone: Tone; readonly note?: string; readonly own?: RequestPhaseAction }>> = {
   send_failed: { label: "Send failed", tone: "danger" },
+  start_failed: { label: "Start failed", tone: "danger" },
   run_failed: { label: "Run failed", tone: "danger", note: "The agent's run failed in T3. Open the thread to see why, or Retry." },
   thread_lost: { label: "Thread lost", tone: "warning", note: "This brainstorm's thread is gone. In a T3 thread on this project, say:", own: "copy_phrase" },
   previous_thread: { label: "Sent to the previous thread", tone: "warning", note: "Another thread took this brainstorm over. Resend sends the request to it." },
@@ -268,6 +273,7 @@ const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; re
 const TONE_TEXT: Partial<Record<RequestPhase["phase"], string>> = {
   asking: "text-info",
   send_failed: "text-danger",
+  start_failed: "text-danger",
   run_failed: "text-danger",
   thread_lost: "text-warning",
   previous_thread: "text-warning",
@@ -318,11 +324,11 @@ export function phaseActions(view: SessionView): readonly RequestPhaseAction[] {
  * The request's actions, in the header's right cluster before Regenerate. Anchored there, they stay put as the phase's
  * label changes length, so Withdraw sits at one x from queued to working.
  */
-export function PhaseActions({ view, send }: { view: SessionView; send: (action: RobAction) => Promise<unknown> }) {
+export function PhaseActions({ view, send, onDiscard }: { view: SessionView; send: (action: RobAction) => Promise<unknown>; onDiscard: () => void }) {
   return (
     <span className="flex shrink-0 items-center gap-2" data-phase-actions>
       {phaseActions(view).map((action) => (
-        <PhaseAction key={action} action={action} view={view} send={send} />
+        <PhaseAction key={action} action={action} view={view} send={send} onDiscard={onDiscard} />
       ))}
     </span>
   );
@@ -347,7 +353,17 @@ export function RequestDetail({ view }: { view: SessionView }) {
   );
 }
 
-function PhaseAction({ action, view, send }: { action: RequestPhaseAction; view: SessionView; send: (action: RobAction) => Promise<unknown> }) {
+function PhaseAction({
+  action,
+  view,
+  send,
+  onDiscard,
+}: {
+  action: RequestPhaseAction;
+  view: SessionView;
+  send: (action: RobAction) => Promise<unknown>;
+  onDiscard: () => void;
+}) {
   const label = ACTION_LABEL[action];
   switch (action) {
     case "retry":
@@ -359,6 +375,8 @@ function PhaseAction({ action, view, send }: { action: RequestPhaseAction; view:
       return <OpenThread view={view} />;
     case "copy_phrase":
       return <CopyPhrase title={view.session.title} />;
+    case "discard":
+      return <ActionButton action={action} onClick={onDiscard}>{label}</ActionButton>;
   }
 }
 

@@ -9,6 +9,8 @@ import { parseSessionId, parseSlotId, type ProjectId, type SessionId, type SlotI
 export type UiPrefs = {
   readonly panes: { readonly sidebar: number | null; readonly inspector: number | null };
   readonly inspectorRail: boolean;
+  /** Whether a brainstorm's history filmstrip shows under the canvas. One choice for every brainstorm. */
+  readonly historyStrip: boolean;
   /** Keyed by SessionId. A brainstorm with no entry opens on the stage at its first slot. */
   readonly canvas: Readonly<Record<string, CanvasLayout>>;
   /** How home is filtered and sorted. The search text isn't kept: it answers one question, not a standing view. */
@@ -28,11 +30,12 @@ export type CanvasLayout = { readonly view: "stage" | "board"; readonly slot: Sl
 export type UiPrefsPatch = {
   readonly panes?: { readonly sidebar?: number; readonly inspector?: number };
   readonly inspectorRail?: boolean;
+  readonly historyStrip?: boolean;
   readonly canvas?: { readonly session: SessionId; readonly layout: CanvasLayout };
   readonly home?: HomeQuery;
 };
 
-export const NO_PREFS: UiPrefs = { panes: { sidebar: null, inspector: null }, inspectorRail: false, canvas: {}, home: DEFAULT_HOME };
+export const NO_PREFS: UiPrefs = { panes: { sidebar: null, inspector: null }, inspectorRail: false, historyStrip: true, canvas: {}, home: DEFAULT_HOME };
 
 const width = z.number().int().min(120).max(1200);
 const layout = z.strictObject({ view: z.enum(["stage", "board"]), slot: zBranded(z.string(), parseSlotId, "slot id").nullable() });
@@ -45,6 +48,7 @@ const home: z.ZodType<HomeQuery> = z.strictObject({
 export const uiPrefsPatch: z.ZodType<UiPrefsPatch> = z.strictObject({
   panes: z.strictObject({ sidebar: width.optional(), inspector: width.optional() }).optional(),
   inspectorRail: z.boolean().optional(),
+  historyStrip: z.boolean().optional(),
   canvas: z.strictObject({ session: zBranded(z.string(), parseSessionId, "session id"), layout }).optional(),
   home: home.optional(),
 });
@@ -55,6 +59,7 @@ export function prefRows(patch: UiPrefsPatch): [key: string, value: unknown][] {
   if (patch.panes?.sidebar !== undefined) rows.push(["pane.sidebar", patch.panes.sidebar]);
   if (patch.panes?.inspector !== undefined) rows.push(["pane.inspector", patch.panes.inspector]);
   if (patch.inspectorRail !== undefined) rows.push(["inspector.rail", patch.inspectorRail]);
+  if (patch.historyStrip !== undefined) rows.push(["history.strip", patch.historyStrip]);
   if (patch.canvas !== undefined) rows.push([`canvas.${patch.canvas.session}`, patch.canvas.layout]);
   if (patch.home !== undefined) rows.push(["home.query", patch.home]);
   return rows;
@@ -75,6 +80,8 @@ export function readPrefs(rows: readonly { readonly key: string; readonly json: 
       if (w.success) prefs = { ...prefs, panes: { ...prefs.panes, [key.slice(5)]: w.data } };
     } else if (key === "inspector.rail" && typeof value === "boolean") {
       prefs = { ...prefs, inspectorRail: value };
+    } else if (key === "history.strip" && typeof value === "boolean") {
+      prefs = { ...prefs, historyStrip: value };
     } else if (key === "home.query") {
       const h = home.safeParse(value);
       if (h.success) prefs = { ...prefs, home: h.data };
@@ -91,6 +98,7 @@ export function applyPrefs(prefs: UiPrefs, patch: UiPrefsPatch): UiPrefs {
   return {
     panes: { ...prefs.panes, ...patch.panes },
     inspectorRail: patch.inspectorRail ?? prefs.inspectorRail,
+    historyStrip: patch.historyStrip ?? prefs.historyStrip,
     canvas: patch.canvas === undefined ? prefs.canvas : { ...prefs.canvas, [patch.canvas.session]: patch.canvas.layout },
     home: patch.home ?? prefs.home,
   };

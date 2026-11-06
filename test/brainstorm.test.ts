@@ -707,6 +707,7 @@ describe("context", () => {
     const context = data(await service.context(S, T2));
     expect({ ...context, controlVocabulary: undefined, latest: context.latest?.n }).toEqual({
       session: { id: S, title: "Chore wheel", brief: "Pick who does chores" },
+      fork: null,
       latest: 1 as IterationN,
       attached: false,
       attachedThread: T1,
@@ -823,5 +824,367 @@ describe("exportHtml", () => {
       ok: false,
       error: { code: "not_found", entity: "iteration", message: "s_wheel01 has no iteration to export yet" },
     });
+  });
+});
+
+const F = "s_onbrd02" as SessionId;
+const G = "s_onbrd03" as SessionId;
+const CALM = "wheel/calm" as BlockId;
+const calmJson = JSON.stringify({ title: "Calm wheel", props: wheelProps });
+
+/** Iteration 2 has two wheels; Rob tuned and pinned both, and picked Calm. */
+async function withTwoWheels() {
+  const ctx = await withIteration();
+  data(await ctx.service.commit({ session: S, thread: T1, files: copy(1, { "wheel/calm": { tsx: neonTsx, json: calmJson } }), addresses: [], note: "a calmer one" }));
+  data(await ctx.service.act(S, { kind: "set_override", blockId: NEON, prop: "accent" as PropName, value: "#00ff88" }));
+  data(await ctx.service.act(S, { kind: "set_override", blockId: NEON, prop: "density" as PropName, value: "roomy" }));
+  data(await ctx.service.act(S, { kind: "set_override", blockId: CALM, prop: "spinSeconds" as PropName, value: 3 }));
+  data(await ctx.service.act(S, { kind: "add_feedback", pin: { blockId: NEON, part: "spin-button" as PartName }, text: "bigger button" }));
+  data(await ctx.service.act(S, { kind: "add_feedback", pin: { blockId: CALM, part: null }, text: "too grey" }));
+  data(await ctx.service.act(S, { kind: "add_feedback", pin: { blockId: SHEET, part: null }, text: "say who's next" }));
+  data(await ctx.service.act(S, { kind: "select_variant", slot: "wheel" as SlotId, variant: "calm" as VariantKey }));
+  return ctx;
+}
+
+const phaseOf = async (service: Brainstorm, id: SessionId) => {
+  const r = data(await service.view(id)).request;
+  return r === null ? null : { phase: r.phase.phase, actions: r.phase.actions, message: r.message };
+};
+
+describe("fork", () => {
+  test("makes a linked brainstorm of the picked variants, with Rob's settings as defaults and his open pins carried", async () => {
+    const { service, bridge } = await withTwoWheels();
+    const result = await service.fork(S, { from: 2 as IterationN, picks: { wheel: "neon" as VariantKey }, instruction: "Try it as a slot machine, with three reels" });
+    expect(result).toEqual({ ok: true, data: { fork: F } });
+
+    const view = data(await service.view(F));
+    expect(view.session).toMatchObject({ id: F, projectId: "proj-a", title: "Try it as a slot machine", brief: "Pick who does chores" });
+    expect(view.fork).toEqual({ parent: { id: S, title: "Chore wheel", state: "active" }, from: 2 });
+    expect(view.lineage).toEqual([{ id: S, title: "Chore wheel", gone: false }]);
+    expect(view.iteration?.slots.map((s) => [s.id, s.variants, s.active])).toEqual([
+      ["wheel", ["neon"], "neon"],
+      ["result", ["sheet"], "sheet"],
+    ]);
+    const neon = view.iteration?.blocks.find((b) => b.id === NEON);
+    expect(neon?.props.appearance.find((p) => p.name === "accent")?.default, "a setting Rob changed is the fork's default").toBe("#00ff88");
+    expect(neon?.props.appearance.find((p) => p.name === "density")?.default).toBe("roomy");
+    expect(view.overrides.applicable, "the fork starts with no settings of its own").toEqual([]);
+    expect(view.feedback.map((f) => [f.id, f.pin.blockId, f.pin.part, f.text, f.status.state])).toEqual([
+      [1, NEON, "spin-button", "bigger button", "open"],
+      [2, SHEET, null, "say who's next", "open"],
+    ]);
+    expect(view.history.iterations).toEqual([{ n: 1, createdAt: AT, origin: { kind: "fork", parent: "Chore wheel", from: 2 } }]);
+
+    expect(bridge.started.map((s) => ({ project: s.project, title: s.title }))).toEqual([{ project: "proj-a", title: "Try it as a slot machine" }]);
+    const thread = bridge.started[0]!.thread;
+    expect(bridge.started[0]!.message).toBe(
+      [
+        `[brainstorm] session ${F} · request 1 · fork of ${S} iteration 2 · scope: all · feedback: #1 #2 · freetext: "Try it as a slot machine, with three reels"`,
+        `Handle with the ux-brainstorm skill: this thread is new, so run \`brainstorm session attach ${F}\`, then \`brainstorm context ${F}\`.`,
+      ].join("\n"),
+    );
+    expect(view.attachment.threadId).toBe(thread);
+    expect(await phaseOf(service, F)).toEqual({ phase: "queued", actions: ["open_thread", "withdraw"], message: "Queued in T3" });
+
+    const context = data(await service.context(F, thread));
+    expect(context.attached).toBe(true);
+    expect(context.fork).toEqual({
+      parent: { id: S, title: "Chore wheel" },
+      from: 2,
+      baked: [{ blockId: NEON, prop: "accent", value: "#00ff88" }],
+    });
+
+    const parent = data(await service.view(S));
+    expect(parent.history.forks).toEqual([{ id: F, title: "Try it as a slot machine", from: 2 }]);
+    expect(data(await service.view(S)).iteration?.slots[0]?.variants, "the parent is unchanged").toEqual(["calm", "neon"]);
+    const listing = data(await service.listSessions(null)).find((l) => l.id === F);
+    expect(listing?.fork).toEqual({ parentTitle: "Chore wheel", from: 2 });
+    expect(data(await service.listSessions(null)).find((l) => l.id === S)?.fork).toBe(null);
+  });
+
+  test("a slot Rob didn't pick carries the variant it shows, and a past iteration forks as it was", async () => {
+    const { service } = await withTwoWheels();
+    data(await service.fork(S, { from: 2 as IterationN, picks: {}, instruction: "calmer still" }));
+    expect(data(await service.view(F)).iteration?.slots[0]?.variants).toEqual(["calm"]);
+    data(await service.fork(S, { from: 1 as IterationN, picks: {}, instruction: "back to the first cut" }));
+    expect(data(await service.view(G)).iteration?.slots[0]?.variants, "iteration 1 had only Neon").toEqual(["neon"]);
+    expect(data(await service.view(G)).fork?.from).toBe(1);
+  });
+
+  test("refuses a pick or an iteration that isn't there, an empty instruction never reaches here, and nothing is written", async () => {
+    const { service, bridge } = await withTwoWheels();
+    expect(await service.fork(S, { from: 9 as IterationN, picks: {}, instruction: "x" })).toEqual({
+      ok: false,
+      error: { code: "not_found", entity: "iteration", message: `${S} has no iteration 9` },
+    });
+    expect(await service.fork(S, { from: 1 as IterationN, picks: { wheel: "calm" as VariantKey }, instruction: "x" })).toEqual({
+      ok: false,
+      error: { code: "not_found", entity: "block", message: "wheel/calm is not in this iteration" },
+    });
+    expect(await service.fork("s_nothere1" as SessionId, { from: 1 as IterationN, picks: {}, instruction: "x" })).toMatchObject({ ok: false, error: { code: "not_found" } });
+    expect(bridge.started).toEqual([]);
+    expect(data(await service.listSessions(null)).map((l) => l.id)).toEqual([S]);
+  });
+
+  test("a variant that doesn't render with Rob's settings baked in refuses the fork and writes nothing", async () => {
+    const { service, bridge } = await withIteration();
+    const fussy = neonTsx.replace("return (", 'if (accent === "#000000") throw new Error("no black");\n  return (');
+    data(await service.commit({ session: S, thread: T1, files: copy(1, { "wheel/neon": { tsx: fussy, json: neonJson } }), addresses: [], note: null }));
+    data(await service.act(S, { kind: "set_override", blockId: NEON, prop: "accent" as PropName, value: "#000000" }));
+    const result = await service.fork(S, { from: 2 as IterationN, picks: {}, instruction: "darker" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("invalid_action");
+      expect(result.error.message).toMatch(/^Neon wheel doesn't render with your settings as its defaults \(.*no black.*\)\. Reset the setting that breaks it, or pick another variant\.$/);
+    }
+    expect(bridge.started).toEqual([]);
+    expect(data(await service.listSessions(null)).map((l) => l.id)).toEqual([S]);
+  });
+
+  test("a thread start that fails keeps the fork, with Retry and Discard, and Withdraw refused", async () => {
+    const { service, bridge } = await withTwoWheels();
+    bridge.startMode = "fail";
+    data(await service.fork(S, { from: 2 as IterationN, picks: {}, instruction: "calmer still" }));
+    expect(await phaseOf(service, F)).toEqual({
+      phase: "start_failed",
+      actions: ["retry", "discard"],
+      message: "Couldn't start a T3 thread (t3 did not answer within 15 s). The fork is saved.",
+    });
+    expect(data(await service.view(F)).attachment.threadId).toBe(`pending:${F}`);
+    expect(data(await service.view(F)).regenerate).toEqual({ ok: false, reason: "request_open" });
+    expect(await service.act(F, { kind: "withdraw_request" })).toEqual({
+      ok: false,
+      error: { code: "invalid_action", message: `${F} is a fork whose thread hasn't started; retry or discard it` },
+    });
+    bridge.snapshotCalls = 0;
+    await service.tick();
+    expect(bridge.snapshotCalls, "a pending thread is never asked about").toBe(0);
+
+    bridge.startMode = "deliver";
+    data(await service.act(F, { kind: "retry_request" }));
+    expect(bridge.started.length).toBe(1);
+    expect(data(await service.view(F)).attachment.threadId).toBe(bridge.started[0]!.thread);
+    expect(await phaseOf(service, F)).toEqual({ phase: "queued", actions: ["open_thread", "withdraw"], message: "Queued in T3" });
+    expect(service.discard(F)).toEqual({ ok: false, error: { code: "invalid_action", message: `${F}'s thread has started; settle it instead` } });
+  });
+
+  test("a retry after a lost reply finds the thread T3 made instead of starting a second", async () => {
+    const { service, bridge } = await withTwoWheels();
+    bridge.startMode = "deliver_then_fail";
+    data(await service.fork(S, { from: 2 as IterationN, picks: {}, instruction: "calmer still" }));
+    expect((await phaseOf(service, F))?.phase).toBe("start_failed");
+    bridge.startMode = "deliver";
+    data(await service.act(F, { kind: "retry_request" }));
+    expect(bridge.started.length).toBe(1);
+    expect(data(await service.view(F)).attachment.threadId).toBe(bridge.started[0]!.thread);
+
+    const other = await withTwoWheels();
+    other.bridge.startMode = "fail";
+    data(await other.service.fork(S, { from: 2 as IterationN, picks: {}, instruction: "calmer still" }));
+    other.bridge.listFails = true;
+    other.bridge.startMode = "deliver";
+    data(await other.service.act(F, { kind: "retry_request" }));
+    expect(other.bridge.started, "a retry that can't look starts nothing").toEqual([]);
+    expect((await phaseOf(other.service, F))?.message).toBe(
+      "Couldn't start a T3 thread (couldn't check whether its thread already started: t3 did not answer within 15 s). The fork is saved.",
+    );
+  });
+
+  test("the new agent's attach adopts the thread, and the app's later start changes nothing", async () => {
+    const { service, bridge } = await withTwoWheels();
+    bridge.startMode = "fail";
+    data(await service.fork(S, { from: 2 as IterationN, picks: {}, instruction: "calmer still" }));
+    const attached = data(await service.attach({ ref: F, thread: T2 }));
+    expect(attached.previous).toBe(null);
+    expect(data(await service.view(F)).attachment.threadId).toBe(T2);
+    expect(data(await service.view(F)).request?.request.state.state).toBe("sent");
+    expect(data(await service.attach({ ref: F, thread: T2 })).session.id).toBe(F);
+    expect(data(await service.view(F)).attachment.threadId).toBe(T2);
+  });
+
+  test("discard throws away a fork that never started, and the parent forgets it", async () => {
+    const { service, bridge } = await withTwoWheels();
+    bridge.startMode = "fail";
+    data(await service.fork(S, { from: 2 as IterationN, picks: {}, instruction: "calmer still" }));
+    expect(service.discard(F)).toEqual({ ok: true, data: { parent: S } });
+    expect(data(await service.listSessions(null)).map((l) => l.id)).toEqual([S]);
+    expect(data(await service.view(S)).history.forks).toEqual([]);
+    expect((await service.view(F)).ok).toBe(false);
+  });
+
+  test("a restart mid-start adopts a thread T3 made, and otherwise leaves Retry to Rob", async () => {
+    const { service, bridge, open } = await withTwoWheels();
+    bridge.startMode = "hang";
+    const pending = service.fork(S, { from: 2 as IterationN, picks: {}, instruction: "calmer still" });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await phaseOf(service, F)).toEqual({ phase: "starting", actions: [], message: "Starting a T3 thread…" });
+    const restarted = await open();
+    expect(await phaseOf(restarted, F)).toEqual({
+      phase: "start_failed",
+      actions: ["retry", "discard"],
+      message: "Couldn't start a T3 thread (Brainstorm stopped before its thread started). The fork is saved.",
+    });
+    expect(bridge.started, "reconcile never starts a thread").toEqual([]);
+    bridge.release();
+    await pending;
+    restarted.close();
+  });
+
+  test("a settled parent stays settled, and a gone parent shows as gone and can't be forked", async () => {
+    const { service, bridge } = await withTwoWheels();
+    data(service.settle(S, true));
+    data(await service.fork(S, { from: 2 as IterationN, picks: {}, instruction: "calmer still" }));
+    expect(data(await service.view(F)).fork?.parent.state).toBe("settled");
+    expect(data(await service.listSessions(null)).find((l) => l.id === S)?.settlement.state).toBe("settled");
+
+    const { service: s2, bridge: b2 } = await withTwoWheels();
+    b2.startMode = "fail";
+    data(await s2.fork(S, { from: 2 as IterationN, picks: {}, instruction: "calmer still" }));
+    data(await s2.fork(F, { from: 1 as IterationN, picks: {}, instruction: "and smaller" }));
+    data(s2.discard(F));
+    const grandchild = data(await s2.view(G));
+    expect(grandchild.fork?.parent).toEqual({ id: F, title: "calmer still", state: "gone" });
+    expect(grandchild.lineage).toEqual([
+      { id: S, title: "Chore wheel", gone: false },
+      { id: F, title: "calmer still", gone: true },
+    ]);
+    expect((await s2.fork(F, { from: 1 as IterationN, picks: {}, instruction: "x" })).ok).toBe(false);
+  });
+
+  test("names the app's home in the first message when it isn't the default", async () => {
+    const home = mkdtempSync(join(tmpdir(), "bs-service-"));
+    const bridge = new FakeBridge();
+    bridge.add(T1, "proj-a", "Design thread");
+    const ids = [S, F] as SessionId[];
+    const service = await Brainstorm.open({
+      dbPath: join(home, "brainstorm.db"),
+      exportsDir: join(home, "exports"),
+      bridge,
+      checker,
+      now: () => AT,
+      newSessionId: () => ids.shift()!,
+      agentHome: "C:\\bs-home",
+    });
+    data(await service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: null }));
+    data(await service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: null }));
+    data(await service.fork(S, { from: 1 as IterationN, picks: {}, instruction: "x" }));
+    expect(bridge.started[0]!.message.split("\n")[2]).toBe(
+      "Brainstorm runs with BRAINSTORM_HOME=C:\\bs-home. Set it on every brainstorm command: in PowerShell, start each with `$env:BRAINSTORM_HOME = 'C:\\bs-home';`.",
+    );
+    service.close();
+  });
+});
+
+describe("vary", () => {
+  const spinTsx = (label: string) => `export default function Spin() {
+  return <button data-part="spin-button">${label}</button>;
+}
+`;
+  const spinJson = (title: string) => JSON.stringify({ title, props: { appearance: {} } });
+
+  test("sends a scoped request named after the element, and the new variants land marked new until seen", async () => {
+    const { service, bridge } = await withIteration();
+    data(await service.act(S, { kind: "add_feedback", pin: { blockId: NEON, part: null }, text: "louder" }));
+    data(await service.act(S, { kind: "vary", target: { blockId: NEON, part: "spin-button" as PartName }, count: 3, direction: "bouncier" }));
+    expect(bridge.sent.map((m) => m.message.split("\n")[0])).toEqual([
+      `[brainstorm] session ${S} · request 1 · scope: vary wheel/neon [spin-button] as spin-button-a, spin-button-b, spin-button-c · freetext: "bouncier"`,
+    ]);
+    const open = data(await service.view(S)).request?.request;
+    expect(open?.scope).toEqual({
+      kind: "vary",
+      target: { blockId: NEON, part: "spin-button" },
+      variants: [
+        { key: "spin-button-a", title: "Spin button A" },
+        { key: "spin-button-b", title: "Spin button B" },
+        { key: "spin-button-c", title: "Spin button C" },
+      ],
+    });
+    expect(open?.feedbackIds, "a vary carries no feedback").toEqual([]);
+
+    const added = Object.fromEntries(["a", "b", "c"].map((l) => [`wheel/spin-button-${l}`, { tsx: spinTsx(l), json: spinJson(`Spin button ${l.toUpperCase()}`) }]));
+    const result = data(await service.commit({ session: S, thread: T1, files: copy(1, added), addresses: [], note: null }));
+    expect(result.warnings).toEqual([]);
+    const blocks = () => service.view(S).then((v) => data(v).iteration?.blocks.map((b) => [b.id, b.isNew]));
+    expect(await blocks()).toEqual([
+      [SHEET, false],
+      [NEON, false],
+      ["wheel/spin-button-a", true],
+      ["wheel/spin-button-b", true],
+      ["wheel/spin-button-c", true],
+    ]);
+    data(await service.act(S, { kind: "mark_seen", blocks: ["wheel/spin-button-a" as BlockId] }));
+    expect((await blocks())?.filter(([, isNew]) => isNew).map(([id]) => id)).toEqual(["wheel/spin-button-b", "wheel/spin-button-c"]);
+    expect(data(await service.view(S)).request?.message).toBe("Iteration 2 · changed Spin button A, Spin button B and 1 more");
+
+    data(await service.act(S, { kind: "vary", target: { blockId: NEON, part: "spin-button" as PartName }, count: 2, direction: null }));
+    const again = data(await service.view(S)).request?.request.scope;
+    expect(again?.kind === "vary" && again.variants.map((v) => v.key), "a second vary goes on to the next letters").toEqual(["spin-button-d", "spin-button-e"]);
+  });
+
+  test("a whole-block vary is named after the block, and the count is held to 1 to 6", async () => {
+    const { service } = await withIteration();
+    expect(await service.act(S, { kind: "vary", target: { blockId: NEON, part: null }, count: 7, direction: null })).toEqual({
+      ok: false,
+      error: { code: "invalid_action", message: "vary asks for 1 to 6 variants" },
+    });
+    data(await service.act(S, { kind: "vary", target: { blockId: NEON, part: null }, count: 2, direction: null }));
+    const scope = data(await service.view(S)).request?.request.scope;
+    expect(scope?.kind === "vary" && scope.variants).toEqual([
+      { key: "neon-a", title: "Neon wheel A" },
+      { key: "neon-b", title: "Neon wheel B" },
+    ]);
+  });
+
+  test("warns when the commit isn't the variants asked for", async () => {
+    const { service } = await withIteration();
+    data(await service.act(S, { kind: "vary", target: { blockId: NEON, part: "spin-button" as PartName }, count: 3, direction: null }));
+    const files = copy(1, {
+      "wheel/spin-button-a": { tsx: spinTsx("a"), json: spinJson("Spin button A") },
+      "wheel/spin-button-b": { tsx: sheetTsx, json: spinJson("Bouncy") },
+      "result/sheet": { tsx: sheetTsx.replace("<section", '<section className="big"'), json: sheetJson },
+    });
+    const result = data(await service.commit({ session: S, thread: T1, files, addresses: [], note: null }));
+    expect(result.warnings.map((w) => [w.code, w.file, w.message])).toEqual([
+      [
+        "out_of_scope",
+        "slots/result/sheet/block.tsx",
+        "result/sheet changed, but request 1 asked only for new variants of wheel/neon: wheel/spin-button-a, wheel/spin-button-b, wheel/spin-button-c",
+      ],
+      ["vary_mismatch", "slots/wheel/spin-button-b/block.json", 'wheel/spin-button-b is titled "Bouncy"; request 1 named it "Spin button B"'],
+      ["vary_mismatch", "slots/wheel/spin-button-b/block.tsx", 'wheel/spin-button-b doesn\'t render data-part "spin-button", the element request 1 asked to vary'],
+      ["vary_mismatch", "brainstorm.json", 'request 1 asked for wheel/spin-button-c titled "Spin button C", and this commit has no such block'],
+    ]);
+  });
+
+  test("context spells out the vary, and the target's settings are in scope", async () => {
+    const { service } = await withIteration();
+    data(await service.act(S, { kind: "set_override", blockId: NEON, prop: "accent" as PropName, value: "#00ff88" }));
+    data(await service.act(S, { kind: "vary", target: { blockId: NEON, part: "spin-button" as PartName }, count: 1, direction: null }));
+    const context = data(await service.context(S, T1));
+    expect(context.request?.overrides.map((o) => [o.blockId, o.prop, o.value])).toEqual([[NEON, "accent", "#00ff88"]]);
+  });
+});
+
+describe("history", () => {
+  test("names where each iteration came from, and a past iteration reads as it was", async () => {
+    const { service } = await withIteration();
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: "calmer" }));
+    data(await service.commit({ session: S, thread: T1, files: copy(1, { "wheel/calm": { tsx: neonTsx, json: calmJson } }), addresses: [], note: null }));
+    data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/calm": { tsx: neonTsx.replace("Spin", "Go"), json: calmJson } }), addresses: [], note: "tidied" }));
+    expect(data(await service.view(S)).history.iterations.map((i) => [i.n, i.origin])).toEqual([
+      [1, { kind: "brief" }],
+      [2, { kind: "request", n: 1, body: { scope: { kind: "all" }, freetext: "calmer" } }],
+      [3, { kind: "agent", note: "tidied" }],
+    ]);
+    const past = data(service.iteration(S, 1 as IterationN));
+    expect(past.n).toBe(1);
+    expect(past.blocks.map((b) => [b.id, b.isNew])).toEqual([
+      [SHEET, false],
+      [NEON, false],
+    ]);
+    expect(service.iteration(S, 9 as IterationN)).toEqual({ ok: false, error: { code: "not_found", entity: "iteration", message: `${S} has no iteration 9` } });
+    const still = data(service.preview(S, { n: 1 as IterationN, slot: "result" as SlotId }));
+    expect(still?.frame.blockId).toBe(SHEET);
+    expect(data(service.preview(S, { n: 2 as IterationN }))?.frame.blockId).toBe(CALM);
   });
 });

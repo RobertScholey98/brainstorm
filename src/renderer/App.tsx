@@ -212,6 +212,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
             sidebar={sidebar}
             homePanel={nav.panel === "home" ? homePanel : null}
             onHome={() => setNav({ kind: "brainstorm", id: nav.id, panel: "home" })}
+            onOpen={(id) => (id === null ? setNav({ kind: "overview" }) : openSession(id))}
           />
         )}
       </SidebarProvider>
@@ -247,6 +248,7 @@ function SessionWorkspace({
   sidebar,
   homePanel,
   onHome,
+  onOpen,
 }: {
   api: Api;
   sessionId: SessionId;
@@ -265,6 +267,8 @@ function SessionWorkspace({
   /** Shown in place of the session panel while Rob looks for another brainstorm. */
   homePanel: ReactNode | null;
   onHome: () => void;
+  /** Opens another brainstorm, or home with null: a fork, its parent, or home after a discard. */
+  onOpen: (id: SessionId | null) => void;
 }) {
   const [view, setView] = useState<SessionView | null>(null);
   // A failed setting is named by its control's label, read when the failure comes back.
@@ -393,6 +397,13 @@ function SessionWorkspace({
     if ((await send({ kind: "add_feedback", pin, text })) !== null) setInteraction({ kind: "view" });
   };
 
+  const discard = async () => {
+    const result = await api.discard(sessionId);
+    if (!result.ok) return showNotice({ title: failedTitle("discard"), detail: result.error.message });
+    clearNotice();
+    onOpen(result.data.parent);
+  };
+
   const exportHtml = async () => {
     const result = await api.exportHtml(sessionId);
     if (result.ok) clearNotice();
@@ -425,6 +436,7 @@ function SessionWorkspace({
           send={send}
           exportHtml={exportHtml}
           panel={{ open: !inspector.rail, onToggle: () => inspector.onRail(!inspector.rail) }}
+          onDiscard={() => void discard()}
         />
       }
       strip={view !== null && <RequestDetail view={view} />}

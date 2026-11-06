@@ -1,7 +1,11 @@
+import { partLabel } from "./fork";
 import {
+  isPendingThread,
   parseRequestN,
   parseSessionId,
   type Attachment,
+  type IterationN,
+  type IterationOrigin,
   type BlockId,
   type Feedback,
   type FeedbackAction,
@@ -51,7 +55,9 @@ export function canAppend(status: FeedbackStatus, kind: FeedbackEventKind): bool
   return LEGAL_EVENTS[status.state].includes(kind);
 }
 
+/** A vary request carries no feedback: its new variants can't address pins on the block they copy. */
 export function requestFeedback(feedback: readonly Feedback[], scope: RequestScope): Feedback[] {
+  if (scope.kind === "vary") return [];
   return feedback.filter((f) => f.status.state === "open" && (scope.kind !== "blocks" || scope.blocks.includes(f.pin.blockId)));
 }
 
@@ -101,6 +107,11 @@ export function foldFeedback(events: readonly FeedbackEvent[]): FeedbackStatus {
 export function requestPhase(request: Request, attachment: Attachment, observation: Observation | null): RequestPhase {
   const open = (step: readonly RequestPhaseAction[]): readonly RequestPhaseAction[] =>
     attachment.lostAt === null ? [...step, "open_thread", "withdraw"] : [...step, "withdraw"];
+  // A fork without its thread has nothing to open or withdraw to: it starts, or Rob discards it.
+  if (isPendingThread(request.threadId)) {
+    if (request.state.state === "sending") return { phase: "starting", actions: [] };
+    if (request.state.state === "send_failed") return { phase: "start_failed", error: request.state.error, actions: ["retry", "discard"] };
+  }
   switch (request.state.state) {
     case "sending":
       return { phase: "sending", actions: [] };
@@ -139,6 +150,10 @@ export function phaseMessage(phase: RequestPhase, context: { title: string; chan
     case "send_failed":
       // The reason in brackets, so its own colons never read as part of the sentence.
       return `Couldn't send (${phase.error}). The request is saved.`;
+    case "starting":
+      return "Starting a T3 thread…";
+    case "start_failed":
+      return `Couldn't start a T3 thread (${phase.error}). The fork is saved.`;
     case "previous_thread":
       return "Sent to the previous thread";
     case "thread_lost":
@@ -186,7 +201,37 @@ const MARKER = /\[brainstorm\] session (\S+) · request (\d+)/;
 
 type RequestMessageFields = Pick<Request, "session" | "n" | "scope" | "freetext" | "feedbackIds">;
 
-export const scopeText = (scope: RequestScope): string => (scope.kind === "blocks" ? scope.blocks.join(", ") : scope.kind);
+export function scopeText(scope: RequestScope): string {
+  switch (scope.kind) {
+    case "blocks":
+      return scope.blocks.join(", ");
+    case "vary":
+      return `vary ${scope.target.blockId}${scope.target.part === null ? "" : ` [${scope.target.part}]`} as ${scope.variants.map((v) => v.key).join(", ")}`;
+    case "all":
+    case "described":
+      return scope.kind;
+  }
+}
+
+/** The filmstrip's line for an iteration: Rob's words when he gave some, otherwise what he asked for. */
+export function originText(origin: IterationOrigin): string {
+  switch (origin.kind) {
+    case "brief":
+      return "First designs, from the brief";
+    case "fork":
+      return `Forked from ${origin.parent} · iteration ${origin.from}`;
+    case "agent":
+      return origin.note ?? "The agent's own commit";
+    case "request": {
+      const { scope, freetext } = origin.body;
+      if (scope.kind === "vary") {
+        const what = scope.target.part === null ? "the block" : partLabel(scope.target.part);
+        return `Vary ${what} ×${scope.variants.length}${freetext === null ? "" : ` · ${freetext}`}`;
+      }
+      return freetext ?? (scope.kind === "all" ? "Everything" : "Selected blocks");
+    }
+  }
+}
 
 /** The fulfilled message's list, short enough for the top bar: two names, then a count. */
 export function changedNames(titles: readonly string[]): string {
@@ -198,15 +243,33 @@ export function changedNames(titles: readonly string[]): string {
 export const changedText = (changed: readonly string[]): string =>
   changed.length === 0 ? "no blocks changed" : `changed ${changed.join(", ")}`;
 
-export function formatRequestMessage(request: RequestMessageFields): string {
+/**
+ * `fork` makes it a fork's first message: the thread is new, so the agent attaches first, which is a no-op once the
+ * app has adopted the thread and adopts it otherwise. `home` is named when the app runs on a home of its own, because
+ * T3 starts agents with its own environment and their CLI would otherwise look for the default one.
+ */
+export function formatRequestMessage(
+  request: RequestMessageFields,
+  options: { readonly fork?: { readonly parent: SessionId; readonly from: IterationN }; readonly home?: string | null } = {},
+): string {
+  const { fork, home = null } = options;
   const segments = [
     `[brainstorm] session ${request.session}`,
     `request ${request.n}`,
+    ...(fork === undefined ? [] : [`fork of ${fork.parent} iteration ${fork.from}`]),
     `scope: ${scopeText(request.scope)}`,
     ...(request.feedbackIds.length > 0 ? [`feedback: ${request.feedbackIds.map((id) => `#${id}`).join(" ")}`] : []),
     ...(request.freetext !== null ? [`freetext: ${JSON.stringify(request.freetext)}`] : []),
   ];
-  return `${segments.join(" · ")}\nHandle with the ux-brainstorm skill: run \`brainstorm context ${request.session}\`.`;
+  const run =
+    fork === undefined
+      ? `run \`brainstorm context ${request.session}\`.`
+      : `this thread is new, so run \`brainstorm session attach ${request.session}\`, then \`brainstorm context ${request.session}\`.`;
+  const lines = [segments.join(" · "), `Handle with the ux-brainstorm skill: ${run}`];
+  if (home !== null) {
+    lines.push(`Brainstorm runs with BRAINSTORM_HOME=${home}. Set it on every brainstorm command: in PowerShell, start each with \`$env:BRAINSTORM_HOME = '${home}';\`.`);
+  }
+  return lines.join("\n");
 }
 
 export function parseRequestMarker(text: string): { session: SessionId; n: RequestN } | null {

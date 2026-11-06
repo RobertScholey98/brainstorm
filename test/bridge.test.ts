@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, test } from "vitest";
-import { createT3Bridge, resolveT3Cli } from "../src/core/bridge/t3";
-import type { ThreadId } from "../src/core/types";
+import { createT3Bridge, resolveT3Cli, safeTitle } from "../src/core/bridge/t3";
+import type { ProjectId, ThreadId } from "../src/core/types";
 
 const cli = join(import.meta.dirname, "fake-t3", "t3.cmd");
 const thread = "8ee90f34-3a9b-4c75-9a5a-ed220b201be1" as ThreadId;
@@ -92,5 +92,38 @@ describe("t3 bridge", () => {
     expect(resolveT3Cli({ BRAINSTORM_T3_CLI: "C:\\a\\t3.cmd", T3CODE_CLI_PATH: "C:\\b\\t3.cmd" })).toBe("C:\\a\\t3.cmd");
     expect(resolveT3Cli({ T3CODE_CLI_PATH: "C:\\b\\t3.cmd" })).toBe("C:\\b\\t3.cmd");
     expect(resolveT3Cli({ USERPROFILE: "C:\\Users\\rob" })).toBe("C:\\Users\\rob\\.t3\\bin\\t3.cmd");
+  });
+});
+
+describe("t3 thread start and list", () => {
+  const project = "f0d48734-aa55-422c-9bcd-e473ade44a34" as ProjectId;
+  const odd = (id: string) => id as ProjectId;
+
+  test("start sends the first message on stdin, titles the thread, and returns its id", async () => {
+    const message = `[brainstorm] session s_8f2k3a · request 1 · freetext: "a & b | c > d %PATH% ^"\nsecond line`;
+    const result = await bridge.start({ project, title: "Slot machine & 100% \"reels\"", message });
+    expect(result).toEqual({ kind: "started", thread: "5a000000-0000-4000-8000-000000000001" });
+    expect(readState().started).toEqual([{ thread: "5a000000-0000-4000-8000-000000000001", project, title: "Slot machine 100 reels", message }]);
+  });
+
+  test("a start whose reply is lost fails, and list then finds the thread it made", async () => {
+    writeState({ ...readState(), failAfter: ["start"] });
+    expect(await bridge.start({ project, title: "Fork", message: "hi" })).toEqual({ kind: "failed", error: "fake t3 failure: the reply was lost" });
+    const listed = await bridge.list(project);
+    expect(listed.kind === "found" && listed.threads.map((t) => t.threadId).sort()).toEqual(["5a000000-0000-4000-8000-000000000001", thread]);
+  });
+
+  test("refuses a project id cmd.exe could misread, and an unknown project fails", async () => {
+    expect(await bridge.start({ project: odd("x & calc"), title: "t", message: "m" })).toEqual({ kind: "failed", error: `"x & calc" is not a T3 project id` });
+    expect(await bridge.list(odd("x & calc"))).toEqual({ kind: "failed", error: `"x & calc" is not a T3 project id` });
+    expect((await bridge.start({ project: odd("no-such-project"), title: "t", message: "m" })).kind).toBe("failed");
+    expect(readState().started).toEqual(undefined);
+  });
+
+  test("safeTitle keeps only what cmd.exe reads as plain inside quotes", () => {
+    expect(safeTitle('Try "this" & that | 50% ^more!')).toBe("Try this that 50 more");
+    expect(safeTitle("Kai's wheel (v2), calmer?")).toBe("Kai's wheel (v2), calmer?");
+    expect(safeTitle("%%%")).toBe(null);
+    expect(safeTitle("x".repeat(200))?.length).toBe(80);
   });
 });

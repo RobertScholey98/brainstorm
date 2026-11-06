@@ -62,6 +62,7 @@ export function SessionBar({
   send,
   exportHtml,
   panel,
+  onDiscard,
 }: {
   title: string;
   /** The project's label, or null until the list has loaded. */
@@ -71,6 +72,8 @@ export function SessionBar({
   send: (action: RobAction) => Promise<SessionView | null>;
   exportHtml: () => Promise<ExportResult | null>;
   panel: PanelToggle;
+  /** Throws away a fork whose thread never started. */
+  onDiscard: () => void;
 }) {
   return (
     <TopBar
@@ -90,7 +93,7 @@ export function SessionBar({
           <>
             {phaseActions(view).length > 0 && (
               <>
-                <PhaseActions view={view} send={send} />
+                <PhaseActions view={view} send={send} onDiscard={onDiscard} />
                 {/* The request's actions, then the session's. */}
                 <Separator orientation="vertical" className="h-4 self-center" data-phase-divider />
               </>

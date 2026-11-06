@@ -4,7 +4,8 @@
 //   "hold": ["send"],  commands that wait, before doing anything, until they are no longer listed
 //   "threads": { "<threadId>": { "projectId", "title", "status", "activeRunId", "latestRunId",
 //                               "pendingRequestCount", "messages": [{ "role", "runId", "text" }], "missing" } },
-//   "sent": [{ "thread", "message" }] }
+//   "sent": [{ "thread", "message" }],
+//   "started": [{ "thread", "project", "title", "message" }] }  threads `thread start` made, newest last
 // Output mirrors the real shapes recorded in docs/t3-cli.md. control.mjs moves threads through runs for verify scripts.
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 
@@ -32,6 +33,7 @@ for (let i = 0; i < rest.length; i++) {
   const arg = rest[i];
   if (arg === "--json") flags.set("json", true);
   else if (arg.startsWith("--")) flags.set(arg.slice(2), rest[++i]);
+  else if (arg === "-") positionals.push(arg);
   else positionals.push(arg);
 }
 
@@ -53,6 +55,8 @@ const threadJson = (id, t) => ({
   branch: t.branch ?? "main",
   archived: false,
   settled: false,
+  createdAt: t.createdAt ?? "2026-01-01T00:00:00.000Z",
+  updatedAt: t.createdAt ?? "2026-01-01T00:00:00.000Z",
 });
 
 const findThread = (id) => {
@@ -85,6 +89,25 @@ switch (command) {
     save(state);
     if (state.failAfter?.includes("send")) fail("fake t3 failure: the reply was lost");
     process.stdout.write(`Sent to ${id}.\n`);
+    break;
+  }
+  case "start": {
+    // `thread start [--title <t>] --json <project> -`: a new thread in the project folder, its first message from stdin.
+    const [project, message] = positionals;
+    const known = Object.values(state.threads ?? {}).some((t) => t.projectId === project);
+    if (!known) fail(`No T3 Code project matches '${project}'. Pass a project id or a path inside a project.`);
+    const text = message === "-" ? readFileSync(0, "utf8") : message;
+    const n = (state.started ?? []).length + 1;
+    const id = `5a000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+    const title = flags.get("title") ?? text.split(/\r?\n/)[0];
+    state.threads[id] = {
+      projectId: project, title, status: "completed", activeRunId: null, latestRunId: null, pendingRequestCount: 0,
+      messages: [{ role: "user", runId: null, text }], createdAt: new Date().toISOString(),
+    };
+    state.started = [...(state.started ?? []), { thread: id, project, title, message: text }];
+    save(state);
+    if (state.failAfter?.includes("start")) fail("fake t3 failure: the reply was lost");
+    process.stdout.write(flags.get("json") ? JSON.stringify({ threadId: id, projectId: project, runId: null }) : `Started ${id}.\n`);
     break;
   }
   default:

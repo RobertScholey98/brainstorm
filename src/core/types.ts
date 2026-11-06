@@ -218,6 +218,7 @@ const ISSUE_SEVERITY = {
   pin_lost: "warning",
   out_of_scope: "warning",
   not_addressed: "warning",
+  vary_mismatch: "warning",
 } as const satisfies Record<string, "error" | "warning">;
 
 export type IssueCode = keyof typeof ISSUE_SEVERITY;
@@ -322,9 +323,19 @@ export type Feedback = {
   readonly status: FeedbackStatus;
 };
 
+/** One variant a vary request asks for. The server names them when Rob sends, so the commit can hold the agent to them. */
+export type VaryVariant = { readonly key: VariantKey; readonly title: string };
+
+/**
+ * New variants of `target`'s slot that differ from `target.blockId` only at `target.part` (the whole block when the
+ * part is null). It reuses the pin's shape, because Rob picks the element the same way.
+ */
+export type VaryScope = { readonly kind: "vary"; readonly target: Pin; readonly variants: NonEmpty<VaryVariant> };
+
+/** A vary request's `freetext` is Rob's optional direction. */
 export type RequestBody =
   | {
-      readonly scope: { readonly kind: "all" } | { readonly kind: "blocks"; readonly blocks: NonEmpty<BlockId> };
+      readonly scope: { readonly kind: "all" } | { readonly kind: "blocks"; readonly blocks: NonEmpty<BlockId> } | VaryScope;
       readonly freetext: string | null;
     }
   | { readonly scope: { readonly kind: "described" }; readonly freetext: string };
@@ -384,10 +395,27 @@ export type SnapshotResult =
 
 export type SendResult = { readonly kind: "sent" } | { readonly kind: "failed"; readonly error: string };
 
+export type StartResult = { readonly kind: "started"; readonly thread: ThreadId } | { readonly kind: "failed"; readonly error: string };
+
+/** A project's threads, newest first. */
+export type ListResult =
+  | { readonly kind: "found"; readonly threads: readonly { readonly threadId: ThreadId; readonly createdAt: string }[] }
+  | { readonly kind: "failed"; readonly error: string };
+
 export interface AgentBridge {
   send(thread: ThreadId, message: string): Promise<SendResult>;
   snapshot(thread: ThreadId, options: { readonly messages: number }): Promise<SnapshotResult>;
+  /** Starts a thread in `project` with `message` as its first turn. */
+  start(input: { readonly project: ProjectId; readonly title: string; readonly message: string }): Promise<StartResult>;
+  list(project: ProjectId): Promise<ListResult>;
 }
+
+/**
+ * A fork is attached to this stand-in until T3 gives it a thread. It can't match THREAD_ID_PATTERN, so no thread can
+ * own the fork by accident, and the bridge refuses it before running anything.
+ */
+export const pendingThreadOf = (session: SessionId): ThreadId => `pending:${session}` as ThreadId;
+export const isPendingThread = (thread: ThreadId): boolean => thread.startsWith("pending:");
 
 export type Observation =
   | { readonly kind: "not_seen" }
@@ -395,11 +423,14 @@ export type Observation =
   | { readonly kind: "running"; readonly pendingRequestCount: number }
   | { readonly kind: "ended"; readonly failed: boolean };
 
-export type RequestPhaseAction = "retry" | "resend" | "withdraw" | "open_thread" | "copy_phrase";
+export type RequestPhaseAction = "retry" | "resend" | "withdraw" | "open_thread" | "copy_phrase" | "discard";
 
 export type RequestPhase = { readonly actions: readonly RequestPhaseAction[] } & (
   | { readonly phase: "sending" }
   | { readonly phase: "send_failed"; readonly error: string }
+  /** A fork's first request while T3 starts its thread, and once that failed. */
+  | { readonly phase: "starting" }
+  | { readonly phase: "start_failed"; readonly error: string }
   | { readonly phase: "previous_thread" }
   | { readonly phase: "thread_lost" }
   | { readonly phase: "queued" }
@@ -422,6 +453,10 @@ export type RobAction =
   | { readonly kind: "confirm_feedback"; readonly id: FeedbackId }
   | { readonly kind: "reopen_feedback"; readonly id: FeedbackId }
   | ({ readonly kind: "regenerate" } & RequestBody)
+  /** The server names the `count` new variants, then sends a vary request. */
+  | { readonly kind: "vary"; readonly target: Pin; readonly count: number; readonly direction: string | null }
+  /** New variants that have now been on Rob's canvas. */
+  | { readonly kind: "mark_seen"; readonly blocks: NonEmpty<BlockId> }
   | { readonly kind: "retry_request" }
   | { readonly kind: "withdraw_request" }
   | { readonly kind: "check_thread" };
@@ -448,6 +483,8 @@ export type SessionListing = SessionSummary & {
   /** The open Regenerate request's phase, or null when none is open. */
   readonly request: OpenPhase | null;
   readonly settlement: Settlement;
+  /** Set on a fork. Home lists forks flat, each naming its parent. */
+  readonly fork: { readonly parentTitle: string; readonly from: IterationN } | null;
 };
 
 /**
@@ -502,8 +539,18 @@ export type RequestContext = RequestBody & {
   readonly overrides: readonly Override[];
 };
 
+/** What an agent needs to know about a fork: where it came from, and which of its defaults are Rob's settings. */
+export type ForkContext = {
+  readonly parent: { readonly id: SessionId; readonly title: string };
+  readonly from: IterationN;
+  readonly baked: readonly BakedSetting[];
+};
+
+export type BakedSetting = { readonly blockId: BlockId; readonly prop: PropName; readonly value: AppearanceValue };
+
 export type AgentContext = {
   readonly session: { readonly id: SessionId; readonly title: string; readonly brief: string };
+  readonly fork: ForkContext | null;
   readonly latest: IterationSummary | null;
   readonly attached: boolean;
   readonly attachedThread: ThreadId;
@@ -525,6 +572,8 @@ export type BlockView = {
   readonly controls: ControlsSpec;
   readonly parts: readonly PartName[];
   readonly effectiveProps: Props;
+  /** Added after the first iteration and not yet on Rob's canvas. Always false in a past iteration. */
+  readonly isNew: boolean;
 };
 
 export type SlotView = {
@@ -542,8 +591,30 @@ export type IterationView = Omit<IterationSummary, "slots" | "blocks"> & {
 
 export type Regenerate = { readonly ok: true } | { readonly ok: false; readonly reason: "no_iteration" | "request_open" | "thread_lost" };
 
+/** What produced an iteration, for the filmstrip: the brief, a fork, one of Rob's requests, or the agent unasked. */
+export type IterationOrigin =
+  | { readonly kind: "brief" }
+  | { readonly kind: "fork"; readonly parent: string; readonly from: IterationN }
+  | { readonly kind: "request"; readonly n: RequestN; readonly body: RequestBody }
+  | { readonly kind: "agent"; readonly note: string | null };
+
+export type HistoryEntry = { readonly n: IterationN; readonly createdAt: string; readonly origin: IterationOrigin };
+
+/** A fork made from this brainstorm, drawn as an offshoot of the still it came from. */
+export type ForkBranch = { readonly id: SessionId; readonly title: string; readonly from: IterationN };
+
+/** A fork's parent, as its strip's first stub names it. A gone parent can't be opened. */
+export type ForkLink = {
+  readonly parent: { readonly id: SessionId; readonly title: string; readonly state: "active" | "settled" | "gone" };
+  readonly from: IterationN;
+};
+
 export type SessionView = {
   readonly session: SessionSummary;
+  readonly fork: ForkLink | null;
+  /** The fork's ancestors, root first, for the breadcrumb. Empty for a brainstorm that isn't a fork. */
+  readonly lineage: readonly { readonly id: SessionId; readonly title: string; readonly gone: boolean }[];
+  readonly history: { readonly iterations: readonly HistoryEntry[]; readonly forks: readonly ForkBranch[] };
   readonly attachment: Attachment;
   readonly thread: ThreadInfo | null;
   readonly iteration: IterationView | null;
@@ -623,5 +694,12 @@ export type FrameToHost =
  * settings applied. Null before the first iteration.
  */
 export type SessionPreview = { readonly frame: CanvasFrame; readonly module: CanvasModule; readonly props: Props };
+
+/** A fork's source: an iteration of the parent, and the variant Rob picked per slot there. A slot left out keeps the one it shows. */
+export type ForkInput = {
+  readonly from: IterationN;
+  readonly picks: Readonly<Record<string, VariantKey>>;
+  readonly instruction: string;
+};
 
 export type CanvasRect = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };

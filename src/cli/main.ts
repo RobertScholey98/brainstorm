@@ -9,6 +9,7 @@ import {
   parseFeedbackId,
   parseSessionId,
   parseThreadId,
+  splitBlockId,
   type AgentContext,
   type AttachResult,
   type CommitResult,
@@ -25,6 +26,7 @@ import {
   type SessionListing,
   type ThreadId,
   type ValidateResult,
+  type VaryScope,
 } from "../core/types";
 import { changedText, scopeText } from "../core/machines";
 import { ownedByPull, withBase, workingCopySession } from "../core/workingCopy";
@@ -217,17 +219,35 @@ const iterationText = (i: IterationSummary) => `iteration ${i.n} · ${i.blocks.l
 const feedbackLine = (f: Feedback) =>
   `  #${f.id} ${f.pin.blockId}${f.pin.part === null ? "" : ` [${f.pin.part}]`}: ${f.text}${f.status.state === "addressed" ? ` (addressed in ${f.status.in})` : ""}`;
 
+/** What a vary asks, spelled out: copies of one block that differ only at one element, under names the app chose. */
+function varyLines(scope: VaryScope): string[] {
+  const { slot } = splitBlockId(scope.target.blockId);
+  const where = scope.target.part === null ? "the whole block" : `only data-part "${scope.target.part}"`;
+  return [
+    `  vary: add ${scope.variants.length} new variants to slot ${slot}, each a copy of ${scope.target.blockId} that changes ${where}`,
+    ...scope.variants.map((v) => `  new variant ${slot}/${v.key} titled "${v.title}"`),
+    "  keep every existing variant as it is",
+  ];
+}
+
 function contextLines(c: AgentContext): string[] {
   const r = c.request;
   return [
     `session ${c.session.id} "${c.session.title}"`,
     ...(c.session.brief === "" ? [] : [`brief: ${c.session.brief}`]),
+    ...(c.fork === null
+      ? []
+      : [
+          `fork of ${c.fork.parent.id} "${c.fork.parent.title}" iteration ${c.fork.from}: iteration 1 is that iteration narrowed to Rob's picks`,
+          ...c.fork.baked.map((b) => `  baked default ${b.blockId} ${b.prop} = ${JSON.stringify(b.value)}`),
+        ]),
     c.attached ? `attached: this thread (${c.attachedThread})` : `attached: thread ${c.attachedThread}, not this one`,
     `latest: ${c.latest === null ? "no iterations yet" : iterationText(c.latest)}`,
     ...(r === null
       ? ["request: none open"]
       : [
           `request ${r.n} · base ${r.base ?? "none"} · scope: ${scopeText(r.scope)}${r.freetext === null ? "" : ` · freetext: ${JSON.stringify(r.freetext)}`}`,
+          ...(r.scope.kind === "vary" ? varyLines(r.scope) : []),
           ...r.feedback.map(feedbackLine),
           ...r.overrides.map((o) => `  override ${o.blockId} ${o.prop} = ${JSON.stringify(o.value)}`),
         ]),

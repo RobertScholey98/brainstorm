@@ -9,6 +9,7 @@ export type Tone = "accent" | "info" | "warning" | "danger";
  */
 export const STATUS: Record<OpenPhase, { readonly label: string; readonly tone: Tone; readonly live?: true }> = {
   sending: { label: "Sending", tone: "accent", live: true },
+  starting: { label: "Starting thread", tone: "accent", live: true },
   queued: { label: "Queued in T3", tone: "accent" },
   working: { label: "Agent working", tone: "accent", live: true },
   asking: { label: "Agent asking", tone: "info" },
@@ -16,6 +17,7 @@ export const STATUS: Record<OpenPhase, { readonly label: string; readonly tone: 
   previous_thread: { label: "Previous thread", tone: "warning" },
   thread_lost: { label: "Thread lost", tone: "warning" },
   send_failed: { label: "Send failed", tone: "danger" },
+  start_failed: { label: "Start failed", tone: "danger" },
   run_failed: { label: "Run failed", tone: "danger" },
 };
 
