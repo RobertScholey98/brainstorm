@@ -16,6 +16,7 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuMark,
   SidebarMenuSkeleton,
   SidebarSeparator,
   SidebarTrigger,
@@ -151,7 +152,7 @@ export function HomePanel({
                 <span className="flex group-data-[panel-open]/label:hidden">
                   <Badge data-project-count>{group.sessions.length}</Badge>
                 </span>
-                <ChevronRight aria-hidden className="size-4 transition-transform group-data-[panel-open]/label:rotate-90" />
+                <ChevronRight aria-hidden className={GROUP_CHEVRON} />
               </span>
             </SidebarGroupLabel>
             <CollapsibleContent>
@@ -178,7 +179,7 @@ export function HomePanel({
             <span className="truncate">Settled</span>
             <span className="ml-auto flex shrink-0 items-center gap-1.5">
               <Badge data-settled-count>{settled.length}</Badge>
-              <ChevronRight aria-hidden className="size-4 transition-transform group-data-[panel-open]/label:rotate-90" />
+              <ChevronRight aria-hidden className={GROUP_CHEVRON} />
             </span>
           </SidebarGroupLabel>
           <CollapsibleContent>
@@ -196,6 +197,9 @@ export function HomePanel({
     </SidebarContent>
   );
 }
+
+/** An open group's chevron ink stands 4 px inside its box, so the box reaches 4 px out to end the ink on the rows' ages. */
+const GROUP_CHEVRON = "-mr-1 size-4 transition-transform group-data-[panel-open]/label:rotate-90";
 
 /**
  * One line, as T3 Code lists threads: the title, its live status, and how long ago it last moved, right-aligned. A
@@ -354,7 +358,7 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
         <SidebarMenuItem>
           {pending ? (
             <div className="flex h-8 items-center gap-2 px-2 text-sm" data-thread-link>
-              <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", failed ? "bg-danger" : "bg-accent")} />
+              <SidebarMenuMark className={failed ? "bg-danger" : "bg-accent"} />
               <span className={failed ? "font-medium text-danger" : "text-fg-muted"} data-thread={failed ? "start_failed" : "starting"}>
                 {failed ? "New thread didn't start" : "New thread · starting"}
               </span>
@@ -362,9 +366,10 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
           ) : lost || view.thread === null ? (
             // T3 may not have answered yet for an attached thread, so it shows the state without a name or a link.
             <div className="flex h-8 items-center gap-2 px-2 text-sm" data-thread-link>
-              <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", lost ? "bg-warning" : "bg-success")} />
+              {/* The header names a lost thread in amber, and its strip says what to do, so the row only states it. */}
+              <SidebarMenuMark className={lost ? "bg-fg-muted" : "bg-success"} />
               {lost ? (
-                <span className="font-medium text-warning" data-thread="lost">
+                <span className="text-fg-muted" data-thread="lost">
                   Thread lost
                 </span>
               ) : (
@@ -373,7 +378,9 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
             </div>
           ) : (
             <SidebarMenuButton size="tall" render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-thread-link>
-              <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-success" />
+              <span className="mt-0.5 flex">
+                <SidebarMenuMark className="bg-success" />
+              </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate">{view.thread.title}</span>
                 <ThreadState view={view} className="text-xs" />
@@ -458,8 +465,7 @@ function SlotSection({
       <SidebarGroup data-slot-id={slot.id}>
         <SidebarGroupLabel
           render={<button type="button" onClick={onSlot} />}
-          className="w-full cursor-pointer gap-2 hover:bg-hover data-[selected]:text-fg"
-          data-selected={selected || undefined}
+          className="w-full cursor-pointer gap-2 hover:bg-hover hover:text-fg"
         >
           <span className="truncate">{slot.title}</span>
           <span className="ml-auto shrink-0 font-normal text-fg-muted tabular-nums" data-slot-count>
@@ -490,7 +496,7 @@ function SlotSection({
                   data-variant={variant}
                   data-showing={active || undefined}
                 >
-                  <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${active ? "bg-fg-muted" : ""}`} />
+                  <SidebarMenuMark className={active ? "bg-fg-muted" : undefined} />
                   <span className="min-w-0 flex-1 truncate" data-variant-title>
                     {block?.title ?? variant}
                   </span>

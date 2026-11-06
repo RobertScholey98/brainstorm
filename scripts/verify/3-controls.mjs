@@ -74,6 +74,25 @@ try {
     ),
     [true, true, false],
   );
+  await run.window.click('[data-slot="select-trigger"]');
+  await run.window.waitForSelector('[data-slot="select-trigger"][data-popup-open]');
+  check(
+    "an open select's trigger takes the open look of every other popover trigger: the accent edge on the selected fill",
+    await settled(() =>
+      run.window.$eval('[data-slot="select-trigger"]', (el) => {
+        const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "border: 1px solid var(--accent); background: var(--selected)" }));
+        const want = getComputedStyle(probe);
+        const [edge, fill] = [want.borderTopColor, want.backgroundColor];
+        probe.remove();
+        const style = getComputedStyle(el);
+        return [style.borderTopColor === edge, style.backgroundColor === fill];
+      }),
+    ),
+    [true, true],
+  );
+  await run.window.keyboard.press("Escape");
+  await run.window.waitForSelector('[data-slot="select-trigger"]:not([data-popup-open])');
+  await run.window.click(hex);
   await run.window.keyboard.press("Control+A");
   await run.window.keyboard.type("#00f0ff");
   await run.window.keyboard.press("Enter");
@@ -138,9 +157,12 @@ try {
   );
   await run.window.waitForSelector('[data-banner="inapplicable"] [data-override="wheel/neon:accent"]');
   check(
-    "the banner names the dropped setting, as words, and why",
-    (await run.window.innerText('[data-override="wheel/neon:accent"]'))?.replace(/\s+/g, " ").trim(),
-    "Accent: #00F0FF On Neon wheel: the block no longer has this setting. Dismiss",
+    "the banner names the dropped setting, as words, and why, without naming the block the header names, at its sentence's weight",
+    [
+      (await run.window.innerText('[data-override="wheel/neon:accent"]'))?.replace(/\s+/g, " ").trim(),
+      await run.window.$eval('[data-override="wheel/neon:accent"] span', (s) => getComputedStyle(s).fontWeight),
+    ],
+    ["Accent: #00F0FF The block no longer has this setting. Dismiss", "400"],
   );
   check("the slider's value still applies", await run.window.getAttribute(slider, "aria-valuenow"), "3.4");
   check("the panel no longer has an accent control", await run.window.isVisible(hex), false);

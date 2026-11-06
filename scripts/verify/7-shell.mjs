@@ -282,7 +282,23 @@ try {
   await window.waitForTimeout(300);
   await shot(window, shots, "settled-sidebar");
 
+  check(
+    "an open project group's chevron ink, 4 px inside its box, ends on its rows' ages",
+    await window.evaluate(() => {
+      const group = document.querySelector("[data-project]");
+      const chevron = group.querySelector('[data-sidebar="group-label"] svg').getBoundingClientRect();
+      const age = group.querySelector("[data-age]").getBoundingClientRect();
+      return Math.round(chevron.right - 4 - age.right);
+    }),
+    0,
+  );
+  await window.keyboard.press("Shift");
   await window.focus(`[data-session="${loose}"]`);
+  check(
+    "a focused sidebar row keeps its focus ring inside its own fill, on the column's inset",
+    await window.$eval(`[data-session="${loose}"]`, (row) => getComputedStyle(row).boxShadow.includes("inset")),
+    true,
+  );
   await window.keyboard.press("Control+Shift+S");
   await window.waitForFunction((id) => document.querySelector(`[data-settled-group] [data-session="${id}"]`) !== null, loose);
   check("Ctrl+Shift+S settles the focused row, and the newest settle lists first", await settledRows(), [loose, kitchen]);
@@ -428,14 +444,29 @@ try {
     ["All brainstorms", "Attached", ["card"]],
   );
   check(
-    "a slot head's variant count stays muted under its fg title, so the head and its count read apart",
-    await window.$$eval("[data-slot-id] [data-slot-count]", (counts) => {
+    "every section head in the brainstorm panel takes one style, the selected slot's too, its variant count muted",
+    await window.evaluate(() => {
       const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--fg-muted)" }));
       const muted = getComputedStyle(probe).color;
       probe.remove();
-      return [counts.length > 0, counts.every((c) => getComputedStyle(c).color === muted)];
+      const heads = [...document.querySelectorAll('[data-sidebar-panel="session"] [data-sidebar="group-label"]')].map((h) => `${getComputedStyle(h).color} ${getComputedStyle(h).fontWeight}`);
+      const counts = [...document.querySelectorAll("[data-slot-id] [data-slot-count]")];
+      return [heads.length >= 2, new Set(heads).size, counts.every((c) => getComputedStyle(c).color === muted)];
     }),
-    [true, true],
+    [true, 1, true],
+  );
+  check(
+    "in the brainstorm panel every row's lead mark, dot or icon, centres on one line, and every row's text starts at one edge",
+    await window.evaluate(() => {
+      const panel = '[data-sidebar-panel="session"]';
+      const marks = [...document.querySelectorAll(`${panel} [data-back] > svg, ${panel} [data-slot="sidebar-menu-mark"]`)].map((m) => {
+        const r = m.getBoundingClientRect();
+        return Math.round(r.left + r.width / 2);
+      });
+      const texts = [...document.querySelectorAll(`${panel} [data-back] > span, ${panel} [data-thread-link] .truncate, ${panel} [data-variant-title]`)].map((t) => Math.round(t.getBoundingClientRect().left));
+      return [marks.length >= 3 && new Set(marks).size, texts.length >= 2 && new Set(texts).size];
+    }),
+    [1, 1],
   );
 
   await canvas.waitForSelector('[data-bid="result/card"]');
@@ -604,6 +635,24 @@ try {
     }),
     [28, 6, 6, "-6px", "6px"],
   );
+  check(
+    "the breadcrumb starts 16 px into the card, on the first ink of the canvas bar and of the Inspector's header",
+    await window.evaluate(() => {
+      const card = document.querySelector('[data-slot="sidebar-inset-card"]').getBoundingClientRect();
+      const crumb = document.querySelector('nav[aria-label="Breadcrumb"]').getBoundingClientRect();
+      const inspector = document.querySelector("[data-inspector-header]");
+      const pad = parseFloat(getComputedStyle(inspector).paddingLeft);
+      return [Math.round(crumb.left - card.left), pad];
+    }),
+    [16, 16],
+  );
+  await window.keyboard.press("Shift");
+  await window.focus('[data-slot-tab="wheel"]');
+  check(
+    "a focused slot tab draws its ring inside itself, 4 px clear of the accent underline",
+    await window.$eval('[data-slot-tab="wheel"]', (tab) => getComputedStyle(tab).boxShadow.includes("inset")),
+    true,
+  );
   // The pointer may still rest on the toggle from collapsing the sidebar, so come at it fresh.
   await window.mouse.move(700, 20);
   await window.hover('[data-slot="sidebar"] [data-sidebar="trigger"]');
@@ -751,6 +800,21 @@ try {
     [await inspectorWidth(), (await window.textContent("[data-rail-count]"))?.trim(), await window.getAttribute("[data-rail-count]", "data-slot")],
     [40, "1", "badge"],
   );
+  check(
+    "the rail's head carries the canvas bar's rule, its button centred on the bar's line with the count on its corner",
+    await settled(() =>
+      window.evaluate(() => {
+        const box = (sel) => document.querySelector(sel).getBoundingClientRect();
+        const [bar, head, button, count] = [box("[data-canvas-bar]"), box("[data-rail-head]"), box("[data-rail-feedback]"), box("[data-rail-count]")];
+        return {
+          rule: Math.round(head.bottom) === Math.round(bar.bottom) && parseFloat(getComputedStyle(document.querySelector("[data-rail-head]")).borderBottomWidth) > 0,
+          centred: Math.round(button.top + button.height / 2) === Math.round(bar.top + bar.height / 2),
+          corner: count.left > button.left + button.width / 2 && count.bottom < button.top + button.height / 2 && count.right <= head.right,
+        };
+      }),
+    ),
+    { rule: true, centred: true, corner: true },
+  );
   await window.click("[data-rail-feedback]");
   await window.waitForSelector("[data-feedback-panel]");
   const narrow = await inspectorWidth();
@@ -809,13 +873,20 @@ try {
   await window.click('[data-slot-id="wheel"] [data-variant="reel"]');
   await window.waitForSelector("[data-slot=toast]");
   check(
-    "a notice sits in the canvas region, off the Inspector",
-    await window.evaluate(() => {
+    "a notice sits in the canvas region, off the Inspector, as far off the canvas scrollbar as off the bottom",
+    // Read once its entrance has finished moving it.
+    await settled(() => window.evaluate(() => {
       const toast = document.querySelector("[data-slot=toast]").getBoundingClientRect();
       const inspector = document.querySelector("aside[aria-label=Inspector]").getBoundingClientRect();
-      return { inRegion: document.querySelector("[data-canvas-region] [data-slot=toast]") !== null, clear: toast.right <= inspector.left };
-    }),
-    { inRegion: true, clear: true },
+      const region = document.querySelector("[data-canvas-region]").getBoundingClientRect();
+      return {
+        inRegion: document.querySelector("[data-canvas-region] [data-slot=toast]") !== null,
+        clear: toast.right <= inspector.left,
+        offScrollbar: Math.round(region.right - 10 - toast.right),
+        offBottom: Math.round(region.bottom - toast.bottom),
+      };
+    })),
+    { inRegion: true, clear: true, offScrollbar: 16, offBottom: 16 },
   );
   check(
     "a notice leads with the step that failed, in a medium title over its reason",

@@ -59,14 +59,24 @@ function Header({ children }: { children: ReactNode }) {
  */
 export function InspectorRail({ open, onExpand }: { open: number; onExpand: () => void }) {
   return (
-    <aside className="flex w-10 shrink-0 flex-col items-center gap-1 border-l bg-card py-2" aria-label="Inspector" data-inspector-rail>
-      <Hint label={open === 0 ? "No open feedback" : open === 1 ? "1 open comment" : `${open} open comments`} side="left">
-        <Button variant="ghost" size="icon" aria-label="Show the feedback" onClick={onExpand} data-rail-feedback>
-          <MessageSquare aria-hidden />
-        </Button>
-      </Hint>
-      {/* The chip every other count takes, so the rail's count reads as one. */}
-      {open > 0 && <Badge data-rail-count>{open}</Badge>}
+    <aside className="flex w-10 shrink-0 flex-col border-l bg-card" aria-label="Inspector" data-inspector-rail>
+      {/* The canvas bar's height and rule, so the bar's line runs on to the card's edge. */}
+      <div className="flex h-10 shrink-0 items-center justify-center border-b" data-rail-head>
+        <span className="relative flex">
+          <Hint label={open === 0 ? "No open feedback" : open === 1 ? "1 open comment" : `${open} open comments`} side="left">
+            <Button variant="ghost" size="icon" aria-label="Show the feedback" onClick={onExpand} data-rail-feedback>
+              <MessageSquare aria-hidden />
+            </Button>
+          </Hint>
+          {open > 0 && (
+            <span className="pointer-events-none absolute -top-1 -right-1 flex">
+              <Badge size="corner" data-rail-count>
+                {open}
+              </Badge>
+            </span>
+          )}
+        </span>
+      </div>
     </aside>
   );
 }
@@ -127,7 +137,7 @@ export function Inspector({
   children: ReactNode;
 }) {
   // It covers the whole session, removed blocks included, so it shows whatever is selected, under the block's header.
-  const banner = view.overrides.inapplicable.length > 0 && <Inapplicable items={view.overrides.inapplicable} blocks={blocks} onDismiss={onDismiss} />;
+  const banner = view.overrides.inapplicable.length > 0 && <Inapplicable items={view.overrides.inapplicable} blocks={blocks} shown={block} onDismiss={onDismiss} />;
   const slot = block === null ? undefined : view.iteration?.slots.find((s) => s.id === block.slot);
   const past = readOnly !== null && (
     <div className="pt-3" data-inspector-past={readOnly}>
@@ -235,13 +245,16 @@ function BlockControls({
   );
 }
 
+/** `shown` is the block the Inspector's header names, whose own settings need no "On <block>" to say where they were. */
 function Inapplicable({
   items,
   blocks,
+  shown,
   onDismiss,
 }: {
   items: readonly InapplicableOverride[];
   blocks: readonly BlockView[];
+  shown: BlockView | null;
   onDismiss: (o: InapplicableOverride) => void;
 }) {
   return (
@@ -261,11 +274,11 @@ function Inapplicable({
                   </Button>
                 }
               >
-                <span className="flex items-center gap-1.5 font-medium">
+                <span className="flex items-center gap-1.5 text-fg">
                   {isHex(o.value) && <span aria-hidden className="size-3 shrink-0 rounded-sm inset-ring inset-ring-fg/15" style={{ background: o.value }} />}
                   {settingLabel(o, blocks)}: {isHex(o.value) ? o.value.toUpperCase() : String(o.value)}
                 </span>
-                On {title}: {WHY[reason]}.
+                {o.blockId === shown?.id ? `${WHY[reason][0]!.toUpperCase()}${WHY[reason].slice(1)}.` : `On ${title}: ${WHY[reason]}.`}
               </CalloutItem>
             );
           })}
