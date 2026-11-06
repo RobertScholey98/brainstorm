@@ -221,10 +221,13 @@ function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
     case "starting":
       return <Spinner className={`${cls} text-accent`} aria-hidden data-progress />;
     case "working":
+      // A live dot in a 14 px halo, the optical size of the other phases' glyphs.
       return (
         <span aria-hidden className="relative grid size-4 shrink-0 place-items-center" data-progress>
           <span className="absolute size-2 animate-ping rounded-full bg-accent/60" />
-          <span className="size-2 rounded-full bg-accent" />
+          <span className="grid size-3.5 place-items-center rounded-full bg-accent/25" data-phase-glyph>
+            <span className="size-2 rounded-full bg-accent" />
+          </span>
         </span>
       );
     case "queued":

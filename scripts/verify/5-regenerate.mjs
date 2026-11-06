@@ -173,6 +173,11 @@ try {
 
   t3.startRun(DEMO_THREAD);
   check("the agent picking it up shows as working", await phase("working"), { message: "The agent is working", actions: ["open_thread", "withdraw"] });
+  check(
+    "working's live dot sits in a 14 px halo, the optical size of the other phases' glyphs",
+    await window.$eval("[data-request-phase=working] [data-phase-glyph]", (g) => Math.round(g.getBoundingClientRect().width)),
+    14,
+  );
   await window.setViewportSize({ width: 1100, height: 720 });
   check(
     "at 1100 with a request open the phase actions give up their labels for icons, so the title keeps 160 px or reads whole, and the status message reads whole",
