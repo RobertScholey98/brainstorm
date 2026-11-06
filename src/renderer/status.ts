@@ -22,9 +22,11 @@ export const STATUS: Record<OpenPhase, { readonly label: string; readonly tone: 
 };
 
 /** A lost thread outranks any request, since nobody can answer it. */
+export const sessionPhase = (s: SessionListing): OpenPhase | null => (s.lost ? "thread_lost" : s.request);
+
 export function sessionStatus(s: SessionListing): (typeof STATUS)[OpenPhase] | null {
-  if (s.lost) return STATUS.thread_lost;
-  return s.request === null ? null : STATUS[s.request];
+  const phase = sessionPhase(s);
+  return phase === null ? null : STATUS[phase];
 }
 
 /** Whether the brainstorm has stopped for Rob: a lost thread, or a request in a status hue. */

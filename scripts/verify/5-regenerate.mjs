@@ -309,6 +309,14 @@ try {
   t3.startRun(DEMO_THREAD);
   check("working", await phase("working"), { message: "The agent is working", actions: ["open_thread", "withdraw"] });
   check("working shows progress", await window.isVisible("[data-request-phase] [data-progress]"), true);
+  check(
+    "the sidebar's thread row says the agent is working and for how long, in the mark home's rows use",
+    await window.$eval('[data-thread="working"]', (el) => ({
+      text: el.textContent.trim().replace(/\d+/, "N"),
+      mark: el.querySelector('[data-session-status="working"] .animate-ping') !== null,
+    })),
+    { text: "Agent working · Ns", mark: true },
+  );
   at.push(await withdrawAt());
   await window.click("[data-back]");
   await window.click("[data-overview]");

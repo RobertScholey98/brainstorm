@@ -23,12 +23,21 @@ export function age(iso: string, now: number): string {
   return date.getFullYear() === new Date(now).getFullYear() ? day : `${day} ${date.getFullYear()}`;
 }
 
-/** The current time, refreshed every minute so ages stay true while the window is open. */
-export function useNow(): number {
+/** How long something has been running since `iso`, as T3 Code counts a working turn: 12s, 3m, then 1h 5m. */
+export function elapsed(iso: string, now: number): string {
+  const ms = Math.max(0, now - Date.parse(iso));
+  if (ms < MINUTE) return `${Math.floor(ms / 1000)}s`;
+  if (ms < HOUR) return `${Math.floor(ms / MINUTE)}m`;
+  return `${Math.floor(ms / HOUR)}h ${Math.floor((ms % HOUR) / MINUTE)}m`;
+}
+
+/** The current time, refreshed every `every` ms (a minute by default) so ages stay true while the window is open. */
+export function useNow(every = MINUTE): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), MINUTE);
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), every);
     return () => clearInterval(timer);
-  }, []);
+  }, [every]);
   return now;
 }

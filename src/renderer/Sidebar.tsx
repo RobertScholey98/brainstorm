@@ -27,10 +27,10 @@ import { blockIdOf, isPendingThread, type BlockView, type ContentHash, type Sess
 import type { PaneLimits } from "./hooks/use-pane-width";
 import { Mark } from "./Mark";
 import { TakeoverPhrase } from "./Regenerate";
-import { SessionStatus } from "./SessionStatus";
+import { PhaseStatus, SessionStatus } from "./SessionStatus";
 import { groupByProject, splitSettled } from "./sessionGroups";
 import { SETTLE_SHORTCUT, settleLabel, settleUndoes } from "./settle";
-import { age, useNow } from "./time";
+import { age, elapsed, useNow } from "./time";
 
 export function AppSidebar({
   width,
@@ -363,18 +363,20 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
             // T3 may not have answered yet for an attached thread, so it shows the state without a name or a link.
             <div className="flex h-8 items-center gap-2 px-2 text-sm" data-thread-link>
               <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", lost ? "bg-warning" : "bg-success")} />
-              <span className={lost ? "font-medium text-warning" : "text-fg-muted"} data-thread={lost ? "lost" : "attached"}>
-                {lost ? "Thread lost" : "Attached"}
-              </span>
+              {lost ? (
+                <span className="font-medium text-warning" data-thread="lost">
+                  Thread lost
+                </span>
+              ) : (
+                <ThreadState view={view} />
+              )}
             </div>
           ) : (
             <SidebarMenuButton size="tall" render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-thread-link>
               <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-success" />
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate">{view.thread.title}</span>
-                <span className="text-xs text-fg-muted" data-thread="attached">
-                  Attached
-                </span>
+                <ThreadState view={view} className="text-xs" />
               </span>
               <ExternalLink aria-hidden className="mt-0.5 text-fg-muted" />
             </SidebarMenuButton>
@@ -410,6 +412,28 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
         </div>
       )}
     </SidebarGroup>
+  );
+}
+
+/**
+ * What the attached thread is doing, as home's rows say it: the open request's phase, counting up while the agent
+ * works, or Attached once nothing is open.
+ */
+function ThreadState({ view, className }: { view: SessionView; className?: string }) {
+  const request = view.request;
+  const phase = request === null || request.phase.phase === "fulfilled" || request.phase.phase === "withdrawn" ? null : request.phase.phase;
+  const now = useNow(phase === "working" ? 1_000 : undefined);
+  if (request === null || phase === null) {
+    return (
+      <span className={cn("text-fg-muted", className)} data-thread="attached">
+        Attached
+      </span>
+    );
+  }
+  return (
+    <span className={cn("flex", className)} data-thread={phase}>
+      <PhaseStatus phase={phase} after={phase === "working" ? elapsed(request.request.sentAt ?? request.request.createdAt, now) : undefined} />
+    </span>
   );
 }
 
