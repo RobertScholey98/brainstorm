@@ -299,6 +299,36 @@ try {
     roulette,
   );
 
+  const statusSwitch = () =>
+    settled(() =>
+      window.$eval("[data-home-filters] [data-slot=segmented]", (group) => ({
+        width: Math.round(group.getBoundingClientRect().width),
+        air: [...group.querySelectorAll("[data-home-status]")].map((s) => Math.round(s.getBoundingClientRect().width - s.firstElementChild.getBoundingClientRect().width)),
+      })),
+    );
+  const switchAt = [await statusSwitch()];
+  await window.click('[data-home-status="attention"]');
+  switchAt.push(await statusSwitch());
+  check(
+    "home's status segments each hug their label, so the gaps between labels are even, and a press moves none of them",
+    [new Set(switchAt[0].air).size, switchAt[0].width === switchAt[1].width],
+    [1, true],
+  );
+  await window.setViewportSize({ width: 1100, height: 720 });
+  check(
+    "at 1100 the search field still shows its whole placeholder",
+    await settled(() =>
+      window.$eval("[data-home-search]", (el) => {
+        const s = getComputedStyle(el);
+        const pen = document.createElement("canvas").getContext("2d");
+        pen.font = `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+        return el.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight) >= Math.ceil(pen.measureText(el.placeholder).width);
+      }),
+    ),
+    true,
+  );
+  await window.setViewportSize({ width: 1440, height: 900 });
+
   // Search and filters. Each read waits for the grid to settle, since the list refetches on every change event.
   await window.click('[data-home-status="active"]');
   const cards = () => settled(() => window.$$eval("[data-home-results] [data-overview-session]", (cs) => cs.map((c) => c.dataset.overviewSession)));

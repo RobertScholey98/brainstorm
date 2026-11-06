@@ -106,7 +106,7 @@ export function HomeFilters({
         </span>
       </div>
       <Segmented
-        fit
+        fit="content"
         value={query.status}
         onValueChange={(status) => onQuery({ ...query, status })}
         options={STATUSES.map((s) => ({ value: s.value, label: <StatusLabel label={s.label} count={counts?.[s.value] ?? null} /> }))}
