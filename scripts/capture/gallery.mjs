@@ -103,6 +103,16 @@ const SHOTS = [
   ["home-settled", "home", "Home showing All: the settled Laundry tracker under its own Settled heading, muted, and the sidebar's Settled group open with its row muted"],
   ["state-settle-action", "home", "The pointer over a sidebar row's settle control: the age gives way to it, and its hint names Ctrl+Shift+S"],
   ["state-hover-card", "home", "The pointer over an overview card: its ring and its settle control in the corner"],
+  ["history-strip", "history", "The history strip under the canvas: a still of each iteration with its number, its age and what made it, the latest selected"],
+  ["history-collapsed", "history", "The history toggle off: the strip folds away and the canvas takes its height"],
+  ["history-past", "history", "Iteration 2 shown read-only: the Viewing iteration 2 bar with Esc and Back to latest, Iteration 2 of 3 in the header, Fork iteration 2, Regenerate off, and the Inspector's controls inert under a note"],
+  ["fork-popover-past", "history", "The Fork popover from iteration 2: the instruction, and what carries over, with the reel picked while viewing it"],
+  ["fork-popover-latest", "history", "The Fork popover from the latest iteration: a variant per slot, the changed button text baked in as a default, the open pin, and Starts a new T3 thread"],
+  ["fork-page", "history", "A fork just made: the breadcrumb's lineage, Forked from under its thread, one variant per slot, the strip's stub back to the parent, and request 1 queued in the new thread"],
+  ["home-fork", "history", "Home with a fork: its card names the parent and the iteration it came from"],
+  ["vary-pick", "history", "Vary pick mode: Click an element to vary in the canvas bar, and the highlight on the hovered spin button"],
+  ["vary-popover", "history", "The vary popover on the spin button: how many, an optional direction, and the slot the variants land in"],
+  ["vary-landed", "history", "Three spin button variants landed in the wheel slot, each marked new, and the strip names the vary and hangs the fork off iteration 3"],
 ].map(([name, scene, about], i) => ({ name, scene, about, file: `${String(i + 1).padStart(2, "0")}-${name}` }));
 const byName = new Map(SHOTS.map((s) => [s.name, s]));
 /** name -> { status: "captured" } | { status: "missing" | "partial", reason } */
@@ -935,6 +945,117 @@ function scenes(page, home, env, t3, sessions) {
       await capture(page, "phase-long-title");
       await page.click('[data-request-action="withdraw"]');
       await phase("withdrawn");
+    },
+
+    /**
+     * Rota handover gains history: an agent commit and a fulfilled request on top of its first pass. Then a fork from
+     * the past and one from the latest, and a vary on the parent, whose new variants land under the fork's offshoot.
+     */
+    async history() {
+      const id = sessions.multi;
+      let canvas = await open(id, [inBlock("wheel/neon", "screen")]);
+      await canvas.click(inBlock("wheel/neon", "logo"));
+      await page.waitForSelector('[data-block="wheel/neon"]');
+      await page.click('[data-control="spinLabel"] input');
+      await page.keyboard.press("Control+A");
+      await page.keyboard.type("Spin it");
+      await page.waitForSelector('[data-control="spinLabel"][data-overridden]');
+      await pinComment(canvas, inBlock("wheel/neon", "pool"), "Say why the odds lean this way");
+      await page.click('[data-composer] button:has-text("Pin comment")');
+      await page.waitForSelector('[data-feedback][data-status="open"]');
+
+      agentCommit(home, env, id, {
+        file: "slots/wheel/neon/block.tsx",
+        from: "Odds lean towards whoever has done least.",
+        to: "Every spin is weighted by chores done.",
+        args: ["--note", "Explain the weighting"],
+      });
+      await canvas.waitForFunction((sel) => document.querySelector(sel)?.textContent?.includes("weighted"), inBlock("wheel/neon", "pool"));
+      await regenerate("all", "Make the result read at a glance");
+      await phase("queued");
+      t3.startRun(DEMO_THREAD);
+      agentCommit(home, env, id, { file: "slots/result/card/block.tsx", from: "{chore.name}", to: "{chore.name.toUpperCase()}", args: ["--note", "Shout the chore"] });
+      t3.endRun(DEMO_THREAD, "completed");
+      await phase("fulfilled");
+      await page.waitForSelector('[data-history-n="3"][aria-selected="true"]');
+      await capture(page, "history-strip");
+
+      await page.click("[data-history-toggle]");
+      await page.waitForSelector("[data-history]", { state: "detached" });
+      await capture(page, "history-collapsed");
+      await page.click("[data-history-toggle]");
+      await page.waitForSelector("[data-history]");
+
+      await page.click('[data-history-n="2"]');
+      await page.waitForSelector("[data-past-bar]");
+      await canvas.waitForFunction((sel) => document.querySelector(sel)?.textContent?.includes("weighted"), inBlock("wheel/neon", "pool"));
+      await capture(page, "history-past");
+
+      await page.click('[data-slot-id="wheel"] [data-variant="reel"]');
+      await canvas.waitForSelector('div[data-bid="wheel/reel"]', { state: "attached" });
+      const forkOpen = (instruction) => async () => {
+        if ((await page.$("[data-fork-menu]")) === null) await page.click("[data-fork-toggle]");
+        await page.waitForSelector("[data-fork-menu]");
+        await page.fill("[data-fork-instruction]", instruction);
+      };
+      await capture(page, "fork-popover-past", { keepFocus: true, each: forkOpen("Try the reel as a real slot machine") });
+      await page.keyboard.press("Escape");
+      await page.waitForSelector("[data-fork-menu]", { state: "detached" });
+      await page.click("[data-back-to-latest]");
+      await page.waitForSelector("[data-past-bar]", { state: "detached" });
+
+      await capture(page, "fork-popover-latest", { keepFocus: true, each: forkOpen("Try a calmer wheel for mornings, with the result kept as it is") });
+      await page.click("[data-fork-send]");
+      await page.waitForSelector(`[data-forked-from="${id}"]`, { timeout: PHASE_MS });
+      await page.waitForSelector('[data-thread]:not([data-thread="starting"])', { timeout: PHASE_MS });
+      await (await canvasFrame(page)).waitForSelector(inBlock("wheel/neon", "screen"));
+      await capture(page, "fork-page");
+
+      await goHome();
+      await page.waitForSelector("[data-overview-session] [data-fork-of]");
+      await capture(page, "home-fork");
+
+      canvas = await open(id, [inBlock("wheel/neon", "spin-button")]);
+      const varyPick = async () => {
+        if ((await page.$("[data-vary-composer]")) !== null) await page.keyboard.press("Escape");
+        if ((await page.getAttribute("[data-vary-toggle]", "aria-pressed")) !== "true") await page.click("[data-vary-toggle]");
+        await page.waitForSelector("[data-pick-hint]");
+      };
+      await capture(page, "vary-pick", {
+        each: async () => {
+          await varyPick();
+          await canvas.hover(inBlock("wheel/neon", "spin-button"));
+          await canvas.waitForSelector(".bs-pick[data-on]");
+        },
+      });
+      await capture(page, "vary-popover", {
+        keepFocus: true,
+        each: async () => {
+          await varyPick();
+          await canvas.click(inBlock("wheel/neon", "spin-button"));
+          await page.waitForSelector("[data-vary-composer]");
+          await page.fill("[data-vary-direction]", "bolder, more arcade");
+        },
+      });
+      await page.click("[data-vary-send]");
+      await phase("queued");
+      t3.startRun(DEMO_THREAD);
+      const asked = must("vary context", brainstorm(env, ["context", id, "--json"])).request.scope;
+      const copy = join(home, "agent", "vary");
+      must("vary pull", brainstorm(env, ["pull", id, "--out", copy, "--json"]));
+      for (const { key, title } of asked.variants) {
+        const dir = join(copy, "slots", "wheel", key);
+        cpSync(join(copy, "slots", "wheel", "neon"), dir, { recursive: true });
+        const json = JSON.parse(readFileSync(join(dir, "block.json"), "utf8"));
+        json.title = title;
+        json.props.appearance.spinLabel.default = "Spin it";
+        writeFileSync(join(dir, "block.json"), JSON.stringify(json, null, 2));
+      }
+      must("vary commit", brainstorm(env, ["commit", id, "--from", copy, "--note", "Three bolder spin buttons", "--json"]));
+      t3.endRun(DEMO_THREAD, "completed");
+      await phase("fulfilled");
+      await page.waitForSelector('[data-slot-id="wheel"] [data-variant-new]');
+      await capture(page, "vary-landed");
     },
 
     async overflow() {
