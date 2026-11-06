@@ -224,8 +224,8 @@ function Inapplicable({
   onDismiss: (o: InapplicableOverride) => void;
 }) {
   return (
-    <section aria-label="Adjustments that no longer apply" className="pt-3" data-banner="inapplicable">
-      <Callout tone="warning" role="status" heading={items.length === 1 ? "An adjustment no longer applies" : `${items.length} adjustments no longer apply`}>
+    <section aria-label="Settings that no longer apply" className="pt-3" data-banner="inapplicable">
+      <Callout tone="warning" role="status" heading={items.length === 1 ? "A setting no longer applies" : `${items.length} settings no longer apply`}>
         <ul className="grid gap-2">
           {items.map((item) => {
             const { override: o, reason } = item;

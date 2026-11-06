@@ -27,7 +27,7 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <Hint label={disabled ? "Export needs a first iteration" : "Save the current iteration, with your adjustments, as one HTML file"} side="left">
+      <Hint label={disabled ? "Export needs a first iteration" : "Save the current iteration, with your settings, as one HTML file"} side="left">
         <span tabIndex={disabled ? 0 : -1} className="inline-flex">
           <PopoverTrigger disabled={disabled} render={<Button variant="outline" data-export />}>
             Export
@@ -37,7 +37,7 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
       <PopoverContent size="md" align="end" data-exported={done !== null || undefined}>
         {done === null ? (
           <>
-            <PopoverHeader heading="Exporting" description="Writing one HTML file with your adjustments and variant choices." />
+            <PopoverHeader heading="Exporting" description="Writing one HTML file with your settings and variant choices." />
             <p className="flex items-center gap-2 text-fg-muted">
               <Spinner />
               Writing the file…
@@ -45,7 +45,7 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
           </>
         ) : (
           <>
-            <PopoverHeader heading="Exported" description="One HTML file that opens offline, with your adjustments and variant choices." />
+            <PopoverHeader heading="Exported" description="One HTML file that opens offline, with your settings and variant choices." />
             <ExportPath path={done.path} />
             <PopoverFooter>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>

@@ -110,7 +110,7 @@ export function HomePanel({
           <SidebarMenuItem>
             <SidebarMenuButton isActive={overview} onClick={onOverview} data-overview>
               <LayoutGrid aria-hidden />
-              <span>Overview</span>
+              <span>All brainstorms</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

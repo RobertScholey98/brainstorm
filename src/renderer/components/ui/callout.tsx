@@ -29,7 +29,7 @@ const calloutVariants = cva("flex items-start gap-2 text-xs/relaxed text-fg", {
 })
 
 /**
- * Every status box in the app: the Inspector's block error and inapplicable adjustments, the takeover phrase, and the
+ * Every status box in the app: the Inspector's block error and inapplicable settings, the takeover phrase, and the
  * request message under the top bar. `inset` sits inside a panel; `strip` runs edge to edge under a bar. Actions only
  * go in `actions`, which sit under the message, so a narrow panel keeps the message at full width. A callout that lists
  * several things, each with its own action, uses one `CalloutItem` per thing. lint:design fails a button written into
