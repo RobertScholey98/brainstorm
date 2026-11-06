@@ -233,6 +233,17 @@ try {
     }),
     { header: "drag", sidebar: "drag", controls: [], top: 0 },
   );
+  check(
+    "an accent button paints the full 28 px box its outline neighbour does",
+    await window.evaluate(() => {
+      const paint = (el) => {
+        const c = getComputedStyle(el);
+        return { height: Math.round(el.getBoundingClientRect().height), filled: c.borderTopColor === c.backgroundColor };
+      };
+      return [paint(document.querySelector("[data-regenerate-toggle]")), Math.round(document.querySelector("[data-export]").getBoundingClientRect().height)];
+    }),
+    [{ height: 28, filled: true }, 28],
+  );
   check("the Inspector toggle sits in the header, pressed while the Inspector shows", await window.getAttribute("[data-topbar] [data-inspector-toggle]", "aria-pressed"), "true");
   check("the canvas region ends where the Inspector starts", iframe.right <= inspector.left, true);
   const zoomShown = () => window.getAttribute("[data-canvas-bar] [data-canvas-zoom]", "data-canvas-zoom");
