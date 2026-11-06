@@ -10,6 +10,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { carryOver } from "../core/fork";
 import type { ContentHash, ForkInput, IterationView, SessionView, VariantKey } from "../core/types";
 import { COMPACT, COMPACT_LABEL } from "./headerAction";
+import { PinNumber } from "./PinNumber";
 
 const SETTINGS_SHOWN = 3;
 
@@ -147,7 +148,7 @@ function ForkForm({
             ) : (
               carried.pins.map((f) => (
                 <span key={f.id} className="flex min-w-0 items-start gap-1.5">
-                  <span className="grid size-4 shrink-0 place-items-center rounded-full bg-accent text-2xs font-semibold text-accent-fg tabular-nums">{f.id}</span>
+                  <PinNumber n={f.id} state="open" />
                   <span className="min-w-0 truncate">{f.text}</span>
                 </span>
               ))

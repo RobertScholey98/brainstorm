@@ -124,6 +124,15 @@ try {
     await window.$$eval("[data-attached]", (els) => els.map((e) => e.dataset.attached)),
     ["1"],
   );
+  check(
+    "it marks the attached comment with the pin's own disc, as the feedback list does, not a number in accent text",
+    await window.evaluate(() => {
+      const look = (d) => d && [d.dataset.pinNumber, getComputedStyle(d).backgroundColor, getComputedStyle(d).borderBottomLeftRadius, Math.round(d.getBoundingClientRect().height)];
+      const [attached, listed] = [document.querySelector('[data-attached="1"] [data-pin-number]'), document.querySelector('[data-feedback="1"] [data-pin-number]')].map(look);
+      return [attached?.[0], JSON.stringify(attached) === JSON.stringify(listed)];
+    }),
+    ["open", true],
+  );
   await shot(window, shots, "1-menu");
   const fieldTop = () => window.$eval("[data-regenerate-menu] [data-freetext]", (el) => Math.round(el.getBoundingClientRect().top));
   const tops = [await fieldTop()];

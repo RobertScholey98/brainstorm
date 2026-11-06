@@ -4,6 +4,7 @@ import { partLabel } from "../core/fork";
 import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, CanvasRect, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
 import { HeldLabel } from "./HeldLabel";
+import { PinNumber } from "./PinNumber";
 import { POPOVER_WIDTH } from "./placement";
 import { useComposerPlace } from "./useComposerPlace";
 import { cn } from "cn";
@@ -30,12 +31,6 @@ const GROUPS: readonly { state: FeedbackStatus["state"]; title: string }[] = [
   { state: "confirmed", title: "Confirmed" },
 ];
 
-/** Pins are the accent's; status shows by form, as on the canvas: filled, outlined, then neutral. */
-const PIN_FORM: Record<FeedbackStatus["state"], string> = {
-  open: "bg-accent text-accent-fg",
-  addressed: "bg-card text-accent inset-ring-2 inset-ring-accent",
-  confirmed: "bg-muted text-fg-muted",
-};
 
 /** The item sits under a heading that names its status, so the line says only what the heading doesn't. */
 function statusLine(status: FeedbackStatus): string | null {
@@ -195,12 +190,7 @@ function FeedbackItem({
       className="group relative -mx-1 rounded-lg px-1 py-2 hover:bg-hover/60 data-[focused]:bg-selected"
     >
       <div className="flex gap-2">
-        <span
-          aria-hidden
-          className={`mt-px grid h-4.5 min-w-4.5 shrink-0 place-items-center rounded-full rounded-bl-sm px-1 text-2xs font-semibold tabular-nums ${PIN_FORM[f.status.state]}`}
-        >
-          {f.id}
-        </span>
+        <PinNumber aria-hidden n={f.id} state={f.status.state} className="mt-px" />
         <div className="min-w-0 flex-1">
           {editing ? (
             <TextEditor

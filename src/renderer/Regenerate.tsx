@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Hint } from "@/components/ui/tooltip";
 import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
 import { COMPACT, COMPACT_LABEL } from "./headerAction";
+import { PinNumber } from "./PinNumber";
 import type { BlockId, BlockView, IterationN, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
 /** Vary has its own pick and popover, so Regenerate offers the other three. */
@@ -172,7 +173,7 @@ function RegenerateForm({
         </h3>
         {attached.map((f) => (
           <p key={f.id} className="flex min-w-0 gap-1.5 text-sm/snug" data-attached={f.id}>
-            <span className="shrink-0 font-semibold tabular-nums text-accent">#{f.id}</span>
+            <PinNumber n={f.id} state="open" />
             <Hint label={f.text} side="left">
               <span className="min-w-0 truncate">{f.text}</span>
             </Hint>
