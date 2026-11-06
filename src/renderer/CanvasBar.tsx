@@ -24,6 +24,7 @@ export function CanvasBar({
   current,
   view,
   zoom,
+  below,
   picking,
   onSlot,
   onView,
@@ -34,6 +35,8 @@ export function CanvasBar({
   view: CanvasLayout["view"];
   /** The selected frame's scale below 1, from the fit rules, or null at full size. */
   zoom: number | null;
+  /** Board frames wholly below the visible canvas, which a wrapped board has no other way to show. */
+  below: number;
   picking: boolean;
   onSlot: (slot: SlotId) => void;
   onView: (view: CanvasLayout["view"]) => void;
@@ -81,6 +84,7 @@ export function CanvasBar({
             </Button>
           </span>
         )}
+        {below > 0 && <Badge data-canvas-below={below}>{below} more below</Badge>}
         {pct < 100 && (
           <Hint label="Scaled to fit the canvas. Hide the sidebar (Ctrl+B) or collapse the Inspector to give it more room." side="bottom">
             <Badge tabIndex={0} data-canvas-zoom={pct}>

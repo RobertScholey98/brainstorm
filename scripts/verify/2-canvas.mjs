@@ -1,4 +1,6 @@
-import { seedDemo } from "../seed-demo.mjs";
+import { cpSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { brainstorm, seedDemo } from "../seed-demo.mjs";
 import { build, checks, inBlock, launch, openSession, settled, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
@@ -8,7 +10,7 @@ const { check, finish } = checks();
 const { app, window, errors, api } = await launch(home, env);
 try {
   await window.setViewportSize({ width: 1440, height: 900 });
-  const { session } = seedDemo(home, env);
+  const { session, work } = seedDemo(home, env);
   const canvas = await openSession(window, session);
   await showBoard(window, canvas);
   await canvas.waitForSelector(inBlock("wheel/neon", "screen"));
@@ -145,6 +147,31 @@ try {
   );
   await canvas.evaluate(() => document.getElementById("verify-grow").remove());
   check("and once it fits again, the frame keeps its declared width with no gutter", (await wheelFrame()).bar, 0);
+
+  // A third slot, so the board at 1100 needs under half size for one row and wraps.
+  cpSync(join(work, "slots", "wheel"), join(work, "slots", "spare"), { recursive: true });
+  const manifest = JSON.parse(readFileSync(join(work, "brainstorm.json"), "utf8"));
+  writeFileSync(join(work, "brainstorm.json"), JSON.stringify({ ...manifest, slots: [...manifest.slots, { id: "spare", title: "The spare", frame: { width: 390, height: 760 } }] }));
+  const third = brainstorm(env, ["commit", session, "--from", work, "--note", "A spare wheel", "--json"]);
+  check("the agent adds a third slot", third.code, 0);
+  await canvas.waitForSelector('.bs-frame[data-slot="spare"]');
+  // The first frame selected, so the reveal on resize keeps the board at its top.
+  await canvas.click(inBlock("wheel/neon", "screen"));
+  await window.waitForSelector('[data-block="wheel/neon"]');
+  await window.setViewportSize({ width: 1100, height: 720 });
+  const wrapped = () =>
+    settled(async () => ({
+      ...(await canvas.evaluate(() => {
+        const frames = [...document.querySelectorAll(".bs-frame")].map((f) => f.getBoundingClientRect());
+        const first = frames[0];
+        return { wrap: document.getElementById("canvas").dataset.wrap, centred: Math.abs(first.left - (innerWidth - first.right)) <= 1 };
+      })),
+      below: await window.evaluate(() => document.querySelector("[data-canvas-below]")?.dataset.canvasBelow ?? null),
+    }));
+  check("a wrapped board centres its rows, and the bar says how many frames wait below", await wrapped(), { wrap: "true", centred: true, below: "2" });
+  await canvas.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+  check("and the count goes once they are in view", (await wrapped()).below, null);
+  await window.setViewportSize({ width: 1440, height: 900 });
 
   check("the window logged no errors or warnings", errors, []);
 } finally {

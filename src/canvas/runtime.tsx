@@ -153,6 +153,7 @@ function receive(message: HostToFrame): void {
       if (canvas !== null) canvas.dataset.view = message.stage === null ? "board" : "stage";
       fitCanvas();
       if (reveal) requestAnimationFrame(() => revealSelected("smooth"));
+      requestAnimationFrame(reportBelow);
       return;
     }
     case "mode":
@@ -186,6 +187,16 @@ function revealSelected(behavior: ScrollBehavior): void {
  */
 const gutter = (f: CanvasFrame) => (state.scrolling.has(f.slot) ? SCROLLBAR : 0);
 
+let lastBelow = 0;
+/** Tells the host how many board frames sit wholly below the window, so the bar can say they are there. */
+function reportBelow(): void {
+  const count =
+    state.stage !== null ? 0 : [...document.querySelectorAll(".bs-frame:not([data-offstage])")].filter((f) => f.getBoundingClientRect().top >= innerHeight).length;
+  if (count === lastBelow) return;
+  lastBelow = count;
+  post({ kind: "below", count });
+}
+
 function measureScrolling(): void {
   const scrolling = new Set<string>();
   for (const body of document.querySelectorAll<HTMLElement>(".bs-frame-body[data-height]")) {
@@ -202,6 +213,7 @@ const blockSizes = new ResizeObserver(measureScrolling);
 new MutationObserver(() => {
   for (const el of document.querySelectorAll(".bs-frame-body[data-height] > [data-bid] > *")) blockSizes.observe(el);
   measureScrolling();
+  requestAnimationFrame(reportBelow);
 }).observe(document.getElementById("canvas") ?? document.body, { childList: true, subtree: true });
 
 /** Applies the fit rules to the canvas as it is now, and tells the host when a zoom changes. */
@@ -220,6 +232,7 @@ function fitCanvas(): void {
   const canvas = document.getElementById("canvas");
   if (canvas !== null) canvas.dataset.wrap = String(wrap);
   post({ kind: "zooms", zooms: Object.fromEntries(next) });
+  requestAnimationFrame(reportBelow);
 }
 
 const HOST_KINDS = new Set<string>(["modules", "state", "mode", "pins", "pulse", "variants"] satisfies HostToFrame["kind"][]);
@@ -559,7 +572,7 @@ body {
   display: flex; align-items: flex-start; gap: ${GAP}px;
   padding: ${CANVAS_PAD}px calc(${CANVAS_PAD}px - var(--bs-scrollbar)) 48px;
 }
-#canvas[data-wrap="true"] { flex-wrap: wrap; }
+#canvas[data-wrap="true"] { flex-wrap: wrap; justify-content: center; }
 #canvas[data-view="stage"] { justify-content: center; }
 /* A reveal stops at the canvas padding, so a frame's label sits the same way off the bar in both views. */
 .bs-frame { flex: none; min-width: 0; scroll-margin: ${CANVAS_PAD}px; }
@@ -658,5 +671,7 @@ if (root !== null) createRoot(root).render(<Canvas />);
 addEventListener("resize", () => {
   fitCanvas();
   revealSelected("auto");
+  requestAnimationFrame(reportBelow);
 });
+addEventListener("scroll", reportBelow, { passive: true });
 post({ kind: "ready" });

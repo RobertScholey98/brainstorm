@@ -85,3 +85,7 @@ The canvas root now keeps the scrollbar's gutter on both sides (`scrollbar-gutte
 The council found a 390 × 600 phone frame laying its block out at 380 px, because the body's own scrollbar took its 10 px from inside the declared width, and the bar drawn at the frame's zoom, about 6 px wide (T7). A frame lays out at its declared width, always, so the bar can't come out of it.
 
 The runtime watches each frame with a declared height, and while its block is taller than that height the body widens by the gutter, `SCROLLBAR` from `design.ts`, outside the zoom. Its scrollbar is drawn at the gutter divided by the zoom, so it shows 10 px at any fit, and the fit rules count the gutter as width no zoom scales. A frame whose block fits shows no gutter. `verify:2` grows the wheel's block past its 760 px and checks the block keeps 390 px with a 10 px bar, zoomed and not, and that the gutter goes once it fits again.
+
+## Amendment: round 4. A wrapped board centres its rows and says what is below
+
+At 1100 a three-slot board wraps at full size, and its first screen showed one frame hugging the left with nothing to say two more waited below (T16). A wrapped board now centres each row, as the stage centres its frame, and the runtime tells the host how many board frames sit wholly below the window; the canvas bar shows that count as a chip ("2 more below") until they scroll into view. `verify:2` adds a third slot, checks the wrapped rows centre and the bar counts two below, and that the count goes once they are in view.
