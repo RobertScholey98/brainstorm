@@ -17,7 +17,7 @@ import { markdownText } from "./markdownSubset";
 import { CardPreview, type LoadPreview } from "./Preview";
 import { SessionStatus } from "./SessionStatus";
 import { SETTLE_SHORTCUT, settleLabel, settleUndoes } from "./settle";
-import { ago, useNow } from "./time";
+import { age, useNow } from "./time";
 
 const START = (
   <>
@@ -243,7 +243,7 @@ function OverviewCard({
         <span className="mt-auto flex items-center gap-1 pt-1 text-xs whitespace-nowrap text-fg-muted" data-overview-footer>
           <span className="tabular-nums">{s.latest === null ? "No iterations yet" : `Iteration ${s.latest}`}</span>
           <span aria-hidden>·</span>
-          <span>{settledAt !== null ? `Settled ${ago(settledAt, now)}` : ago(s.activeAt, now)}</span>
+          <span>{settledAt !== null ? `Settled ${age(settledAt, now)}` : age(s.activeAt, now)}</span>
         </span>
       </div>
       <span className="absolute right-3 bottom-3 opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100">

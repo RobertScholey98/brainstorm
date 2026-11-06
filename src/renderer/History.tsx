@@ -7,7 +7,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { originText } from "../core/machines";
 import type { ForkBranch, HistoryEntry, IterationN, Result, SessionId, SessionPreview, SessionView, SlotId } from "../core/types";
 import { IterationStill } from "./Preview";
-import { ago, useNow } from "./time";
+import { age, useNow } from "./time";
 
 export type LoadIterationStill = (at: { readonly n: IterationN; readonly slot: SlotId | null }) => Promise<Result<SessionPreview | null>>;
 
@@ -159,7 +159,7 @@ function StillOption({
           <span className="text-sm font-medium">Iteration {entry.n}</span>
           <span className="text-xs text-fg-muted tabular-nums">
             {latest ? "latest · " : ""}
-            {ago(entry.createdAt, now)}
+            {age(entry.createdAt, now)}
           </span>
           <span className="truncate text-xs" data-history-origin>
             {origin}
