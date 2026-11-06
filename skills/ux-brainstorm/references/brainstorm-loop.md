@@ -118,6 +118,7 @@ Warnings arrive with a saved iteration. Fix the ones you caused and commit again
 | `not_addressed` | Requested feedback isn't in `--addresses`. Address it and include its id, or say in the reply why it stays open. |
 | `duplicate_part` | Two elements share a `data-part` in one render. Make the names unique. |
 | `uncontrolled_prop` | An explicit `controls.json` misses an appearance prop. Add the control, or delete `controls.json`. |
+| `vary_mismatch` | A vary request's new variant is missing, has another title, or lacks the target `data-part`. Add the folder under the key `context` named, set that title, or restore the part. |
 
 A commit that changes nothing and addresses nothing new returns the latest iteration with `created: false`. That is a safe replay.
 
@@ -130,6 +131,28 @@ Handle with the ux-brainstorm skill: run `brainstorm context s_8f2k3a`.
 
 `context` is the source of truth for the request, not the message. It gives the scope, the free text, each requested feedback item with its block, part, text and history, Rob's applicable overrides on in-scope blocks, all open and addressed feedback, the control vocabulary, and the exact `next` commands to run.
 
-- **Scope** is `all`, a list of block ids, or `described`, where the free text names the blocks. Change only those blocks. Add a slot or variant only when the request asks for one.
+- **Scope** is `all`, a list of block ids, `described`, where the free text names the blocks, or `vary`. Change only those blocks. Add a slot or variant only when the request asks for one.
 - **Feedback.** Pass the ids you addressed as `--addresses 4,7`, without `#`. Rob confirms them in the app.
 - **Note.** Add `--note "<one sentence on what changed>"`.
+
+## Vary
+
+```
+[brainstorm] session s_8f2k3a · request 6 · scope: vary wheel/neon [spin-button] as spin-button-a, spin-button-b, spin-button-c · freetext: "bolder"
+```
+
+Rob picked one element and asked for new variants of its slot that differ only there. `context` names the target block, its `data-part` (or the whole block when there is none), and each new variant as `new variant <slot>/<key> titled "<title>"`. The free text, when there is one, is the direction.
+
+- Copy the target's folder to `slots/<slot>/<key>/` once per new variant, and set each copy's `block.json` `title` to the title `context` gave.
+- Change only the target part in each copy, each copy in its own way. Keep its `data-part` name and everything around it as it is.
+- Rob's overrides on the target are in scope. Write them into each copy's `block.json` as the props' defaults, so the copies start from what Rob sees.
+- Leave the target and every other variant unchanged. The commit warns `out_of_scope` for any other block, and `vary_mismatch` for a missing variant, another title or a missing part.
+
+## Forks
+
+```
+[brainstorm] session s_q7d1m0 · request 1 · fork of s_8f2k3a iteration 4 · scope: all · feedback: #1 · freetext: "try a calmer wheel for mornings"
+Handle with the ux-brainstorm skill: this thread is new, so run `brainstorm session attach s_q7d1m0`, then `brainstorm context s_q7d1m0`.
+```
+
+A fork is a new brainstorm, linked to its parent, in a new thread. `context` adds a `fork of` line and one `baked default <block> <prop> = <value>` line for each of Rob's settings that became a default. Rob's later requests to the fork arrive as ordinary requests.
