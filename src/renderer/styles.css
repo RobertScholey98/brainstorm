@@ -144,3 +144,16 @@
     overflow: hidden;
   }
 }
+
+/* While a pane is dragged, the canvas iframe would swallow the pointer and the sidebar's width transition would lag it. */
+body[data-resizing] {
+  cursor: col-resize;
+  user-select: none;
+}
+body[data-resizing] iframe {
+  pointer-events: none;
+}
+body[data-resizing] [data-slot="sidebar-gap"],
+body[data-resizing] [data-slot="sidebar-container"] {
+  transition: none;
+}
