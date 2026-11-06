@@ -125,6 +125,18 @@ describe("design tokens", () => {
       expect(faint).toEqual([]);
     });
 
+    it(`edges each status strip in its own tone at 1.5:1 or more on its fill, so a band reads by more than its icon in ${theme}`, () => {
+      // components/ui/callout.tsx: a full-width strip's fill converges with its neighbour's at that size, so its edge carries the tone.
+      const c = solidColours(theme);
+      const painted = paintedSurfaces(theme);
+      const source = readFileSync("src/renderer/components/ui/callout.tsx", "utf8");
+      const faint = STATUSES.filter((s) => source.includes(`tone: "${s}"`)).filter((s) => {
+        const alpha = new RegExp(`layout: "strip", tone: "${s}", className: "border-${s}/(\\d+)"`).exec(source)?.[1];
+        return alpha === undefined || contrast(srgbOver(c[s]!, Number(alpha) / 100, painted[`${s}-subtle`]!), painted[`${s}-subtle`]!) < 1.5;
+      });
+      expect(faint).toEqual([]);
+    });
+
     it(`lifts a hovered row off the window, the canvas and the card in ${theme}`, () => {
       const c = solidColours(theme);
       const painted = paintedSurfaces(theme);

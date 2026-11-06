@@ -22,9 +22,9 @@ const calloutVariants = cva("flex items-start gap-2 text-xs/relaxed text-fg", {
     { layout: "inset", tone: "danger", className: "inset-ring-danger/25" },
     { layout: "inset", tone: "warning", className: "inset-ring-warning/25" },
     { layout: "inset", tone: "info", className: "inset-ring-info/25" },
-    { layout: "strip", tone: "danger", className: "border-danger/25" },
-    { layout: "strip", tone: "warning", className: "border-warning/25" },
-    { layout: "strip", tone: "info", className: "border-info/25" },
+    { layout: "strip", tone: "danger", className: "border-danger/40" },
+    { layout: "strip", tone: "warning", className: "border-warning/40" },
+    { layout: "strip", tone: "info", className: "border-info/40" },
   ],
 })
 
