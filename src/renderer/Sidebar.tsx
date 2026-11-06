@@ -45,10 +45,11 @@ export function AppSidebar({
   const { isMobile } = useSidebar();
   return (
     <Sidebar variant="inset" collapsible="offcanvas">
-      <SidebarHeader className="flex-row items-center gap-2 px-3 pt-2 pb-1">
+      {/* The sidebar's share of the window header: it moves the window, with the toggle at its left as in T3 Code. */}
+      <SidebarHeader className="-mt-2 h-12 flex-row items-center gap-2 px-1 py-0" data-drag-region>
+        <SidebarTrigger />
         <Mark size={20} />
         <span className="text-sm font-semibold">Brainstorm</span>
-        <SidebarTrigger className="ml-auto" />
       </SidebarHeader>
       {children}
       {!isMobile && (

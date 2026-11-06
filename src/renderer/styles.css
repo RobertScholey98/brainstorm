@@ -178,3 +178,22 @@ body[data-resizing] [data-slot="sidebar-container"] {
 @utility scroll-gutter {
   scrollbar-gutter: stable;
 }
+
+/*
+ * The window has no native title bar, so the app's header row moves it. Anything in it that takes a click or focus
+ * opts out, so a control in the header never turns into a drag handle.
+ */
+[data-drag-region] {
+  -webkit-app-region: drag;
+}
+[data-drag-region] :is(a, button, input, select, textarea, [role="tab"], [tabindex]) {
+  -webkit-app-region: no-drag;
+}
+
+/*
+ * Room at the header's right end for the native window buttons. The browser reports the space they leave as the
+ * titlebar area, and the main column already ends 8 px short of the window edge; with no overlay this is 12 px.
+ */
+@utility titlebar-inset {
+  padding-right: max(12px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
+}

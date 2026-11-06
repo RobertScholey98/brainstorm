@@ -187,8 +187,7 @@ function Shell({ sidebar, bar, strip, children }: { sidebar: ReactNode; bar: Rea
   return (
     <>
       {sidebar}
-      <SidebarInset className="min-h-0 min-w-0 overflow-hidden ring-1 ring-border/70">
-        {bar}
+      <SidebarInset header={bar}>
         {strip}
         <div className="flex min-h-0 flex-1">{children}</div>
       </SidebarInset>
@@ -378,6 +377,7 @@ function SessionWorkspace({
           selected={selectedBlock?.id ?? null}
           send={send}
           exportHtml={exportHtml}
+          panel={{ open: !inspector.rail, onToggle: () => inspector.onRail(!inspector.rail) }}
         />
       }
       strip={view !== null && <RequestDetail view={view} />}
@@ -388,10 +388,8 @@ function SessionWorkspace({
             slots={slots}
             current={slot?.id ?? null}
             view={canvasView}
-            rail={inspector.rail}
             onSlot={setSelectedSlot}
             onView={setCanvasView}
-            onRail={inspector.onRail}
           />
         )}
         <section

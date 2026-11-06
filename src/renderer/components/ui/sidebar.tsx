@@ -303,16 +303,25 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
   )
 }
 
-function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
+/**
+ * The main column: the window header on the app background, then the inset card that holds the page. The header
+ * sits outside the card, at the window's top edge, where the native window buttons overlay its right end.
+ */
+function SidebarInset({ className, header, children, ...props }: React.ComponentProps<"div"> & { header: React.ReactNode }) {
   return (
     <main
       data-slot="sidebar-inset"
-      className={cn(
-        "relative flex w-full flex-1 flex-col bg-card md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
-        className
-      )}
-      {...props}
-    />
+      className="relative flex min-w-0 w-full flex-1 flex-col md:peer-data-[variant=inset]:mr-2 md:peer-data-[variant=inset]:mb-2 md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2"
+    >
+      {header}
+      <div
+        data-slot="sidebar-inset-card"
+        className={cn("relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border/70", className)}
+        {...props}
+      >
+        {children}
+      </div>
+    </main>
   )
 }
 

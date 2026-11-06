@@ -1,20 +1,37 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, PanelRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { Hint } from "@/components/ui/tooltip";
 import type { BlockId, ExportResult, RobAction, SessionView } from "../core/types";
 import { ExportButton } from "./Export";
 import { Regenerate, RequestStatus } from "./Regenerate";
 
-export function TopBar({ actions, children }: { actions?: ReactNode; children: ReactNode }) {
+/** The right panel's toggle, as T3 Code has it: pressed while the panel shows. */
+export type PanelToggle = { readonly open: boolean; readonly onToggle: () => void };
+
+/**
+ * The window header: the native title bar is gone, so this row moves the window, and the native buttons overlay its
+ * right end. The sidebar's toggle comes here when the sidebar is hidden, and the Inspector's toggle sits last.
+ */
+export function TopBar({ actions, panel, children }: { actions?: ReactNode; panel?: PanelToggle; children: ReactNode }) {
   const { state, isMobile } = useSidebar();
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b px-3" data-topbar>
+    <header className="titlebar-inset flex h-12 shrink-0 items-center gap-3 pl-1" data-topbar data-drag-region>
       {(state === "collapsed" || isMobile) && <SidebarTrigger />}
       {children}
-      <div className="ml-auto flex shrink-0 items-center gap-2">{actions}</div>
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        {actions}
+        {panel !== undefined && (
+          <Hint label={panel.open ? "Collapse the Inspector" : "Show the Inspector"}>
+            <Button variant="ghost" size="icon" aria-label="Inspector" aria-pressed={panel.open} onClick={panel.onToggle} data-inspector-toggle>
+              <PanelRight aria-hidden />
+            </Button>
+          </Hint>
+        )}
+      </div>
     </header>
   );
 }
@@ -26,6 +43,7 @@ export function SessionBar({
   selected,
   send,
   exportHtml,
+  panel,
 }: {
   title: string;
   /** The project's label, or null until the list has loaded. */
@@ -34,9 +52,11 @@ export function SessionBar({
   selected: BlockId | null;
   send: (action: RobAction) => Promise<SessionView | null>;
   exportHtml: () => Promise<ExportResult | null>;
+  panel: PanelToggle;
 }) {
   return (
     <TopBar
+      panel={panel}
       actions={
         view === null ? (
           // Held in place while the brainstorm loads, so the bar doesn't change shape when it arrives.
@@ -61,7 +81,7 @@ export function SessionBar({
           {project !== null && (
             <>
               {/* A long title cuts itself, not the project down to a letter. */}
-              <span className="max-w-1/3 shrink-0 truncate text-fg-muted" data-breadcrumb-project>
+              <span className="max-w-picker shrink-0 truncate text-fg-muted" data-breadcrumb-project>
                 {project}
               </span>
               <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-muted" />

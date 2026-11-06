@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, Menu, nativeTheme, session, shell } from "electron";
 import { join } from "node:path";
+import { solidColours } from "../core/design";
 import { brainstormHome } from "../server/appData";
 import { startServer, type RunningServer } from "../server/index";
 
@@ -7,6 +8,11 @@ const home = brainstormHome();
 // Electron's profile defaults to %APPDATA%\<name>, which is BRAINSTORM_HOME's default too. Keeping it under home also
 // scopes the single-instance lock to one home, so a test app on a temp home never focuses Rob's window.
 app.setPath("userData", join(home, "electron"));
+
+/** The app draws its own header; the native buttons overlay its right end in the header's own colours. */
+const HEADER_HEIGHT = 48;
+const theme = () => solidColours(nativeTheme.shouldUseDarkColors ? "dark" : "light");
+const overlay = () => ({ color: theme()["app"], symbolColor: theme()["fg"], height: HEADER_HEIGHT });
 
 if (app.requestSingleInstanceLock()) void run();
 else app.quit();
@@ -48,11 +54,19 @@ async function run(): Promise<void> {
   window = new BrowserWindow({
     width: 1440,
     height: 900,
-    minWidth: 960,
-    minHeight: 600,
+    minWidth: 1100,
+    minHeight: 720,
     title: "Brainstorm",
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#17181b" : "#f7f7f8",
+    titleBarStyle: "hidden",
+    titleBarOverlay: overlay(),
+    backgroundColor: theme()["app"],
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  const shown = window;
+  // The page follows prefers-color-scheme, which is the same setting, so the overlay needs no word from the renderer.
+  nativeTheme.on("updated", () => {
+    shown.setTitleBarOverlay(overlay());
+    shown.setBackgroundColor(theme()["app"] ?? "#000000");
   });
   const contents = window.webContents;
   // The renderer has no preload, so Show in folder is a link to /reveal-export/<file> that never opens a window.
