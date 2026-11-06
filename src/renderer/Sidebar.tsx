@@ -22,13 +22,12 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
-import { takeoverPhrase } from "../core/machines";
 import { blockIdOf, type BlockId, type BlockView, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
 import type { PaneLimits } from "./hooks/use-pane-width";
 import { Mark } from "./Mark";
 import { Markdown } from "./Markdown";
 import { parseMarkdown, withLeadLabel } from "./markdownSubset";
-import { CopyPhrase } from "./Regenerate";
+import { TakeoverPhrase } from "./Regenerate";
 import { groupByProject } from "./sessionGroups";
 import { age, useNow } from "./time";
 
@@ -263,41 +262,45 @@ export function SessionPanel({
   );
 }
 
+/**
+ * The brainstorm's T3 thread. An attached thread is a link out to it. A lost one is a status, not a control: one line
+ * that says "Thread lost", the term the bar and home use, and under it the phrase that takes the brainstorm over.
+ */
 function ThreadSection({ view }: { view: SessionView }) {
   const lost = view.attachment.lostAt !== null;
-  const name = view.thread?.title ?? `Thread ${view.attachment.threadId.slice(0, 8)}`;
-  // A lost thread with a request in flight already says so, with the phrase, in the request status.
+  // A lost thread with a request in flight already says so, with the phrase, in the request strip.
   const showTakeover = lost && view.request?.phase.phase !== "thread_lost";
   return (
     <SidebarGroup className="py-1">
       <SidebarGroupLabel>Thread</SidebarGroupLabel>
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton
-            size="tall"
-            {...(view.thread === null
-              ? { disabled: true }
-              : { render: <a href={view.thread.link} target="_blank" rel="noreferrer" /> })}
-            data-thread-link
-          >
-            <span aria-hidden className={`mt-1.5 size-1.5 shrink-0 rounded-full ${lost ? "bg-warning" : "bg-success"}`} />
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="truncate">{name}</span>
-              <span className={`text-xs ${lost ? "text-warning" : "text-fg-muted"}`} data-thread={lost ? "lost" : "attached"}>
-                {lost ? "Unattached" : "Attached"}
+          {lost || view.thread === null ? (
+            // T3 may not have answered yet for an attached thread, so it shows the state without a name or a link.
+            <div className="flex h-8 items-center gap-2 px-2 text-sm" data-thread-link>
+              <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", lost ? "bg-warning" : "bg-success")} />
+              <span className={lost ? "font-medium text-warning" : "text-fg-muted"} data-thread={lost ? "lost" : "attached"}>
+                {lost ? "Thread lost" : "Attached"}
               </span>
-            </span>
-            {view.thread !== null && <ExternalLink aria-hidden className="mt-0.5 text-fg-muted" />}
-          </SidebarMenuButton>
+            </div>
+          ) : (
+            <SidebarMenuButton size="tall" render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-thread-link>
+              <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-success" />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="truncate">{view.thread.title}</span>
+                <span className="text-xs text-fg-muted" data-thread="attached">
+                  Attached
+                </span>
+              </span>
+              <ExternalLink aria-hidden className="mt-0.5 text-fg-muted" />
+            </SidebarMenuButton>
+          )}
         </SidebarMenuItem>
       </SidebarMenu>
       {showTakeover && (
         <div className="px-2 pt-1" data-takeover>
-          <Callout tone="warning" heading="Not attached to a thread" actions={<CopyPhrase title={view.session.title} />}>
+          <Callout tone="warning" actions={<TakeoverPhrase title={view.session.title} />}>
             <p>In a T3 thread on this project, say:</p>
-            <p className="rounded-sm bg-card px-1.5 py-1 font-mono text-xs select-all" data-takeover-phrase>
-              {takeoverPhrase(view.session.title)}
-            </p>
           </Callout>
         </div>
       )}

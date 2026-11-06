@@ -1,8 +1,10 @@
-import { AlertTriangle, Check, CircleHelp, Clock, MessageSquare, Undo2 } from "lucide-react";
+import { AlertTriangle, Check, CircleAlert, CircleHelp, Clock, Info, Undo2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Checkbox } from "@/components/ui/checkbox";
+import { chip } from "@/components/ui/chip";
 import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
@@ -222,14 +224,14 @@ function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
     case "asking":
       return <CircleHelp className={`${cls} text-info`} aria-hidden />;
     case "no_change":
-      return <MessageSquare className={`${cls} text-info`} aria-hidden />;
+      return <Info className={`${cls} text-info`} aria-hidden />;
     case "fulfilled":
       return <Check className={`${cls} text-success`} aria-hidden />;
     case "withdrawn":
       return <Undo2 className={`${cls} text-fg-muted`} aria-hidden />;
     case "send_failed":
     case "run_failed":
-      return <AlertTriangle className={`${cls} text-danger`} aria-hidden />;
+      return <CircleAlert className={`${cls} text-danger`} aria-hidden />;
     case "previous_thread":
     case "thread_lost":
       return <AlertTriangle className={`${cls} text-warning`} aria-hidden />;
@@ -247,12 +249,16 @@ const ACTION_LABEL: Record<RequestPhaseAction, string> = {
 type Tone = "danger" | "warning" | "info";
 
 /**
- * Phases whose message is too long for the bar: an error, the takeover phrase, the agent's reply. The bar names the
- * phase and the strip under it holds the whole message, so nothing Rob has to read or copy is cut off.
+ * Phases that need more than the bar has room for: an error, the takeover phrase, the agent's reply, or what the next
+ * step does. The bar names the phase and the strip under it says the rest, so nothing Rob has to read or copy is cut
+ * off. The icon is the strip's tone icon, the same one the bar shows. `own` is an action the strip carries instead
+ * of the bar, beside what it acts on.
  */
-const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; readonly tone: Tone }>> = {
+const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; readonly tone: Tone; readonly note?: string; readonly own?: RequestPhaseAction }>> = {
   send_failed: { label: "Send failed", tone: "danger" },
-  thread_lost: { label: "Thread lost", tone: "warning" },
+  run_failed: { label: "Run failed", tone: "danger", note: "The agent's run failed in T3. Open the thread to see why, or Retry to send the request again." },
+  thread_lost: { label: "Thread lost", tone: "warning", note: "This brainstorm's thread is gone. In a T3 thread on this project, say:", own: "copy_phrase" },
+  previous_thread: { label: "Sent to the previous thread", tone: "warning", note: "Another thread took this brainstorm over. Resend sends the request to it." },
   no_change: { label: "No change", tone: "info" },
 };
 
@@ -284,8 +290,8 @@ export function RequestStatus({ view, send }: { view: SessionView; send: (action
         </span>
       )}
       {phase.actions.length > 0 && (
-        <span className="flex shrink-0 items-center gap-1">
-          {phase.actions.map((action) => (
+        <span className="flex shrink-0 items-center gap-2">
+          {phase.actions.filter((action) => action !== detail?.own).map((action) => (
             <PhaseAction key={action} action={action} view={view} send={send} />
           ))}
         </span>
@@ -299,9 +305,21 @@ export function RequestDetail({ view }: { view: SessionView }) {
   const detail = view.request === null ? undefined : DETAIL[view.request.phase.phase];
   if (view.request === null || detail === undefined) return null;
   return (
-    <Callout tone={detail.tone} layout="strip" role="status" data-request-detail>
+    <Callout
+      tone={detail.tone}
+      layout="strip"
+      role="status"
+      actions={
+        detail.own === "copy_phrase" ? (
+          <TakeoverPhrase title={view.session.title} />
+        ) : view.request.phase.phase === "run_failed" && view.thread !== null ? (
+          <OpenThread view={view} />
+        ) : undefined
+      }
+      data-request-detail
+    >
       <p className="select-text" data-request-message>
-        {view.request.message}
+        {detail.note ?? view.request.message}
       </p>
     </Callout>
   );
@@ -316,22 +334,40 @@ function PhaseAction({ action, view, send }: { action: RequestPhaseAction; view:
     case "withdraw":
       return <ActionButton action={action} onClick={() => void send({ kind: "withdraw_request" })}>{label}</ActionButton>;
     case "open_thread":
-      return view.thread === null ? null : (
-        <Button
-          variant="outline"
-          nativeButton={false}
-          render={<a href={view.thread.link} target="_blank" rel="noreferrer" />}
-          data-request-action={action}
-        >
-          {label}
-        </Button>
-      );
+      return <OpenThread view={view} />;
     case "copy_phrase":
       return <CopyPhrase title={view.session.title} />;
   }
 }
 
-export function CopyPhrase({ title }: { title: string }) {
+function OpenThread({ view }: { view: SessionView }) {
+  if (view.thread === null) return null;
+  return (
+    <Button variant="outline" nativeButton={false} render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-request-action="open_thread">
+      {ACTION_LABEL.open_thread}
+    </Button>
+  );
+}
+
+/**
+ * The takeover phrase on its own line in mono, with Copy phrase beside it where there is room and under it where
+ * there isn't. The quoted title keeps to one line, so the phrase never breaks inside it.
+ */
+export function TakeoverPhrase({ title }: { title: string }) {
+  const phrase = takeoverPhrase(title);
+  const at = phrase.indexOf('"');
+  return (
+    <>
+      <p className={cn(chip, "rounded-sm px-1.5 py-1 font-mono text-xs text-fg select-all")} data-takeover-phrase>
+        {phrase.slice(0, at)}
+        <span className={title.length <= 24 ? "whitespace-nowrap" : undefined}>{phrase.slice(at)}</span>
+      </p>
+      <CopyPhrase title={title} />
+    </>
+  );
+}
+
+function CopyPhrase({ title }: { title: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;

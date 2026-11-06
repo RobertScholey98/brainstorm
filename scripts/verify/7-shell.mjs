@@ -397,7 +397,7 @@ try {
   await window.waitForSelector("[data-home-overview]");
   await window.click(`[data-session="${loose}"]`);
   await window.waitForSelector('[data-sidebar-panel="session"] [data-thread="lost"]');
-  check("a brainstorm whose thread is gone says so in its sidebar", (await window.textContent('[data-thread="lost"]'))?.trim(), "Unattached");
+  check("a brainstorm whose thread is gone says Thread lost in its sidebar", (await window.textContent('[data-thread="lost"]'))?.trim(), "Thread lost");
   check(
     "the takeover phrase sits on its own line at the sidebar's width, with Copy phrase under it",
     await window.$eval("[data-takeover]", (el) => {

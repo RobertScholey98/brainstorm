@@ -59,14 +59,14 @@ const SHOTS = [
   ["phase-queued", "phases", "Request phase: queued in T3"],
   ["phase-working", "phases", "Request phase: the agent is working"],
   ["phase-asking", "phases", "Request phase: the agent is asking something in T3"],
-  ["phase-run-failed", "phases", "Request phase: the agent's run failed, with Retry and Withdraw"],
+  ["phase-run-failed", "phases", "Request phase: the agent's run failed, with Retry and Withdraw, and the strip links to the thread"],
   ["phase-send-failed", "phases", "Request phase: the send failed; the bar names it with Retry, and the strip under it holds the whole error"],
   ["phase-no-change", "phases", "Request phase: the agent replied without changing the design; the bar names it, the strip says it in full"],
   ["phase-fulfilled", "phases", "Request phase: fulfilled, naming the new iteration and the block that changed"],
   ["phase-withdrawn", "phases", "Request phase: withdrawn"],
-  ["phase-thread-lost", "phases", "Request phase: the thread is gone; the bar has Copy phrase, the strip holds the whole takeover phrase"],
+  ["phase-thread-lost", "phases", "Request phase: the thread is gone; the strip holds the takeover phrase on its own mono line with Copy phrase beside it"],
   ["session-unattached", "phases", "The lost-thread session once its request is withdrawn: the sidebar shows the takeover phrase and Copy phrase"],
-  ["phase-previous-thread", "phases", "Request phase: sent to the previous thread after another thread took the session over"],
+  ["phase-previous-thread", "phases", "Request phase: sent to the previous thread after another thread took the session over; the strip says what Resend does"],
   ["home-loading", "launch", "Home while the first list loads: skeleton rows in the sidebar and skeleton cards in the overview"],
   ["home-server-down", "launch", "Home when Brainstorm's server doesn't answer at launch: the error and Try again"],
   ["home-sidebar-collapsed", "home", "Home with the sidebar collapsed, so the toggle sits in the top bar"],
@@ -834,8 +834,8 @@ function scenes(page, home, env, t3, sessions) {
         each: async () => {
           // The clipboard only takes a write from a focused document.
           await page.bringToFront();
-          await page.click('[data-request-phase] [data-request-action="copy_phrase"]');
-          await page.waitForSelector('[data-request-phase] [data-request-action="copy_phrase"] [data-copied]');
+          await page.click('[data-request-detail] [data-request-action="copy_phrase"]');
+          await page.waitForSelector('[data-request-detail] [data-request-action="copy_phrase"] [data-copied]');
         },
       });
       await page.click('[data-request-action="withdraw"]');

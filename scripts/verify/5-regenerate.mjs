@@ -178,7 +178,11 @@ try {
   await shot(window, shots, "4-asking");
 
   t3.endRun(DEMO_THREAD, "failed");
-  check("run failed", await phase("run_failed"), { message: "The agent's run failed in T3", actions: ["retry", "withdraw"] });
+  check("run failed", await phase("run_failed"), {
+    message: "The agent's run failed in T3. Open the thread to see why, or Retry to send the request again.",
+    actions: ["retry", "withdraw"],
+  });
+  check("run failed links to the thread from its strip", await window.isVisible('[data-request-detail] [data-request-action="open_thread"]'), true);
   await shot(window, shots, "5-run-failed");
   const beforeRetry = t3.sent().length;
   await window.click('[data-request-action="retry"]');
@@ -208,20 +212,27 @@ try {
   t3.addThread(TAKEOVER, { projectId: "chore-roulette", title: "Takeover thread" });
   const attached = brainstorm(env, ["session", "attach", "Chore roulette", "--thread", TAKEOVER, "--json"]);
   check("a new thread takes the session over through the CLI", [attached.code, attached.json?.data?.previous], [0, DEMO_THREAD]);
-  check("previous thread", await phase("previous_thread"), { message: "Sent to the previous thread", actions: ["resend", "withdraw"] });
+  check("previous thread", await phase("previous_thread"), { message: "Another thread took this brainstorm over. Resend sends the request to it.", actions: ["resend", "withdraw"] });
   await shot(window, shots, "7-previous-thread");
   await window.click('[data-request-action="resend"]');
   check("Resend sends it to the new thread", [await phase("queued"), markers(TAKEOVER, 3)], [{ message: "Queued in T3", actions: ["open_thread", "withdraw"] }, 1]);
 
   t3.setMissing(TAKEOVER, true);
   const phrase = 'pick up the brainstorm session titled "Chore roulette"';
-  check("missing thread", await phase("thread_lost"), {
-    message: `This session's thread is gone. In a T3 thread on this project, say: ${phrase}`,
-    actions: ["copy_phrase", "withdraw"],
-  });
-  check("the session shows as unattached", (await window.textContent('[data-thread="lost"]'))?.trim(), "Unattached");
-  await window.click('[data-request-phase] [data-request-action="copy_phrase"]');
-  await window.waitForSelector('[data-request-phase] [data-request-action="copy_phrase"] [data-copied]');
+  check("missing thread", await phase("thread_lost"), { message: "This brainstorm's thread is gone. In a T3 thread on this project, say:", actions: ["withdraw"] });
+  check(
+    "the strip holds the takeover phrase on its own line, with Copy phrase beside it",
+    await window.$eval("[data-request-detail]", (el) => {
+      const phrase = el.querySelector("[data-takeover-phrase]");
+      const copy = el.querySelector('[data-request-action="copy_phrase"]').getBoundingClientRect();
+      const box = phrase.getBoundingClientRect();
+      return [phrase.textContent, getComputedStyle(phrase).fontFamily.includes("Cascadia") || getComputedStyle(phrase).fontFamily.includes("mono"), Math.abs(copy.top + copy.height / 2 - (box.top + box.height / 2)) < 4];
+    }),
+    [phrase, true, true],
+  );
+  check("the session's thread reads Thread lost, the bar's term", (await window.textContent('[data-thread="lost"]'))?.trim(), "Thread lost");
+  await window.click('[data-request-detail] [data-request-action="copy_phrase"]');
+  await window.waitForSelector('[data-request-detail] [data-request-action="copy_phrase"] [data-copied]');
   check("Copy phrase puts the takeover phrase on the clipboard", await app.evaluate(({ clipboard }) => clipboard.readText()), phrase);
   await shot(window, shots, "8-thread-lost");
   await window.click('[data-request-action="withdraw"]');
@@ -229,7 +240,7 @@ try {
   check(
     "with no request open, the top bar still offers the takeover phrase",
     await window.$eval("[data-takeover]", (el) => [...el.querySelectorAll("p")].map((p) => p.textContent).concat(el.querySelector("button")?.innerText.trim())),
-    ["Not attached to a thread", "In a T3 thread on this project, say:", phrase, "Copy phrase"],
+    ["In a T3 thread on this project, say:", phrase, "Copy phrase"],
   );
   check("Regenerate is disabled while the session is unattached", await window.isDisabled("[data-regenerate-toggle]"), true);
   await shot(window, shots, "9-unattached");
