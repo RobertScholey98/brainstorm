@@ -24,7 +24,7 @@ test("migrations run once and reopening keeps the data", () => {
   store.nameProject("p1" as ProjectId, "brainstorm");
   store.close();
   const reopened = new Store(path);
-  expect(reopened.schemaVersion()).toBe(2);
+  expect(reopened.schemaVersion()).toBe(3);
   expect(reopened.session(session)).toEqual({ id: session, projectId: "p1", title: "Wheel", brief: "", createdAt: at });
   expect(reopened.sessions(null).map((s) => s.projectName)).toEqual(["brainstorm"]);
   reopened.close();
@@ -34,10 +34,10 @@ test("a version 1 store gains a null name for the projects it already has", () =
   const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
   seeded(path).close();
   const v1 = new DatabaseSync(path);
-  v1.exec("ALTER TABLE project DROP COLUMN name; PRAGMA user_version = 1;");
+  v1.exec("ALTER TABLE project DROP COLUMN name; DROP TABLE ui_pref; PRAGMA user_version = 1;");
   v1.close();
   const store = new Store(path);
-  expect(store.schemaVersion()).toBe(2);
+  expect(store.schemaVersion()).toBe(3);
   expect(store.sessions(null).map((s) => [s.id, s.projectName])).toEqual([[session, null]]);
   store.close();
 });

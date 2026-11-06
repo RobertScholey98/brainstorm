@@ -55,6 +55,7 @@ const MIGRATIONS: readonly string[] = [
   CREATE UNIQUE INDEX one_open_request ON request(session_id) WHERE state IN ('sending','sent','send_failed');
   `,
   `ALTER TABLE project ADD COLUMN name TEXT;`,
+  `CREATE TABLE ui_pref(key TEXT PRIMARY KEY, value_json TEXT NOT NULL);`,
 ];
 
 const OPEN_REQUEST = `state IN ('sending','sent','send_failed')`;
@@ -224,6 +225,18 @@ export class Store {
 
   #run(sql: string, ...params: (string | number | null)[]): void {
     this.#statement(sql).run(...params);
+  }
+
+  uiPrefRows(): { key: string; json: string }[] {
+    return this.#all("SELECT key, value_json FROM ui_pref ORDER BY key").map((r) => ({ key: str(r.key), json: str(r.value_json) }));
+  }
+
+  setUiPrefs(rows: readonly [key: string, value: unknown][]): void {
+    this.tx(() => {
+      for (const [key, value] of rows) {
+        this.#run("INSERT INTO ui_pref(key, value_json) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json", key, JSON.stringify(value));
+      }
+    });
   }
 
   schemaVersion(): number {

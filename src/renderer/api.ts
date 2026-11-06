@@ -1,3 +1,4 @@
+import type { UiPrefs, UiPrefsPatch } from "../core/prefs";
 import type { ExportResult, Result, RobAction, SessionId, SessionListing, SessionView } from "../core/types";
 
 export type Api = {
@@ -5,6 +6,8 @@ export type Api = {
   view(id: SessionId): Promise<Result<SessionView>>;
   act(id: SessionId, action: RobAction): Promise<Result<SessionView>>;
   exportHtml(id: SessionId): Promise<Result<ExportResult>>;
+  prefs(): Promise<Result<UiPrefs>>;
+  setPrefs(patch: UiPrefsPatch): Promise<Result<UiPrefs>>;
   /** Calls `onSession` with each changed session id until `signal` aborts, reconnecting after a drop. */
   events(onSession: (id: SessionId) => void, onOpen: () => void, signal: AbortSignal): Promise<void>;
 };
@@ -58,6 +61,8 @@ export function createApi(token: string): Api {
     view: (id) => call("GET", `/v1/ui/sessions/${id}`),
     act: (id, action) => call("POST", `/v1/ui/sessions/${id}/actions`, action),
     exportHtml: (id) => call("POST", `/v1/ui/sessions/${id}/export`),
+    prefs: () => call("GET", "/v1/ui/prefs"),
+    setPrefs: (patch) => call("POST", "/v1/ui/prefs", patch),
     events,
   };
 }

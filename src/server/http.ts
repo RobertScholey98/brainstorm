@@ -6,6 +6,7 @@ import { buildCanvasDocument, CANVAS_CSP } from "../canvas/document";
 import { packageRoot } from "../core/packageRoot";
 import type { Brainstorm } from "../core/brainstorm";
 import { zBranded } from "../core/parse";
+import { uiPrefsPatch } from "../core/prefs";
 import {
   parseBlockId,
   parseFeedbackId,
@@ -240,6 +241,16 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
         const action = parseAction(body);
         return action.ok ? service.act(id, action.data) : action;
       }),
+    },
+    { method: "GET", path: /^\/v1\/ui\/prefs$/, auth: "ui", handle: async () => service.prefs() },
+    {
+      method: "POST",
+      path: /^\/v1\/ui\/prefs$/,
+      auth: "ui",
+      handle: async ({ body }) => {
+        const patch = parseBody(uiPrefsPatch, body);
+        return patch.ok ? service.setPrefs(patch.data) : patch;
+      },
     },
     { method: "POST", path: /^\/v1\/ui\/sessions\/([^/]+)\/export$/, auth: "ui", handle: withSession((id) => service.exportHtml(id)) },
     {

@@ -15,6 +15,7 @@ import {
   requestFeedback,
   requestPhase,
 } from "./machines";
+import { prefRows, readPrefs, type UiPrefs, type UiPrefsPatch } from "./prefs";
 import { projectNameAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { Store, type FeedbackRecord, type IterationBlock, type StoredContent, type StoredIteration } from "./store";
@@ -158,6 +159,16 @@ export class Brainstorm {
 
   close(): void {
     this.#store.close();
+  }
+
+  /** The window's own layout, kept across launches. */
+  prefs(): Result<UiPrefs> {
+    return ok(readPrefs(this.#store.uiPrefRows()));
+  }
+
+  setPrefs(patch: UiPrefsPatch): Result<UiPrefs> {
+    this.#store.setUiPrefs(prefRows(patch));
+    return this.prefs();
   }
 
   subscribe(listener: (session: SessionId) => void): () => void {
