@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { overlaySurface } from "@/components/ui/overlay";
 import { Textarea } from "@/components/ui/textarea";
+import { Hint } from "@/components/ui/tooltip";
 import type { Placement } from "./CanvasHost";
 
 /** Where a pin is on the canvas. Only the frame can tell placed from detached; the rest the view knows. */
@@ -45,6 +46,14 @@ function statusLine(status: FeedbackStatus): string | null {
 
 const ACTION_LABEL: Record<FeedbackAction, string> = { confirm: "Confirm", reopen: "Reopen", edit: "Edit", delete: "Delete" };
 
+/** A list of items repeats its actions, so none of them is filled; Delete reads as destructive. */
+const ACTION_VARIANT: Record<FeedbackAction, "secondary" | "outline" | "destructive"> = {
+  confirm: "secondary",
+  reopen: "outline",
+  edit: "outline",
+  delete: "destructive",
+};
+
 const PLACE_NOTE: Record<Exclude<PinPlace, "placed">, string> = {
   detached: "Detached: its element is gone",
   hidden: "On a variant that isn't showing",
@@ -55,6 +64,7 @@ export function FeedbackPanel({
   feedback,
   blocks,
   place,
+  canPin,
   picking,
   focused,
   onPickToggle,
@@ -64,6 +74,8 @@ export function FeedbackPanel({
   feedback: readonly Feedback[];
   blocks: readonly BlockView[];
   place: (f: Feedback) => PinPlace;
+  /** False before the first iteration, when the canvas has nothing to pin to. */
+  canPin: boolean;
   picking: boolean;
   focused: FeedbackId | null;
   onPickToggle: () => void;
@@ -75,14 +87,27 @@ export function FeedbackPanel({
       <header className="flex items-center gap-2 px-4 pt-3 pb-2">
         <h2 className="text-sm font-semibold">Feedback</h2>
         <span className="text-xs tabular-nums text-fg-muted">{feedback.length > 0 ? feedback.length : ""}</span>
-        <Button variant={picking ? "default" : "outline"} className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
-          <MessageSquarePlus data-icon="inline-start" aria-hidden />
-          {picking ? "Picking…" : "Pin comment"}
-        </Button>
+        {canPin ? (
+          <Button variant={picking ? "default" : "outline"} className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
+            <MessageSquarePlus data-icon="inline-start" aria-hidden />
+            {picking ? "Picking…" : "Pin comment"}
+          </Button>
+        ) : (
+          <Hint label="There is nothing on the canvas to pin to yet">
+            <span tabIndex={0} className="ml-auto" data-pick-blocked>
+              <Button variant="outline" disabled data-pick-toggle>
+                <MessageSquarePlus data-icon="inline-start" aria-hidden />
+                Pin comment
+              </Button>
+            </span>
+          </Hint>
+        )}
       </header>
       {feedback.length === 0 ? (
         <p className="px-4 pb-4 text-sm/relaxed text-fg-muted">
-          Pin a comment to an element in the canvas. The agent sees it with your next Regenerate.
+          {canPin
+            ? "Pin a comment to an element in the canvas. The agent sees it with your next Regenerate."
+            : "Once the first iteration is on the canvas, pin comments to its elements here."}
         </p>
       ) : (
         GROUPS.map(({ state, title }) => {
@@ -90,8 +115,9 @@ export function FeedbackPanel({
           if (items.length === 0) return null;
           return (
             <div key={state} className="pb-2" data-group={state}>
-              <h3 className="px-4 pt-1 pb-1 text-xs font-medium text-fg-muted">
-                {title} <span className="tabular-nums">{items.length}</span>
+              <h3 className="flex gap-1.5 px-4 pt-1 pb-1 text-xs font-medium">
+                {title}
+                <span className="font-normal tabular-nums text-fg-muted">{items.length}</span>
               </h3>
               <ul className="grid">
                 {items.map((f) => (
@@ -135,6 +161,8 @@ function FeedbackItem({
     if (focused) item.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [focused]);
   const line = statusLine(f.status);
+  const where = `${block?.title ?? f.pin.blockId} · ${f.pin.part ?? "whole block"}`;
+  const meta = line === null ? where : `${where} · ${line}`;
   const run = (action: FeedbackAction) => {
     switch (action) {
       case "edit":
@@ -180,10 +208,12 @@ function FeedbackItem({
               {f.text}
             </button>
           )}
-          <p className="pt-1 text-xs/snug text-fg-muted" data-feedback-meta>
-            {block?.title ?? f.pin.blockId} · {f.pin.part ?? "whole block"}
-            {line !== null && <span data-feedback-status> · {line}</span>}
-          </p>
+          <Hint label={meta}>
+            <p className="truncate pt-1 text-xs/snug text-fg-muted" data-feedback-meta>
+              {where}
+              {line !== null && <span data-feedback-status> · {line}</span>}
+            </p>
+          </Hint>
           {place !== "placed" && (
             <p className="pt-0.5 text-xs/snug text-warning" data-feedback-place>
               {PLACE_NOTE[place]}
@@ -192,7 +222,7 @@ function FeedbackItem({
           {!editing && (
             <div className="flex gap-1 pt-1.5 empty:hidden">
               {FEEDBACK_ACTIONS[f.status.state].map((action) => (
-                <Button key={action} variant={action === "confirm" ? "default" : "outline"} size="xs" onClick={() => run(action)}>
+                <Button key={action} variant={ACTION_VARIANT[action]} size="xs" onClick={() => run(action)} data-feedback-action={action}>
                   {ACTION_LABEL[action]}
                 </Button>
               ))}

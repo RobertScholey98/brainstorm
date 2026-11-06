@@ -405,6 +405,7 @@ function SessionWorkspace({
             feedback={feedback}
             blocks={blocks}
             place={(f) => pinPlace(f, blocks, activeBlocks, placement)}
+            canPin={iteration !== null}
             picking={interaction.kind === "picking"}
             focused={focusedFeedback}
             onPickToggle={() => setInteraction((i) => (i.kind === "picking" ? { kind: "view" } : { kind: "picking" }))}

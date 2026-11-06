@@ -229,6 +229,11 @@ try {
   await window.click(`[data-session="${loose}"]`);
   await window.waitForSelector('[data-sidebar-panel="session"] [data-thread="lost"]');
   check("a brainstorm whose thread is gone says so in its sidebar", (await window.textContent('[data-thread="lost"]'))?.trim(), "Unattached");
+  check(
+    "before the first iteration, the Inspector says when settings appear and Pin comment is disabled",
+    [(await window.textContent("[data-inspector-empty]"))?.includes("first iteration"), await window.isDisabled("[data-pick-toggle]")],
+    [true, true],
+  );
   await window.click("[data-back]");
   await window.waitForSelector(`[data-session="${loose}"][data-lost] [data-session-lost]`);
   check("its home row carries the lost marker", (await window.textContent(`[data-session="${loose}"] [data-session-lost]`))?.trim(), "Thread lost");

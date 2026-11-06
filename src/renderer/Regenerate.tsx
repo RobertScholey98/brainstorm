@@ -148,12 +148,12 @@ function RegenerateForm({
         className="resize-none"
       />
 
-      <div className="grid gap-1" data-attached-feedback>
+      <div className="grid min-w-0 gap-1" data-attached-feedback>
         <h3 className="text-xs font-medium text-fg-muted">
           {attached.length === 0 ? "No open feedback in scope" : `Open feedback sent with it (${attached.length})`}
         </h3>
         {attached.map((f) => (
-          <p key={f.id} className="flex gap-1.5 text-sm/snug" data-attached={f.id}>
+          <p key={f.id} className="flex min-w-0 gap-1.5 text-sm/snug" data-attached={f.id}>
             <span className="shrink-0 font-semibold tabular-nums text-accent">#{f.id}</span>
             <Hint label={f.text}>
               <span className="min-w-0 truncate">{f.text}</span>

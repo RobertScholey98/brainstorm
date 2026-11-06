@@ -85,7 +85,9 @@ export function Inspector({
     >
       {view.overrides.inapplicable.length > 0 && <Inapplicable items={view.overrides.inapplicable} blocks={blocks} onDismiss={onDismiss} />}
       {block === null || props === null ? (
-        <p className="px-4 py-4 text-sm text-fg-muted">Select a frame to adjust it.</p>
+        <p className="px-4 py-4 text-sm/relaxed text-fg-muted" data-inspector-empty>
+          {view.iteration === null ? "Each block's settings show here once the agent commits the first iteration." : "Select a frame to adjust it."}
+        </p>
       ) : (
         <BlockControls key={block.id} view={view} block={block} props={props} error={error} onSet={onSet} onReset={onReset} />
       )}

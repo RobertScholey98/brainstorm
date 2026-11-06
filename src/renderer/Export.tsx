@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
@@ -44,9 +44,7 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
         ) : (
           <>
             <PopoverHeader heading="Exported" description="One HTML file that opens offline, with your adjustments and variant choices." />
-            <code className="rounded-md bg-muted px-2 py-1.5 font-mono text-xs/snug break-all select-all" data-export-path>
-              {done.path}
-            </code>
+            <ExportPath path={done.path} />
             <PopoverFooter>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>
                 Done
@@ -63,5 +61,27 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
         )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * The folder, then the file name on its own line. The folder may break only after a separator, so no segment is split
+ * mid-word; the text is still the whole path for copying.
+ */
+function ExportPath({ path }: { path: string }) {
+  const cut = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/")) + 1;
+  const segments = path.slice(0, cut).split(/(?<=[\\/])/);
+  return (
+    <code className="grid gap-0.5 rounded-md bg-muted px-2 py-1.5 font-mono text-xs/snug select-all" data-export-path>
+      <span className="text-fg-muted">
+        {segments.map((segment, i) => (
+          <Fragment key={i}>
+            {segment}
+            <wbr />
+          </Fragment>
+        ))}
+      </span>
+      <span className="font-medium break-all text-fg">{path.slice(cut)}</span>
+    </code>
   );
 }
