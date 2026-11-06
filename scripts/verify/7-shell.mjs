@@ -245,6 +245,25 @@ try {
   await window.keyboard.press("ArrowLeft");
   await rouletteCanvas.waitForSelector('.bs-frame[data-slot="wheel"]:not([data-offstage])');
   check("arrow keys on the tabs move between slots", await staged(), ["wheel"]);
+  check(
+    "a slot tab is a 28 px control centred in the 40 px bar, its underline on the bar's rule",
+    await window.$eval('[data-slot-tab="wheel"]', (tab) => {
+      const t = tab.getBoundingClientRect();
+      const bar = tab.closest("[data-canvas-bar]").getBoundingClientRect();
+      return [Math.round(t.height), Math.round(t.top - bar.top), Math.round(bar.bottom - t.bottom), getComputedStyle(tab, "::after").bottom, getComputedStyle(tab).borderRadius];
+    }),
+    [28, 6, 6, "-6px", "6px"],
+  );
+  await window.hover('[data-slot="sidebar"] [data-sidebar="trigger"]');
+  await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
+  check("a hint is 28 px tall, the height of the controls it labels", await window.$eval('[data-slot="tooltip-content"]', (t) => Math.round(t.getBoundingClientRect().height)), 28);
+  await window.hover('[data-slot="resize-handle"][aria-label="Inspector width"]');
+  check(
+    "under the pointer, the resize line is a 2 px control edge in border-strong",
+    await window.$eval('[data-slot="resize-handle"][aria-label="Inspector width"]', (h) => [getComputedStyle(h, "::after").backgroundColor, getComputedStyle(h, "::after").width]),
+    ["rgb(212, 211, 205)", "2px"],
+  );
+  await window.mouse.move(700, 600);
   await window.click('[data-slot-step="next"]');
   await rouletteCanvas.waitForSelector('.bs-frame[data-slot="result"]:not([data-offstage])');
   check("the next arrow steps to the next slot, and stops at the last", [await staged(), await window.isDisabled('[data-slot-step="next"]')], [["result"], true]);

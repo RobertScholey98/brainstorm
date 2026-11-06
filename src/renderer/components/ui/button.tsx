@@ -7,9 +7,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        accent: "bg-accent text-accent-fg hover:bg-accent-hover",
+        accent: "bg-accent text-accent-fg hover:bg-accent-hover aria-expanded:bg-accent-hover",
         outline:
-          "border-border-strong bg-card hover:bg-muted hover:text-fg aria-expanded:bg-muted aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
+          "border-border-strong bg-card hover:bg-muted hover:text-fg aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
         ghost:
           "hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg aria-pressed:bg-selected aria-pressed:text-fg",
         destructive:

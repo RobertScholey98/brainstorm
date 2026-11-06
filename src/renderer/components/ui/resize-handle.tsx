@@ -4,7 +4,7 @@ import { cva } from "class-variance-authority"
 const STEP = 16
 
 const handleVariants = cva(
-  "group/handle absolute inset-y-0 z-raised flex w-2 cursor-col-resize justify-center outline-hidden after:w-px after:bg-ring after:opacity-0 after:transition-opacity hover:after:opacity-100 focus-visible:after:w-0.5 focus-visible:after:opacity-100 data-dragging:after:opacity-100",
+  "group/handle absolute inset-y-0 z-raised flex w-2 cursor-col-resize justify-center outline-hidden after:w-0.5 after:bg-border-strong after:opacity-0 after:transition-opacity hover:after:opacity-100 focus-visible:after:bg-ring focus-visible:after:opacity-100 data-dragging:after:opacity-100",
   {
     variants: {
       edge: {
@@ -16,7 +16,8 @@ const handleVariants = cva(
 )
 
 /**
- * A drag handle on one edge of a pane, centred on the pane's border. `edge` is the side it sits on; dragging away
+ * A drag handle on one edge of a pane, centred on the pane's border. Under the pointer or while dragged its line is a
+ * control edge, border-strong; with keyboard focus it is the focus ring. `edge` is the side it sits on; dragging away
  * from the pane grows it. Arrow keys step 16 px, and a double click goes back to `reset`.
  */
 function ResizeHandle({

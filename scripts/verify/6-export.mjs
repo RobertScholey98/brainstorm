@@ -43,8 +43,16 @@ try {
   await setText(window, "buttonLabel", "Crank it");
   await window.waitForTimeout(400);
 
+  const trigger = () => window.$eval("[data-export]", (b) => [b.getAttribute("aria-expanded"), getComputedStyle(b).backgroundColor, getComputedStyle(b).borderColor]);
+  const closed = await trigger();
   await window.click("[data-export]");
   await window.waitForSelector("[data-exported]");
+  const opened = await trigger();
+  check(
+    "Export shows it is open, in the pressed look, and goes back when it closes",
+    [opened[0], opened[1] !== closed[1], opened[2] !== closed[2]],
+    ["true", true, true],
+  );
   exported = (await window.textContent("[data-export-path]"))?.trim();
   const name = exported?.slice(join(home, "exports").length + 1);
   check("the file lands in exports, named by session, iteration and time", /^s_[0-9a-z]+-i1-\d{8}-\d{6}\.html$/.test(name ?? "") && name.startsWith(`${session}-i1-`), true);

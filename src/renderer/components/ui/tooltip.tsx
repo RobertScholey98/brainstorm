@@ -55,7 +55,7 @@ function TooltipContent({
           data-slot="tooltip-content"
           className={cn(
             overlaySurface({ tone: "inverse" }),
-            "inline-flex w-fit max-w-xs items-center gap-2 px-2 py-1 text-xs",
+            "inline-flex min-h-7 w-fit max-w-xs items-center gap-2 px-2 py-1 text-xs",
             className
           )}
           {...props}

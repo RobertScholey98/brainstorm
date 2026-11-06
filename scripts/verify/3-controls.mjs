@@ -45,18 +45,36 @@ try {
   await run.window.focus(slider);
   for (let i = 0; i < 10; i++) await run.window.keyboard.press("ArrowRight");
   check(
-    "a slider moved from the keyboard rings its thumb",
+    "a slider moved from the keyboard rings its thumb 2 px out from its edge",
     await run.window
-      .waitForFunction(() => getComputedStyle(document.querySelector('[data-control="spinSeconds"] [data-slot="slider-thumb"]')).boxShadow.includes("0px 0px 0px 2px"), null, { timeout: 2000 })
+      .waitForFunction(() => /0px 0px 0px 2px.*0px 0px 0px 4px/.test(getComputedStyle(document.querySelector('[data-control="spinSeconds"] [data-slot="slider-thumb"]')).boxShadow), null, { timeout: 2000 })
       .then(() => true, () => false),
     true,
   );
   await run.window.click(hex);
+  check(
+    "a focused text field takes a 1 px ring outside its ring-coloured edge, not a 2 px one",
+    await run.window.$eval('[data-control="accent"] div:has(> input)', (el) => getComputedStyle(el).boxShadow.match(/0px 0px 0px [1-9]px/g)),
+    ["0px 0px 0px 1px"],
+  );
   await run.window.keyboard.press("Control+A");
   await run.window.keyboard.type("#00f0ff");
   await run.window.keyboard.press("Enter");
   await run.window.waitForSelector('[data-control="spinSeconds"][data-overridden]');
   await run.window.waitForSelector('[data-control="accent"][data-overridden]');
+  check(
+    "each overridden row puts its reset last, at one x, and its dot 6 px off the pane edge",
+    await run.window.evaluate(() => {
+      const aside = document.querySelector("aside[aria-label=Inspector]");
+      const pane = { left: aside.getBoundingClientRect().left + aside.clientLeft };
+      const rows = [...document.querySelectorAll("[data-control][data-overridden]")];
+      return {
+        resets: new Set(rows.map((r) => Math.round(r.querySelector("[data-control-reset]").getBoundingClientRect().right))).size,
+        dots: rows.map((r) => Math.round(r.querySelector("[data-overridden-mark]").getBoundingClientRect().left - pane.left)),
+      };
+    }),
+    { resets: 1, dots: [6, 6] },
+  );
   const adjusted = {
     panel: { spinSeconds: "3.4", accent: "#00f0ff" },
     canvas: { transition: "transform 3.4s cubic-bezier(0.12, 0.7, 0.14, 1)", accent: "#00f0ff" },

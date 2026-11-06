@@ -40,7 +40,7 @@ function Slider({
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
             key={index}
-            className="relative block size-4 shrink-0 rounded-full border border-border-strong bg-card shadow-xs transition-[color,box-shadow] select-none after:absolute after:-inset-1 hover:ring-2 hover:ring-border-strong active:ring-2 active:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden has-focus-visible:ring-2 has-focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 dark:bg-fg"
+            className="relative block size-4 shrink-0 rounded-full border border-border-strong bg-card shadow-xs transition-[color,box-shadow] select-none after:absolute after:-inset-1 hover:ring-2 hover:ring-border-strong active:ring-2 active:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card focus-visible:outline-hidden has-focus-visible:ring-2 has-focus-visible:ring-ring has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-card disabled:pointer-events-none disabled:opacity-50 dark:bg-fg"
           />
         ))}
       </SliderPrimitive.Control>

@@ -57,17 +57,20 @@ function Row({ bound, trailing, children }: { bound: Pick<Bound<AppearanceType>,
   return (
     <div className="grid gap-1.5" data-control={spec.name} data-overridden={overridden || undefined}>
       <div className="relative flex h-6 items-center gap-1.5">
-        {/* In the gutter, so an overridden label starts on the same edge as the rest. */}
-        {overridden && <span aria-hidden className="absolute top-1/2 -left-3 size-1.5 -translate-y-1/2 rounded-full bg-fg" data-overridden-mark />}
+        {/* In the gutter, 6 px off the pane edge and 4 px before the label, so an overridden label keeps its edge. */}
+        {overridden && <span aria-hidden className="absolute top-1/2 -left-2.5 size-1.5 -translate-y-1/2 rounded-full bg-fg" data-overridden-mark />}
         <span className="truncate text-sm font-medium">{label}</span>
-        {overridden && (
-          <Hint label="Reset to the agent's value" side="left">
-            <Button variant="ghost" size="icon-xs" aria-label={`Reset ${label}`} onClick={() => scope.reset(spec.name)}>
-              <RotateCcw aria-hidden />
-            </Button>
-          </Hint>
-        )}
-        <span className="ml-auto flex items-center">{trailing}</span>
+        <span className="ml-auto flex items-center gap-1">
+          {trailing}
+          {/* Last in the row, so every reset sits at one x beside the value it resets. */}
+          {overridden && (
+            <Hint label="Reset to the agent's value" side="left">
+              <Button variant="ghost" size="icon-xs" aria-label={`Reset ${label}`} onClick={() => scope.reset(spec.name)} data-control-reset>
+                <RotateCcw aria-hidden />
+              </Button>
+            </Hint>
+          )}
+        </span>
       </div>
       {children}
     </div>
@@ -180,7 +183,7 @@ function ColourField({ bound }: { bound: Bound<"color"> }) {
   };
   return (
     <Row bound={bound}>
-      <div className="flex h-7 items-center gap-2 rounded-md border border-border-strong pr-2 pl-1 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring dark:bg-border-strong/30">
+      <div className="flex h-7 items-center gap-2 rounded-md border border-border-strong pr-2 pl-1 transition-colors focus-within:border-ring focus-within:ring-1 focus-within:ring-ring dark:bg-border-strong/30">
         <input
           type="color"
           aria-label={`${label} colour`}
