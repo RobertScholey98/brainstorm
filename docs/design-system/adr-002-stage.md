@@ -73,3 +73,9 @@ The round 3 council found the board still scrolled sideways once the window narr
 Half size is the floor because below it a phone frame's 13 px text renders under 7 px, which is no longer a preview. The board measures its room without the scrollbar gutter, since only the stage pads its left by it to centre.
 
 `verify:7` now checks: with one slot there is no view switch; the stage readout is in the bar (83% at 1440, 49% at 1100); two 390 px frames fit at full size at 1440 and at one zoom in one row at 1100 beside the Inspector (58% there), with no sideways scroll and the pin on its element; a frame's label is 24 px under the bar in both views; and pick mode's hint sits in the bar.
+
+## Amendment: round 4. One gutter rule
+
+The round 4 council found the stage frame 5 px left of centre whenever it didn't scroll (U57, reopened as T4), and the board's readout moving from 64% to 63% when a strip brought in the scrollbar. The stage padded its left by a measured gutter that was only there when the scrollbar was, and the room counted the gutter in one view and not the other.
+
+The canvas root now keeps the scrollbar's gutter on both sides (`scrollbar-gutter: stable both-edges`), and `#canvas` pads each side by 24 px less the gutter, `--bs-scrollbar` from `design.ts`. So in both views the room is the window less 24 px a side, a frame's sides sit 24 px off the canvas edges whether or not it scrolls, and nothing is measured. Fixed boxes start after the left gutter, so the pick highlight is placed from a zero-size fixed probe's origin. `verify:7` checks a stage frame that doesn't scroll sits 24 px off each side, and one that scrolls sits centred.

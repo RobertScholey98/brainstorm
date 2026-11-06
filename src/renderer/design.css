@@ -33,6 +33,7 @@
   --scrollbar-thumb-hover: color-mix(in oklab, var(--fg) 36%, transparent);
   --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-code: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --scrollbar: 10px;
 }
 :root { color-scheme: light; }
 @media (prefers-color-scheme: dark) {

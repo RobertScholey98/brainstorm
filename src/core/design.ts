@@ -61,13 +61,20 @@ const SOLID = {
   },
 } as const satisfies Record<Theme, Record<string, string>>;
 
+/**
+ * A scrollbar's width. Every scroller keeps this gutter on both sides, so its content sits as far off each edge with or
+ * without a scrollbar, and pads each side by its inset less the gutter.
+ */
+export const SCROLLBAR = 10;
+
 /** A scrollbar's track stops this far short of each end, the main card's corner radius, so its thumb never runs into a rounded corner. */
 export const SCROLL_TRACK_INSET = 12;
 
-/** Segoe UI Variable and Cascadia Mono ship with Windows 11; see ADR 001 for why no font is bundled. */
-const FONTS = {
+/** The same in both themes. Segoe UI Variable and Cascadia Mono ship with Windows 11; see ADR 001 for why no font is bundled. */
+const UNTHEMED = {
   "font-ui": '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
   "font-code": '"Cascadia Mono", Consolas, ui-monospace, monospace',
+  scrollbar: `${SCROLLBAR}px`,
 };
 
 /** The same mix in both themes, so a derived token can never drift from the solid it comes from. */
@@ -94,14 +101,14 @@ export function designCss(prefix = ""): string {
   const v = (name: string) => `var(--${prefix}${name})`;
   const derived = Object.fromEntries(Object.entries(DERIVED).map(([k, mix]) => [k, mix(v)]));
   return [
-    block(":root", { ...solidColours("light"), ...derived, ...FONTS }, prefix, ""),
+    block(":root", { ...solidColours("light"), ...derived, ...UNTHEMED }, prefix, ""),
     ":root { color-scheme: light; }",
     "@media (prefers-color-scheme: dark) {",
     block(":root", solidColours("dark"), prefix, "  "),
     "  :root { color-scheme: dark; }",
     "}",
     // Chromium ignores these pseudo-elements once scrollbar-width or scrollbar-color is set, so neither is.
-    "::-webkit-scrollbar { width: 10px; height: 10px; }",
+    `::-webkit-scrollbar { width: ${SCROLLBAR}px; height: ${SCROLLBAR}px; }`,
     "::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }",
     `::-webkit-scrollbar-track:vertical { margin-block: ${SCROLL_TRACK_INSET}px; }`,
     `::-webkit-scrollbar-track:horizontal { margin-inline: ${SCROLL_TRACK_INSET}px; }`,

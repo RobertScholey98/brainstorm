@@ -117,6 +117,22 @@ try {
     [[1, 1, true]],
   );
   check("the overview is the active row in the sidebar", (await window.$("[data-overview][data-active]")) !== null, true);
+  check(
+    "one gutter rule: a sidebar row's fill and the overview's cards sit as far off both edges of their pane",
+    await settled(() =>
+      window.evaluate(() => {
+        const inset = (el, pane) => {
+          const [e, p] = [el.getBoundingClientRect(), pane.getBoundingClientRect()];
+          return [Math.round(e.left - p.left), Math.round(p.right - e.right)];
+        };
+        return {
+          sidebar: inset(document.querySelector("[data-overview]"), document.querySelector('[data-slot="sidebar-inner"]')),
+          overview: inset(document.querySelector("[data-home-overview] ul"), document.querySelector("[data-home-overview]")),
+        };
+      }),
+    ),
+    { sidebar: [8, 8], overview: [24, 24] },
+  );
   check("home shows no Regenerate or Export", [await window.$("[data-regenerate-toggle]"), await window.$("[data-export]")], [null, null]);
   await window.waitForTimeout(300);
   await shot(window, shots, "home-light");
@@ -231,6 +247,14 @@ try {
   check("a brainstorm opens on the stage", await window.getAttribute("[data-canvas-region]", "data-canvas-view"), "stage");
   check("with one slot both views are the same, so the bar shows no view switch", await window.$("[data-view-option]"), null);
   check("the stage zooms the 980 px frame to fit, says by how much in the canvas bar, and never scrolls sideways at 1440", await fit(), { sideways: false, zoom: "83", fits: true });
+  const centring = () =>
+    settled(() =>
+      canvas.evaluate(() => {
+        const body = document.querySelector(".bs-frame:not([data-offstage]) .bs-frame-body").getBoundingClientRect();
+        return { scrolls: document.documentElement.scrollHeight > innerHeight, sides: [Math.round(body.left), Math.round(innerWidth - body.right)] };
+      }),
+    );
+  check("a stage frame that doesn't scroll sits centred, 24 px off each side of the canvas", await centring(), { scrolls: false, sides: [24, 24] });
   await window.setViewportSize({ width: 1100, height: 720 });
   await window.waitForFunction(() => document.querySelector("[data-canvas-zoom]")?.dataset.canvasZoom === "49", null, { timeout: 5000 }).catch(() => {});
   check("and at 1100", await fit(), { sideways: false, zoom: "49", fits: true });
@@ -276,6 +300,16 @@ try {
   await rouletteCanvas.waitForSelector('[data-bid="wheel/neon"]');
   const staged = () => rouletteCanvas.$$eval(".bs-frame:not([data-offstage])", (els) => els.map((e) => e.dataset.slot));
   check("the stage shows the first slot alone, with a tab per slot", [await staged(), await window.$$eval("[data-slot-tab]", (els) => els.map((e) => e.dataset.slotTab))], [["wheel"], ["wheel", "result"]]);
+  check(
+    "a stage frame that scrolls sits centred too, its gutter mirrored on the left",
+    await settled(() =>
+      rouletteCanvas.evaluate(() => {
+        const body = document.querySelector(".bs-frame:not([data-offstage]) .bs-frame-body").getBoundingClientRect();
+        return { scrolls: document.documentElement.scrollHeight > innerHeight, off: Math.round(body.left + body.width / 2 - innerWidth / 2) };
+      }),
+    ),
+    { scrolls: true, off: 0 },
+  );
   await window.click('[data-slot-tab="result"]');
   await rouletteCanvas.waitForSelector('.bs-frame[data-slot="result"]:not([data-offstage])');
   check("a tab puts its slot on the stage and its block in the Inspector", [await staged(), await window.getAttribute("[data-block]", "data-block")], [["result"], "result/card"]);
@@ -362,10 +396,9 @@ try {
   await window.setViewportSize({ width: 1100, height: 720 });
   await window.waitForSelector("[data-canvas-bar] [data-canvas-zoom]");
   // The panels ease to their new widths, so the canvas refits a few times before it settles.
-  await rouletteCanvas.waitForFunction(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth, null, { timeout: 3000 }).catch(() => {});
   check(
     "at 1100 beside the Inspector the board zooms both frames to fit one row, says so in the bar, and never scrolls sideways",
-    [await row(), await pinAt(1)],
+    await settled(async () => [await row(), await pinAt(1)]),
     [{ sideways: false, tops: 1, inside: true }, true],
   );
   check(

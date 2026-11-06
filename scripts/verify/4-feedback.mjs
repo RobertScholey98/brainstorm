@@ -41,9 +41,9 @@ try {
   const highlight = await canvas.evaluate((sel) => {
     const a = document.querySelector(".bs-pick").getBoundingClientRect();
     const b = document.querySelector(sel).getBoundingClientRect();
-    return [a.x, a.y, a.width, a.height].map(Math.round).join() === [b.x, b.y, b.width, b.height].map(Math.round).join();
+    return [[a.x, a.y, a.width, a.height].map(Math.round), [b.x, b.y, b.width, b.height].map(Math.round)];
   }, HEADLINE);
-  check("the highlight covers the element", highlight, true);
+  check("the highlight covers the element", highlight[0], highlight[1]);
   await shot(window, shots, "1-picking");
 
   await canvas.click(HEADLINE);

@@ -179,10 +179,9 @@ function revealSelected(behavior: ScrollBehavior): void {
 
 /** Applies the fit rules to the canvas as it is now, and tells the host when a zoom changes. */
 function fitCanvas(): void {
-  const gutter = innerWidth - document.documentElement.clientWidth;
-  document.documentElement.style.setProperty("--bs-gutter", `${gutter}px`);
-  // The stage pads its left by the scrollbar's width too, so a centred frame sits mid-window; the board does not.
-  const room = document.documentElement.clientWidth - 2 * CANVAS_PAD - (state.stage === null ? 0 : gutter);
+  // The scrollbar's gutter is kept on both sides and the padding gives it back, so in either view the room is the
+  // window less its pad, with or without a scrollbar.
+  const room = innerWidth - 2 * CANVAS_PAD;
   const { zooms: next, wrap } = fitFrames(
     state.frames.map((f) => ({ slot: f.slot, width: f.frame.width })),
     room,
@@ -435,6 +434,9 @@ const highlight = document.createElement("div");
 highlight.className = "bs-pick";
 const highlightLabel = document.createElement("span");
 highlight.append(highlightLabel);
+/** Where position: fixed puts 0, 0. The root keeps a scrollbar gutter on its left, and fixed boxes start after it. */
+const fixedOrigin = document.createElement("div");
+fixedOrigin.style.cssText = "position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none";
 
 function layoutHover(): void {
   if (state.mode !== "pin" || hover === null || !hover.anchor.isConnected) {
@@ -442,7 +444,8 @@ function layoutHover(): void {
     return;
   }
   const r = hover.anchor.getBoundingClientRect();
-  highlight.style.transform = `translate(${r.left}px, ${r.top}px)`;
+  const o = fixedOrigin.getBoundingClientRect();
+  highlight.style.transform = `translate(${r.left - o.left}px, ${r.top - o.top}px)`;
   highlight.style.width = `${r.width}px`;
   highlight.style.height = `${r.height}px`;
   highlightLabel.textContent = hover.pin.part ?? "Whole block";
@@ -450,7 +453,7 @@ function layoutHover(): void {
 }
 
 if (live) {
-  document.body.append(highlight);
+  document.body.append(highlight, fixedOrigin);
   // In pin mode a click pins instead of reaching the block, so it can't press the block's own buttons.
   for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "dblclick", "contextmenu"]) {
     window.addEventListener(
@@ -511,17 +514,19 @@ function wake(): void {
 const CHROME_CSS = `
 ${designCss("bs-")}
 html, body { margin: 0; min-height: 100%; }
-html { scrollbar-gutter: stable; }
+html { scrollbar-gutter: stable both-edges; }
 body {
   background-color: var(--bs-canvas);
   background-image: radial-gradient(color-mix(in oklab, var(--bs-fg) 10%, transparent) 1px, transparent 1.2px);
   background-size: 16px 16px;
   font: 12px/16px var(--bs-font-ui);
 }
-#canvas { display: flex; align-items: flex-start; gap: ${GAP}px; padding: ${CANVAS_PAD}px ${CANVAS_PAD}px 48px; }
+#canvas {
+  display: flex; align-items: flex-start; gap: ${GAP}px;
+  padding: ${CANVAS_PAD}px calc(${CANVAS_PAD}px - var(--bs-scrollbar)) 48px;
+}
 #canvas[data-wrap="true"] { flex-wrap: wrap; }
-/* The left pad matches the scrollbar gutter on the right, so the stage centres in the canvas, not left of it. */
-#canvas[data-view="stage"] { justify-content: center; padding-left: calc(${CANVAS_PAD}px + var(--bs-gutter, 0px)); }
+#canvas[data-view="stage"] { justify-content: center; }
 /* A reveal stops at the canvas padding, so a frame's label sits the same way off the bar in both views. */
 .bs-frame { flex: none; min-width: 0; scroll-margin: ${CANVAS_PAD}px; }
 .bs-frame[data-offstage] { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none; }

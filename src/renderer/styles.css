@@ -176,9 +176,12 @@ body[data-resizing] [data-slot="sidebar-container"] {
   grid-template-columns: auto minmax(0, max-content);
 }
 
-/* A scroller that keeps its scrollbar's room whether or not it overflows, so its content never shifts sideways. */
+/*
+ * A scroller keeps its scrollbar's room on both sides whether or not it overflows, so its content never shifts
+ * sideways and sits as far off each edge. Its padding is its inset less the gutter (--scrollbar).
+ */
 @utility scroll-gutter {
-  scrollbar-gutter: stable;
+  scrollbar-gutter: stable both-edges;
 }
 
 /* A scroller whose top 8 px fade out, so content scrolled under a solid header edge never ends in a hard sliver. */

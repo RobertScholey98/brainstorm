@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Code } from "@/components/ui/kbd";
 import { PageHeader } from "@/components/ui/page-header";
+import { ScrollPane } from "@/components/ui/scroll-pane";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SessionId, SessionListing } from "../core/types";
 import { markdownText } from "./markdownSubset";
@@ -32,8 +33,8 @@ export function HomeOverview({
   if (sessions === null && error !== null) return <ListError message={error} onRetry={onRetry} />;
   if (sessions !== null && sessions.length === 0) return <HomeEmpty />;
   return (
-    <div className="size-full overflow-y-auto" data-home-overview>
-      <div className="grid gap-5 p-6">
+    <ScrollPane inset={6} className="size-full" data-home-overview>
+      <div className="grid gap-5 py-6">
         <PageHeader heading="All brainstorms" description={<span data-home-hint>To start a new brainstorm, {START}.</span>} />
         {/* Cards hug their own content, so a card with no brief never carries a blank band to match its row. */}
         <ul className="grid-overview grid gap-3" aria-busy={sessions === null || undefined}>
@@ -55,7 +56,7 @@ export function HomeOverview({
               ))}
         </ul>
       </div>
-    </div>
+    </ScrollPane>
   );
 }
 
