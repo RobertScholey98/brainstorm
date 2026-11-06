@@ -142,6 +142,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     </AppSidebar>
   );
   const listing = sessions?.find((s) => s.id === sessionId);
+  const toast = notice !== null && <Toast message={notice} onClose={clearNotice} />;
 
   return (
     <TooltipProvider>
@@ -157,6 +158,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
           >
             <section className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Brainstorms" data-canvas-region>
               <HomeOverview sessions={sessions} error={listError} onRetry={() => void refreshList()} onSession={openSession} />
+              {toast}
             </section>
           </Shell>
         ) : (
@@ -169,6 +171,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
             revision={revision}
             showNotice={setNotice}
             clearNotice={clearNotice}
+            toast={toast}
             layout={prefs.canvas[nav.id]}
             onLayout={(layout) => savePrefs({ canvas: { session: nav.id, layout } })}
             inspector={{ width: inspectorWidth, onWidth: setInspectorWidth, rail: prefs.inspectorRail, onRail: (inspectorRail) => savePrefs({ inspectorRail }) }}
@@ -178,7 +181,6 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
           />
         )}
       </SidebarProvider>
-      {notice !== null && <Toast message={notice} onClose={clearNotice} />}
     </TooltipProvider>
   );
 }
@@ -204,6 +206,7 @@ function SessionWorkspace({
   revision,
   showNotice,
   clearNotice,
+  toast,
   layout,
   onLayout,
   inspector,
@@ -218,6 +221,8 @@ function SessionWorkspace({
   revision: number;
   showNotice: (message: string) => void;
   clearNotice: () => void;
+  /** The failure notice, drawn in the canvas region so it stays off the Inspector. */
+  toast: ReactNode;
   /** How Rob left this brainstorm's canvas, if he has opened it before. */
   layout: CanvasLayout | undefined;
   onLayout: (layout: CanvasLayout) => void;
@@ -349,7 +354,7 @@ function SessionWorkspace({
   const exportHtml = async () => {
     const result = await api.exportHtml(sessionId);
     if (result.ok) clearNotice();
-    else showNotice(result.error.message);
+    else showNotice(`Export failed. ${result.error.message}`);
     return result.ok ? result.data : null;
   };
 
@@ -424,7 +429,7 @@ function SessionWorkspace({
             <div data-open="" className={cn(overlaySurface(), "pointer-events-auto flex items-center gap-2 py-1 pr-1 pl-3 text-sm")}>
               Click an element to pin a comment
               <Kbd>Esc</Kbd>
-              <Button variant="ghost" size="xs" onClick={() => setInteraction({ kind: "view" })}>
+              <Button variant="ghost" onClick={() => setInteraction({ kind: "view" })}>
                 Cancel
               </Button>
             </div>
@@ -442,6 +447,7 @@ function SessionWorkspace({
             onCancel={() => setInteraction({ kind: "view" })}
           />
         )}
+        {toast}
         </section>
       </div>
       {view === null ? (

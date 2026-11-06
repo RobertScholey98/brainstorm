@@ -332,6 +332,15 @@ try {
   await window.route("**/v1/ui/sessions/*/actions", (route) => route.abort());
   await window.click('[data-slot-id="wheel"] [data-variant="reel"]');
   await window.waitForSelector("[data-slot=toast]");
+  check(
+    "a notice sits in the canvas region, off the Inspector",
+    await window.evaluate(() => {
+      const toast = document.querySelector("[data-slot=toast]").getBoundingClientRect();
+      const inspector = document.querySelector("aside[aria-label=Inspector]").getBoundingClientRect();
+      return { inRegion: document.querySelector("[data-canvas-region] [data-slot=toast]") !== null, clear: toast.right <= inspector.left };
+    }),
+    { inRegion: true, clear: true },
+  );
   await window.click("[data-toast-close]");
   await window.waitForSelector("[data-slot=toast]", { state: "detached" });
   check("a notice closes from its close button", await window.$("[data-slot=toast]"), null);
