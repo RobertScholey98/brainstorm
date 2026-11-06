@@ -119,7 +119,7 @@ export function FeedbackPanel({
                 {title}
                 <span className="font-normal tabular-nums text-fg-muted">{items.length}</span>
               </h3>
-              <ul className="grid">
+              <ul>
                 {items.map((f) => (
                   <FeedbackItem
                     key={f.id}

@@ -113,6 +113,18 @@ try {
   await window.click('[data-feedback="1"] button:has-text("Confirm")');
   await window.waitForSelector('[data-feedback="1"][data-status="confirmed"]');
   check("Confirm moves it to confirmed", await itemText(window, 1, "meta"), "Assignment card · headline · Confirmed · addressed in 2");
+  const handle = '[data-slot="resize-handle"][aria-label="Inspector width"]';
+  await window.focus(handle);
+  await window.keyboard.press("Home");
+  check(
+    "at its narrowest the Inspector cuts a long status line instead of scrolling sideways",
+    await window.$eval('aside[aria-label="Inspector"]', (aside) => {
+      const meta = aside.querySelector('[data-feedback="1"] [data-feedback-meta]');
+      return [aside.scrollWidth <= aside.clientWidth, meta.scrollWidth > meta.clientWidth];
+    }),
+    [true, true],
+  );
+  await window.dblclick(handle);
   await canvas.waitForSelector(`${PIN}[data-status="confirmed"]`);
   check("the pin is coloured confirmed", await canvas.getAttribute(PIN, "data-status"), "confirmed");
   await shot(window, shots, "5-confirmed");
