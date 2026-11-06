@@ -366,6 +366,15 @@ try {
     [await row(), await pinAt(1)],
     [{ sideways: false, tops: 1, inside: true }, true],
   );
+  await window.click("[data-pick-toggle]");
+  await window.waitForSelector("[data-pick-hint]");
+  check(
+    "in pick mode at 1100 the hint's text gives way, and every slot tab still shows whole",
+    await window.$$eval("[data-slot-tab]", (tabs) => tabs.map((t) => t.querySelector("span").scrollWidth <= t.querySelector("span").clientWidth && t.getBoundingClientRect().width > 40)),
+    [true, true],
+  );
+  await window.keyboard.press("Escape");
+  await window.waitForSelector("[data-pick-hint]", { state: "detached" });
   await window.setViewportSize({ width: 1440, height: 900 });
   await window.waitForSelector("[data-canvas-zoom]", { state: "detached" });
   await window.click('[data-view-option="stage"]');

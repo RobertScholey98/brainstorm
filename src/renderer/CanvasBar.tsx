@@ -70,10 +70,11 @@ export function CanvasBar({
         </>
       )}
       <Tabs value={current} onValueChange={onSlot} tabs={slots.map((s) => ({ value: s.id, label: s.title }))} itemData="slot-tab" aria-label="Slots" />
-      <div className="ml-auto flex shrink-0 items-center gap-2 pl-2">
+      {/* It takes only the room the tabs leave, so in a narrow window the pick hint's text gives way, never a tab. */}
+      <div className="flex flex-1 items-center justify-end gap-2 pl-2">
         {picking && (
-          <span className="flex items-center gap-2 text-sm text-fg-muted" role="status" data-pick-hint>
-            Click an element to pin a comment
+          <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-fg-muted" role="status" data-pick-hint>
+            <span className="w-0 flex-1 truncate text-right">Click an element to pin a comment</span>
             <Kbd>Esc</Kbd>
             <Button variant="ghost" onClick={onCancelPick}>
               Cancel
