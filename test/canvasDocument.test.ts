@@ -26,6 +26,7 @@ describe("buildCanvasDocument", () => {
         frames: [{ slot: "wheel" as SlotId, title: "The wheel", frame: { width: 390, height: null }, blockId: "wheel/neon" as BlockId }],
         props: { "wheel/neon": { accent: "#ff2bd6" } },
         selected: null,
+        stage: null,
       },
     ];
     const html = buildCanvasDocument(payload, "export");

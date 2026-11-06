@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { BlockId, BlockView, CanvasFrame, CanvasMode, CanvasPin, CanvasRect, FeedbackId, FrameToHost, HostToFrame, Pin, Props } from "../core/types";
+import type { BlockId, BlockView, CanvasFrame, CanvasMode, CanvasPin, CanvasRect, FeedbackId, FrameToHost, HostToFrame, Pin, Props, SlotId } from "../core/types";
 
 export type Placement = { readonly placed: ReadonlySet<FeedbackId>; readonly detached: ReadonlySet<FeedbackId> };
 
@@ -12,6 +12,7 @@ export function CanvasHost({
   frames,
   props,
   selected,
+  stage,
   mode,
   pins,
   focused,
@@ -26,6 +27,8 @@ export function CanvasHost({
   frames: readonly CanvasFrame[];
   props: Readonly<Record<string, Props>>;
   selected: BlockId | null;
+  /** The slot on the stage, or null for the board. */
+  stage: SlotId | null;
   mode: CanvasMode;
   pins: readonly CanvasPin[];
   /** The pin whose feedback row is open in the Inspector. */
@@ -94,8 +97,8 @@ export function CanvasHost({
   }, [readyCount, blocks]);
 
   useEffect(() => {
-    if (readyCount > 0) post({ kind: "state", frames, props, selected });
-  }, [readyCount, frames, props, selected]);
+    if (readyCount > 0) post({ kind: "state", frames, props, selected, stage });
+  }, [readyCount, frames, props, selected, stage]);
 
   useEffect(() => {
     if (readyCount > 0) post({ kind: "mode", mode });

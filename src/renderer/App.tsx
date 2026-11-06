@@ -29,19 +29,20 @@ import {
   type SlotId,
   type VariantKey,
 } from "../core/types";
+import { applyPrefs, NO_PREFS, type CanvasLayout, type UiPrefs, type UiPrefsPatch } from "../core/prefs";
 import type { Api } from "./api";
+import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { HomeOverview } from "./Home";
 import { useWiderThan } from "./hooks/use-mobile";
 import { usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
-import { Inspector, InspectorSkeleton } from "./Inspector";
+import { Inspector, InspectorRail, InspectorSkeleton } from "./Inspector";
 import { PendingOverrides } from "./overrides";
 import { AppSidebar, HomePanel, SessionPanel } from "./Sidebar";
 import { RequestDetail } from "./Regenerate";
 import { SessionBar, TopBar } from "./TopBar";
 
-const NOTICE_MS = 6000;
 /** How often an open brainstorm asks T3 whether its thread still exists, besides on window focus. */
 const THREAD_CHECK_MS = 15_000;
 
@@ -63,25 +64,37 @@ type CanvasInteraction =
 
 const NO_PLACEMENT: Placement = { placed: new Set(), detached: new Set() };
 
+/** The window waits for the stored layout before its first paint, so a remembered width never jumps into place. */
 export function App({ api }: { api: Api }) {
+  const [prefs, setPrefs] = useState<UiPrefs | null>(null);
+  useEffect(() => void api.prefs().then((r) => setPrefs(r.ok ? r.data : NO_PREFS)), [api]);
+  const savePrefs = useCallback(
+    (patch: UiPrefsPatch) => {
+      setPrefs((p) => applyPrefs(p ?? NO_PREFS, patch));
+      // Not keeping a layout is no reason to interrupt Rob, so a failed save says nothing.
+      void api.setPrefs(patch);
+    },
+    [api],
+  );
+  return prefs === null ? null : <Window api={api} prefs={prefs} savePrefs={savePrefs} />;
+}
+
+function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs: (patch: UiPrefsPatch) => void }) {
   const [sessions, setSessions] = useState<readonly SessionListing[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [nav, setNav] = useState<Nav>({ kind: "overview" });
   const [revision, setRevision] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const sidebarLimits = useWiderThan(1280) ? SIDEBAR_WIDE : SIDEBAR_NARROW;
-  const [sidebarWidth, setSidebarWidth] = usePaneWidth("sidebar", sidebarLimits);
+  const [sidebarWidth, setSidebarWidth] = usePaneWidth(prefs.panes.sidebar, sidebarLimits, (sidebar) => savePrefs({ panes: { sidebar } }));
+  const [inspectorWidth, setInspectorWidth] = usePaneWidth(prefs.panes.inspector, INSPECTOR, (inspector) => savePrefs({ panes: { inspector } }));
+  // A notice stays until Rob closes it or the next call he makes succeeds.
+  const clearNotice = useCallback(() => setNotice(null), []);
 
   const sessionId = nav.kind === "brainstorm" ? nav.id : null;
   const current = useRef<SessionId | null>(null);
   current.current = sessionId;
   const loaded = useRef(false);
-
-  useEffect(() => {
-    if (notice === null) return;
-    const timer = setTimeout(() => setNotice(null), NOTICE_MS);
-    return () => clearTimeout(timer);
-  }, [notice]);
 
   const refreshList = useCallback(async () => {
     const list = await api.sessions();
@@ -89,6 +102,7 @@ export function App({ api }: { api: Api }) {
       loaded.current = true;
       setSessions(list.data);
       setListError(null);
+      setNotice(null);
     } else if (loaded.current) setNotice(list.error.message);
     else setListError(list.error.message);
   }, [api]);
@@ -154,13 +168,17 @@ export function App({ api }: { api: Api }) {
             project={listing === undefined ? null : (listing.projectName ?? "Other project")}
             revision={revision}
             showNotice={setNotice}
+            clearNotice={clearNotice}
+            layout={prefs.canvas[nav.id]}
+            onLayout={(layout) => savePrefs({ canvas: { session: nav.id, layout } })}
+            inspector={{ width: inspectorWidth, onWidth: setInspectorWidth, rail: prefs.inspectorRail, onRail: (inspectorRail) => savePrefs({ inspectorRail }) }}
             sidebar={sidebar}
             homePanel={nav.panel === "home" ? homePanel : null}
             onHome={() => setNav({ kind: "brainstorm", id: nav.id, panel: "home" })}
           />
         )}
       </SidebarProvider>
-      {notice !== null && <Toast message={notice} />}
+      {notice !== null && <Toast message={notice} onClose={clearNotice} />}
     </TooltipProvider>
   );
 }
@@ -186,6 +204,10 @@ function SessionWorkspace({
   project,
   revision,
   showNotice,
+  clearNotice,
+  layout,
+  onLayout,
+  inspector,
   sidebar,
   homePanel,
   onHome,
@@ -196,6 +218,11 @@ function SessionWorkspace({
   project: string | null;
   revision: number;
   showNotice: (message: string) => void;
+  clearNotice: () => void;
+  /** How Rob left this brainstorm's canvas, if he has opened it before. */
+  layout: CanvasLayout | undefined;
+  onLayout: (layout: CanvasLayout) => void;
+  inspector: { width: number; onWidth: (width: number) => void; rail: boolean; onRail: (rail: boolean) => void };
   sidebar: (panel: ReactNode) => ReactNode;
   /** Shown in place of the session panel while Rob looks for another brainstorm. */
   homePanel: ReactNode | null;
@@ -203,14 +230,14 @@ function SessionWorkspace({
 }) {
   const [view, setView] = useState<SessionView | null>(null);
   // Selection is a slot, so switching variants keeps the controls on the slot's new block.
-  const [selectedSlot, setSelectedSlot] = useState<SlotId | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<SlotId | null>(layout?.slot ?? null);
+  const [canvasView, setCanvasView] = useState<CanvasLayout["view"]>(layout?.view ?? "stage");
   const [blockErrors, setBlockErrors] = useState<ReadonlyMap<BlockId, string>>(new Map());
   const [interaction, setInteraction] = useState<CanvasInteraction>({ kind: "view" });
   const [placement, setPlacement] = useState<Placement>(NO_PLACEMENT);
   const [focusedFeedback, setFocusedFeedback] = useState<FeedbackId | null>(null);
   const [pulse, setPulse] = useState<{ id: FeedbackId; seq: number } | null>(null);
   const canvasArea = useRef<HTMLElement>(null);
-  const [inspectorWidth, setInspectorWidth] = usePaneWidth("inspector", INSPECTOR);
 
   useEffect(() => {
     void api.view(sessionId).then((next) => (next.ok ? setView(next.data) : showNotice(next.error.message)));
@@ -235,10 +262,11 @@ function SessionWorkspace({
         showNotice(result.error.message);
         return null;
       }
+      clearNotice();
       setView(result.data);
       return result.data;
     },
-    [api, sessionId, showNotice],
+    [api, sessionId, showNotice, clearNotice],
   );
   const pending = useMemo(() => new PendingOverrides(send), [send]);
   const pendingVersion = useSyncExternalStore(pending.subscribe, pending.version);
@@ -252,6 +280,12 @@ function SessionWorkspace({
   const blocks = iteration?.blocks ?? [];
   const slot = slots.find((s) => s.id === selectedSlot) ?? slots[0] ?? null;
   const selectedBlock = slot === null ? null : (blocks.find((b) => b.id === blockIdOf(slot.id, slot.active)) ?? null);
+  const stage = canvasView === "stage" ? (slot?.id ?? null) : null;
+  const saved = useRef(onLayout);
+  saved.current = onLayout;
+  useEffect(() => {
+    if (slot !== null) saved.current({ view: canvasView, slot: slot.id });
+  }, [canvasView, slot?.id]);
 
   const frames = useMemo(() => framesOf(slots), [slots]);
   const frameProps = useMemo(() => {
@@ -315,7 +349,8 @@ function SessionWorkspace({
 
   const exportHtml = async () => {
     const result = await api.exportHtml(sessionId);
-    if (!result.ok) showNotice(result.error.message);
+    if (result.ok) clearNotice();
+    else showNotice(result.error.message);
     return result.ok ? result.data : null;
   };
 
@@ -347,7 +382,25 @@ function SessionWorkspace({
       }
       strip={view !== null && <RequestDetail view={view} />}
     >
-      <section ref={canvasArea} className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Canvas" data-canvas-region>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {iteration !== null && (
+          <CanvasBar
+            slots={slots}
+            current={slot?.id ?? null}
+            view={canvasView}
+            rail={inspector.rail}
+            onSlot={setSelectedSlot}
+            onView={setCanvasView}
+            onRail={inspector.onRail}
+          />
+        )}
+        <section
+          ref={canvasArea}
+          className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-canvas"
+          aria-label="Canvas"
+          data-canvas-region
+          data-canvas-view={iteration === null ? undefined : canvasView}
+        >
         {iteration === null ? (
           <WaitingEmpty loading={view === null} />
         ) : (
@@ -356,6 +409,7 @@ function SessionWorkspace({
             frames={frames}
             props={frameProps}
             selected={selectedBlock?.id ?? null}
+            stage={stage}
             mode={interaction.kind === "picking" ? "pin" : "view"}
             pins={pins}
             focused={focusedFeedback}
@@ -390,14 +444,17 @@ function SessionWorkspace({
             onCancel={() => setInteraction({ kind: "view" })}
           />
         )}
-      </section>
+        </section>
+      </div>
       {view === null ? (
-        <InspectorSkeleton width={inspectorWidth} />
+        <InspectorSkeleton width={inspector.width} />
+      ) : inspector.rail ? (
+        <InspectorRail feedback={feedback.length} onExpand={() => inspector.onRail(false)} />
       ) : (
         <Inspector
-          width={inspectorWidth}
+          width={inspector.width}
           limits={INSPECTOR}
-          onWidth={setInspectorWidth}
+          onWidth={inspector.onWidth}
           view={view}
           block={selectedBlock}
           props={selectedBlock === null ? null : (frameProps[selectedBlock.id] ?? null)}
@@ -423,15 +480,17 @@ function SessionWorkspace({
   );
 }
 
+/** While the brainstorm loads, the Inspector's skeletons are the only loading cue; the canvas stays a quiet surface. */
 function WaitingEmpty({ loading }: { loading: boolean }) {
+  if (loading) return <div className="size-full bg-canvas" aria-busy data-canvas-loading />;
   return (
-    <Empty className="size-full rounded-none bg-card">
+    <Empty className="size-full rounded-none bg-canvas">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Loader2 aria-hidden className="animate-spin" />
         </EmptyMedia>
-        <EmptyTitle>{loading ? "Opening the brainstorm" : "Waiting for the agent's first commit"}</EmptyTitle>
-        {!loading && <EmptyDescription>Blocks appear here as soon as it lands.</EmptyDescription>}
+        <EmptyTitle>Waiting for the agent's first commit</EmptyTitle>
+        <EmptyDescription>Blocks appear here as soon as it lands.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

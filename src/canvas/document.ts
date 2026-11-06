@@ -26,6 +26,7 @@ export function exportPayload(iteration: IterationView): CanvasPayload {
       frames: framesOf(iteration.slots),
       props: Object.fromEntries(iteration.blocks.map((b) => [b.id, b.effectiveProps])),
       selected: null,
+      stage: null,
     },
   ];
 }

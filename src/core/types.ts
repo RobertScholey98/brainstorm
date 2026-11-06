@@ -572,6 +572,8 @@ export type HostToFrame =
       readonly props: Readonly<Record<string, Props>>;
       /** The block whose controls are open, outlined in the canvas. */
       readonly selected: BlockId | null;
+      /** The slot the stage shows on its own, or null for the board, every slot side by side. Export is always the board. */
+      readonly stage: SlotId | null;
     }
   | { readonly kind: "mode"; readonly mode: CanvasMode }
   /** `focused` is the comment open in the Inspector, ringed on the canvas. */

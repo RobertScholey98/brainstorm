@@ -17,6 +17,7 @@ import type {
   PartName,
   Pin,
   Props,
+  SlotId,
 } from "../core/types";
 
 type Loaded = { readonly ok: true; readonly component: ComponentType<Props> } | { readonly ok: false; readonly message: string };
@@ -25,6 +26,10 @@ type CanvasState = {
   readonly frames: readonly CanvasFrame[];
   readonly props: Readonly<Record<string, Props>>;
   readonly selected: BlockId | null;
+  /** The slot on the stage, or null for the board. */
+  readonly stage: SlotId | null;
+  /** Each staged slot zoomed below 1 to fit, keyed by slot. */
+  readonly zooms: ReadonlyMap<string, number>;
   readonly mode: CanvasMode;
   readonly pins: readonly CanvasPin[];
   readonly focused: FeedbackId | null;
@@ -91,7 +96,7 @@ function applyCss(m: CanvasModule): void {
   style.textContent = `@scope ([data-bid="${m.blockId}"]) {\n${m.css}\n}`;
 }
 
-let state: CanvasState = { frames: [], props: {}, selected: null, mode: "view", pins: [], focused: null, variants: {}, hashes: new Map() };
+let state: CanvasState = { frames: [], props: {}, selected: null, stage: null, zooms: new Map(), mode: "view", pins: [], focused: null, variants: {}, hashes: new Map() };
 /** The block Rob just pressed in the canvas. Its selection comes back from the host and needs no reveal. */
 let pressed: BlockId | null = null;
 const listeners = new Set<() => void>();
@@ -117,11 +122,15 @@ function receive(message: HostToFrame): void {
       return;
     }
     case "state": {
-      const reveal = message.selected !== null && message.selected !== state.selected && message.selected !== pressed;
+      const moved = message.selected !== state.selected || message.stage !== state.stage;
+      // A frame Rob pressed waits for the pointer to lift, so the canvas never scrolls under a click.
+      const reveal = moved && message.selected !== null && message.selected !== pressed;
       pressed = null;
-      setState({ frames: message.frames, props: message.props, selected: message.selected });
-      // A selection made outside the canvas (the Inspector, a feedback row) scrolls its frame in only as far as needed.
-      if (reveal) requestAnimationFrame(() => document.querySelector(".bs-frame[data-selected]")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }));
+      setState({ frames: message.frames, props: message.props, selected: message.selected, stage: message.stage });
+      const canvas = document.getElementById("canvas");
+      if (canvas !== null) canvas.dataset.view = message.stage === null ? "board" : "stage";
+      fitStage();
+      if (reveal) requestAnimationFrame(() => revealSelected("smooth"));
       return;
     }
     case "mode":
@@ -142,6 +151,27 @@ function receive(message: HostToFrame): void {
       setState({ variants: message.slots });
       return;
   }
+}
+
+/** Scrolls the selected frame in only as far as it takes, from wherever the selection came: a press, the shell, a resize. */
+function revealSelected(behavior: ScrollBehavior): void {
+  document.querySelector(".bs-frame[data-selected]:not([data-offstage])")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior });
+}
+
+/**
+ * The stage's page-width rule (ADR 002): a frame lays out at its declared width, always. On the stage, one wider than
+ * the room the stage has is zoomed down to fit it, so the stage never scrolls sideways, and its title says by how much.
+ */
+const STAGE_PAD = 24;
+
+function fitStage(): void {
+  const room = document.documentElement.clientWidth - 2 * STAGE_PAD;
+  const next = new Map<string, number>();
+  for (const f of state.frames) {
+    if (state.stage === f.slot && f.frame.width > room) next.set(f.slot, Math.max(room, 1) / f.frame.width);
+  }
+  const same = next.size === state.zooms.size && [...next].every(([k, v]) => state.zooms.get(k) === v);
+  if (!same) setState({ zooms: next });
 }
 
 const HOST_KINDS = new Set<string>(["modules", "state", "mode", "pins", "pulse", "variants"] satisfies HostToFrame["kind"][]);
@@ -216,14 +246,21 @@ function Canvas() {
       {s.frames.map((frame) => {
         const selected = s.selected === frame.blockId;
         const variants = s.variants[frame.slot] ?? [];
+        const zoom = s.zooms.get(frame.slot);
+        // Off the stage, a frame stays mounted and laid out, so its block keeps its state, its errors still report and
+        // its pins still tell placed from detached.
+        const offstage = s.stage !== null && s.stage !== frame.slot;
         return (
           <section
             key={frame.slot}
             className="bs-frame"
             data-slot={frame.slot}
             data-selected={selected || undefined}
+            data-offstage={offstage || undefined}
+            aria-hidden={offstage || undefined}
             onPointerDownCapture={() => {
               pressed = frame.blockId;
+              revealOnRelease = true;
               post({ kind: "select_block", blockId: frame.blockId });
             }}
           >
@@ -232,9 +269,18 @@ function Canvas() {
               <span className="bs-frame-size">
                 {frame.frame.width} × {frame.frame.height ?? "auto"}
               </span>
+              {zoom !== undefined && (
+                <span className="bs-frame-zoom" data-zoom={Math.round(zoom * 100)}>
+                  {Math.round(zoom * 100)}%
+                </span>
+              )}
             </header>
             {variants.length > 1 && <VariantSwitch frame={frame} variants={variants} />}
-            <div className="bs-frame-body" style={{ width: frame.frame.width, height: frame.frame.height ?? undefined }}>
+            <div
+              className="bs-frame-body"
+              data-zoom={zoom}
+              style={{ width: frame.frame.width, height: frame.frame.height ?? undefined, zoom }}
+            >
               <Block frame={frame} hash={s.hashes.get(frame.blockId)} props={s.props[frame.blockId] ?? {}} />
               {s.pins
                 .filter((p) => p.pin.blockId === frame.blockId)
@@ -273,6 +319,7 @@ function Canvas() {
 const PIN_SIZE = 20;
 type Target = { readonly pin: Pin; readonly anchor: Element };
 let hover: Target | null = null;
+let revealOnRelease = false;
 let wantedPulse: FeedbackId | null = null;
 let looping = false;
 let lastPlacement: { readonly placed: readonly FeedbackId[]; readonly detached: readonly FeedbackId[] } | null = null;
@@ -333,16 +380,18 @@ function layoutPins(): void {
       x = body.clientWidth - PIN_SIZE - 6;
       y = 6;
     } else {
+      // Rects are in the viewport, the pin is placed inside a frame body the stage may have zoomed.
+      const k = body instanceof HTMLElement && body.offsetWidth > 0 ? b.width / body.offsetWidth : 1;
       const r = anchor.getBoundingClientRect();
-      x = r.right - b.left - body.clientLeft + body.scrollLeft - PIN_SIZE / 2;
-      y = r.top - b.top - body.clientTop + body.scrollTop - PIN_SIZE / 2;
+      x = (r.right - b.left) / k - body.clientLeft + body.scrollLeft - PIN_SIZE / 2;
+      y = (r.top - b.top) / k - body.clientTop + body.scrollTop - PIN_SIZE / 2;
     }
     x = Math.min(Math.max(x - index * (PIN_SIZE + 2), 2), body.scrollWidth - PIN_SIZE - 2);
     y = Math.min(Math.max(y, 2), body.scrollHeight - PIN_SIZE - 2);
     const transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
     if (marker.style.transform !== transform) marker.style.transform = transform;
     marker.dataset.placed = "";
-    if (wantedPulse === id) {
+    if (wantedPulse === id && marker.closest("[data-offstage]") === null) {
       wantedPulse = null;
       // Nearest, with the pin's scroll margin, so a pin already in view doesn't pull the canvas sideways.
       marker.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
@@ -384,14 +433,23 @@ if (live) {
         e.stopPropagation();
         const target = type === "click" ? pickTarget(e.target) : null;
         if (target !== null) {
-          const { clientX: x, clientY: y } = e as MouseEvent;
+          // The composer anchors to the element, so its frame comes into view first, and the click point moves with it.
+          const before = target.anchor.getBoundingClientRect();
+          target.anchor.closest(".bs-frame")?.scrollIntoView({ block: "nearest", inline: "nearest" });
           const r = target.anchor.getBoundingClientRect();
+          const { clientX, clientY } = e as MouseEvent;
+          const [x, y] = [clientX + r.left - before.left, clientY + r.top - before.top];
           post({ kind: "picked", pin: target.pin, at: { x, y }, rect: { x: r.left, y: r.top, width: r.width, height: r.height } });
         }
       },
       true,
     );
   }
+  window.addEventListener("pointerup", () => {
+    if (!revealOnRelease) return;
+    revealOnRelease = false;
+    revealSelected("smooth");
+  });
   window.addEventListener("pointermove", (e) => (hover = state.mode === "pin" ? pickTarget(e.target) : null), true);
   window.addEventListener("keydown", (e) => {
     if (e.defaultPrevented || !(e.key === "Escape" || e.ctrlKey || e.metaKey)) return;
@@ -425,20 +483,27 @@ function wake(): void {
 const CHROME_CSS = `
 ${designCss("bs-")}
 html, body { margin: 0; min-height: 100%; }
+html { scrollbar-gutter: stable; }
 body {
   background-color: var(--bs-canvas);
   background-image: radial-gradient(color-mix(in oklab, var(--bs-fg) 10%, transparent) 1px, transparent 1.2px);
   background-size: 16px 16px;
   font: 12px/16px var(--bs-font-ui);
 }
-#canvas { display: flex; align-items: flex-start; gap: 32px; padding: 24px 24px 48px; width: max-content; }
+#canvas { display: flex; align-items: flex-start; gap: 24px; padding: 24px 24px 48px; width: max-content; }
+#canvas[data-view="stage"] { justify-content: center; width: auto; }
 .bs-frame { flex: none; }
+.bs-frame[data-offstage] { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none; }
 .bs-frame-title {
-  position: sticky; left: 8px; display: flex; gap: 8px; width: fit-content; max-width: calc(100vw - 16px);
+  position: sticky; left: 12px; display: flex; gap: 8px; width: fit-content; max-width: calc(100vw - 24px);
   margin: 0 2px 8px; color: var(--bs-fg-muted); font-weight: 500; cursor: default; user-select: none; white-space: nowrap;
 }
 .bs-frame-title > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .bs-frame-size { font-variant-numeric: tabular-nums; font-weight: 400; }
+.bs-frame-zoom {
+  padding: 0 4px; border-radius: 4px; background: var(--bs-muted); color: var(--bs-fg);
+  font-variant-numeric: tabular-nums; font-weight: 500;
+}
 .bs-frame[data-selected] .bs-frame-title { color: var(--bs-accent); }
 .bs-frame-body {
   position: relative; overflow: auto; isolation: isolate;
@@ -449,10 +514,11 @@ body {
 .bs-frame[data-selected] .bs-frame-body { box-shadow: 0 0 0 2px var(--bs-accent), var(--bs-elevation-sm); }
 .bs-frame-body:has(> .bs-failure) { height: auto !important; }
 .bs-edge {
-  position: fixed; top: 0; bottom: 0; z-index: 10; width: 24px; pointer-events: none; opacity: 0; transition: opacity 120ms ease-out;
+  position: fixed; top: 0; bottom: 0; z-index: 10; width: 8px; pointer-events: none; opacity: 0; transition: opacity 120ms ease-out;
+  box-shadow: var(--bs-elevation-md);
 }
-.bs-edge[data-side="left"] { left: 0; background: linear-gradient(to right, var(--bs-canvas), transparent); }
-.bs-edge[data-side="right"] { right: 0; background: linear-gradient(to left, var(--bs-canvas), transparent); }
+.bs-edge[data-side="left"] { left: -8px; }
+.bs-edge[data-side="right"] { right: -8px; }
 .bs-edge[data-on] { opacity: 1; }
 .bs-failure {
   display: grid; gap: 4px; margin: 16px; padding: 12px; border-radius: 6px;
@@ -473,12 +539,13 @@ body {
   width: ${PIN_SIZE}px; height: ${PIN_SIZE}px; box-sizing: border-box; padding: 0;
   border: 2px solid var(--bs-card); border-radius: 10px 10px 10px 4px; background: var(--bs-accent); color: var(--bs-accent-fg);
   font: 600 11px/1 var(--bs-font-ui); font-variant-numeric: tabular-nums;
-  box-shadow: var(--bs-elevation-sm); cursor: pointer; scroll-margin: 48px;
+  box-shadow: var(--bs-elevation-sm); cursor: pointer; scroll-margin: 48px; transition: scale 120ms ease-out, box-shadow 120ms ease-out;
 }
 .bs-pin[data-placed] { display: grid; }
+.bs-pin::after { content: ""; position: absolute; inset: -3px; }
 .bs-pin[data-status="addressed"] { background: var(--bs-card); color: var(--bs-accent); border-color: var(--bs-accent); }
 .bs-pin[data-status="confirmed"] { background: var(--bs-muted); color: var(--bs-fg-muted); }
-.bs-pin:hover { filter: brightness(1.08); }
+.bs-pin:hover { scale: 1.15; box-shadow: var(--bs-elevation-md); }
 .bs-pin[data-focused] { box-shadow: 0 0 0 2px var(--bs-card), 0 0 0 4px var(--bs-accent), var(--bs-elevation-sm); }
 .bs-pin.bs-pulse { animation: bs-pulse 650ms ease-out 2; }
 @keyframes bs-pulse {
@@ -534,6 +601,10 @@ const showEdges = () => {
   }
 };
 addEventListener("scroll", showEdges, { passive: true });
-addEventListener("resize", showEdges);
+addEventListener("resize", () => {
+  showEdges();
+  fitStage();
+  revealSelected("auto");
+});
 if (root !== null) new ResizeObserver(showEdges).observe(root);
 post({ kind: "ready" });

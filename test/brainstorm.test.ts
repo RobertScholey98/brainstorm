@@ -719,6 +719,7 @@ describe("exportHtml", () => {
         "wheel/reel": { headline: "Pull" },
       },
       selected: null,
+      stage: null,
     });
   });
 

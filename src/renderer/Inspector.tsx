@@ -1,10 +1,12 @@
 import { JSONUIProvider, Renderer } from "@json-render/react";
 import type { Spec } from "@json-render/core";
+import { MessageSquare, PanelRightOpen } from "lucide-react";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Callout, CalloutItem } from "@/components/ui/callout";
 import { ResizeHandle } from "@/components/ui/resize-handle";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Hint } from "@/components/ui/tooltip";
 import { HEX_COLOR_PATTERN } from "../core/props";
 import type { AppearanceValue, BlockView, InapplicableOverride, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
 import { ControlScopeContext, controlRegistry, createBlockStore } from "./controls";
@@ -25,10 +27,33 @@ function Column({ width, handle, children }: { width: number; handle?: ReactNode
   return (
     <div className="relative flex min-h-0 shrink-0" style={{ width }}>
       {handle}
-      <aside className="flex min-h-0 w-full flex-col overflow-y-auto border-l bg-card" aria-label="Inspector">
+      <aside className="scroll-gutter flex min-h-0 w-full flex-col overflow-y-auto border-l bg-card" aria-label="Inspector">
         {children}
       </aside>
     </div>
+  );
+}
+
+/** The Inspector collapsed to a rail: a way back, and how much feedback is waiting behind it. */
+export function InspectorRail({ feedback, onExpand }: { feedback: number; onExpand: () => void }) {
+  return (
+    <aside className="flex w-10 shrink-0 flex-col items-center gap-1 border-l bg-card py-2" aria-label="Inspector" data-inspector-rail>
+      <Hint label="Show the Inspector" side="left">
+        <Button variant="ghost" size="icon" aria-label="Show the Inspector" onClick={onExpand} data-rail-expand>
+          <PanelRightOpen aria-hidden />
+        </Button>
+      </Hint>
+      <Hint label={feedback === 1 ? "1 comment" : `${feedback} comments`} side="left">
+        <Button variant="ghost" size="icon" aria-label="Show the feedback" onClick={onExpand} data-rail-feedback>
+          <MessageSquare aria-hidden />
+        </Button>
+      </Hint>
+      {feedback > 0 && (
+        <span className="text-2xs tabular-nums text-fg-muted" data-rail-count>
+          {feedback}
+        </span>
+      )}
+    </aside>
   );
 }
 

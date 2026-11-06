@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import type { BlockId, ExportResult, RobAction, SessionView } from "../core/types";
@@ -37,7 +38,17 @@ export function SessionBar({
   return (
     <TopBar
       actions={
-        view !== null && (
+        view === null ? (
+          // Held in place while the brainstorm loads, so the bar doesn't change shape when it arrives.
+          <>
+            <Button variant="accent" disabled data-regenerate-toggle>
+              Regenerate
+            </Button>
+            <Button variant="outline" disabled data-export>
+              Export
+            </Button>
+          </>
+        ) : (
           <>
             <Regenerate view={view} selected={selected} send={send} />
             <ExportButton disabled={view.iteration === null} exportHtml={exportHtml} />
@@ -49,7 +60,8 @@ export function SessionBar({
         <nav aria-label="Breadcrumb" className="flex min-w-0 max-w-fit flex-1 items-center gap-1 text-sm">
           {project !== null && (
             <>
-              <span className="truncate text-fg-muted" data-breadcrumb-project>
+              {/* A long title cuts itself, not the project down to a letter. */}
+              <span className="max-w-1/3 shrink-0 truncate text-fg-muted" data-breadcrumb-project>
                 {project}
               </span>
               <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
