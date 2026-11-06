@@ -25,6 +25,12 @@ describe("the canvas fit rules", () => {
     expect(fit([phone("wheel"), phone("result")], 806, null)).toEqual({ zooms: {}, wrap: false });
   });
 
+  it("leaves room for a scrollbar no zoom scales beside a frame with a declared height", () => {
+    expect(fit([{ slot: "wheel", width: 390, gutter: 10 }, phone("result")], 814, null)).toEqual({ zooms: {}, wrap: false });
+    expect(fit([{ slot: "wheel", width: 390, gutter: 10 }, phone("result")], 754, null)).toEqual({ zooms: { wheel: 92, result: 92 }, wrap: false });
+    expect(fit([{ slot: "wide", width: 980, gutter: 10 }], 806, "wide")).toEqual({ zooms: { wide: 81 }, wrap: false });
+  });
+
   it("wraps at full size once one row would need less than half size, zooming only a frame wider than the room", () => {
     expect(fit([phone("a"), phone("b"), phone("c"), phone("d")], 600, null)).toEqual({ zooms: {}, wrap: true });
     expect(fit([phone("a"), { slot: "desk", width: 1440 }, phone("c")], 500, null)).toEqual({ zooms: { desk: 35 }, wrap: true });

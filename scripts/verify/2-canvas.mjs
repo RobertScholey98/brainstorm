@@ -1,5 +1,5 @@
 import { seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, showBoard, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, settled, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-2");
@@ -116,6 +116,35 @@ try {
     ["Fate has spoken", true],
   );
   await shot(window, shots, "4-override-kept");
+
+  // The wheel's frame declares 760 px; its block grows past that, as a block's content can.
+  await canvas.evaluate(() => {
+    const grow = Object.assign(document.createElement("div"), { id: "verify-grow" });
+    grow.style.height = "400px";
+    document.querySelector('[data-bid="wheel/neon"] > *').append(grow);
+  });
+  const wheelFrame = () =>
+    settled(() =>
+      canvas.$eval('.bs-frame[data-slot="wheel"] .bs-frame-body', (body) => {
+        const r = body.getBoundingClientRect();
+        const k = r.width / body.offsetWidth;
+        return { zoomed: k < 1, layout: body.clientWidth, bar: Math.round(r.width - body.clientWidth * k), overflows: body.scrollHeight > body.clientHeight };
+      }),
+    );
+  const frames = [await wheelFrame()];
+  await window.setViewportSize({ width: 1100, height: 720 });
+  frames.push(await wheelFrame());
+  await window.setViewportSize({ width: 1440, height: 900 });
+  check(
+    "a frame whose block outgrows its declared height scrolls with a 10 px bar outside its declared width, zoomed or not",
+    frames,
+    [
+      { zoomed: false, layout: 390, bar: 10, overflows: true },
+      { zoomed: true, layout: 390, bar: 10, overflows: true },
+    ],
+  );
+  await canvas.evaluate(() => document.getElementById("verify-grow").remove());
+  check("and once it fits again, the frame keeps its declared width with no gutter", (await wheelFrame()).bar, 0);
 
   check("the window logged no errors or warnings", errors, []);
 } finally {

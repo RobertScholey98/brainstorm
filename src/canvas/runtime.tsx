@@ -3,7 +3,7 @@ import { Component, type ComponentType, type ReactNode, useSyncExternalStore } f
 import * as JSXRuntime from "react/jsx-runtime";
 import { CircleAlert } from "lucide-react";
 import { createRoot } from "react-dom/client";
-import { designCss } from "../core/design";
+import { designCss, SCROLLBAR } from "../core/design";
 import { CANVAS_PAD, fitFrames, GAP } from "./fit";
 import type {
   BlockId,
@@ -43,6 +43,8 @@ type CanvasState = {
   readonly variants: Readonly<Record<string, readonly CanvasVariant[]>>;
   /** Which content each block shows. Modules are cached by hash, so a new hash is the only thing that remounts a block. */
   readonly hashes: ReadonlyMap<BlockId, ContentHash>;
+  /** Slots whose block is taller than the frame's declared height, so the frame scrolls. */
+  readonly scrolling: ReadonlySet<string>;
 };
 
 const boot = JSON.parse(document.getElementById("brainstorm-boot")?.textContent ?? "{}") as {
@@ -115,6 +117,7 @@ let state: CanvasState = {
   hovered: null,
   variants: {},
   hashes: new Map(),
+  scrolling: new Set(),
 };
 /** The block Rob just pressed in the canvas. Its selection comes back from the host and needs no reveal. */
 let pressed: BlockId | null = null;
@@ -177,13 +180,37 @@ function revealSelected(behavior: ScrollBehavior): void {
   document.querySelector(".bs-frame[data-selected]:not([data-offstage])")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior });
 }
 
+/**
+ * A frame whose block outgrows its declared height scrolls, and its scrollbar sits outside the declared width at the
+ * one width every scrollbar has, so the block lays out at that width and the bar never shrinks with the zoom.
+ */
+const gutter = (f: CanvasFrame) => (state.scrolling.has(f.slot) ? SCROLLBAR : 0);
+
+function measureScrolling(): void {
+  const scrolling = new Set<string>();
+  for (const body of document.querySelectorAll<HTMLElement>(".bs-frame-body[data-height]")) {
+    const slot = body.closest<HTMLElement>(".bs-frame")?.dataset.slot;
+    if (slot !== undefined && body.scrollHeight > body.clientHeight) scrolling.add(slot);
+  }
+  if (scrolling.size === state.scrolling.size && [...scrolling].every((slot) => state.scrolling.has(slot))) return;
+  setState({ scrolling });
+  fitCanvas();
+}
+
+// A block's height changes with its content as well as its DOM, so each block root is watched for size too.
+const blockSizes = new ResizeObserver(measureScrolling);
+new MutationObserver(() => {
+  for (const el of document.querySelectorAll(".bs-frame-body[data-height] > [data-bid] > *")) blockSizes.observe(el);
+  measureScrolling();
+}).observe(document.getElementById("canvas") ?? document.body, { childList: true, subtree: true });
+
 /** Applies the fit rules to the canvas as it is now, and tells the host when a zoom changes. */
 function fitCanvas(): void {
   // The scrollbar's gutter is kept on both sides and the padding gives it back, so in either view the room is the
   // window less its pad, with or without a scrollbar.
   const room = innerWidth - 2 * CANVAS_PAD;
   const { zooms: next, wrap } = fitFrames(
-    state.frames.map((f) => ({ slot: f.slot, width: f.frame.width })),
+    state.frames.map((f) => ({ slot: f.slot, width: f.frame.width, gutter: gutter(f) })),
     room,
     state.stage,
   );
@@ -284,7 +311,7 @@ function Canvas() {
             data-offstage={offstage || undefined}
             aria-hidden={offstage || undefined}
             // The frame is as wide as its zoomed body, so a long title truncates inside it rather than widening it.
-            style={{ width: frame.frame.width * (zoom ?? 1) }}
+            style={{ width: frame.frame.width * (zoom ?? 1) + gutter(frame) }}
             onPointerDownCapture={() => {
               pressed = frame.blockId;
               revealOnRelease = true;
@@ -301,7 +328,14 @@ function Canvas() {
             <div
               className="bs-frame-body"
               data-zoom={zoom}
-              style={{ width: frame.frame.width, height: frame.frame.height ?? undefined, zoom }}
+              data-height={frame.frame.height ?? undefined}
+              data-scrolls={gutter(frame) > 0 || undefined}
+              style={{
+                width: frame.frame.width + gutter(frame) / (zoom ?? 1),
+                height: frame.frame.height ?? undefined,
+                zoom,
+                ["--bs-unzoom" as string]: zoom === undefined ? undefined : 1 / zoom,
+              }}
             >
               <Block frame={frame} hash={s.hashes.get(frame.blockId)} props={s.props[frame.blockId] ?? {}} />
               {s.pins
@@ -546,6 +580,8 @@ body {
 }
 .bs-frame[data-selected] .bs-frame-body { box-shadow: 0 0 0 2px var(--bs-accent), var(--bs-elevation-sm); }
 .bs-frame-body:has(> .bs-failure) { height: auto !important; }
+.bs-frame-body[data-scrolls] { overflow-y: scroll; }
+.bs-frame-body::-webkit-scrollbar { width: calc(var(--bs-scrollbar) * var(--bs-unzoom, 1)); }
 .bs-failure {
   display: flex; align-items: flex-start; gap: 8px; margin: 16px; padding: 12px; border-radius: 8px;
   color: var(--bs-fg); background: var(--bs-danger-subtle);

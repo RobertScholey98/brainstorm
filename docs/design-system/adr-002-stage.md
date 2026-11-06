@@ -79,3 +79,9 @@ Half size is the floor because below it a phone frame's 13 px text renders under
 The round 4 council found the stage frame 5 px left of centre whenever it didn't scroll (U57, reopened as T4), and the board's readout moving from 64% to 63% when a strip brought in the scrollbar. The stage padded its left by a measured gutter that was only there when the scrollbar was, and the room counted the gutter in one view and not the other.
 
 The canvas root now keeps the scrollbar's gutter on both sides (`scrollbar-gutter: stable both-edges`), and `#canvas` pads each side by 24 px less the gutter, `--bs-scrollbar` from `design.ts`. So in both views the room is the window less 24 px a side, a frame's sides sit 24 px off the canvas edges whether or not it scrolls, and nothing is measured. Fixed boxes start after the left gutter, so the pick highlight is placed from a zero-size fixed probe's origin. `verify:7` checks a stage frame that doesn't scroll sits 24 px off each side, and one that scrolls sits centred.
+
+## Amendment: round 4. A scrolling frame's bar sits outside its width
+
+The council found a 390 × 600 phone frame laying its block out at 380 px, because the body's own scrollbar took its 10 px from inside the declared width, and the bar drawn at the frame's zoom, about 6 px wide (T7). A frame lays out at its declared width, always, so the bar can't come out of it.
+
+The runtime watches each frame with a declared height, and while its block is taller than that height the body widens by the gutter, `SCROLLBAR` from `design.ts`, outside the zoom. Its scrollbar is drawn at the gutter divided by the zoom, so it shows 10 px at any fit, and the fit rules count the gutter as width no zoom scales. A frame whose block fits shows no gutter. `verify:2` grows the wheel's block past its 760 px and checks the block keeps 390 px with a 10 px bar, zoomed and not, and that the gutter goes once it fits again.
