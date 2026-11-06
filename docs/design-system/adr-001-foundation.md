@@ -32,8 +32,8 @@ Each colour has one meaning. A role is named for what it does, not for its shade
 | `fg` | `#1b1b1a` | `#ecebe8` | Body text |
 | `fg-muted` | `#66655f` | `#a8a7a1` | Secondary text and icons |
 | `border` | `#e6e5e1` | `#3a3a36` | Dividers and card edges |
-| `border-strong` | `#d4d3cd` | `#4a4a45` | Input and control edges |
-| `ring` | `#85847e` | `#8a8983` | The focus ring |
+| `border-strong` | `#d4d3cd` | `#55554f` | Input and control edges |
+| `ring` | `#7a7973` | `#8a8983` | The focus ring, always at full strength |
 | `inverse`, `inverse-fg` | `#1f1f1e`, `#fafaf9` | `#ecebe8`, `#1f1f1d` | The neutral solid fill of the default button, a checked checkbox and an on switch |
 | `accent`, `accent-fg`, `accent-hover` | see below | see below | Brainstorm itself: the mark, the primary action, open pins, selection |
 | `success` | `#4e7514` | `#9ccc5a` | Attached, confirmed, done |
@@ -41,7 +41,7 @@ Each colour has one meaning. A role is named for what it does, not for its shade
 | `danger` | `#c03a2f` | `#ff8a7f` | Failed, destructive |
 | `info` | `#2f63c4` | `#86aeff` | Neutral status, such as the agent asking a question |
 
-Each status colour has a `-subtle` partner, the status mixed 10% into `card`, for a tinted box behind status text. Every derived token is a `color-mix` in oklab over the solids, the same expression in both themes, so a derived value can't drift from its solid.
+Each status colour has a `-subtle` partner, the status mixed 12% into `card`, for a tinted box behind status text. Every derived token is a `color-mix` in oklab over the solids, the same expression in both themes, so a derived value can't drift from its solid.
 
 The neutrals are warm greys, a little yellow, so the app sits next to Claude desktop without looking cold beside it. In dark, each layer is lighter than the one below it, `app` to `card` to `raised`, because a shadow barely shows on a dark ground. The canvas is one step darker than the window in light, so white frames stand out, and one step lighter in dark, so a frame no longer reads as a hole (W15, W16).
 
@@ -51,14 +51,14 @@ Contrast, measured with `contrast()` in `design.ts` against `app`, `canvas`, `ca
 | --- | --- | --- |
 | `fg` | 15.81, 14.85, 17.24, 17.24, 15.12 | 14.32, 13.53, 12.72, 11.10, 10.80 |
 | `fg-muted` | 5.36, 5.04, 5.85, 5.85, 5.13 | 7.08, 6.69, 6.29, 5.49, 5.34 |
-| `ring` | 3.44, 3.23, 3.75, 3.75, 3.29 | 4.87, 4.60, 4.32, 3.77, 3.67 |
+| `ring` | 4.00, 3.76, 4.37, 4.37, 3.83 | 4.87, 4.60, 4.32, 3.77, 3.67 |
 | `accent` | 5.08, 4.77, 5.54, 5.54, 4.86 | 7.99, 7.55, 7.10, 6.20, 6.03 |
 | `success` | 4.97, 4.66, 5.41, 5.41, 4.75 | 9.10, 8.60, 8.08, 7.06, 6.86 |
 | `warning` | 5.81, 5.45, 6.33, 6.33, 5.55 | 9.59, 9.06, 8.52, 7.44, 7.23 |
 | `danger` | 4.95, 4.65, 5.40, 5.40, 4.74 | 7.47, 7.06, 6.64, 5.80, 5.64 |
 | `info` | 5.20, 4.89, 5.67, 5.67, 4.97 | 7.73, 7.31, 6.87, 6.00, 5.83 |
 
-Text roles pass 4.5:1 on every surface and the ring passes 3:1. `test/design.test.ts` asserts those floors, so a token edit that breaks one fails `npm test`. A draft `fg-faint` measured 2.46:1 on the light canvas and had no callers, so it was deleted rather than kept for later.
+Text roles pass 4.5:1 on every surface and the ring passes 3:1. Round 2 found the kit drawing the ring at 40% and 50% opacity, about 1.6:1 and 2.1:1 in dark, so the ring now has no opacity anywhere and the lint's `focus-ring` rule fails one that does. The ring test also measures every derived fill a focused control sits on: each `-subtle` fill, and the hover and selected tints over the window and the card. Light `ring` moved from `#85847e` to `#7a7973`, because the old value was 2.84:1 on a selected row in the sidebar. Dark `border-strong` lifted from `#4a4a45` to `#55554f`, and an unchecked checkbox's edge is `fg-muted`, because its edge is the only thing that shows it. The `-subtle` mix went from 10% to 12%, so dark warning and danger strips read as two tints, at least 5 CIEDE2000 apart, with each status colour still 4.5:1 on its own fill. `test/design.test.ts` asserts those floors, so a token edit that breaks one fails `npm test`. A draft `fg-faint` measured 2.46:1 on the light canvas and had no callers, so it was deleted rather than kept for later.
 
 ### Closed scales
 

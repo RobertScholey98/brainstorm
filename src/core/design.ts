@@ -25,7 +25,7 @@ const SOLID = {
     "fg-muted": "#66655f",
     border: "#e6e5e1",
     "border-strong": "#d4d3cd",
-    ring: "#85847e",
+    ring: "#7a7973",
     inverse: "#1f1f1e",
     "inverse-fg": "#fafaf9",
     success: "#4e7514",
@@ -46,7 +46,7 @@ const SOLID = {
     fg: "#ecebe8",
     "fg-muted": "#a8a7a1",
     border: "#3a3a36",
-    "border-strong": "#4a4a45",
+    "border-strong": "#55554f",
     ring: "#8a8983",
     inverse: "#ecebe8",
     "inverse-fg": "#1f1f1d",
@@ -72,10 +72,10 @@ const DERIVED: Readonly<Record<string, (v: (name: string) => string) => string>>
   hover: (v) => `color-mix(in oklab, ${v("fg")} 6%, transparent)`,
   selected: (v) => `color-mix(in oklab, ${v("accent")} 14%, transparent)`,
   "accent-hover": (v) => `color-mix(in oklab, ${v("accent")} 88%, ${v("fg")})`,
-  "success-subtle": (v) => `color-mix(in oklab, ${v("success")} 10%, ${v("card")})`,
-  "warning-subtle": (v) => `color-mix(in oklab, ${v("warning")} 10%, ${v("card")})`,
-  "danger-subtle": (v) => `color-mix(in oklab, ${v("danger")} 10%, ${v("card")})`,
-  "info-subtle": (v) => `color-mix(in oklab, ${v("info")} 10%, ${v("card")})`,
+  "success-subtle": (v) => `color-mix(in oklab, ${v("success")} 12%, ${v("card")})`,
+  "warning-subtle": (v) => `color-mix(in oklab, ${v("warning")} 12%, ${v("card")})`,
+  "danger-subtle": (v) => `color-mix(in oklab, ${v("danger")} 12%, ${v("card")})`,
+  "info-subtle": (v) => `color-mix(in oklab, ${v("info")} 12%, ${v("card")})`,
   "scrollbar-thumb": (v) => `color-mix(in oklab, ${v("fg")} 22%, transparent)`,
   "scrollbar-thumb-hover": (v) => `color-mix(in oklab, ${v("fg")} 36%, transparent)`,
 };
@@ -118,6 +118,31 @@ const luminance = (hex: string) => {
 export function contrast(a: string, b: string): number {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
   return (hi + 0.05) / (lo + 0.05);
+}
+
+const unchannel = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+
+function toOklab(hex: string): readonly [number, number, number] {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const [r, g, b] = [16, 8, 0].map((s) => channel(((n >> s) & 255) / 255)) as [number, number, number];
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+}
+
+function fromOklab([L, A, B]: readonly [number, number, number]): string {
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+  const rgb = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s];
+  return `#${rgb.map((c) => Math.round(Math.min(1, Math.max(0, unchannel(c))) * 255).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** `color-mix(in oklab, a p%, b)` as the browser paints it over an opaque `b`, for measuring derived tokens. */
+export function mixOklab(a: string, p: number, b: string): string {
+  const [x, y] = [toOklab(a), toOklab(b)];
+  return fromOklab([0, 1, 2].map((i) => x[i]! * p + y[i]! * (1 - p)) as [number, number, number]);
 }
 
 type Lab = readonly [l: number, a: number, b: number];

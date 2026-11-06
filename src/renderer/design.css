@@ -9,7 +9,7 @@
   --fg-muted: #66655f;
   --border: #e6e5e1;
   --border-strong: #d4d3cd;
-  --ring: #85847e;
+  --ring: #7a7973;
   --inverse: #1f1f1e;
   --inverse-fg: #fafaf9;
   --success: #4e7514;
@@ -25,10 +25,10 @@
   --hover: color-mix(in oklab, var(--fg) 6%, transparent);
   --selected: color-mix(in oklab, var(--accent) 14%, transparent);
   --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--fg));
-  --success-subtle: color-mix(in oklab, var(--success) 10%, var(--card));
-  --warning-subtle: color-mix(in oklab, var(--warning) 10%, var(--card));
-  --danger-subtle: color-mix(in oklab, var(--danger) 10%, var(--card));
-  --info-subtle: color-mix(in oklab, var(--info) 10%, var(--card));
+  --success-subtle: color-mix(in oklab, var(--success) 12%, var(--card));
+  --warning-subtle: color-mix(in oklab, var(--warning) 12%, var(--card));
+  --danger-subtle: color-mix(in oklab, var(--danger) 12%, var(--card));
+  --info-subtle: color-mix(in oklab, var(--info) 12%, var(--card));
   --scrollbar-thumb: color-mix(in oklab, var(--fg) 22%, transparent);
   --scrollbar-thumb-hover: color-mix(in oklab, var(--fg) 36%, transparent);
   --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -45,7 +45,7 @@
     --fg: #ecebe8;
     --fg-muted: #a8a7a1;
     --border: #3a3a36;
-    --border-strong: #4a4a45;
+    --border-strong: #55554f;
     --ring: #8a8983;
     --inverse: #ecebe8;
     --inverse-fg: #1f1f1d;

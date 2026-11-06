@@ -1,12 +1,36 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { contrast, deltaE2000, designCss, designStylesheet, lab, solidColours, THEMES } from "../src/core/design";
+import { contrast, deltaE2000, designCss, designStylesheet, lab, mixOklab, solidColours, THEMES } from "../src/core/design";
 
 const SURFACES = ["app", "canvas", "card", "raised", "muted"] as const;
 /** The accent and each status colour carry one meaning each, so no two may read as the same hue. */
 const HUES = ["accent", "success", "warning", "danger", "info"] as const;
 /** CIEDE2000 distance under which two colours read as one family at a glance. 2.3 is a just-noticeable difference. */
 const MIN_HUE_DISTANCE = 20;
+const STATUSES = ["success", "warning", "danger", "info"] as const;
+/** Two subtle fills closer than this read as one tint at a glance. */
+const MIN_SUBTLE_DISTANCE = 5;
+
+const srgbOver = (fg: string, alpha: number, base: string) => {
+  const ch = (hex: string, i: number) => Number.parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  return `#${[0, 1, 2].map((i) => Math.round(ch(fg, i) * alpha + ch(base, i) * (1 - alpha)).toString(16).padStart(2, "0")).join("")}`;
+};
+
+/**
+ * Every surface a control can sit on, painted as the browser paints the generated CSS: the solid surfaces, each
+ * `-subtle` fill, and the hover and selected tints over the window and the card. Mixes are read from `designCss`.
+ */
+function paintedSurfaces(theme: (typeof THEMES)[number]): Record<string, string> {
+  const c = solidColours(theme);
+  const out: Record<string, string> = Object.fromEntries(SURFACES.map((s) => [s, c[s]!]));
+  for (const [, name = "", a = "", p = "", b = ""] of designCss().matchAll(/--([\w-]+): color-mix\(in oklab, var\(--([\w-]+)\) (\d+)%, (transparent|var\(--([\w-]+)\))\)/g)) {
+    const pct = Number(p) / 100;
+    if (name.startsWith("scrollbar") || name === "accent-hover") continue;
+    if (b === "transparent") for (const base of ["app", "card"]) out[`${name} on ${base}`] = srgbOver(c[a]!, pct, c[base]!);
+    else out[name] = mixOklab(c[a]!, pct, c[b.slice(6, -1)]!);
+  }
+  return out;
+}
 
 describe("design tokens", () => {
   it("measures contrast the WCAG way", () => {
@@ -44,6 +68,27 @@ describe("design tokens", () => {
       }
       expect(contrast(c["inverse-fg"]!, c.inverse!)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(c["accent-fg"]!, c.accent!)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it(`gives the focus ring 3:1 on every surface a focused control sits on in ${theme}, derived fills included`, () => {
+      const c = solidColours(theme);
+      const low = Object.entries(paintedSurfaces(theme))
+        .map(([surface, hex]) => ({ surface, ratio: Math.round(contrast(c.ring!, hex) * 100) / 100 }))
+        .filter((s) => s.ratio < 3);
+      expect(low).toEqual([]);
+    });
+
+    it(`keeps each status colour readable on its subtle fill, and the subtle fills apart, in ${theme}`, () => {
+      const c = solidColours(theme);
+      const painted = paintedSurfaces(theme);
+      const subtle = STATUSES.map((s) => painted[`${s}-subtle`]!);
+      expect(STATUSES.filter((s, i) => contrast(c[s]!, subtle[i]!) < 4.5)).toEqual([]);
+      const close = STATUSES.flatMap((x, i) =>
+        STATUSES.slice(i + 1)
+          .map((y, j) => ({ pair: `${x}/${y}`, distance: deltaE2000(lab(subtle[i]!), lab(subtle[i + 1 + j]!)) }))
+          .filter((p) => p.distance < MIN_SUBTLE_DISTANCE),
+      );
+      expect(close).toEqual([]);
     });
 
     it(`keeps the accent and every status colour at least ${MIN_HUE_DISTANCE} CIEDE2000 apart in ${theme}`, () => {
