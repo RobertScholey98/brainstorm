@@ -178,3 +178,17 @@ The surfaces now step up in one order in both themes, `app` to `canvas` to `card
 - **What moved with them.** A darker light window took `success` and `danger` under 4.5:1 on it, so both went one step darker. They keep their 20 CIEDE2000 from the accent and each other. The selected tint went from 14% to 18%, so it sits at least 5 CIEDE2000 from hover on the window and the card. That took the ring under 3:1 on the selected fill, so the ring went one step darker in light and lighter in dark.
 - **The tests.** `test/design.test.ts` checks the order, the 2.5 step between each pair of layers, and the hover to selected distance, beside the contrast and hue tests it already ran.
 
+
+### Round 3: one chip, one filled button, and hints that name their side (2026-11-06)
+
+Round 3 found the `muted` chip gone on the window and the canvas in light, three inverse fills beside the accent primary, and hints that opened over the controls they served (U4, U10, U13).
+
+- **One chip.** `components/ui/chip.ts` holds the recipe, a `card` fill inside a `border-strong` edge. The edge carries a chip on a card or a popover and the fill carries it on the window and the canvas. `Badge`, `Kbd`, `Code`, the export path and the canvas zoom readout use it. A token test checks the edge sits at least 5 CIEDE2000 from every surface.
+- **One filled button.** `Button` has no `default` (inverse) or `secondary` variant, so `accent` is the only filled button. `outline` is the default. Text buttons are 28 px, and the 24 px size is for icon buttons in a row. A checked checkbox and an on switch take the accent. `inverse` is now only the light tooltip's surface, drawn by `overlaySurface`.
+- **Hints name their side.** `Hint` needs a `side`. A header hint opens left or right, off the canvas bar and the Inspector header.
+
+The lint gains three rules, each tested in `test/design-lint.test.ts`.
+
+- `inverse-fill` fails `bg-inverse` in any TSX file, the kit included.
+- `chip-recipe` fails a `<code>` or `<kbd>` element whose own classes paint a fill.
+- `hint-side` fails a `Hint` with no `side`, and a `top` or `bottom` hint in `TopBar.tsx`, `Regenerate.tsx` or `Export.tsx`.
