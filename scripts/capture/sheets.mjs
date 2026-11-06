@@ -18,9 +18,20 @@ const exemplar = (file) => join(root, "design-review", "exemplars", file);
 
 const SHEETS = [
   { name: "vs-claude-home", exemplar: ["Claude desktop · home", exemplar("claude/home-design.png")], app: ["Brainstorm · home", app("light", "02-home")] },
-  { name: "vs-claude-session", exemplar: ["Claude desktop · home", exemplar("claude/home-design.png")], app: ["Brainstorm · brainstorm open", app("light", "06-session")] },
-  { name: "vs-t3-session-dark", exemplar: ["T3 Code · thread (dark)", exemplar("t3/thread-dark.png")], app: ["Brainstorm · brainstorm open (dark)", app("dark", "06-session")] },
-  { name: "vs-t3-home-dark", exemplar: ["T3 Code · thread (dark)", exemplar("t3/thread-dark.png")], app: ["Brainstorm · home (dark)", app("dark", "02-home")] },
+  // Each exemplar is the one shot of that app there is, so a sheet whose two sides are different surfaces says so.
+  {
+    name: "vs-claude-session",
+    exemplar: ["Claude desktop · home, its only exemplar", exemplar("claude/home-design.png")],
+    app: ["Brainstorm · a brainstorm open", app("light", "06-session")],
+    note: "Different surfaces: Claude's home beside a Brainstorm session. Compare the chrome, type, edges and density, not the layout.",
+  },
+  { name: "vs-t3-session-dark", exemplar: ["T3 Code · thread (dark)", exemplar("t3/thread-dark.png")], app: ["Brainstorm · a brainstorm open (dark)", app("dark", "06-session")] },
+  {
+    name: "vs-t3-home-dark",
+    exemplar: ["T3 Code · thread (dark), its only exemplar", exemplar("t3/thread-dark.png")],
+    app: ["Brainstorm · home (dark)", app("dark", "02-home")],
+    note: "Different surfaces: a T3 Code thread beside Brainstorm's home. Compare the chrome, type, edges and density, not the layout.",
+  },
 ];
 
 const dataUrl = (file) => `data:image/png;base64,${readFileSync(file).toString("base64")}`;
@@ -36,9 +47,10 @@ for (const sheet of SHEETS) {
   }
   const panel = ([label, file], logical) => `<figure><figcaption>${label}</figcaption><img src="${dataUrl(file)}" data-logical="${logical}"></figure>`;
   await page.setContent(`<!doctype html><style>
-    body { margin: 0; padding: 24px; background: #8a8a8a; display: flex; gap: 24px; align-items: flex-start; font: 600 18px system-ui; width: max-content; }
+    body { margin: 0; padding: 24px; background: #8a8a8a; font: 600 18px system-ui; width: max-content; }
+    main { display: flex; gap: 24px; align-items: flex-start; } p { margin: 0 0 16px; color: #fff; font-weight: 400; }
     figure { margin: 0; } figcaption { color: #fff; margin-bottom: 8px; } img { display: block; box-shadow: 0 2px 12px #0004; }
-  </style>${panel(sheet.exemplar, true)}${panel(sheet.app, false)}`);
+  </style>${sheet.note === undefined ? "" : `<p>${sheet.note}</p>`}<main>${panel(sheet.exemplar, true)}${panel(sheet.app, false)}</main>`);
   await page.evaluate((s) => {
     for (const img of document.querySelectorAll("img[data-logical=true]")) img.style.width = `${img.naturalWidth / s}px`;
   }, scale);
