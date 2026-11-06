@@ -47,8 +47,8 @@ export const CANVAS_MIN = 560;
 
 /**
  * The widths the panes show at, so a pair kept from a wider window never squeezes the canvas under `CANVAS_MIN`.
- * The Inspector gives way first, then the sidebar, neither below its minimum. The kept widths stay as Rob left them,
- * for when the window is wide again.
+ * Each pane gives way in proportion to its room above its minimum, so neither is squeezed to its floor while the other
+ * stays wide. The kept widths stay as Rob left them, for when the window is wide again.
  */
 export function fitPanes(
   panes: { readonly sidebar: number; readonly inspector: number },
@@ -57,7 +57,13 @@ export function fitPanes(
 ): { sidebar: number; inspector: number } {
   const over = panes.sidebar + panes.inspector + CANVAS_MIN - window;
   if (over <= 0) return { ...panes };
-  const inspector = Math.max(mins.inspector, panes.inspector - over);
-  const sidebar = Math.max(mins.sidebar, panes.sidebar - (over - (panes.inspector - inspector)));
-  return { sidebar, inspector };
+  const room = { sidebar: Math.max(0, panes.sidebar - mins.sidebar), inspector: Math.max(0, panes.inspector - mins.inspector) };
+  const total = room.sidebar + room.inspector;
+  if (total === 0) return { ...panes };
+  const give = Math.min(over, total);
+  // Floored, so the two never round up past the room the canvas needs.
+  return {
+    sidebar: Math.floor(panes.sidebar - (give * room.sidebar) / total),
+    inspector: Math.floor(panes.inspector - (give * room.inspector) / total),
+  };
 }
