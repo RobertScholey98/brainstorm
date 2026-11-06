@@ -36,7 +36,7 @@ export function HomeOverview({
       <div className="grid gap-5 p-6">
         <PageHeader heading="All brainstorms" description={<span data-home-hint>To start a new brainstorm, {START}.</span>} />
         {/* Cards hug their own content, so a card with no brief never carries a blank band to match its row. */}
-        <ul className="grid-overview grid items-start gap-3" aria-busy={sessions === null || undefined}>
+        <ul className="grid-overview grid gap-3" aria-busy={sessions === null || undefined}>
           {sessions === null
             ? [true, false, false, true, false, false].map((brief, i) => (
                 <li key={i} className="flex flex-col gap-1.5 rounded-lg bg-card p-4 ring-1 ring-border" data-overview-skeleton>
@@ -65,7 +65,7 @@ function OverviewCard({ session: s, now, onOpen }: { session: SessionListing; no
     <button
       type="button"
       onClick={onOpen}
-      className="flex min-w-0 flex-col gap-1.5 rounded-lg bg-card p-4 text-left shadow-xs ring-1 ring-border transition-shadow outline-none hover:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex h-full min-w-0 flex-col gap-1.5 rounded-lg bg-card p-4 text-left shadow-xs ring-1 ring-border transition-shadow outline-none hover:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring"
       data-overview-session={s.id}
       data-lost={s.lost || undefined}
     >

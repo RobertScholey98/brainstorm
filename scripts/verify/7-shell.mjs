@@ -101,6 +101,21 @@ try {
     await window.$$eval("[data-overview-session]", (els) => els.map((e) => e.dataset.overviewSession)),
     [loose, kitchen, wide, roulette],
   );
+  check(
+    "cards in a row share one height, with each meta line on the card's bottom edge, whether or not it has a brief",
+    await window.$$eval("[data-overview-session]", (cards) => {
+      const rows = new Map();
+      for (const c of cards) {
+        const r = c.getBoundingClientRect();
+        const foot = c.querySelector("[data-overview-footer]").getBoundingClientRect();
+        const row = rows.get(Math.round(r.top)) ?? [];
+        row.push([Math.round(r.height), Math.round(r.bottom - foot.bottom)]);
+        rows.set(Math.round(r.top), row);
+      }
+      return [...rows.values()].map((row) => [new Set(row.map(([h]) => h)).size, new Set(row.map(([, gap]) => gap)).size, row.length > 1]);
+    }),
+    [[1, 1, true]],
+  );
   check("the overview is the active row in the sidebar", (await window.$("[data-overview][data-active]")) !== null, true);
   check("home shows no Regenerate or Export", [await window.$("[data-regenerate-toggle]"), await window.$("[data-export]")], [null, null]);
   await window.waitForTimeout(300);
