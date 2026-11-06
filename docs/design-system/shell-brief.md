@@ -78,6 +78,19 @@ Change behaviour only where the UX falls short of the exemplars' patterns. Log e
 
 Anything else a reviewer asks for that changes behaviour goes to Rob first.
 
+Rob added these on 2026-11-06, after round 2:
+
+- **Stage view (replaces X1, the Fit zoom).**
+  - The centre of a brainstorm shows one slot at a time, filling the space between the sidebars. Tabs or arrows move between slots.
+  - A slot narrower than the stage sits centred at its declared width.
+  - A slot that declares a page width fills the stage.
+  - An "All slots" toggle brings back the side-by-side board, so the whole flow is still visible at a glance.
+- **X2.** Long variant notes collapse behind "More".
+- **X3.** Notices get a close button and clear on the next success.
+- **X4.** The Inspector collapses to a rail.
+- **X5.** Deleting feedback asks for confirmation.
+- **X6.** Pane widths survive an app restart, stored by the server because the app's origin changes with each launch's port.
+
 ## Constraints
 
 - The stack:
