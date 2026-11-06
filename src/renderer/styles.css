@@ -171,3 +171,8 @@ body[data-resizing] [data-slot="sidebar-container"] {
   grid-auto-flow: column;
   grid-template-columns: auto minmax(0, max-content);
 }
+
+/* A scroller that keeps its scrollbar's room whether or not it overflows, so its content never shifts sideways. */
+@utility scroll-gutter {
+  scrollbar-gutter: stable;
+}

@@ -30,8 +30,10 @@ const calloutVariants = cva("flex items-start gap-2 text-xs/relaxed text-fg", {
 
 /**
  * Every status box in the app: the Inspector's block error and inapplicable adjustments, the takeover phrase, and the
- * request message under the top bar. `inset` sits inside a panel; `strip` runs edge to edge under a bar. Actions sit
- * under the message, so a narrow panel keeps the message at full width.
+ * request message under the top bar. `inset` sits inside a panel; `strip` runs edge to edge under a bar. Actions only
+ * go in `actions`, which sit under the message, so a narrow panel keeps the message at full width. A callout that lists
+ * several things, each with its own action, uses one `CalloutItem` per thing. lint:design fails a button written into
+ * the message itself (`callout-actions`).
  */
 function Callout({
   tone,
@@ -57,10 +59,24 @@ function Callout({
           </p>
         )}
         {children}
-        {actions !== undefined && <div className="flex flex-wrap items-center gap-1 pt-1">{actions}</div>}
+        {actions !== undefined && <CalloutActions>{actions}</CalloutActions>}
       </div>
     </div>
   )
 }
 
-export { Callout }
+function CalloutActions({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap items-center gap-1 pt-1">{children}</div>
+}
+
+/** One entry in a callout that lists several, with its own actions under its text. */
+function CalloutItem({ actions, children, ...props }: Omit<ComponentProps<"li">, "className"> & { actions?: ReactNode }) {
+  return (
+    <li data-slot="callout-item" className="grid min-w-0 gap-0.5" {...props}>
+      <div className="min-w-0">{children}</div>
+      {actions !== undefined && <CalloutActions>{actions}</CalloutActions>}
+    </li>
+  )
+}
+
+export { Callout, CalloutItem }

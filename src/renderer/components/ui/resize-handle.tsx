@@ -4,11 +4,11 @@ import { cva } from "class-variance-authority"
 const STEP = 16
 
 const handleVariants = cva(
-  "group/handle absolute inset-y-0 z-raised flex w-2 cursor-col-resize justify-center outline-hidden after:w-px after:bg-accent after:opacity-0 after:transition-opacity hover:after:opacity-100 focus-visible:after:w-0.5 focus-visible:after:opacity-100 data-dragging:after:opacity-100",
+  "group/handle absolute inset-y-0 z-raised flex w-2 cursor-col-resize justify-center outline-hidden after:w-px after:bg-ring after:opacity-0 after:transition-opacity hover:after:opacity-100 focus-visible:after:w-0.5 focus-visible:after:opacity-100 data-dragging:after:opacity-100",
   {
     variants: {
       edge: {
-        left: "left-0 -translate-x-1/2",
+        left: "left-0 justify-start",
         right: "right-0 translate-x-1/2",
       },
     },

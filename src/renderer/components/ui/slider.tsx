@@ -26,7 +26,7 @@ function Slider({
       thumbAlignment="edge"
       {...props}
     >
-      <SliderPrimitive.Control className="relative flex h-6 w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-picker data-vertical:w-auto data-vertical:flex-col">
+      <SliderPrimitive.Control className="relative flex h-4 w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-picker data-vertical:w-auto data-vertical:flex-col">
         <SliderPrimitive.Track
           data-slot="slider-track"
           className="relative grow overflow-hidden rounded-full bg-muted select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
@@ -40,7 +40,7 @@ function Slider({
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
             key={index}
-            className="relative block size-4 shrink-0 rounded-full border border-border-strong bg-card shadow-xs ring-ring/40 transition-[color,box-shadow] select-none after:absolute after:-inset-1 hover:ring-2 focus-visible:ring-2 focus-visible:outline-hidden has-focus-visible:ring-2 active:ring-2 disabled:pointer-events-none disabled:opacity-50 dark:bg-fg"
+            className="relative block size-4 shrink-0 rounded-full border border-border-strong bg-card shadow-xs transition-[color,box-shadow] select-none after:absolute after:-inset-1 hover:ring-2 hover:ring-border-strong active:ring-2 active:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden has-focus-visible:ring-2 has-focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 dark:bg-fg"
           />
         ))}
       </SliderPrimitive.Control>

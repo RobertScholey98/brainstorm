@@ -37,7 +37,7 @@ function Segmented<T extends string>({
           key={o.value}
           value={o.value}
           {...(itemData === undefined ? {} : { [`data-${itemData}`]: o.value })}
-          className="min-w-0 flex-1 truncate rounded-sm px-2 text-sm text-fg-muted transition-colors outline-none select-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/50 data-pressed:bg-card data-pressed:font-medium data-pressed:text-fg data-pressed:shadow-xs data-pressed:ring-1 data-pressed:ring-border-strong dark:data-pressed:bg-muted"
+          className="min-w-0 flex-1 truncate rounded-sm px-2 text-sm text-fg-muted transition-colors outline-none select-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring data-pressed:bg-card data-pressed:font-medium data-pressed:text-fg data-pressed:shadow-xs data-pressed:ring-1 data-pressed:ring-border-strong dark:data-pressed:bg-muted"
         >
           {o.label}
         </TogglePrimitive>

@@ -179,7 +179,7 @@ function ColourField({ bound }: { bound: Bound<"color"> }) {
   };
   return (
     <Row bound={bound}>
-      <div className="flex h-7 items-center gap-2 rounded-md border border-border-strong pr-2 pl-1 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 dark:bg-border-strong/30">
+      <div className="flex h-7 items-center gap-2 rounded-md border border-border-strong pr-2 pl-1 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring dark:bg-border-strong/30">
         <input
           type="color"
           aria-label={`${label} colour`}

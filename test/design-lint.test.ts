@@ -96,6 +96,29 @@ describe("design lint", () => {
     ]);
   });
 
+  it("focus-ring: fails a diluted ring token and any other focus ring colour, kit included", () => {
+    const source = `<p className="focus-visible:ring-2 focus-visible:ring-ring/50 ring-ring/40 focus-visible:ring-danger/20 has-focus-visible:ring-accent" />\n<p className="focus-visible:ring-2 focus-visible:ring-ring has-focus-visible:ring-ring hover:ring-border-strong ring-inset outline-hidden ring-0" />`;
+    expect(rules(source, true)).toEqual([
+      { rule: "focus-ring", line: 1, text: "focus-visible:ring-ring/50" },
+      { rule: "focus-ring", line: 1, text: "ring-ring/40" },
+      { rule: "focus-ring", line: 1, text: "focus-visible:ring-danger/20" },
+      { rule: "focus-ring", line: 1, text: "has-focus-visible:ring-accent" },
+    ]);
+  });
+
+  it("callout-actions: fails a button in a Callout's message, and allows one in its actions or a CalloutItem's", () => {
+    const source = [
+      `import { Callout, CalloutItem } from "@/components/ui/callout";`,
+      `<Callout tone="warning" actions={<Button>Copy</Button>}>`,
+      `  <p>Say this</p>`,
+      `  <CalloutItem actions={<Button>Dismiss</Button>}>accent</CalloutItem>`,
+      `  <li><span>accent</span> <Button variant="ghost">Dismiss</Button></li>`,
+      `</Callout>`,
+      `<Button>Outside</Button>`,
+    ].join("\n");
+    expect(rules(source)).toEqual([{ rule: "callout-actions", line: 5, text: "<Button> in a Callout message" }]);
+  });
+
   it("passes on the renderer as it stands", async () => {
     expect(await lintRenderer()).toEqual([]);
   });

@@ -2,7 +2,7 @@ import { JSONUIProvider, Renderer } from "@json-render/react";
 import type { Spec } from "@json-render/core";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Callout } from "@/components/ui/callout";
+import { Callout, CalloutItem } from "@/components/ui/callout";
 import { ResizeHandle } from "@/components/ui/resize-handle";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HEX_COLOR_PATTERN } from "../core/props";
@@ -78,18 +78,22 @@ export function Inspector({
   children: ReactNode;
 }) {
   const blocks = view.iteration?.blocks ?? [];
+  // It covers the whole session, removed blocks included, so it shows whatever is selected, under the block's header.
+  const banner = view.overrides.inapplicable.length > 0 && <Inapplicable items={view.overrides.inapplicable} blocks={blocks} onDismiss={onDismiss} />;
   return (
     <Column
       width={width}
       handle={<ResizeHandle edge="left" value={width} min={limits.min} max={limits.max} reset={limits.fallback} onValueChange={onWidth} aria-label="Inspector width" />}
     >
-      {view.overrides.inapplicable.length > 0 && <Inapplicable items={view.overrides.inapplicable} blocks={blocks} onDismiss={onDismiss} />}
       {block === null || props === null ? (
-        <p className="px-4 py-4 text-sm/relaxed text-fg-muted" data-inspector-empty>
-          {view.iteration === null ? "Each block's settings show here once the agent commits the first iteration." : "Select a frame to adjust it."}
-        </p>
+        <>
+          {banner}
+          <p className="px-4 py-4 text-sm/relaxed text-fg-muted" data-inspector-empty>
+            {view.iteration === null ? "Each block's settings show here once the agent commits the first iteration." : "Select a frame to adjust it."}
+          </p>
+        </>
       ) : (
-        <BlockControls key={block.id} view={view} block={block} props={props} error={error} onSet={onSet} onReset={onReset} />
+        <BlockControls key={block.id} view={view} block={block} props={props} error={error} banner={banner} onSet={onSet} onReset={onReset} />
       )}
       {children}
     </Column>
@@ -101,6 +105,7 @@ function BlockControls({
   block,
   props,
   error,
+  banner,
   onSet,
   onReset,
 }: {
@@ -108,6 +113,7 @@ function BlockControls({
   block: BlockView;
   props: Props;
   error: string | null;
+  banner: ReactNode;
   onSet: (block: BlockView, prop: PropName, value: AppearanceValue) => void;
   onReset: (block: BlockView, prop: PropName) => void;
 }) {
@@ -143,6 +149,7 @@ function BlockControls({
           </div>
         )}
       </header>
+      {banner}
       {block.props.appearance.length === 0 ? (
         <p className="px-4 py-4 text-sm text-fg-muted">This block has no adjustable settings.</p>
       ) : (
@@ -166,30 +173,31 @@ function Inapplicable({
   onDismiss: (o: InapplicableOverride) => void;
 }) {
   return (
-    <section aria-label="Adjustments that no longer apply" className="px-3 pt-3" data-banner="inapplicable">
+    <section aria-label="Adjustments that no longer apply" className="px-4 pt-3" data-banner="inapplicable">
       <Callout tone="warning" role="status" heading={items.length === 1 ? "An adjustment no longer applies" : `${items.length} adjustments no longer apply`}>
-      <ul className="grid gap-1">
-        {items.map((item) => {
-          const { override: o, reason } = item;
-          const title = blocks.find((b) => b.id === o.blockId)?.title ?? o.blockId;
-          return (
-            <li key={`${o.blockId}/${o.prop}`} className="flex items-start gap-2" data-override={`${o.blockId}:${o.prop}`}>
-              {isHex(o.value) && (
-                <span aria-hidden className="mt-0.5 size-3 shrink-0 rounded-sm inset-ring inset-ring-fg/15" style={{ background: o.value }} />
-              )}
-              <span className="min-w-0">
-                <span className="font-medium">
+        <ul className="grid gap-2">
+          {items.map((item) => {
+            const { override: o, reason } = item;
+            const title = blocks.find((b) => b.id === o.blockId)?.title ?? o.blockId;
+            return (
+              <CalloutItem
+                key={`${o.blockId}/${o.prop}`}
+                data-override={`${o.blockId}:${o.prop}`}
+                actions={
+                  <Button variant="outline" size="xs" onClick={() => onDismiss(item)}>
+                    Dismiss
+                  </Button>
+                }
+              >
+                <span className="flex items-center gap-1.5 font-medium">
+                  {isHex(o.value) && <span aria-hidden className="size-3 shrink-0 rounded-sm inset-ring inset-ring-fg/15" style={{ background: o.value }} />}
                   {o.prop} = {isHex(o.value) ? o.value.toUpperCase() : String(o.value)}
-                </span>{" "}
-                on {title}: {WHY[reason]}.
-              </span>
-              <Button variant="ghost" size="xs" className="-my-0.5 ml-auto" onClick={() => onDismiss(item)}>
-                Dismiss
-              </Button>
-            </li>
-          );
-        })}
-      </ul>
+                </span>
+                On {title}: {WHY[reason]}.
+              </CalloutItem>
+            );
+          })}
+        </ul>
       </Callout>
     </section>
   );
