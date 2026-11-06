@@ -91,6 +91,13 @@ Rob added these on 2026-11-06, after round 2:
 - **X5.** Deleting feedback asks for confirmation.
 - **X6.** Pane widths survive an app restart, stored by the server because the app's origin changes with each launch's port.
 
+Rob added these on 2026-11-06, after round 4, when both home sheets lost on navigation:
+
+- **Home previews.** Each overview card shows a live preview of the brainstorm's latest iteration, so home is where Rob picks visually.
+- **Search and filters.** Home has a search box over titles and briefs, and filters, as Claude desktop's home does.
+- **Settle.** Rob can settle a brainstorm the way T3 Code settles a thread. It works the same way in both apps: what settling hides, where settled brainstorms go, how to unsettle one, and what brings one back on its own. The build observes T3's own behaviour first, and records it in an ADR.
+- **No variant notes.** Variant notes are removed: the `about.md` file, its "Hypothesis", "Tradeoff", "Try this" and "Recommended" text, and More/Less, from the app, the working-copy format, the skill and the fixtures. This supersedes X2. Rob judges the designs himself, and the notes were padding. The skill still has the agent design around distinct hypotheses, but the agent doesn't write them up.
+
 ## Constraints
 
 - The stack:
