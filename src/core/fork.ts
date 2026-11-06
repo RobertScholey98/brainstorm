@@ -1,3 +1,4 @@
+import { partLabel } from "./part";
 import { appearanceProp } from "./props";
 import {
   blockIdOf,
@@ -96,11 +97,7 @@ export function forkTitle(instruction: string): string {
   return `${(space > 20 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
-/** A `data-part` as Rob reads it: `spin-button` is "Spin button". */
-export function partLabel(part: PartName): string {
-  const words = part.replace(/[-_]+/g, " ").trim();
-  return words.length === 0 ? part : words[0]!.toUpperCase() + words.slice(1);
-}
+export { partLabel };
 
 const LETTERS = "abcdefghijklmnopqrstuvwxyz";
 export const VARY_MAX = 6;

@@ -45,7 +45,7 @@ try {
   check("Pin comment keeps its width and its left edge while it reads Picking…", await toggleBox(), idleBox);
   await canvas.hover(HEADLINE);
   await canvas.waitForSelector(".bs-pick[data-on]");
-  check("hovering in pin mode highlights the nearest data-part", await canvas.textContent(".bs-pick[data-on] span"), "headline");
+  check("hovering in pin mode highlights the nearest data-part, named in words as the feedback list names it", await canvas.textContent(".bs-pick[data-on] span"), "Headline");
   const highlight = await canvas.evaluate((sel) => {
     const a = document.querySelector(".bs-pick").getBoundingClientRect();
     const b = document.querySelector(sel).getBoundingClientRect();

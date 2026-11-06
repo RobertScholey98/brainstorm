@@ -4,6 +4,7 @@ import * as JSXRuntime from "react/jsx-runtime";
 import { CircleAlert } from "lucide-react";
 import { createRoot } from "react-dom/client";
 import { designCss, SCROLLBAR } from "../core/design";
+import { partLabel } from "../core/part";
 import { CANVAS_PAD, fitFrames, GAP } from "./fit";
 import type {
   BlockId,
@@ -568,7 +569,7 @@ function layoutHover(): void {
   highlight.style.transform = `translate(${r.left - o.left}px, ${r.top - o.top}px)`;
   highlight.style.width = `${r.width}px`;
   highlight.style.height = `${r.height}px`;
-  highlightLabel.textContent = hover.pin.part ?? "Whole block";
+  highlightLabel.textContent = hover.pin.part === null ? "Whole block" : partLabel(hover.pin.part);
   highlight.dataset.on = "";
 }
 
