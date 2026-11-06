@@ -264,6 +264,8 @@ function SidebarTrigger({
         data-slot="sidebar-trigger"
         variant="ghost"
         size="icon"
+        // A pane toggle is pressed while its pane shows, as the history and Inspector toggles are.
+        aria-pressed={state === "expanded"}
         className={cn("text-fg-muted", className)}
         onClick={(event) => {
           onClick?.(event)
@@ -468,7 +470,8 @@ function SidebarMenu({ className, ...props }: React.ComponentProps<"ul">) {
     <ul
       data-slot="sidebar-menu"
       data-sidebar="menu"
-      className={cn("flex w-full min-w-0 flex-col gap-0", className)}
+      // 2 px between rows, so a hovered row and the selected one beside it read as two fills, not one slab.
+      className={cn("flex w-full min-w-0 flex-col gap-0.5", className)}
       {...props}
     />
   )
@@ -486,7 +489,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-hover hover:text-fg focus-visible:ring-2 active:bg-hover active:text-fg disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-hover data-open:hover:text-fg data-active:bg-selected data-active:font-medium data-active:text-fg [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
+  "peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-has-[:is([data-sidebar=menu-action],[data-sidebar=menu-reveal]):hover]/menu-item:bg-hover group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-hover hover:text-fg focus-visible:ring-2 active:bg-hover active:text-fg disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-hover data-open:hover:text-fg data-active:bg-selected data-active:font-medium data-active:text-fg [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
   {
     variants: {
       variant: {

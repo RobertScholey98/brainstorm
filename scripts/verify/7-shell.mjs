@@ -219,6 +219,11 @@ try {
   await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
   check("its hint names the action and T3's chord", (await window.textContent('[data-slot="tooltip-content"]'))?.trim(), "SettleCtrl+Shift+S");
   check(
+    "pointing at the settle control keeps its row's hover fill, so the row still reads as the one in hand",
+    await settled(() => window.$eval(`[data-session="${kitchen}"]`, (row) => getComputedStyle(row).backgroundColor !== "rgba(0, 0, 0, 0)")),
+    true,
+  );
+  check(
     "and opens over its own row, covering no control outside it, the home search least of all",
     await settled(() =>
       window.evaluate((id) => {
@@ -469,6 +474,11 @@ try {
     [{ height: 28, filled: true }, 28],
   );
   check("the Inspector toggle sits in the header, pressed while the Inspector shows", await window.getAttribute("[data-topbar] [data-inspector-toggle]", "aria-pressed"), "true");
+  check(
+    "every pane toggle follows one rule, pressed while its pane shows: the sidebar's, the history's and the Inspector's",
+    await window.$$eval('[data-sidebar="trigger"], [data-history-toggle], [data-inspector-toggle]', (toggles) => toggles.map((t) => t.getAttribute("aria-pressed"))),
+    ["true", "true", "true"],
+  );
   check("the canvas region ends where the Inspector starts", iframe.right <= inspector.left, true);
   const zoomShown = () => window.getAttribute("[data-canvas-bar] [data-canvas-zoom]", "data-canvas-zoom");
   const fit = async () => ({
