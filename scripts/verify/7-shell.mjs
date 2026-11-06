@@ -956,8 +956,8 @@ try {
   answer();
   await window.waitForSelector("[data-home-error]");
   check(
-    "a list that fails at launch shows its error with Try again, and the sidebar stops loading",
-    [await window.isVisible("[data-home-retry]"), await window.isVisible("[data-home-loading]"), (await window.textContent('[data-sidebar-panel="home"]'))?.includes("The list didn't load")],
+    "a list that fails at launch shows its error with Try again, and the sidebar stops loading and points at Try again",
+    [await window.isVisible("[data-home-retry]"), await window.isVisible("[data-home-loading]"), (await window.textContent('[data-sidebar-panel="home"]'))?.includes("The list didn't load. Try again is on the right.")],
     [true, false, true],
   );
   check("a failed home keeps its page heading over the error", (await window.textContent("[data-home-overview] h1"))?.trim(), "All brainstorms");

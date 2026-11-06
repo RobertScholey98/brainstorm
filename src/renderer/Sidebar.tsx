@@ -121,7 +121,7 @@ export function HomePanel({
         </SidebarMenu>
       </SidebarGroup>
       {sessions === null && failed ? (
-        <p className="px-4 py-3 text-sm/relaxed text-pretty text-fg-muted">The list didn't load.</p>
+        <p className="px-4 py-3 text-sm/relaxed text-pretty text-fg-muted">The list didn't load. Try again is on the right.</p>
       ) : sessions === null ? (
         <SidebarGroup data-home-loading>
           <div className="flex h-8 items-center px-2">

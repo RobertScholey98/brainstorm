@@ -213,8 +213,8 @@ function BlockControls({
     <div data-block={block.id}>
       {error !== null && (
         <div className="pt-3">
-          <Callout tone="danger" role="alert" heading="This block failed to render">
-            <p>The error shows in its frame on the canvas.</p>
+          <Callout tone="danger" role="alert" heading="Render failed">
+            <p>Its frame on the canvas shows why.</p>
           </Callout>
         </div>
       )}
