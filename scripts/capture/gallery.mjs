@@ -10,7 +10,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { chromium } from "playwright";
+import { _electron, chromium } from "playwright";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, demoEnv } from "../seed-demo.mjs";
 import { build, canvasFrame, inBlock, launch, root } from "../verify/electron.mjs";
@@ -33,7 +33,7 @@ const PHASE_MS = 20_000;
 
 const SHOTS = [
   ["home-empty", "empty", "Home on a fresh install: no brainstorms in the sidebar, and the empty state says how to start one"],
-  ["home", "home", "Home with three project groups (chores, kitchen, Other project), a lost thread, and a long title that truncates"],
+  ["home", "home", "Home: the overview of every brainstorm as cards, beside three project groups (chores, kitchen, Other project), a lost thread, and a long title that truncates"],
   ["home-collapsed-group", "home", "Home with the kitchen project group collapsed"],
   ["sidebar-collapsed", "canvas", "The Chore roulette brainstorm with the sidebar collapsed, so the toggle sits in the top bar"],
   ["state-hover-row", "home", "Home with the pointer over the Chore roulette session row"],
@@ -52,7 +52,7 @@ const SHOTS = [
   ["state-export-done", "canvas", "The Export popover once the file is written, with its path and Show in folder"],
   ["state-pick-mode", "canvas", "Pin mode: the hint pill over the canvas and the highlight on the hovered headline"],
   ["state-pin-composer", "canvas", "The pin composer over the canvas with a comment typed"],
-  ["state-tooltip", "canvas", "A tooltip on an ordinary control"],
+  ["state-tooltip", "canvas", "A tooltip on an ordinary control: the sidebar toggle, with its Ctrl+B shortcut"],
   ["state-notice", "canvas", "The failure toast after an action fails because Brainstorm's server didn't answer"],
   ["feedback-list", "canvas", "Feedback with open, addressed and confirmed comments, and comment 1 focused from its pin"],
   ["phase-sending", "phases", "Request phase: sending to T3, with Regenerate already disabled"],
@@ -60,13 +60,35 @@ const SHOTS = [
   ["phase-working", "phases", "Request phase: the agent is working"],
   ["phase-asking", "phases", "Request phase: the agent is asking something in T3"],
   ["phase-run-failed", "phases", "Request phase: the agent's run failed, with Retry and Withdraw"],
-  ["phase-send-failed", "phases", "Request phase: the send failed, with the error and Retry"],
-  ["phase-no-change", "phases", "Request phase: the agent replied without changing the design"],
+  ["phase-send-failed", "phases", "Request phase: the send failed; the bar names it with Retry, and the strip under it holds the whole error"],
+  ["phase-no-change", "phases", "Request phase: the agent replied without changing the design; the bar names it, the strip says it in full"],
   ["phase-fulfilled", "phases", "Request phase: fulfilled, naming the new iteration and the block that changed"],
   ["phase-withdrawn", "phases", "Request phase: withdrawn"],
-  ["phase-thread-lost", "phases", "Request phase: the thread is gone, with the takeover phrase and Copy phrase"],
+  ["phase-thread-lost", "phases", "Request phase: the thread is gone; the bar has Copy phrase, the strip holds the whole takeover phrase"],
   ["session-unattached", "phases", "The lost-thread session once its request is withdrawn: the sidebar shows the takeover phrase and Copy phrase"],
   ["phase-previous-thread", "phases", "Request phase: sent to the previous thread after another thread took the session over"],
+  ["home-loading", "launch", "Home while the first list loads: skeleton rows in the sidebar and skeleton cards in the overview"],
+  ["home-server-down", "launch", "Home when Brainstorm's server doesn't answer at launch: the error and Try again"],
+  ["home-sidebar-collapsed", "home", "Home with the sidebar collapsed, so the toggle sits in the top bar"],
+  ["home-session-kept", "home", "Back to all brainstorms from Chore roulette: the home list, with that brainstorm still on the canvas and its row marked"],
+  ["session-loading", "views", "A brainstorm opening: skeletons in the sidebar and the Inspector while its view loads"],
+  ["state-select-open", "canvas", "The Palette select open in the Inspector"],
+  ["state-slider-focus", "canvas", "The Glow slider focused from the keyboard"],
+  ["state-focus-row", "canvas", "Keyboard focus on a variant row in the sidebar"],
+  ["state-hover-variant", "canvas", "The pointer over a variant row that isn't showing"],
+  ["state-resize-handle", "canvas", "The Inspector's resize handle under the pointer, with its accent line"],
+  ["state-shortcut-hint", "canvas", "The Regenerate hint, naming its Ctrl+R shortcut"],
+  ["state-hover-pin", "canvas", "The pointer over a pin on the canvas"],
+  ["state-hover-feedback", "canvas", "The pointer over a feedback item in the Inspector"],
+  ["state-feedback-edit", "canvas", "A feedback item in Edit mode"],
+  ["state-regenerate-invalid", "canvas", "Regenerate with Describe it and no text yet, so Send is disabled"],
+  ["state-export-failed", "canvas", "Export when the server doesn't answer: the popover closes and the failure toast says why"],
+  ["state-copied", "phases", "Copy phrase just after a click, reading Copied"],
+  ["phase-long-title", "phases", "A long brainstorm title beside a queued request in the top bar"],
+  ["home-many-projects", "overflow", "Home with nine projects, so the sidebar and the overview both scroll"],
+  ["state-colour-picker", "canvas", "The colour picker on the Accent control"],
+  ["window-title-bar", "canvas", "The window's title bar"],
+  ["state-escape", "canvas", "Escape closing an overlay, pick mode and the composer"],
 ].map(([name, scene, about], i) => ({ name, scene, about, file: `${String(i + 1).padStart(2, "0")}-${name}` }));
 const byName = new Map(SHOTS.map((s) => [s.name, s]));
 /** name -> { status: "captured" } | { status: "missing" | "partial", reason } */
@@ -109,12 +131,12 @@ async function untilStill(page, deadline = Date.now() + SETTLE_MS) {
   }
 }
 
-/** Null once the page is settled, else why it never did. */
-async function settle(page, { keepFocus }) {
+/** Null once the page is settled, else why it never did. A `loading` shot is of the skeletons, so it doesn't wait them out. */
+async function settle(page, { keepFocus, loading = false }) {
   const deadline = Date.now() + SETTLE_MS;
   await inFrames(page, () => document.fonts.ready.then(() => null));
   let clearSince = Date.now();
-  while (Date.now() - clearSince < 1000) {
+  while (!loading && Date.now() - clearSince < 1000) {
     if (Date.now() > deadline) return "a loading skeleton kept showing";
     if (await page.evaluate(() => document.querySelector("[data-slot=skeleton], .animate-pulse") !== null)) clearSince = Date.now();
     await sleep(100);
@@ -134,8 +156,11 @@ async function setCombo(page, c) {
   await page.emulateMedia({ colorScheme: c.theme });
 }
 
-/** Shoots the current state in every theme and width. `each` re-enters anything a resize or a parked pointer undoes. */
-async function capture(page, name, { keepFocus = false, each } = {}) {
+/**
+ * Shoots the current state in every theme and width. `each` re-enters anything a resize or a parked pointer undoes. A
+ * `brief` state reverts on a timer shorter than settling takes, so it is shot as soon as `each` has entered it.
+ */
+async function capture(page, name, { keepFocus = false, loading = false, brief = false, each } = {}) {
   const shot = shotOf(name);
   const problems = [];
   for (const c of COMBOS) {
@@ -144,7 +169,7 @@ async function capture(page, name, { keepFocus = false, each } = {}) {
     // A hover or click aimed while the layout is still moving lands on where an element was.
     await untilStill(page);
     if (each !== undefined) await each(c);
-    const unsettled = await settle(page, { keepFocus });
+    const unsettled = brief ? null : await settle(page, { keepFocus, loading });
     if (unsettled === null) {
       await page.screenshot({ path: join(comboDir(c), `${shot.file}.png`) });
     } else {
@@ -164,6 +189,19 @@ function must(step, r) {
 
 /** The fake T3's environment for a home, minus ELECTRON_RUN_AS_NODE, which would start Electron as plain Node. */
 const appEnv = (home) => (({ ELECTRON_RUN_AS_NODE: _, ...rest }) => rest)(demoEnv(home));
+
+/**
+ * Launches with `route` on the session list from the first request, for the states only a fresh launch shows. The
+ * route goes on before the window's first load.
+ */
+async function startRouted(env, route) {
+  const app = await _electron.launch({ args: [root], env, cwd: root });
+  await app.context().route("**/v1/ui/sessions", route);
+  const window = await app.firstWindow();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setIgnoreMouseEvents(true));
+  await setCombo(window, COMBOS[0]);
+  return { app, window };
+}
 
 async function start(home, env) {
   const run = await launch(home, env);
@@ -291,7 +329,7 @@ function seedAll(home, env, t3) {
   const sessions = {};
   sessions.loose = seed(home, env, { title: "Loose notes", thread: LOOSE_THREAD, project: loose }).id;
   sessions.list = seed(home, env, { title: "Shopping list sketch", thread: LIST_THREAD, project: loose }).id;
-  seed(home, env, {
+  sessions.longTitle = seed(home, env, {
     title: LONG_TITLE,
     thread: KITCHEN_THREAD,
     project: kitchen,
@@ -354,10 +392,13 @@ const HEADLINE = inBlock("result/card", "headline");
 function scenes(page, home, env, t3, sessions) {
   const phase = (name) => page.waitForSelector(`[data-request-phase="${name}"]`, { timeout: PHASE_MS });
 
+  /** Back to the overview with nothing open. Back alone keeps the open brainstorm on the canvas. */
   async function goHome() {
     await page.keyboard.press("Escape");
     if ((await page.$("[data-back]")) !== null) await page.click("[data-back]");
     await page.waitForSelector('[data-sidebar-panel="home"]');
+    if ((await page.$("[data-home-overview]")) === null) await page.click("[data-overview]");
+    await page.waitForSelector("[data-home-overview]");
   }
 
   /** Opens a session from home and returns its canvas frame, or null when it has no iteration yet. */
@@ -410,9 +451,36 @@ function scenes(page, home, env, t3, sessions) {
       await page.waitForSelector(`[data-session="${sessions.kitchen.id}"]`);
 
       await capture(page, "state-hover-row", { each: () => page.hover(`[data-session="${sessions.roulette.id}"]`) });
+
+      await page.click('[data-slot="sidebar"] [data-sidebar="trigger"]');
+      await page.waitForSelector('[data-slot="sidebar"][data-state="collapsed"]');
+      await capture(page, "home-sidebar-collapsed");
+      await page.click('[data-topbar] [data-sidebar="trigger"]');
+      await page.waitForSelector('[data-slot="sidebar"][data-state="expanded"]');
+      await untilStill(page);
+
+      await open(sessions.roulette.id, [inBlock("wheel/neon", "screen")]);
+      await page.click("[data-back]");
+      await page.waitForSelector('[data-sidebar-panel="home"]');
+      await capture(page, "home-session-kept");
+      await goHome();
     },
 
     async views() {
+      let release;
+      const viewed = new Promise((r) => (release = r));
+      await page.route(`**/v1/ui/sessions/${sessions.multi}`, async (route) => {
+        await viewed;
+        await route.continue();
+      });
+      await goHome();
+      await page.click(`[data-session="${sessions.multi}"]`);
+      await page.waitForSelector("[data-session-loading]");
+      await capture(page, "session-loading", { loading: true });
+      release();
+      await page.waitForSelector("[data-session-loading]", { state: "detached" });
+      await page.unroute(`**/v1/ui/sessions/${sessions.multi}`);
+
       await open(sessions.multi, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card"), inBlock("history/ledger", "footer")]);
       await capture(page, "session-multi-slot");
 
@@ -466,6 +534,47 @@ function scenes(page, home, env, t3, sessions) {
       const canvas = await open(id, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card")]);
       await capture(page, "session");
 
+      await capture(page, "state-select-open", {
+        each: async () => {
+          if (!(await page.isVisible('[data-slot="select-content"]'))) await page.click('[data-control="palette"] [data-slot="select-trigger"]');
+          await page.waitForSelector('[data-slot="select-content"]', { state: "visible" });
+        },
+      });
+      await page.keyboard.press("Escape");
+      await page.waitForSelector('[data-slot="select-content"]', { state: "hidden" });
+
+      await capture(page, "state-slider-focus", {
+        keepFocus: true,
+        each: async () => {
+          await page.focus('[data-control="glow"] input[type="range"]');
+          await page.keyboard.press("Shift");
+        },
+      });
+      await capture(page, "state-focus-row", {
+        keepFocus: true,
+        each: async () => {
+          await page.focus('[data-slot-id="wheel"] [data-variant="neon"]');
+          await page.keyboard.press("Shift");
+        },
+      });
+      await capture(page, "state-hover-variant", { each: () => page.hover('[data-slot-id="wheel"] [data-variant="reel"]') });
+      await capture(page, "state-resize-handle", { each: () => page.hover('[data-slot="resize-handle"][aria-label="Inspector width"]') });
+      await capture(page, "state-tooltip", {
+        each: async () => {
+          await page.hover('[data-slot="sidebar"] [data-sidebar="trigger"]');
+          await page.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
+        },
+      });
+      await capture(page, "state-shortcut-hint", {
+        each: async () => {
+          await page.hover("[data-regenerate-toggle]");
+          await page.waitForSelector('[data-slot="tooltip-content"]:has-text("Ctrl+R")', { state: "visible" });
+        },
+      });
+      missing("state-colour-picker", "The Accent swatch opens the operating system's colour dialog, a separate window the page can't screenshot.");
+      missing("window-title-bar", "Screenshots are of the page; the title bar is the operating system's frame around it.");
+      missing("state-escape", "Escape is behaviour rather than a look: each overlay, pick mode and the composer close to a state already shot. verify:7 and verify:4 press it.");
+
       await page.click('[data-slot="sidebar"] [data-sidebar="trigger"]');
       await page.waitForSelector('[data-slot="sidebar"][data-state="collapsed"]');
       await capture(page, "sidebar-collapsed");
@@ -511,6 +620,19 @@ function scenes(page, home, env, t3, sessions) {
       await capture(page, "feedback-list", {
         each: () => page.$eval("[data-feedback-panel]", (el) => el.scrollIntoView({ block: "end" })),
       });
+      await capture(page, "state-hover-pin", { each: () => canvas.hover('.bs-pin[data-pin="2"]') });
+      await capture(page, "state-hover-feedback", {
+        each: async () => {
+          await page.$eval("[data-feedback-panel]", (el) => el.scrollIntoView({ block: "end" }));
+          await page.hover('[data-feedback="2"]');
+        },
+      });
+      await page.click('[data-feedback="1"] [data-feedback-action="edit"]');
+      await capture(page, "state-feedback-edit", {
+        keepFocus: true,
+        each: () => page.$eval("[data-feedback-panel]", (el) => el.scrollIntoView({ block: "end" })),
+      });
+      await page.click('[data-feedback="1"] button:has-text("Cancel")');
 
       await openRegenerate("all", "Make the whole flow feel calmer, especially the spin");
       await capture(page, "state-regenerate-open-all", { keepFocus: true });
@@ -518,13 +640,11 @@ function scenes(page, home, env, t3, sessions) {
       await capture(page, "state-regenerate-open-blocks", { keepFocus: true });
       await openRegenerate("described", "Try a calmer palette on every screen that shows the winner");
       await capture(page, "state-regenerate-open-described", { keepFocus: true });
+      await openRegenerate("described", "");
+      await capture(page, "state-regenerate-invalid", { keepFocus: true });
       await page.click('[data-regenerate-menu] button:has-text("Cancel")');
       await page.waitForSelector("[data-regenerate-menu]", { state: "detached" });
 
-      missing(
-        "state-tooltip",
-        "Blocked Regenerate is the app's only styled tooltip (see state-regenerate-blocked). Every other hint is a native title attribute, which the OS draws outside the page, so no screenshot can show it.",
-      );
 
       // An aborted request is how the renderer meets a server that isn't answering, the case its notice is for.
       await page.route("**/v1/ui/sessions/*/actions", (route) => route.abort());
@@ -555,6 +675,19 @@ function scenes(page, home, env, t3, sessions) {
       await page.click('[data-exported] button:has-text("Done")');
       await page.waitForSelector("[data-exported]", { state: "detached" });
       await page.unroute("**/v1/ui/sessions/*/export");
+
+      await page.route("**/v1/ui/sessions/*/export", (route) => route.abort());
+      await capture(page, "state-export-failed", {
+        each: async (c) => {
+          await page.waitForSelector("[data-slot=toast]", { state: "detached", timeout: 8000 });
+          await page.click("[data-export]");
+          await page.waitForSelector("[data-slot=toast]");
+          await page.keyboard.press("Escape");
+          await park(page, c);
+        },
+      });
+      await page.unroute("**/v1/ui/sessions/*/export");
+      await page.waitForSelector("[data-slot=toast]", { state: "detached", timeout: 8000 });
     },
 
     async phases() {
@@ -571,7 +704,7 @@ function scenes(page, home, env, t3, sessions) {
       await capture(page, "phase-queued");
       await capture(page, "state-regenerate-blocked", {
         each: async () => {
-          await page.hover('[data-slot="tooltip-trigger"]');
+          await page.hover("[data-regenerate-blocked]");
           await page.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
         },
       });
@@ -629,9 +762,39 @@ function scenes(page, home, env, t3, sessions) {
       t3.setMissing(TAKEOVER_THREAD, true);
       await phase("thread_lost");
       await capture(page, "phase-thread-lost");
+      await capture(page, "state-copied", {
+        keepFocus: true,
+        brief: true,
+        each: async () => {
+          // The clipboard only takes a write from a focused document.
+          await page.bringToFront();
+          await page.click('[data-request-phase] [data-request-action="copy_phrase"]');
+          await page.waitForSelector('[data-request-phase] [data-request-action="copy_phrase"]:has-text("Copied")');
+        },
+      });
       await page.click('[data-request-action="withdraw"]');
       await page.waitForSelector("[data-takeover]");
       await capture(page, "session-unattached");
+
+      await open(sessions.longTitle.id, [inBlock("result/card", "card")]);
+      await regenerate("all");
+      await phase("queued");
+      await page.waitForSelector("[data-regenerate-menu]", { state: "detached" });
+      await capture(page, "phase-long-title");
+      await page.click('[data-request-action="withdraw"]');
+      await phase("withdrawn");
+    },
+
+    async overflow() {
+      const names = ["bins", "laundry", "garden", "pantry", "bikes", "recycling"];
+      for (const [i, name] of names.entries()) {
+        const thread = `c0ffee00-0000-4000-8000-0000000d00${String(i).padStart(2, "0")}`;
+        t3.addThread(thread, { projectId: `${name}-proj`, title: `${name} study` });
+        seed(home, env, { title: `${name[0].toUpperCase()}${name.slice(1)} rota`, thread, project: gitRepo(home, name).repo, brief: `Who does the ${name} this week, and how the flat sees it was fair.` });
+      }
+      await goHome();
+      await page.waitForSelector('[data-project="recycling-proj"]', { timeout: PHASE_MS });
+      await capture(page, "home-many-projects");
     },
   };
 }
@@ -665,6 +828,22 @@ const emptyEnv = appEnv(emptyHome);
   } finally {
     await run.app.close();
   }
+  await runScene("launch", async () => {
+    let held = await startRouted(emptyEnv, () => {});
+    try {
+      await held.window.waitForSelector("[data-home-loading]");
+      await capture(held.window, "home-loading", { loading: true });
+    } finally {
+      await held.app.close();
+    }
+    held = await startRouted(emptyEnv, (route) => route.abort());
+    try {
+      await held.window.waitForSelector("[data-home-error]");
+      await capture(held.window, "home-server-down");
+    } finally {
+      await held.app.close();
+    }
+  });
 }
 
 const home = mkdtempSync(join(tmpdir(), "bs-capture-"));
