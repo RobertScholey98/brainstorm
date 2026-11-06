@@ -17,3 +17,16 @@ export function useIsMobile() {
 
   return !!isMobile
 }
+
+/** Whether the window is at least `px` wide, following resizes. */
+export function useWiderThan(px: number): boolean {
+  const query = `(min-width: ${px}px)`;
+  return React.useSyncExternalStore(
+    (onChange) => {
+      const mql = matchMedia(query);
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    },
+    () => matchMedia(query).matches,
+  );
+}

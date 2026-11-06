@@ -33,6 +33,7 @@ import type { Api } from "./api";
 import { CanvasHost, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { HomeOverview } from "./Home";
+import { useWiderThan } from "./hooks/use-mobile";
 import { usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
 import { Inspector, InspectorSkeleton } from "./Inspector";
 import { PendingOverrides } from "./overrides";
@@ -44,7 +45,9 @@ const NOTICE_MS = 6000;
 /** How often an open brainstorm asks T3 whether its thread still exists, besides on window focus. */
 const THREAD_CHECK_MS = 15_000;
 
-const SIDEBAR: PaneLimits = { fallback: typeof innerWidth === "number" && innerWidth < 1280 ? 240 : 288, min: 200, max: 400 };
+/** Below 1280 px the sidebar starts narrower, so the canvas keeps room for a second frame. */
+const SIDEBAR_WIDE: PaneLimits = { fallback: 288, min: 200, max: 400 };
+const SIDEBAR_NARROW: PaneLimits = { ...SIDEBAR_WIDE, fallback: 240 };
 const INSPECTOR: PaneLimits = { fallback: 280, min: 240, max: 480 };
 
 /**
@@ -66,7 +69,8 @@ export function App({ api }: { api: Api }) {
   const [nav, setNav] = useState<Nav>({ kind: "overview" });
   const [revision, setRevision] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
-  const [sidebarWidth, setSidebarWidth] = usePaneWidth("sidebar", SIDEBAR);
+  const sidebarLimits = useWiderThan(1280) ? SIDEBAR_WIDE : SIDEBAR_NARROW;
+  const [sidebarWidth, setSidebarWidth] = usePaneWidth("sidebar", sidebarLimits);
 
   const sessionId = nav.kind === "brainstorm" ? nav.id : null;
   const current = useRef<SessionId | null>(null);
@@ -119,7 +123,7 @@ export function App({ api }: { api: Api }) {
     />
   );
   const sidebar = (panel: ReactNode) => (
-    <AppSidebar width={sidebarWidth} limits={SIDEBAR} onWidth={setSidebarWidth}>
+    <AppSidebar width={sidebarWidth} limits={sidebarLimits} onWidth={setSidebarWidth}>
       {panel}
     </AppSidebar>
   );

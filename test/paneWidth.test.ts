@@ -9,8 +9,8 @@ describe("readWidth", () => {
     expect([readWidth("inspector", limits, store("320")), readWidth("inspector", limits, store("100")), readWidth("inspector", limits, store("900"))]).toEqual([320, 240, 480]);
   });
 
-  it("falls back when nothing usable is stored or storage throws", () => {
+  it("reads nothing when no usable width is stored or storage throws", () => {
     const throws = { getItem: () => { throw new Error("blocked"); } };
-    expect([readWidth("inspector", limits, store(null)), readWidth("inspector", limits, store("wide")), readWidth("inspector", limits, throws), readWidth("inspector", limits, undefined)]).toEqual([280, 280, 280, 280]);
+    expect([readWidth("inspector", limits, store(null)), readWidth("inspector", limits, store("wide")), readWidth("inspector", limits, throws), readWidth("inspector", limits, undefined)]).toEqual([null, null, null, null]);
   });
 });
