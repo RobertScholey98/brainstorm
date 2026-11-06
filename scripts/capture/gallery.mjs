@@ -37,9 +37,9 @@ const SHOTS = [
   ["home-collapsed-group", "home", "Home with the kitchen project group collapsed"],
   ["sidebar-collapsed", "canvas", "The Chore roulette brainstorm with the sidebar collapsed, so the toggle sits in the top bar"],
   ["state-hover-row", "home", "Home with the pointer over the Chore roulette session row"],
-  ["session", "canvas", "The Chore roulette brainstorm as it opens: two slots, the first frame selected, its controls in the Inspector"],
+  ["session", "canvas", "The Chore roulette brainstorm as it opens: on the stage, the first slot alone under the slot tabs, its controls in the Inspector"],
   ["session-multi-slot", "views", "A brainstorm with three slots and several variants each, where the showing variants carry long about text"],
-  ["session-wide-frame", "views", "A 980 px frame wider than the canvas, scrolled halfway across"],
+  ["session-wide-frame", "views", "All slots: a 980 px frame on the board, wider than the canvas, scrolled halfway across"],
   ["session-block-error", "views", "A block that throws in the canvas: the frame shows the failure, and the Inspector names the error"],
   ["session-no-iteration", "views", "A brainstorm whose agent hasn't committed yet: waiting state, Regenerate and Export disabled"],
   ["inspector-overridden", "inspector", "The Inspector on the assignment card with the headline, accent and name size overridden"],
@@ -53,7 +53,7 @@ const SHOTS = [
   ["state-pick-mode", "canvas", "Pin mode: the hint pill over the canvas and the highlight on the hovered headline"],
   ["state-pin-composer", "canvas", "The pin composer over the canvas with a comment typed"],
   ["state-tooltip", "canvas", "A tooltip on an ordinary control: the sidebar toggle, with its Ctrl+B shortcut"],
-  ["state-notice", "canvas", "The failure toast after an action fails because Brainstorm's server didn't answer"],
+  ["state-notice", "canvas", "The failure notice, with its close button, after an action fails because Brainstorm's server didn't answer"],
   ["feedback-list", "canvas", "Feedback with open, addressed and confirmed comments, and comment 1 focused from its pin"],
   ["phase-sending", "phases", "Request phase: sending to T3, with Regenerate already disabled"],
   ["phase-queued", "phases", "Request phase: queued in T3"],
@@ -76,7 +76,7 @@ const SHOTS = [
   ["state-slider-focus", "canvas", "The Glow slider focused from the keyboard"],
   ["state-focus-row", "canvas", "Keyboard focus on a variant row in the sidebar"],
   ["state-hover-variant", "canvas", "The pointer over a variant row that isn't showing"],
-  ["state-resize-handle", "canvas", "The Inspector's resize handle under the pointer, with its accent line"],
+  ["state-resize-handle", "canvas", "The Inspector's resize handle under the pointer, with its line"],
   ["state-shortcut-hint", "canvas", "The Regenerate hint, naming its Ctrl+R shortcut"],
   ["state-hover-pin", "canvas", "The pointer over a pin on the canvas"],
   ["state-hover-feedback", "canvas", "The pointer over a feedback item in the Inspector"],
@@ -87,8 +87,16 @@ const SHOTS = [
   ["phase-long-title", "phases", "A long brainstorm title beside a queued request in the top bar"],
   ["home-many-projects", "overflow", "Home with nine projects, so the sidebar and the overview both scroll"],
   ["state-colour-picker", "canvas", "The colour picker on the Accent control"],
-  ["window-title-bar", "canvas", "The window's title bar"],
+  ["window-title-bar", "window", "The whole window at its real size, from the screen: the app's own header with the native buttons overlaid at its right end, in the theme's colours"],
   ["state-escape", "canvas", "Escape closing an overlay, pick mode and the composer"],
+  ["session-board", "canvas", "All slots: the Chore roulette board, both frames side by side"],
+  ["stage-wide-frame", "views", "The 980 px frame on the stage, scaled to fit with its zoom readout and no sideways scroll"],
+  ["stage-desktop-frame", "views", "A 1440 px frame on the stage, scaled to fit"],
+  ["stage-tabs-focus", "canvas", "Keyboard focus on a slot tab in the canvas bar"],
+  ["about-more-open", "views", "A long variant note opened with More, so it reads Less"],
+  ["inspector-rail", "canvas", "The Inspector collapsed to its rail, with the feedback count"],
+  ["feedback-delete-confirm", "canvas", "Delete on a feedback item asking in place, with Cancel focused"],
+  ["prefs-restored", "restart", "After a restart: the wider sidebar and Inspector, and the board, come back as Rob left them"],
 ].map(([name, scene, about], i) => ({ name, scene, about, file: `${String(i + 1).padStart(2, "0")}-${name}` }));
 const byName = new Map(SHOTS.map((s) => [s.name, s]));
 /** name -> { status: "captured" } | { status: "missing" | "partial", reason } */
@@ -351,6 +359,12 @@ function seedAll(home, env, t3) {
     project: chores,
     slots: [{ id: "result", title: "Wide frame", frame: { width: 980, height: 600 }, variants: { card: { from: demo("result", "card") } } }],
   }).id;
+  sessions.desktop = seed(home, env, {
+    title: "Rota on the desktop",
+    thread: DEMO_THREAD,
+    project: chores,
+    slots: [{ id: "result", title: "Desktop frame", frame: { width: 1440, height: 600 }, variants: { card: { from: demo("result", "card") } } }],
+  }).id;
   sessions.multi = seed(home, env, {
     title: "Rota handover",
     thread: DEMO_THREAD,
@@ -401,15 +415,24 @@ function scenes(page, home, env, t3, sessions) {
     await page.waitForSelector("[data-home-overview]");
   }
 
-  /** Opens a session from home and returns its canvas frame, or null when it has no iteration yet. */
-  async function open(id, waitFor) {
+  /**
+   * Opens a session from home in `view` and returns its canvas frame, or null when it has no iteration yet. A slot
+   * off the stage is mounted but hidden, so its blocks are waited for as attached.
+   */
+  async function open(id, waitFor, view = "stage") {
     await goHome();
     await page.click(`[data-session="${id}"]`);
     await page.waitForSelector('[data-sidebar-panel="session"]');
     if (waitFor === undefined) return null;
     const canvas = await canvasFrame(page);
-    for (const selector of waitFor) await canvas.waitForSelector(selector);
+    for (const selector of waitFor) await canvas.waitForSelector(selector, { state: "attached" });
+    await showView(canvas, view);
     return canvas;
+  }
+
+  async function showView(canvas, view) {
+    if ((await page.getAttribute("[data-board-toggle]", "aria-pressed")) !== String(view === "board")) await page.click("[data-board-toggle]");
+    await canvas.waitForSelector(`#canvas[data-view="${view}"]`);
   }
 
   async function ensurePicking() {
@@ -481,10 +504,20 @@ function scenes(page, home, env, t3, sessions) {
       await page.waitForSelector("[data-session-loading]", { state: "detached" });
       await page.unroute(`**/v1/ui/sessions/${sessions.multi}`);
 
-      await open(sessions.multi, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card"), inBlock("history/ledger", "footer")]);
+      await open(sessions.multi, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card"), inBlock("history/ledger", "footer")], "board");
       await capture(page, "session-multi-slot");
+      await page.click('[data-slot-id="wheel"] [data-about-more]');
+      await capture(page, "about-more-open");
+      await page.click('[data-slot-id="wheel"] [data-about-more]');
 
-      const wide = await open(sessions.wide, [inBlock("result/card", "card")]);
+      const staged = await open(sessions.wide, [inBlock("result/card", "card")]);
+      await staged.waitForSelector(".bs-frame-zoom");
+      await capture(page, "stage-wide-frame");
+      const desktop = await open(sessions.desktop, [inBlock("result/card", "card")]);
+      await desktop.waitForSelector(".bs-frame-zoom");
+      await capture(page, "stage-desktop-frame");
+
+      const wide = await open(sessions.wide, [inBlock("result/card", "card")], "board");
       await capture(page, "session-wide-frame", {
         each: () => wide.evaluate(() => scrollTo(Math.round((document.documentElement.scrollWidth - innerWidth) / 2), 0)),
       });
@@ -501,6 +534,8 @@ function scenes(page, home, env, t3, sessions) {
     async inspector() {
       const { id, work } = sessions.kitchen;
       const canvas = await open(id, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card")]);
+      await page.click('[data-slot-tab="result"]');
+      await canvas.waitForSelector(inBlock("result/card", "chore"));
       await canvas.click(inBlock("result/card", "chore"));
       await page.waitForSelector('[data-block="result/card"]');
       await page.click('[data-control="headline"] input');
@@ -533,6 +568,16 @@ function scenes(page, home, env, t3, sessions) {
       const { id } = sessions.roulette;
       const canvas = await open(id, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card")]);
       await capture(page, "session");
+      await capture(page, "stage-tabs-focus", {
+        keepFocus: true,
+        each: async () => {
+          await page.focus('[data-slot-tab="wheel"]');
+          await page.keyboard.press("Shift");
+        },
+      });
+      // The rest of this scene pins and selects across both slots, as the board shows them.
+      await showView(canvas, "board");
+      await capture(page, "session-board");
 
       await capture(page, "state-select-open", {
         each: async () => {
@@ -572,7 +617,6 @@ function scenes(page, home, env, t3, sessions) {
         },
       });
       missing("state-colour-picker", "The Accent swatch opens the operating system's colour dialog, a separate window the page can't screenshot.");
-      missing("window-title-bar", "Screenshots are of the page; the title bar is the operating system's frame around it.");
       missing("state-escape", "Escape is behaviour rather than a look: each overlay, pick mode and the composer close to a state already shot. verify:7 and verify:4 press it.");
 
       await page.click('[data-slot="sidebar"] [data-sidebar="trigger"]');
@@ -635,6 +679,21 @@ function scenes(page, home, env, t3, sessions) {
         each: () => page.$eval("[data-feedback-panel]", (el) => el.scrollIntoView({ block: "end" })),
       });
       await page.click('[data-feedback="1"] button:has-text("Cancel")');
+      await page.click('[data-feedback="1"] [data-feedback-action="delete"]');
+      await capture(page, "feedback-delete-confirm", {
+        keepFocus: true,
+        each: async () => {
+          await page.$eval("[data-feedback-panel]", (el) => el.scrollIntoView({ block: "end" }));
+          await page.focus('[data-feedback="1"] [data-feedback-cancel]');
+          await page.keyboard.press("Shift");
+        },
+      });
+      await page.click('[data-feedback="1"] [data-feedback-cancel]');
+      await page.click("[data-inspector-toggle]");
+      await page.waitForSelector("[data-inspector-rail]");
+      await capture(page, "inspector-rail");
+      await page.click("[data-rail-expand]");
+      await page.waitForSelector("[data-feedback-panel]");
 
       await openRegenerate("all", "Make the whole flow feel calmer, especially the spin");
       await capture(page, "state-regenerate-open-all", { keepFocus: true });
@@ -652,15 +711,15 @@ function scenes(page, home, env, t3, sessions) {
       await page.route("**/v1/ui/sessions/*/actions", (route) => route.abort());
       await capture(page, "state-notice", {
         each: async (c) => {
-          // The notice hides 6 s after it last changed, and the same message twice doesn't restart that.
-          await page.waitForSelector("[data-slot=toast]", { state: "detached", timeout: 8000 });
+          if ((await page.$("[data-slot=toast]")) !== null) await page.click("[data-toast-close]");
           await page.click('button[data-variant="reel"]');
           await page.waitForSelector("[data-slot=toast]");
           await park(page, c);
         },
       });
       await page.unroute("**/v1/ui/sessions/*/actions");
-      await page.waitForSelector("[data-slot=toast]", { state: "detached", timeout: 8000 });
+      await page.click("[data-toast-close]");
+      await page.waitForSelector("[data-slot=toast]", { state: "detached" });
 
       let release;
       const written = new Promise((r) => (release = r));
@@ -681,7 +740,7 @@ function scenes(page, home, env, t3, sessions) {
       await page.route("**/v1/ui/sessions/*/export", (route) => route.abort());
       await capture(page, "state-export-failed", {
         each: async (c) => {
-          await page.waitForSelector("[data-slot=toast]", { state: "detached", timeout: 8000 });
+          if ((await page.$("[data-slot=toast]")) !== null) await page.click("[data-toast-close]");
           await page.click("[data-export]");
           await page.waitForSelector("[data-slot=toast]");
           await page.keyboard.press("Escape");
@@ -689,12 +748,13 @@ function scenes(page, home, env, t3, sessions) {
         },
       });
       await page.unroute("**/v1/ui/sessions/*/export");
-      await page.waitForSelector("[data-slot=toast]", { state: "detached", timeout: 8000 });
+      await page.click("[data-toast-close]");
+      await page.waitForSelector("[data-slot=toast]", { state: "detached" });
     },
 
     async phases() {
       const { id } = sessions.roulette;
-      const canvas = await open(id, [inBlock("wheel/neon", "screen")]);
+      const canvas = await open(id, [inBlock("wheel/neon", "screen"), inBlock("result/card", "card")], "board");
 
       t3.setHold(["send"]);
       await regenerate("all", "Make the spin feel less random");
@@ -771,7 +831,7 @@ function scenes(page, home, env, t3, sessions) {
           // The clipboard only takes a write from a focused document.
           await page.bringToFront();
           await page.click('[data-request-phase] [data-request-action="copy_phrase"]');
-          await page.waitForSelector('[data-request-phase] [data-request-action="copy_phrase"]:has-text("Copied")');
+          await page.waitForSelector('[data-request-phase] [data-request-action="copy_phrase"] [data-copied]');
         },
       });
       await page.click('[data-request-action="withdraw"]');
@@ -798,6 +858,16 @@ function scenes(page, home, env, t3, sessions) {
       await page.waitForSelector('[data-project="recycling-proj"]', { timeout: PHASE_MS });
       await capture(page, "home-many-projects");
     },
+
+    /** Widens both panes for the restart shot; the roulette board is already kept from the canvas scene. */
+    async widen() {
+      await open(sessions.roulette.id, [inBlock("wheel/neon", "screen")], "board");
+      await page.focus('[data-slot="resize-handle"][aria-label="Sidebar width"]');
+      for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowRight");
+      await page.focus('[data-slot="resize-handle"][aria-label="Inspector width"]');
+      for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowLeft");
+      await sleep(600);
+    },
   };
 }
 
@@ -810,6 +880,20 @@ async function runScene(name, fn) {
     console.log(`scene ${name} stopped: ${e.message}`);
     for (const shot of SHOTS) if (shot.scene === name && !outcomes.has(shot.name)) missing(shot.name, reason);
   }
+}
+
+/** Copies a physical-pixel rectangle of the screen to a PNG, as a DPI-aware process so the rectangle isn't rescaled. */
+function screenGrab({ x, y, width, height }, path) {
+  const script = [
+    "Add-Type -AssemblyName System.Drawing",
+    "Add-Type -Namespace Grab -Name Dpi -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware();'",
+    "[Grab.Dpi]::SetProcessDPIAware() | Out-Null",
+    `$b = New-Object System.Drawing.Bitmap ${width}, ${height}`,
+    "$g = [System.Drawing.Graphics]::FromImage($b)",
+    `$g.CopyFromScreen(${x}, ${y}, 0, 0, $b.Size)`,
+    `$b.Save('${path.replace(/'/g, "''")}', [System.Drawing.Imaging.ImageFormat]::Png)`,
+  ].join("; ");
+  execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { stdio: "ignore" });
 }
 
 const consoleNotes = [];
@@ -864,6 +948,49 @@ try {
     await run.window.keyboard.press("Escape").catch(() => {});
   }
   consoleNotes.push(...run.errors.map(firstLine("scenes")));
+  await run.app.close();
+  run = await start(home, env);
+  await runScene("restart", async () => {
+    await run.window.click(`[data-session="${sessions.roulette.id}"]`);
+    const canvas = await canvasFrame(run.window);
+    await canvas.waitForSelector('#canvas[data-view="board"]');
+    await canvas.waitForSelector(inBlock("result/card", "card"));
+    await capture(run.window, "prefs-restored");
+  });
+  consoleNotes.push(...run.errors.map(firstLine("restart")));
+  await run.app.close();
+  // Page screenshots stop at the web contents, and the native buttons are drawn outside them, so this shot is taken
+  // from the screen, of a window with no viewport emulation, sized and themed through Electron itself.
+  run = await launch(home, env);
+  await runScene("window", async () => {
+    await run.window.click(`[data-session="${sessions.roulette.id}"]`);
+    await (await canvasFrame(run.window)).waitForSelector(inBlock("result/card", "card"));
+    const shot = shotOf("window-title-bar");
+    for (const c of COMBOS) {
+      const { rect, size } = await run.app.evaluate(({ BrowserWindow, nativeTheme, screen }, [w, h, theme]) => {
+        nativeTheme.themeSource = theme;
+        const win = BrowserWindow.getAllWindows()[0];
+        win.setContentSize(w, h);
+        win.center();
+        win.setAlwaysOnTop(true);
+        win.setIgnoreMouseEvents(true);
+        win.focus();
+        const content = win.getContentBounds();
+        return { rect: screen.dipToScreenRect(win, content), size: [content.width, content.height] };
+      }, [c.width, c.height, c.theme]);
+      // Playwright pins the page to light until told otherwise; nativeTheme alone themes the native buttons.
+      await run.window.emulateMedia({ colorScheme: c.theme });
+      // Scaled displays round the content size, so the page is waited on to match what the window really is.
+      await run.window.waitForFunction(([w, h]) => Math.abs(innerWidth - w) <= 1 && Math.abs(innerHeight - h) <= 1, size);
+      await untilStill(run.window);
+      await sleep(800);
+      screenGrab(rect, join(comboDir(c), `${shot.file}.png`));
+    }
+    await run.app.evaluate(({ nativeTheme }) => (nativeTheme.themeSource = "system"));
+    outcomes.set("window-title-bar", { status: "captured" });
+    console.log(`shot    ${shot.file}`);
+  });
+  consoleNotes.push(...run.errors.map(firstLine("window")));
 } finally {
   await run.app.close();
 }

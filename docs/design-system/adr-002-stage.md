@@ -28,13 +28,13 @@ A frame always lays out at its declared `frame.width`. On the stage:
 
 On the board nothing scales. A frame wider than the canvas scrolls there, as before, and never sits under the Inspector.
 
-Measured with both sidebars at their default widths:
+Measured in the round 3 capture, with the panes at their default widths for each window size (the sidebar starts at 240 px below 1280):
 
 | Frame | Stage at 1440 | Stage at 1100 |
 | --- | --- | --- |
 | 390 px | centred at 100% | centred at 100% |
-| 980 px | 83% | 49% |
-| 1440 px | 56% | 34% |
+| 980 px | 83% | 53% |
+| 1440 px | 57% | 36% |
 
 ### Why zoom, not transform
 
@@ -48,7 +48,7 @@ The frames for the slots that aren't on the stage stay mounted, fixed and hidden
 
 - `HostToFrame` `state` carries `stage: SlotId | null`. Null is the board. `docs/design.md` records it under Canvas.
 - A scaled frame's text is smaller than it will be in the product. The percentage readout says so, and the board or a wider window shows it at full size.
-- `verify:7` checks the stage is the default, the tabs and arrows, a 980 px frame at 83% and 49% with no sideways scroll, the board fitting two 390 px frames at 1440, and a pin on its element in both views.
+- `verify:7` checks the stage is the default, the tabs and arrows, a 980 px frame at 83% at 1440 and scaled again at 1100 (49% there, where the sidebar keeps its 288 px from launch), with no sideways scroll, the board fitting two 390 px frames at 1440, and a pin on its element in both views.
 
 ## Rejected
 
