@@ -122,7 +122,8 @@ export function phaseMessage(phase: RequestPhase, context: { title: string; chan
     case "sending":
       return "Sending to T3…";
     case "send_failed":
-      return `Couldn't send: ${phase.error}. The request is saved.`;
+      // The reason in brackets, so its own colons never read as part of the sentence.
+      return `Couldn't send (${phase.error}). The request is saved.`;
     case "previous_thread":
       return "Sent to the previous thread";
     case "thread_lost":

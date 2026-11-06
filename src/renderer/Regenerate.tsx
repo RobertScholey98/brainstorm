@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, CircleAlert, CircleHelp, Clock, Info, Undo2 } from "lucide-react";
+import { AlertTriangle, Check, CircleAlert, CircleHelp, CircleSlash, Clock, Info } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
@@ -229,7 +229,8 @@ function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
     case "fulfilled":
       return <Check className={`${cls} text-success`} aria-hidden />;
     case "withdrawn":
-      return <Undo2 className={`${cls} text-fg-muted`} aria-hidden />;
+      // A state, not an action, so not the undo arrow a button would carry.
+      return <CircleSlash className={`${cls} text-fg-muted`} aria-hidden />;
     case "send_failed":
     case "run_failed":
       return <CircleAlert className={`${cls} text-danger`} aria-hidden />;
@@ -260,7 +261,7 @@ const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; re
   run_failed: { label: "Run failed", tone: "danger", note: "The agent's run failed in T3. Open the thread to see why, or Retry." },
   thread_lost: { label: "Thread lost", tone: "warning", note: "This brainstorm's thread is gone. In a T3 thread on this project, say:", own: "copy_phrase" },
   previous_thread: { label: "Sent to the previous thread", tone: "warning", note: "Another thread took this brainstorm over. Resend sends the request to it." },
-  no_change: { label: "No change", tone: "info" },
+  no_change: { label: "No change", tone: "info", note: "The agent replied in T3 without changing the design." },
 };
 
 /** A phase's label takes its icon's tone, so a tone never means one thing in the icon and another in the words. */
@@ -271,6 +272,7 @@ const TONE_TEXT: Partial<Record<RequestPhase["phase"], string>> = {
   thread_lost: "text-warning",
   previous_thread: "text-warning",
   no_change: "text-info",
+  fulfilled: "text-success",
 };
 
 export function RequestStatus({ view }: { view: SessionView }) {

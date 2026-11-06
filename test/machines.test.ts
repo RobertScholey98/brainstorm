@@ -126,7 +126,7 @@ describe("requestPhase, one test per design.md row", () => {
     expect(seen({ state: "send_failed", error: "t3 exited 1" }, attached, null)).toEqual({
       phase: "send_failed",
       actions: ["retry", "open_thread", "withdraw"],
-      message: "Couldn't send: t3 exited 1. The request is saved.",
+      message: "Couldn't send (t3 exited 1). The request is saved.",
     });
   });
 

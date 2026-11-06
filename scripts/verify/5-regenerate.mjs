@@ -282,7 +282,7 @@ try {
   t3.startRun(DEMO_THREAD);
   await phase("working");
   t3.endRun(DEMO_THREAD, "completed");
-  check("no change", await phase("no_change"), { message: "The agent replied in T3 without changing the design", actions: ["retry", "open_thread", "withdraw"] });
+  check("no change", await phase("no_change"), { message: "The agent replied in T3 without changing the design.", actions: ["retry", "open_thread", "withdraw"] });
   at.push(await withdrawAt());
   check("Open thread and Withdraw keep one x from queued through working, asking, run failed and no change", new Set(at).size, 1);
   await window.click('[data-request-action="withdraw"]');
@@ -292,7 +292,7 @@ try {
   await regenerate("described", "try a calmer palette everywhere");
   await window.click("[data-regenerate-menu] [data-send]");
   check("send failed", await phase("send_failed"), {
-    message: "Couldn't send: fake t3 failure: the reply was lost. The request is saved.",
+    message: "Couldn't send (fake t3 failure: the reply was lost). The request is saved.",
     actions: ["retry", "open_thread", "withdraw"],
   });
   await shot(window, shots, "6-send-failed");

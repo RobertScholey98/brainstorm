@@ -490,7 +490,7 @@ describe("request phases", () => {
     expect(await phase(service)).toEqual({
       phase: "send_failed",
       actions: ["retry", "open_thread", "withdraw"],
-      message: "Couldn't send: t3 did not answer within 15 s. The request is saved.",
+      message: "Couldn't send (t3 did not answer within 15 s). The request is saved.",
     });
     expect(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null })).toEqual({
       ok: false,
@@ -545,7 +545,7 @@ describe("request phases", () => {
     expect(await phase(restarted)).toEqual({
       phase: "send_failed",
       actions: ["retry", "open_thread", "withdraw"],
-      message: "Couldn't send: Brainstorm stopped before the send finished. The request is saved.",
+      message: "Couldn't send (Brainstorm stopped before the send finished). The request is saved.",
     });
     bridge.release();
     await pending;
