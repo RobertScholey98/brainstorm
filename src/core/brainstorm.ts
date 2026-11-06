@@ -862,10 +862,13 @@ export class Brainstorm {
     );
   }
 
-  /** A fork's first request says where it came from; a resend of it later says so again. */
+  /**
+   * A fork's first request says where it came from, and a resend of it later says so again. It goes to a thread the
+   * app started, so it also names a home other than the default; a thread that made its own brainstorm already knows.
+   */
   #messageFor(request: Request): string {
     const fork = request.n === 1 ? this.#store.fork(request.session) : null;
-    return formatRequestMessage(request, { ...(fork === null ? {} : { fork: { parent: fork.parent, from: fork.from } }), home: this.#agentHome });
+    return formatRequestMessage(request, fork === null ? {} : { fork: { parent: fork.parent, from: fork.from }, home: this.#agentHome });
   }
 
   /**

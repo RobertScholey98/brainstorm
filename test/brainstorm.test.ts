@@ -1051,7 +1051,7 @@ describe("fork", () => {
     expect((await s2.fork(F, { from: 1 as IterationN, picks: {}, instruction: "x" })).ok).toBe(false);
   });
 
-  test("names the app's home in the first message when it isn't the default", async () => {
+  test("names the app's home in a fork's first message when it isn't the default, and only there", async () => {
     const home = mkdtempSync(join(tmpdir(), "bs-service-"));
     const bridge = new FakeBridge();
     bridge.add(T1, "proj-a", "Design thread");
@@ -1071,6 +1071,8 @@ describe("fork", () => {
     expect(bridge.started[0]!.message.split("\n")[2]).toBe(
       "Brainstorm runs with BRAINSTORM_HOME=C:\\bs-home. Set it on every brainstorm command: in PowerShell, start each with `$env:BRAINSTORM_HOME = 'C:\\bs-home';`.",
     );
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null }));
+    expect(bridge.sent.at(-1)!.message.split("\n")).toHaveLength(2);
     service.close();
   });
 });
