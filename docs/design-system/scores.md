@@ -109,3 +109,44 @@ Same slices as round 3. No read failed. Each score below is the member's lowest 
 The major is from Opus D. Canvas pins shrink with their frame's zoom, so on the 64% board at 1100 they render at about 13 px.
 
 Every Claude slice found the blocked-Regenerate hint covering Open thread and Withdraw. The home sheets lose or tie on navigation and lists. The exemplars' homes show previews, live status and search, and Brainstorm's overview repeats the sidebar as text cards.
+
+## Round 5 (captures round-5, after the round 4 fix pass and the home pass: previews, search, filters, settle, no variant notes)
+
+Each Claude member reviewed five slices:
+- **A:** light 1440, shots 01 to 40, plus the sheets
+- **B:** dark 1440, shots 01 to 40, plus the T3 sheets
+- **C:** light 1440, shots 41 to 70
+- **E:** dark 1440, shots 41 to 70
+- **D:** 22 key 1100 shots, both themes
+
+No read failed. Each score is the member's lowest across its slices. GPT Sol's review was still running when the workflow change (round 6) superseded these captures.
+
+| Area | Claude Opus 5.5 | GPT-6.1 Sol | Claude Sonnet 5.5 |
+| --- | --- | --- | --- |
+| Shell | 8.5 | pending | 8.0 |
+| Navigation and lists | 8.5 | pending | 7.0 |
+| Canvas chrome | 8.5 | pending | 8.0 |
+| Inspector and controls | 8.5 | pending | 8.0 |
+| Overlays | 8.5 | pending | 7.5 |
+| Feedback | 8.5 | pending | 8.0 |
+| States and request phases | 8.5 | pending | 8.0 |
+| Dark mode | 8.8 | pending | 8.0 |
+| Self-consistency | 8.0 | pending | 7.0 |
+| Fitness for all-day use | 8.5 | pending | 8.0 |
+| Completely happy | no | pending | no |
+| Blocker / major / minor / nit (all slices) | 0 / 1 / 35 / 60 | pending | 0 / 1 / 31 / 58 |
+| Comparison sheets won | 4 of 4 named; both T3 sheets in every area; Claude ahead on self-consistency on vs-claude-home | pending | 3 of 4 named; Claude took vs-claude-session on shell chrome |
+
+The two majors:
+- **Opus D:** a board frame shows a horizontal scrollbar, which breaks ADR 002.
+- **Sonnet D:** home previews leave a blank band under short and wide frames.
+
+Opus's best slices (A and B, 1440 shots 01 to 40) reached 9.0 to 9.4. The low scores come from the new home surfaces in slices C and E.
+
+These findings are open:
+- a toolbar jump when counts load
+- project counts that ignore the status filter
+- a settle hint over the search field
+- the header hint reading as a button (T26)
+
+The vs-claude-session sheet pairs Claude's home with a Brainstorm session, because no Claude session exemplar exists.
