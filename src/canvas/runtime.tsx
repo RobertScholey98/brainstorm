@@ -479,7 +479,7 @@ body {
 .bs-pin[data-status="addressed"] { background: var(--bs-card); color: var(--bs-accent); border-color: var(--bs-accent); }
 .bs-pin[data-status="confirmed"] { background: var(--bs-muted); color: var(--bs-fg-muted); }
 .bs-pin:hover { filter: brightness(1.08); }
-.bs-pin[data-focused] { box-shadow: 0 0 0 2px var(--bs-card), 0 0 0 4px var(--bs-accent), var(--bs-elevation-sm); scale: 1.1; }
+.bs-pin[data-focused] { box-shadow: 0 0 0 2px var(--bs-card), 0 0 0 4px var(--bs-accent), var(--bs-elevation-sm); }
 .bs-pin.bs-pulse { animation: bs-pulse 650ms ease-out 2; }
 @keyframes bs-pulse {
   0% { box-shadow: var(--bs-elevation-sm), 0 0 0 0 color-mix(in oklab, var(--bs-accent) 60%, transparent); scale: 1.25; }
