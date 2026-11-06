@@ -332,7 +332,7 @@ function SlotSection({
           data-selected={selected || undefined}
         >
           <span className="truncate">{slot.title}</span>
-          <span className="ml-auto shrink-0 font-normal tabular-nums">
+          <span className="ml-auto shrink-0 font-normal text-fg-muted tabular-nums" data-slot-count>
             {slot.variants.length} {slot.variants.length === 1 ? "variant" : "variants"}
           </span>
         </SidebarGroupLabel>

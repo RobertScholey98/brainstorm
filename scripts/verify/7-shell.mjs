@@ -176,6 +176,16 @@ try {
     ],
     ["All brainstorms", "Attached", ["card"]],
   );
+  check(
+    "a slot head's variant count stays muted under its fg title, so the head and its count read apart",
+    await window.$$eval("[data-slot-id] [data-slot-count]", (counts) => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--fg-muted)" }));
+      const muted = getComputedStyle(probe).color;
+      probe.remove();
+      return [counts.length > 0, counts.every((c) => getComputedStyle(c).color === muted)];
+    }),
+    [true, true],
+  );
 
   await canvas.waitForSelector('[data-bid="result/card"]');
   await window.waitForSelector("[data-inspector-header]");
