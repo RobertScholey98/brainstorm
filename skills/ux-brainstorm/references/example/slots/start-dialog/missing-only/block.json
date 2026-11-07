@@ -1,0 +1,28 @@
+{
+  "title": "Only the missing questions",
+  "props": {
+    "data": {
+      "projects": {
+        "type": "data",
+        "description": "projects the person can start work in; the first is the current thread's project",
+        "sample": [
+          { "id": "brainstorm", "name": "Brainstorm", "branch": "main" },
+          { "id": "fleet-portal", "name": "Fleet portal", "branch": "release/2026-11-maintenance-window" }
+        ]
+      },
+      "draft": {
+        "type": "data",
+        "description": "the first message, sent word for word to the new agent",
+        "sample": "Add an Export button to the session toolbar that writes the current iteration, with Rob's current control values, to one offline HTML file."
+      }
+    },
+    "appearance": {
+      "situation": { "type": "enum", "label": "Situation", "default": "ready", "options": ["ready", "no-project", "launch-fails"] },
+      "accent": { "type": "color", "label": "Accent", "default": "#1f6feb" },
+      "radius": { "type": "number", "label": "Corner radius", "default": 8, "min": 0, "max": 20, "step": 1, "unit": "px" },
+      "density": { "type": "enum", "label": "Density", "default": "roomy", "options": ["compact", "roomy"] },
+      "showBranch": { "type": "boolean", "label": "Show branch", "default": true },
+      "startLabel": { "type": "text", "label": "Start button", "default": "Start", "multiline": false }
+    }
+  }
+}

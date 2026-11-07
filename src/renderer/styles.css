@@ -1,0 +1,340 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "./design.css";
+
+/*
+ * Closed scales. Each namespace is cleared and then listed in full, so an off-scale utility such as p-7 or text-[15px]
+ * generates nothing, and `npm run lint:design` fails it. docs/design-system/adr-001-foundation.md records why each
+ * step is here.
+ */
+@theme {
+  --spacing: initial;
+  --spacing-*: initial;
+  --text-*: initial;
+  --font-weight-*: initial;
+  --leading-*: initial;
+  --tracking-*: initial;
+  --radius-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-shadow-*: initial;
+  --container-*: initial;
+  --font-*: initial;
+
+  /* Spacing: padding, margin, gap and offsets use only these. */
+  --spacing-0: 0px;
+  --spacing-0\.5: 2px;
+  --spacing-1: 4px;
+  --spacing-1\.5: 6px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+
+  /* Sizing only: icons, dots and control heights. The lint keeps these off padding, margin and gap. */
+  --spacing-2\.5: 10px;
+  --spacing-3\.5: 14px;
+  --spacing-4\.5: 18px;
+  --spacing-7: 28px;
+  --spacing-16: 64px;
+
+  /* Layout widths. */
+  --spacing-inspector: 280px;
+  --spacing-popover-sm: 320px;
+  --spacing-popover-md: 380px;
+  --spacing-menu: 144px;
+  --spacing-picker: 220px;
+  /* The phone frame most brainstorms open with, for the stage's loading frame. */
+  --spacing-frame: 390px;
+  /* A home card's preview band. */
+  --spacing-preview: 160px;
+  /* The history strip, one height whatever it holds, and a still's card in it. */
+  --spacing-strip: 84px;
+  --spacing-still: 56px;
+  --container-xs: 20rem;
+  --container-sm: 24rem;
+  --container-md: 28rem;
+
+  /* Type. Each size carries its line height. 2xs is for numerals in pins and badges only; title is the page heading, which only the kit's PageHeader sets. */
+  --text-2xs: 11px;
+  --text-2xs--line-height: 14px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 18px;
+  --text-base: 14px;
+  --text-base--line-height: 20px;
+  --text-lg: 16px;
+  --text-lg--line-height: 22px;
+  --text-title: 22px;
+  --text-title--line-height: 28px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --leading-none: 1;
+  --leading-snug: 1.375;
+  --leading-relaxed: 1.55;
+  --tracking-tight: -0.01em;
+
+  /* Radius: badges and swatches, controls, rows and popovers, the main card. rounded-full is for pins, dots and switches. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Layers. Numeric z-* still compiles, so the lint allows only these names. */
+  --z-index-raised: 10;
+  --z-index-sticky: 20;
+  --z-index-popover: 40;
+  --z-index-tooltip: 50;
+  --z-index-toast: 60;
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-app: var(--app);
+  --color-canvas: var(--canvas);
+  --color-card: var(--card);
+  --color-raised: var(--raised);
+  --color-muted: var(--muted);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-separator: var(--separator);
+  --color-shade: var(--shade);
+  --color-ring: var(--ring);
+  --color-inverse: var(--inverse);
+  --color-inverse-fg: var(--inverse-fg);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-hover: var(--accent-hover);
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-ink: var(--danger-ink);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+
+  --shadow-*: initial;
+  --shadow-xs: var(--elevation-xs);
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
+}
+
+/* tw-animate-css reads this at runtime for its slide offsets. It is not a theme key, so it opens no spacing utilities. */
+:root {
+  --spacing: 4px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-app font-sans text-sm text-fg antialiased;
+    margin: 0;
+    overflow: hidden;
+  }
+  /* Prose never ends on a lone word, whichever overlay, empty state or callout it sits in. */
+  p {
+    text-wrap: pretty;
+  }
+}
+
+/*
+ * While a pane is dragged, the canvas iframe would swallow the pointer and the sidebar's width transition would lag it.
+ * A window resize moves the sidebar's width too, and a lagging sidebar re-zoomed the canvas at every step of its slide.
+ */
+body[data-resizing] {
+  cursor: col-resize;
+  user-select: none;
+}
+body[data-resizing] iframe {
+  pointer-events: none;
+}
+body:is([data-resizing], [data-window-resizing]) [data-slot="sidebar-gap"],
+body:is([data-resizing], [data-window-resizing]) [data-slot="sidebar-container"] {
+  transition: none;
+}
+
+/*
+ * A Truncate that overflows paints its measured cut, which never ends on a space or a comma, over its own text. The
+ * text stays for copy and the accessible name, and the cut's alt text is empty so a screen reader hears the title once.
+ */
+[data-slot="truncate"][data-cut] {
+  position: relative;
+  -webkit-text-fill-color: transparent;
+  text-decoration-color: transparent;
+}
+[data-slot="truncate"][data-cut]::after {
+  content: attr(data-cut) / "";
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  overflow: hidden;
+  -webkit-text-fill-color: currentColor;
+  text-decoration: inherit;
+  text-decoration-color: currentColor;
+}
+
+/* The canvas's dot grid, as the canvas document draws it, for a home preview's mat. */
+@utility canvas-dots {
+  background-color: var(--canvas);
+  background-image: radial-gradient(color-mix(in oklab, var(--fg) 10%, transparent) 1px, transparent 1.2px);
+  background-size: 16px 16px;
+}
+
+/* The home overview's cards: as many 240 px columns as fit, sharing the spare width. */
+@utility grid-overview {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+/*
+ * The request status in the top bar: icon, then message. The message's column can close to nothing, so a long title
+ * or a narrow window cuts text, never the icon.
+ */
+@utility grid-phase {
+  grid-auto-flow: column;
+  grid-template-columns: auto minmax(0, max-content);
+}
+
+/* The Fork popover's carry list: a label column as wide as "Open pins", then what carries, which can shrink. */
+@utility grid-carry {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+/*
+ * A scroller keeps its scrollbar's room on both sides whether or not it overflows, so its content never shifts
+ * sideways and sits as far off each edge. Its padding is its inset less the gutter (--scrollbar).
+ */
+@utility scroll-gutter {
+  scrollbar-gutter: stable both-edges;
+}
+
+/*
+ * Inside a ScrollPane while it can scroll: its thumb then stands in the right gutter, 8 px in from the pane's edge, so
+ * a fill that reaches into the padding stops short of it by as much as it stands off the left edge.
+ */
+@custom-variant scrolling {
+  @container scroll-state(scrollable: block) {
+    @slot;
+  }
+}
+
+/*
+ * Fades on the inline axis, for the history strip. Its entries rest on their edges, so at rest each end's 16 px holds
+ * only the inset; the fade softens an entry passing that edge mid-scroll, and only on a side with more that way.
+ */
+@property --fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes scroll-fade-start {
+  to {
+    --fade-start: 16px;
+  }
+}
+@keyframes scroll-fade-end {
+  from {
+    --fade-end: 16px;
+  }
+}
+@utility scroll-fades-x {
+  mask-image: linear-gradient(
+    to right,
+    transparent calc(var(--fade-start) * 0.5),
+    black var(--fade-start),
+    black calc(100% - var(--fade-end)),
+    transparent calc(100% - var(--fade-end) * 0.5)
+  );
+  animation: scroll-fade-start linear both, scroll-fade-end linear both;
+  animation-timeline: scroll(self inline), scroll(self inline);
+  animation-range: 0 16px, calc(100% - 16px) 100%;
+}
+
+/* Room for a word that shows elsewhere, such as a row action laid over its row: the word sizes the box from data-label, out of the text. */
+@utility content-label {
+  &::after {
+    content: attr(data-label);
+  }
+}
+
+/* A running count holds the room of its unit's widest form, from data-count-slot, so what sits before it stays still as it counts. */
+@utility count-slot {
+  display: inline-grid;
+  justify-items: end;
+  font-variant-numeric: tabular-nums;
+  &::before {
+    content: attr(data-count-slot) / "";
+    visibility: hidden;
+    grid-area: 1 / 1;
+  }
+  & > * {
+    grid-area: 1 / 1;
+  }
+}
+
+/* A scroller whose position another control shows, such as the strip with its arrows, draws no scrollbar. */
+@utility scrollbar-none {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* The history strip's columns, one per entry at the width stripFit.ts gives it. */
+@utility grid-cols-strip {
+  grid-template-columns: var(--strip-columns);
+}
+
+/*
+ * The window has no native title bar, so the app's header row moves it. Anything in it that takes a click or focus
+ * opts out, so a control in the header never turns into a drag handle.
+ */
+[data-drag-region] {
+  -webkit-app-region: drag;
+}
+[data-drag-region] :is(a, button, input, select, textarea, [role="tab"], [tabindex]) {
+  -webkit-app-region: no-drag;
+}
+
+/*
+ * Room at the header's right end for the native window buttons. The browser reports the space they leave as the
+ * titlebar area, and the main column already ends 8 px short of the window edge; with no overlay this is 12 px.
+ */
+@utility titlebar-inset {
+  padding-right: max(12px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
+}
+
+/* A settled card's still. Contrast comes off first, around mid-grey, then the result lifts toward the card in light and sinks toward it in dark. Tailwind's own filters run brightness before contrast, which pulls every still to mid-grey. */
+@utility still-settled {
+  filter: grayscale(1) contrast(0.3) brightness(1.7);
+  @media (prefers-color-scheme: dark) {
+    filter: grayscale(1) contrast(0.5) brightness(0.55);
+  }
+}

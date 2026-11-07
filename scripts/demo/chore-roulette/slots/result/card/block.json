@@ -1,0 +1,18 @@
+{
+  "title": "Assignment card",
+  "props": {
+    "data": {
+      "winner": { "type": "data", "description": "who the draw picked", "sample": { "name": "Jun", "color": "#f5ff3b", "points": 1 } },
+      "chore": { "type": "data", "description": "the chore, with its due time and points", "sample": { "name": "Bins out", "due": "tonight 21:00", "points": 1 } },
+      "swapsLeft": { "type": "data", "description": "swaps the winner has left this week", "sample": 1 }
+    },
+    "appearance": {
+      "headline": { "type": "text", "label": "Headline", "default": "Picked by the wheel" },
+      "accent": { "type": "color", "label": "Accent", "default": "#00f0ff" },
+      "nameSize": { "type": "number", "label": "Name size", "default": 56, "min": 28, "max": 80, "step": 2, "unit": "px" },
+      "glitch": { "type": "boolean", "label": "Glitch name", "default": true },
+      "density": { "type": "enum", "label": "Density", "default": "Roomy", "options": ["Compact", "Roomy"] },
+      "stamp": { "type": "enum", "label": "Stamp", "default": "Locked in", "options": ["Accepted", "On it", "Locked in", "Done deal"] }
+    }
+  }
+}

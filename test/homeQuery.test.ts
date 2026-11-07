@@ -1,0 +1,118 @@
+import { expect, test } from "vitest";
+import { DEFAULT_HOME, type HomeQuery } from "../src/core/prefs";
+import type { OpenPhase, ProjectId, SessionListing, Settlement } from "../src/core/types";
+import { briefMatch, matchesSearch, projectOptions, queryHome } from "../src/renderer/homeQuery";
+import { markdownText } from "../src/renderer/markdownSubset";
+import { needsAttention } from "../src/renderer/status";
+
+type Spec = { project?: string; name?: string | null; brief?: string; at?: string; created?: string; request?: OpenPhase | null; lost?: boolean; settled?: string };
+const listing = (title: string, spec: Spec = {}): SessionListing => {
+  const settlement: Settlement = spec.settled === undefined ? { state: "active", unsettledAt: null } : { state: "settled", at: spec.settled };
+  return {
+    id: `s_${title.toLowerCase().replace(/\W/g, "")}`,
+    projectId: (spec.project ?? "p-chores") as ProjectId,
+    projectName: spec.name === undefined ? "chores" : spec.name,
+    title,
+    brief: spec.brief ?? "",
+    createdAt: spec.created ?? "2026-11-01T09:00:00Z",
+    activeAt: spec.at ?? "2026-11-01T09:00:00Z",
+    request: spec.request ?? null,
+    lost: spec.lost ?? false,
+    settlement,
+  } as unknown as SessionListing;
+};
+
+const ids = (list: readonly SessionListing[]) => list.map((s) => s.title);
+/** The match a card shows, from the brief's text as the card reads it. */
+const found = (s: SessionListing, search: string) => briefMatch(s.title, markdownText(s.brief).trim(), search);
+
+const wheel = listing("Chore wheel", { brief: "Spin to pick **who** does the bins", at: "2026-11-05T09:00:00Z", created: "2026-11-02T09:00:00Z" });
+const rota = listing("Kitchen rota", { project: "p-kitchen", name: "kitchen", request: "asking", at: "2026-11-04T09:00:00Z", created: "2026-11-04T09:00:00Z" });
+const lost = listing("Loose notes", { project: "p-loose", name: null, lost: true, at: "2026-11-03T09:00:00Z", created: "2026-11-03T09:00:00Z" });
+const working = listing("Onboarding", { request: "working", at: "2026-11-02T09:00:00Z", created: "2026-11-05T09:00:00Z" });
+const settled = listing("Archive tour", { project: "p-kitchen", name: "kitchen", at: "2026-10-01T09:00:00Z", settled: "2026-11-01T09:00:00Z", created: "2026-10-01T09:00:00Z" });
+const settledLater = listing("Bins study", { at: "2026-10-02T09:00:00Z", settled: "2026-11-02T09:00:00Z", created: "2026-10-02T09:00:00Z" });
+const all = [wheel, rota, lost, working, settled, settledLater];
+const q = (patch: Partial<HomeQuery>): HomeQuery => ({ ...DEFAULT_HOME, ...patch });
+
+test("search matches every word, in any case, in the title or the brief's text", () => {
+  expect(matchesSearch(wheel, "WHEEL")).toBe(true);
+  expect(matchesSearch(wheel, "bins who"), "brief words, markdown stripped, in any order").toBe(true);
+  expect(matchesSearch(wheel, "wheel rota")).toBe(false);
+  expect(matchesSearch(wheel, "   ")).toBe(true);
+});
+
+test("a search the brief answers shows the brief from just before the word the title lacks, split around it", () => {
+  const flatmate = listing("Onboarding a new flatmate", { brief: "Walk them through the **house rules**, the shared kitchen and the cleaning rota for the bins." });
+  expect(found(flatmate, "the"), "near the start, from the start, with no ellipsis").toEqual({ before: "Walk ", match: "the", after: "m through the house rules, the shared kitchen and the cleaning rota for the bins." });
+  expect(found(flatmate, "rota")).toEqual({ before: "…and the cleaning ", match: "rota", after: " for the bins." });
+  expect(found(flatmate, "flatmate ROTA"), "only the word the title lacks, in the brief's own case").toEqual({ before: "…and the cleaning ", match: "rota", after: " for the bins." });
+  expect(found(flatmate, "bins kitchen"), "the earliest of the words the title lacks").toEqual({ before: "…rules, the shared ", match: "kitchen", after: " and the cleaning rota for the bins." });
+  expect(found(flatmate, "hou"), "the whole words that fit in 20 characters before it").toEqual({ before: "…them through the ", match: "hou", after: "se rules, the shared kitchen and the cleaning rota for the bins." });
+  expect(found(flatmate, "ota"), "inside a word, from that word's start").toEqual({ before: "…and the cleaning r", match: "ota", after: " for the bins." });
+});
+
+test("a search the title answers, or no search, leaves the brief as it is", () => {
+  expect([found(wheel, "wheel"), found(wheel, "CHORE"), found(wheel, "  "), found(wheel, "zebra")]).toEqual([null, null, null, null]);
+});
+
+test("a long word before the match gives up its context first, so the match stays near the start", () => {
+  const long = listing("Plan", { brief: "Reconsider the internationalisation-responsibilities rota" });
+  expect(found(long, "rota")).toEqual({ before: "…", match: "rota", after: "" });
+  const lines = listing("Plan", { brief: "First line\n\nSecond   line with bins" });
+  expect(found(lines, "bins"), "the brief's breaks and runs of spaces read as one space").toEqual({ before: "…Second line with ", match: "bins", after: "" });
+});
+
+test("home shows active brainstorms by default, newest activity first, with a count for each status", () => {
+  const result = queryHome(all, DEFAULT_HOME, "");
+  expect(ids(result.shown)).toEqual(["Chore wheel", "Kitchen rota", "Loose notes", "Onboarding"]);
+  expect(result.settled).toEqual([]);
+  expect(result.counts).toEqual({ active: 4, attention: 2, settled: 2, all: 6 });
+});
+
+test("attention is a lost thread or a request that stopped for Rob, never the agent at work", () => {
+  expect([wheel, rota, lost, working].map(needsAttention)).toEqual([false, true, true, false]);
+  expect(ids(queryHome(all, q({ status: "attention" }), "").shown)).toEqual(["Kitchen rota", "Loose notes"]);
+});
+
+test("settled lists newest settled first; all lists the active ones, then the settled ones apart", () => {
+  expect(ids(queryHome(all, q({ status: "settled" }), "").shown)).toEqual(["Bins study", "Archive tour"]);
+  const both = queryHome(all, q({ status: "all" }), "");
+  expect([ids(both.shown), ids(both.settled)]).toEqual([["Chore wheel", "Kitchen rota", "Loose notes", "Onboarding"], ["Bins study", "Archive tour"]]);
+});
+
+test("projects narrow every status and its count; a stored project with nothing left is ignored", () => {
+  const kitchen = queryHome(all, q({ projects: ["p-kitchen" as ProjectId], status: "all" }), "");
+  expect([ids(kitchen.shown), ids(kitchen.settled), kitchen.counts]).toEqual([["Kitchen rota"], ["Archive tour"], { active: 1, attention: 1, settled: 1, all: 2 }]);
+  expect(ids(queryHome(all, q({ projects: ["p-gone" as ProjectId] }), "").shown)).toHaveLength(4);
+});
+
+test("sorts by title or by when each was created", () => {
+  expect(ids(queryHome(all, q({ sort: "title" }), "").shown)).toEqual(["Chore wheel", "Kitchen rota", "Loose notes", "Onboarding"]);
+  expect(ids(queryHome(all, q({ sort: "created" }), "").shown)).toEqual(["Onboarding", "Kitchen rota", "Loose notes", "Chore wheel"]);
+  expect(ids(queryHome(all, q({ sort: "title", status: "settled" }), "").shown)).toEqual(["Archive tour", "Bins study"]);
+});
+
+test("search narrows the counts too, so a status tab never promises cards it won't show", () => {
+  const result = queryHome(all, q({ status: "all" }), "bins");
+  expect([ids(result.shown), ids(result.settled), result.counts]).toEqual([["Chore wheel"], ["Bins study"], { active: 1, attention: 0, settled: 1, all: 2 }]);
+});
+
+test("the project filter lists every project once, by name, with Other project for one without", () => {
+  expect(projectOptions(all, "all", "").map((p) => [p.id, p.label, p.count])).toEqual([
+    ["p-chores", "chores", 3],
+    ["p-kitchen", "kitchen", 2],
+    ["p-loose", "Other project", 1],
+  ]);
+});
+
+test("each project counts what picking it would show under the status and search as they are", () => {
+  const counts = (status: HomeQuery["status"], search: string) => projectOptions(all, status, search).map((p) => [p.label, p.count]);
+  expect(counts("active", "")).toEqual([["chores", 2], ["kitchen", 1], ["Other project", 1]]);
+  expect(counts("settled", "")).toEqual([["chores", 1], ["kitchen", 1], ["Other project", 0]]);
+  expect(counts("all", "bins")).toEqual([["chores", 2], ["kitchen", 0], ["Other project", 0]]);
+  for (const status of ["active", "attention", "settled", "all"] as const) {
+    const total = projectOptions(all, status, "").reduce((n, p) => n + p.count, 0);
+    expect(total, status).toBe(queryHome(all, q({ status }), "").counts[status]);
+  }
+});

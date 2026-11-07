@@ -1,0 +1,76 @@
+/* Generated from src/core/design.ts by npm run design:tokens. Edit that file, not this one. */
+:root {
+  --app: #eae9e4;
+  --canvas: #f6f5f2;
+  --card: #ffffff;
+  --raised: #ffffff;
+  --muted: #f1f0ec;
+  --fg: #1b1b1a;
+  --fg-muted: #66655f;
+  --border: #e6e5e1;
+  --border-strong: #d4d3cd;
+  --ring: #73726c;
+  --inverse: #1f1f1e;
+  --inverse-fg: #fafaf9;
+  --success: #497011;
+  --warning: #885600;
+  --danger: #bb372c;
+  --info: #2f63c4;
+  --elevation-xs: 0 1px 2px rgb(0 0 0 / 0.06);
+  --elevation-sm: 0 1px 3px rgb(0 0 0 / 0.08), 0 1px 2px rgb(0 0 0 / 0.04);
+  --elevation-md: 0 8px 24px rgb(0 0 0 / 0.14), 0 2px 6px rgb(0 0 0 / 0.08);
+  --elevation-lg: 0 8px 24px rgb(0 0 0 / 0.14), 0 2px 6px rgb(0 0 0 / 0.06);
+  --shade: rgb(0 0 0 / 0.08);
+  --accent: #0b7570;
+  --accent-fg: #ffffff;
+  --hover: color-mix(in oklab, var(--fg) 8%, transparent);
+  --selected: color-mix(in oklab, var(--accent) 18%, transparent);
+  --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--fg));
+  --success-subtle: color-mix(in oklab, var(--success) 12%, var(--card));
+  --warning-subtle: color-mix(in oklab, var(--warning) 12%, var(--card));
+  --danger-subtle: color-mix(in oklab, var(--danger) 12%, var(--card));
+  --info-subtle: color-mix(in oklab, var(--info) 12%, var(--card));
+  --danger-ink: color-mix(in oklab, var(--danger) 80%, var(--fg));
+  --separator: color-mix(in oklab, var(--fg-muted) 40%, transparent);
+  --scrollbar-thumb: color-mix(in oklab, var(--fg) 22%, transparent);
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--fg) 36%, transparent);
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-code: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --scrollbar: 10px;
+}
+:root { color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app: #161614;
+    --canvas: #1f1f1d;
+    --card: #2e2e2c;
+    --raised: #3d3d3a;
+    --muted: #3b3b37;
+    --fg: #ecebe8;
+    --fg-muted: #a8a7a1;
+    --border: #3d3d39;
+    --border-strong: #585852;
+    --ring: #94938d;
+    --inverse: #ecebe8;
+    --inverse-fg: #1f1f1d;
+    --success: #9ccc5a;
+    --warning: #f2b860;
+    --danger: #ff8395;
+    --info: #86aeff;
+    --elevation-xs: 0 1px 2px rgb(0 0 0 / 0.3);
+    --elevation-sm: 0 1px 3px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.04);
+    --elevation-md: 0 6px 20px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.06);
+    --elevation-lg: 0 10px 32px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.08);
+    --shade: rgb(0 0 0 / 0.32);
+    --accent: #43c4b9;
+    --accent-fg: #062421;
+  }
+  :root { color-scheme: dark; }
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-track:vertical { margin-block: 12px; }
+::-webkit-scrollbar-track:horizontal { margin-inline: 12px; }
+::-webkit-scrollbar-button { display: none; }
+::-webkit-scrollbar-thumb { background-color: var(--scrollbar-thumb); background-clip: padding-box; border: 2px solid transparent; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover); }
