@@ -27,10 +27,13 @@ export function VarySection({ picking, blocked, onPickToggle }: { picking: boole
   );
   return (
     <section className="border-t" aria-label="Vary" data-vary-panel>
-      <header className="flex items-center gap-2 pt-3 pb-2">
+      <header className="flex items-center gap-2 py-3">
         <h2 className="text-base font-semibold">Vary</h2>
+        {/* What a vary does lives in the button's hint, so the pane carries no help text that never goes away. */}
         {blocked === null ? (
-          button
+          <Hint label="New variants of the picked element's slot, differing only there" side="left">
+            {button}
+          </Hint>
         ) : (
           <Hint label={blocked} side="left">
             <span tabIndex={0} className="ml-auto" data-vary-blocked>
@@ -39,7 +42,6 @@ export function VarySection({ picking, blocked, onPickToggle }: { picking: boole
           </Hint>
         )}
       </header>
-      <p className="pb-4 text-sm/relaxed text-fg-muted">Click an element for new variants of its slot that differ only there.</p>
     </section>
   );
 }

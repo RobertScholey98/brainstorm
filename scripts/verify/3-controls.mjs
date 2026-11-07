@@ -172,6 +172,24 @@ try {
   await run.window.waitForSelector('[data-banner="inapplicable"]', { state: "detached" });
   check("Dismiss clears the banner", await run.window.isVisible('[data-banner="inapplicable"]'), false);
   check("the window logged no errors or warnings after the restart", run.errors, []);
+
+  // The commit renders each block before it saves, so the wheel breaks only once it is on the canvas.
+  edit(
+    "block.tsx",
+    'const theme = PALETTES[palette] ?? PALETTES["Night city"];',
+    'useEffect(() => {\n    throw new Error("The wheel lost its spokes");\n  }, []);\n  const theme = PALETTES[palette] ?? PALETTES["Night city"];',
+  );
+  const broken = brainstorm(env, ["commit", session, "--from", work, "--note", "Break the wheel"]);
+  check("the agent commits a wheel that breaks once it mounts", broken.code, 0);
+  await run.window.waitForSelector('[data-block="wheel/neon"] [role="alert"]');
+  const off = [await run.window.isDisabled("[data-vary-toggle]"), await run.window.isDisabled("[data-pick-toggle]")];
+  await run.window.focus("[data-vary-blocked]");
+  await run.window.keyboard.press("Tab");
+  check(
+    "a block that didn't render leaves Vary element and Pin comment off, the hint saying why",
+    [...off, await run.window.waitForSelector('[data-slot="tooltip-content"]', { timeout: 3000 }).then((h) => h.textContent()).then((t) => t.trim(), () => null)],
+    [true, true, "The block didn't render, so there's nothing to pick"],
+  );
 } finally {
   await run.app.close();
 }

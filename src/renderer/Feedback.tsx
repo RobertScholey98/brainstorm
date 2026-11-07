@@ -86,10 +86,12 @@ export function FeedbackPanel({
         <h2 className="text-base font-semibold">Feedback</h2>
         {feedback.length > 0 && <Badge>{feedback.length}</Badge>}
         {canPin ? (
-          <Button variant="outline" className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
-            <MessageSquarePlus data-icon="inline-start" aria-hidden />
-            <HeldLabel active={picking} idle="Pin comment" busy="Picking…" />
-          </Button>
+          <Hint label="Pin a comment to an element. The agent sees it with your next Regenerate" side="left">
+            <Button variant="outline" className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
+              <MessageSquarePlus data-icon="inline-start" aria-hidden />
+              <HeldLabel active={picking} idle="Pin comment" busy="Picking…" />
+            </Button>
+          </Hint>
         ) : (
           <Hint label={pinBlocked} side="left">
             <span tabIndex={0} className="ml-auto" data-pick-blocked>
@@ -102,10 +104,8 @@ export function FeedbackPanel({
         )}
       </header>
       {feedback.length === 0 ? (
-        <p className="pb-4 text-sm/relaxed text-fg-muted">
-          {canPin
-            ? "Pin a comment to an element in the canvas. The agent sees it with your next Regenerate."
-            : "Once the first iteration is on the canvas, pin comments to its elements here."}
+        <p className="pb-4 text-sm text-fg-muted" data-feedback-empty>
+          No comments yet
         </p>
       ) : (
         GROUPS.map(({ state, title }) => {

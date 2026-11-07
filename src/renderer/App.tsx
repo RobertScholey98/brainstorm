@@ -480,12 +480,15 @@ function SessionWorkspace({
   };
   const togglePick = (kind: "comment" | "vary") =>
     setInteraction((i) => (i.kind === "picking" && i.for === kind ? { kind: "view" } : { kind: "picking", for: kind }));
+  const unrendered = selectedBlock !== null && blockErrors.has(selectedBlock.hash) ? "The block didn't render, so there's nothing to pick" : null;
   const varyBlocked =
     iteration === null
       ? "There is nothing on the canvas to vary yet"
       : past !== null
         ? "Back to latest to vary an element"
-        : view !== null && !view.regenerate.ok
+        : unrendered !== null
+          ? unrendered
+          : view !== null && !view.regenerate.ok
           ? blockedMessage(view.regenerate.reason, view.request?.request.n)
           : null;
 
@@ -673,8 +676,8 @@ function SessionWorkspace({
             feedback={feedback}
             blocks={blocks}
             place={(f) => pinPlace(f, blocks, activeBlocks, placement)}
-            canPin={iteration !== null && past === null}
-            pinBlocked={past !== null ? "Back to latest to pin a comment" : undefined}
+            canPin={iteration !== null && past === null && unrendered === null}
+            pinBlocked={past !== null ? "Back to latest to pin a comment" : (unrendered ?? undefined)}
             picking={picking === "comment"}
             focused={focusedFeedback}
             onHover={setHoveredFeedback}
