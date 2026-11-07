@@ -29,6 +29,27 @@ The session top bar moves out of the inset card and becomes the window header, o
 
 The request strip (send failed, thread lost, no change) stays at the top of the card, under the header, because it belongs to the page, not the window.
 
+### Labels give way one at a time, only when the title needs the room
+
+Round 6 added 2026-11-07. A container query at 960 px used to turn every session action into an icon at once. At 1100 the title then kept room it didn't need while Open thread and Retry lost their names. At 1440 nothing gave way, however long the title, so "Chore roulette" read "C." with a request asking.
+
+The header now measures. `useHeaderFit` in `headerAction.ts` runs after each layout and whenever the header, its actions or its title change size. It restores every label, then takes them back one at a time until the title holds 160 px (or reads whole) and each ancestor in a fork's breadcrumb holds 64 px. The order is fixed by `COLLAPSE`:
+
+1. the status's long words, which give way to the phase's short name ("Agent asking")
+2. Export
+3. Fork
+4. the phase actions, from last to first, so the phase's recovery (Retry, Resend) keeps its name longest
+
+A collapsible part carries `data-collapse` with its rank, and a collapsed one `data-collapsed`, which the `data-collapsed:` and `in-data-collapsed:` variants style. Rules:
+
+- The title shows whole whenever the header has room for it with every label.
+- A label goes only when the title would otherwise drop under its floor.
+- No label goes while there is room for it.
+
+`verify:9` proves this in every request phase, with a short title, a long one and a fork breadcrumb, at 1440 and 1100, in both themes. For each state it restores the last label that gave way and checks the floors then break, so nothing gave way early.
+
+Rejected: a second header row for the status. It costs the canvas 40 px in every state to fix the few that crowd, and it moves the actions between rows as a phase starts and ends.
+
 ### Moving the window
 
 The header and the sidebar's header row carry `data-drag-region`, which sets `-webkit-app-region: drag`. One CSS rule gives every link, button, input, tab and focusable element inside a drag region `no-drag`, so a control added to the header later can't turn into a drag handle by accident.

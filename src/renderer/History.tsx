@@ -14,7 +14,7 @@ export type LoadIterationStill = (at: { readonly n: IterationN; readonly slot: S
 
 /**
  * The brainstorm's history along the bottom of the canvas: a still per iteration, oldest first, each with what made it
- * and its age, and the forks made from an iteration branching under its still. Inside a fork the strip starts with a
+ * and its age, and the forks made from an iteration as links in the row after its still. Inside a fork the strip starts with a
  * stub back to the iteration it came from. It is one listbox: Left and Right step through it, Home and End jump, and
  * the option Rob lands on is what the canvas shows.
  */
