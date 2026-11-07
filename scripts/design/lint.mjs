@@ -110,7 +110,7 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
       if (FLOATING.has(utility)) problems.push({ rule: "surface-recipe", line: lit.line, text: token, message: "floating surfaces come from overlaySurface in components/ui/overlay.ts" });
     });
   }
-  problems.push(...chipRecipe(source, lits), ...frameSandbox(source));
+  problems.push(...chipRecipe(source, lits), ...frameSandbox(source), ...fieldFill(source));
   if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source), ...dismissGhost(source), ...rawPart(source));
   return problems.sort((a, b) => a.line - b.line);
 }
@@ -193,6 +193,18 @@ function dismissGhost(source) {
       return variant === undefined || source.slice(variant.start, variant.end).replace(/^\{?"?|"?\}?$/g, "") !== "ghost";
     })
     .map((el) => ({ rule: "dismiss-ghost", line: el.line, text: "<Button> Cancel", message: "a dismiss button is ghost, as every overlay footer has it" }));
+}
+
+/**
+ * A field filled with a tint of its border in dark. Every field, from a text input to a select and a checkbox, fills
+ * with the card, so one Inspector column has one field fill in both themes.
+ */
+function fieldFill(source) {
+  return source.split("\n").flatMap((text, i) =>
+    /\bdark:bg-border-strong\//.test(text)
+      ? [{ rule: "field-fill", line: i + 1, text: text.match(/dark:bg-border-strong\/\d+/)[0], message: "fill a field with bg-card, the one field fill in both themes" }]
+      : [],
+  );
 }
 
 /** A pin's part rendered as its raw id, "spin-button", where Rob reads the words partLabel gives, "Spin button". */

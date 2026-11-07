@@ -173,6 +173,12 @@ describe("design lint", () => {
     ]);
   });
 
+  it("field-fill: fails a field tinted with its border in dark, in the kit and out of it, and allows the card fill", () => {
+    const source = [`<div className="rounded-md border border-border-strong dark:bg-border-strong/30" />`, `<div className="rounded-md border border-border-strong bg-card" />`].join("\n");
+    expect(rules(source)).toEqual([{ rule: "field-fill", line: 1, text: "dark:bg-border-strong/30" }]);
+    expect(rules(source, true)).toEqual([{ rule: "field-fill", line: 1, text: "dark:bg-border-strong/30" }]);
+  });
+
   it("overlay-kit: fails an overlay drawn from the surface recipe outside the kit, and allows the kit", () => {
     const source = [`<div className={cn(overlaySurface(), "absolute grid w-popover-sm p-3")} />`, `<OverlayPanel style={{ left, top }} />`].join("\n");
     expect(rules(source)).toEqual([{ rule: "overlay-kit", line: 1, text: "overlaySurface()" }]);
