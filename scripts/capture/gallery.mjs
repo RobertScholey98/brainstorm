@@ -207,15 +207,18 @@ const park = (page, c) => page.mouse.move(Math.round(c.width * 0.55), c.height -
 async function handTo(page, frame, selector) {
   const el = await frame.waitForSelector(selector);
   // Brought in as the canvas's own reveal does, so the frame's label shows whole or not at all. Playwright's
-  // scrollIntoViewIfNeeded is blind to the label and left it sliced under the canvas bar (round 8's shot 78).
+  // scrollIntoViewIfNeeded is blind to the label and left it sliced under the canvas bar (round 8's shot 78). It stops
+  // where revealInFrame does, at the frame's top edge, or the selection edge sits under the bar's rule (round 10's shot 78).
   await el.evaluate((target) => {
     const [margin, pad] = [12, 24];
     const t = target.getBoundingClientRect();
     const room = document.documentElement.clientHeight;
     let by = t.top < margin ? t.top - margin : t.bottom > room - margin ? t.bottom - (room - margin) : 0;
     if (by === 0) return;
-    const label = target.closest(".bs-frame")?.querySelector(".bs-frame-title")?.getBoundingClientRect();
-    if (label !== undefined && label.bottom - by > 0 && label.top - by < pad) by = by < 0 ? label.top - pad : Math.max(by, label.bottom);
+    const frame = target.closest(".bs-frame");
+    const label = frame?.querySelector(".bs-frame-title")?.getBoundingClientRect();
+    const top = frame?.querySelector(".bs-frame-body")?.getBoundingClientRect().top;
+    if (label !== undefined && top !== undefined && top - by > 0 && label.top - by < pad) by = by < 0 ? label.top - pad : Math.max(by, top);
     scrollBy({ top: by });
   });
   const box = await el.boundingBox();
