@@ -41,23 +41,15 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
         {/* Both titles lead with a 16 px glyph, the spinner then the check, so the title holds still as the file lands. */}
         {done === null ? (
           <PopoverHeader
-            heading={
-              <span className="flex items-center gap-1.5" data-export-title>
-                <Spinner className="text-fg-muted" />
-                Exporting
-              </span>
-            }
+            icon={<Spinner className="text-fg-muted" />}
+            heading={<span data-export-title>Exporting</span>}
             description="Writing one HTML file with your settings and variant choices."
           />
         ) : (
           <>
             <PopoverHeader
-              heading={
-                <span className="flex items-center gap-1.5" data-export-title>
-                  <Check aria-hidden className="size-4 text-success" />
-                  Exported
-                </span>
-              }
+              icon={<Check aria-hidden className="size-4 text-success" />}
+              heading={<span data-export-title>Exported</span>}
               description="One HTML file that opens offline, with your settings and variant choices."
             />
             <ExportPath path={done.path} />

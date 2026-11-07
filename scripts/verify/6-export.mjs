@@ -78,9 +78,19 @@ try {
       const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--success)" }));
       const success = getComputedStyle(probe).color;
       probe.remove();
-      return [t.textContent.trim(), t.firstElementChild?.tagName.toLowerCase(), getComputedStyle(t.firstElementChild).color === success];
+      const glyph = t.closest("[data-slot=popover-header]").firstElementChild;
+      return [t.textContent.trim(), glyph.tagName.toLowerCase(), getComputedStyle(glyph).color === success];
     }),
     ["Exported", "svg", true],
+  );
+  check(
+    "its description starts under the title's words, so the header keeps one left edge",
+    await window.$eval("[data-slot=popover-header]", (h) => {
+      const range = document.createRange();
+      range.selectNodeContents(h.querySelector("[data-export-title]"));
+      return Math.round(h.querySelector("[data-slot=popover-description]").getBoundingClientRect().left - range.getBoundingClientRect().left);
+    }),
+    0,
   );
   exported = (await window.textContent("[data-export-path]"))?.trim();
   const name = exported?.slice(join(home, "exports").length + 1);

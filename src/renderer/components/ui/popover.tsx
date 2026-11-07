@@ -54,14 +54,19 @@ function PopoverContent({
 const TITLE = "text-sm font-semibold"
 const DESCRIPTION = "text-xs text-fg-muted"
 
-function PopoverHeader({ heading, description }: { heading: React.ReactNode; description?: React.ReactNode }) {
+/**
+ * A popover's title over its description. An `icon`, such as a state's spinner or check, hangs before the title as
+ * the Callout's does, so the description starts under the title's words and the header keeps one left edge.
+ */
+function PopoverHeader({ heading, description, icon }: { heading: React.ReactNode; description?: React.ReactNode; icon?: React.ReactNode }) {
   return (
-    <div data-slot="popover-header" className="grid gap-0.5">
+    <div data-slot="popover-header" className={cn("grid gap-0.5", icon !== undefined && "grid-cols-[auto_minmax(0,1fr)] items-center gap-x-1.5")}>
+      {icon}
       <PopoverPrimitive.Title data-slot="popover-title" className={TITLE}>
         {heading}
       </PopoverPrimitive.Title>
       {description !== undefined && (
-        <PopoverPrimitive.Description data-slot="popover-description" className={DESCRIPTION}>
+        <PopoverPrimitive.Description data-slot="popover-description" className={cn(DESCRIPTION, icon !== undefined && "col-start-2")}>
           {description}
         </PopoverPrimitive.Description>
       )}
