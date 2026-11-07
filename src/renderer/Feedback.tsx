@@ -16,7 +16,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { Count } from "@/components/ui/count";
+import { overflows } from "@/components/ui/ink";
 import type { Placement } from "./CanvasHost";
+
+/** The comment in focus, and which focus this is: a pin clicked twice focuses its comment twice. */
+export type FeedbackFocus = { readonly id: FeedbackId; readonly seq: number };
 
 /** Where a pin is on the canvas. Only the frame can tell placed from detached; the rest the view knows. */
 export type PinPlace = "placed" | "detached" | "hidden" | "removed";
@@ -82,7 +86,7 @@ export function FeedbackPanel({
   picking: boolean;
   /** Whether the pin composer is up, so the button reads open as every popover trigger does. */
   composing: boolean;
-  focused: FeedbackId | null;
+  focused: FeedbackFocus | null;
   /** The comment whose pin is under the pointer on the canvas, tinted as if the pointer were on it. */
   echoed: FeedbackId | null;
   /** The item under the pointer, so its pin can echo the hover on the canvas. */
@@ -133,7 +137,8 @@ export function FeedbackPanel({
                     feedback={f}
                     block={blocks.find((b) => b.id === f.pin.blockId) ?? null}
                     place={place(f)}
-                    focused={focused === f.id}
+                    focused={focused?.id === f.id}
+                    reveal={focused?.id === f.id ? focused.seq : 0}
                     echoed={echoed === f.id}
                     onHover={onHover}
                     onOpen={() => onOpen(f)}
@@ -154,6 +159,7 @@ function FeedbackItem({
   block,
   place,
   focused,
+  reveal,
   echoed,
   onHover,
   onOpen,
@@ -163,6 +169,8 @@ function FeedbackItem({
   block: BlockView | null;
   place: PinPlace;
   focused: boolean;
+  /** Which focus this is, so each one reveals the comment again. */
+  reveal: number;
   echoed: boolean;
   onHover: (id: FeedbackId | null) => void;
   onOpen: () => void;
@@ -173,8 +181,18 @@ function FeedbackItem({
   const [metaCut, setMetaCut] = useState(false);
   const item = useRef<HTMLLIElement>(null);
   useEffect(() => {
-    if (focused) item.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [focused]);
+    const el = item.current;
+    const pane = el?.closest<HTMLElement>("[data-slot=scroll-pane]");
+    const section = el?.closest<HTMLElement>("[data-feedback-panel]");
+    if (!focused || el == null || pane == null || section == null) return;
+    const [box, r, s] = [pane.getBoundingClientRect(), el.getBoundingClientRect(), section.getBoundingClientRect()];
+    if (r.top >= box.top && r.bottom <= box.bottom) return;
+    // A reveal stops on a seam, never through a control: under the section's rule, which the pane head's then stands for,
+    // when the comment fits below it, else the comment's top.
+    const head = s.top + section.clientTop;
+    const seam = r.bottom - head <= pane.clientHeight ? head : r.top;
+    pane.scrollBy({ top: seam - box.top, behavior: "smooth" });
+  }, [focused, reveal]);
   const line = statusLine(f.status);
   const where = pinWhere(f.pin, block);
   const run = (action: FeedbackAction) => {
@@ -230,7 +248,7 @@ function FeedbackItem({
               <Hint label={where} side="left" disabled={!metaCut || confirming}>
                 <Truncate
                   className={cn("pt-1 text-xs/snug", confirming ? "text-fg" : "text-fg-muted")}
-                  onPointerEnter={(e) => setMetaCut(e.currentTarget.scrollWidth > e.currentTarget.clientWidth)}
+                  onPointerEnter={(e) => setMetaCut(overflows(e.currentTarget))}
                   data-feedback-meta
                   data-feedback-question={confirming || undefined}
                 >

@@ -34,7 +34,7 @@ import { applyPrefs, NO_PREFS, type CanvasLayout, type UiPrefs, type UiPrefsPatc
 import type { Api } from "./api";
 import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type Placement } from "./CanvasHost";
-import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
+import { FeedbackPanel, PinComposer, pinPlace, type FeedbackFocus } from "./Feedback";
 import { Filmstrip, FilmstripSkeleton, PastBar } from "./History";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
@@ -306,7 +306,8 @@ function SessionWorkspace({
   const [interaction, setInteraction] = useState<CanvasInteraction>({ kind: "view" });
   const [past, setPast] = useState<Past | null>(null);
   const [placement, setPlacement] = useState<Placement>(NO_PLACEMENT);
-  const [focusedFeedback, setFocusedFeedback] = useState<FeedbackId | null>(null);
+  const [focus, setFocus] = useState<FeedbackFocus | null>(null);
+  const focusedFeedback = focus?.id ?? null;
   const [hoveredFeedback, setHoveredFeedback] = useState<FeedbackId | null>(null);
   const [hoveredPin, setHoveredPin] = useState<FeedbackId | null>(null);
   const [zooms, setZooms] = useState<Readonly<Record<string, number>>>({});
@@ -463,7 +464,7 @@ function SessionWorkspace({
     (id: FeedbackId) => {
       const f = feedback.find((x) => x.id === id);
       if (f !== undefined) onSelectBlock(f.pin.blockId);
-      setFocusedFeedback(id);
+      setFocus((p) => ({ id, seq: (p?.seq ?? 0) + 1 }));
     },
     [feedback, onSelectBlock],
   );
@@ -471,7 +472,7 @@ function SessionWorkspace({
     const block = blocks.find((b) => b.id === f.pin.blockId);
     if (block !== undefined && !activeBlocks.has(block.id)) onVariant(block.slot, block.variant);
     else if (block !== undefined) setSelectedSlot(block.slot);
-    setFocusedFeedback(f.id);
+    setFocus((p) => ({ id: f.id, seq: (p?.seq ?? 0) + 1 }));
     setPulse((p) => ({ id: f.id, seq: (p?.seq ?? 0) + 1 }));
   };
   const saveComment = async (pin: Pin, text: string) => {
@@ -684,7 +685,7 @@ function SessionWorkspace({
             pinBlocked={past !== null ? "Back to latest to pin a comment" : (unrendered ?? undefined)}
             picking={picking === "comment"}
             composing={interaction.kind === "composing"}
-            focused={focusedFeedback}
+            focused={focus}
             echoed={hoveredPin}
             onHover={setHoveredFeedback}
             onPickToggle={() => togglePick("comment")}

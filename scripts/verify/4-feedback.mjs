@@ -139,8 +139,14 @@ try {
   await canvas.evaluate((s) => scrollTo(0, s), Math.round(near.pin - (near.room - 12) - 7));
   await window.click('[data-feedback="2"] [data-feedback-text]');
   check(
-    "and a reveal that hides the label takes the frame's top edge with it, never leaving that edge a few px under the bar",
-    await settled(() => canvas.evaluate(() => Math.round(document.querySelector(".bs-frame[data-slot=wheel] .bs-frame-body").getBoundingClientRect().top))).then((top) => [near.label - near.edge < 0, top <= 0 || top >= 24]),
+    "and a reveal that hides the label takes the frame's top edge with it, its 2 px selection ring and all, never leaving the ring a pixel under the bar",
+    await settled(() =>
+      canvas.evaluate(() => {
+        const body = document.querySelector(".bs-frame[data-slot=wheel] .bs-frame-body");
+        const ring = parseFloat(getComputedStyle(body).boxShadow.match(/0px 0px 0px ([d.]+)px/)?.[1] ?? "0") * (body.getBoundingClientRect().width / body.offsetWidth);
+        return Math.round((body.getBoundingClientRect().top - ring) * 100) / 100;
+      }),
+    ).then((top) => [near.label - near.edge < 0, top <= 0 || top >= 24 || top]),
     [true, true],
   );
   await window.setViewportSize({ width: 1440, height: 900 });
@@ -298,9 +304,33 @@ try {
   await canvas.waitForSelector(`${PIN}.bs-pulse`);
   check("clicking the comment in the list pulses its pin", await canvas.$eval(PIN, (el) => el.classList.contains("bs-pulse")), true);
 
+  // At 1100 the comment starts out of sight, so the click has to reveal it.
+  await window.setViewportSize({ width: 1100, height: 720 });
+  await window.$eval("[data-inspector-body]", (el) => el.scrollTo({ top: 0 }));
   await canvas.click(PIN);
   await window.waitForSelector('[data-feedback="1"][data-focused]');
   check("clicking the pin focuses its comment in the list", await window.isVisible('[data-feedback="1"][data-focused]'), true);
+  // Here the comment needs 57 px and the pane ends at 65, so the Feedback section's rule is out of reach and the pane
+  // ends instead. Clicking the comment above already focused it, so this also proves a pin clicked again reveals.
+  check(
+    "at 1100 the reveal shows the comment whole, stopped on the Feedback section's rule or, out of its reach, at the pane's end",
+    await settled(() =>
+      window.evaluate(() => {
+        const pane = document.querySelector("[data-inspector-body]");
+        const box = pane.getBoundingClientRect();
+        const item = document.querySelector('[data-feedback="1"]').getBoundingClientRect();
+        const section = document.querySelector("[data-feedback-panel]");
+        const rule = section.getBoundingClientRect().top + section.clientTop - box.top + pane.scrollTop;
+        const end = pane.scrollHeight - pane.clientHeight;
+        return {
+          whole: item.top >= box.top - 0.5 && item.bottom <= box.bottom + 0.5,
+          stop: Math.abs(pane.scrollTop - Math.min(rule, end)) <= 1,
+        };
+      }),
+    ),
+    { whole: true, stop: true },
+  );
+  await window.setViewportSize({ width: 1440, height: 900 });
   check(
     "a focused pin rings its card border in the accent, 2 px, with no band of card between",
     await canvas.$eval(`${PIN}[data-focused]`, (pin) => {
