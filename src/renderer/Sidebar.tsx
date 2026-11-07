@@ -248,9 +248,9 @@ function SessionRow({
             </span>
           </span>
         )}
-        {/* An open request says what it is waiting on and for how long, as T3 Code's thread rows do, in the age's place. */}
+        {/* An open request says what it is waiting on and for how long, as T3 Code's thread rows do, in the age's place. A lost thread echoes muted: the card beside it carries the warning. */}
         <span className="flex shrink-0 text-xs font-normal text-fg-muted tabular-nums group-focus-within/menu-item:hidden group-hover/menu-item:hidden">
-          {sessionPhase(s) === null || s.settlement.state === "settled" ? <span data-age={since}>{age(since, now)}</span> : <SessionStatus session={s} now={now} collapsible />}
+          {sessionPhase(s) === null || s.settlement.state === "settled" ? <span data-age={since}>{age(since, now)}</span> : <SessionStatus session={s} now={now} tone={sessionPhase(s) === "thread_lost" ? "muted" : undefined} collapsible />}
         </span>
         {/* The settle action's room, held while it shows in the age's place, so the title gives way to it rather than run under it. */}
         <span aria-hidden data-label={label} className="content-label invisible hidden shrink-0 gap-1 px-1.5 text-xs group-focus-within/menu-item:flex group-hover/menu-item:flex">

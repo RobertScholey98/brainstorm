@@ -332,6 +332,13 @@ try {
     ),
     [[kitchen, "true", "Settled", "rgba(0, 0, 0, 0)", false, true]],
   );
+  await window.hover("[data-overview-session]:not([data-settled]) [data-card-open]");
+  check(
+    "a hovered card's settle button paints no fill of its own, so it sits on the lifted card rather than punching the resting fill into it",
+    await settled(() => window.$eval("[data-overview-session]:not([data-settled]) [data-settle]", (b) => getComputedStyle(b).backgroundColor)),
+    "rgba(0, 0, 0, 0)",
+  );
+  await window.mouse.move(0, 0);
   await window.click("[data-settled-label]");
   await window.waitForSelector(`[data-settled-group] [data-session="${kitchen}"][data-settled]`);
   check(
@@ -375,6 +382,12 @@ try {
   await window.hover(`[data-overview-session="${roulette}"]`);
   await window.click(`[data-settle="${roulette}"]`);
   await window.waitForFunction((id) => document.querySelector(`[data-settled-group] [data-session="${id}"]`) !== null, roulette);
+  await window.waitForSelector(`[data-overview-session="${roulette}"][data-settled] [data-preview-still]`);
+  check(
+    "a settled card's still fades to 35% in light, so its dark ground reads as a ghost rather than a grey slab",
+    await settled(() => window.$eval(`[data-overview-session="${roulette}"] [data-preview-still]`, (img) => getComputedStyle(img).opacity)),
+    "0.35",
+  );
   await window.hover(`[data-overview-session="${roulette}"]`);
   await window.click(`[data-settle="${roulette}"]`);
   await window.waitForFunction((id) => document.querySelector(`[data-project] [data-session="${id}"]`) !== null, roulette);
@@ -460,12 +473,12 @@ try {
   await window.fill("[data-home-search]", "zebra");
   await window.waitForSelector('[data-home-none="no-match"]');
   check(
-    "a search that matches nothing in any status says so, naming only the search and not the status, with one way out",
+    "a search that matches nothing in any status says so by the search's own words, not the status, with one way out",
     [
       (await window.textContent('[data-home-none="no-match"] [data-slot=empty-description]'))?.trim(),
       (await window.textContent('[data-home-none="no-match"] [data-home-none-action]'))?.trim(),
     ],
-    ["No brainstorm matches the search.", "Clear search"],
+    ["No brainstorm has “zebra” in its title or brief.", "Clear search"],
   );
   check(
     "and its icon sits 20 px under the query row, where the first card would, not down the page",
@@ -1220,6 +1233,25 @@ try {
   await window.click("[data-back]");
   await window.waitForSelector(`[data-session="${loose}"][data-lost] [data-session-status="thread_lost"]`);
   check("its home row carries the lost marker", (await window.textContent(`[data-session="${loose}"] [data-session-status="thread_lost"]`))?.trim(), "Thread lost");
+  await window.click("[data-overview]");
+  await window.waitForSelector("[data-home-status]");
+  const shownStatus = await window.$eval("[data-home-status][aria-pressed=true]", (el) => el.dataset.homeStatus);
+  await window.click('[data-home-status="all"]');
+  await window.waitForSelector(`[data-overview-session="${loose}"] [data-session-status="thread_lost"]`);
+  check(
+    "home shows the lost thread's warning once, on its card, and the row echoes it muted",
+    await window.evaluate((id) => {
+      const colour = (el) => (el === null ? null : getComputedStyle(el).color);
+      const row = document.querySelector(`[data-session="${id}"] [data-session-status="thread_lost"]`);
+      const card = document.querySelector(`[data-overview-session="${id}"] [data-session-status="thread_lost"]`);
+      const muted = document.body.appendChild(Object.assign(document.createElement("span"), { className: "text-fg-muted" }));
+      const result = { row: colour(row) === colour(muted), card: card !== null && colour(card) !== colour(muted) };
+      muted.remove();
+      return result;
+    }, loose),
+    { row: true, card: true },
+  );
+  await window.click(`[data-home-status="${shownStatus}"]`);
   check("the window logged no errors or warnings after the restart", errors, []);
 
   await app.close();

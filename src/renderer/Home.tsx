@@ -125,7 +125,7 @@ export function HomeOverview({
           ) : nothing ? (
             <NoneShown
               title="No brainstorms match"
-              description={noMatch(query.status, search.trim() !== "", selected.size > 0, result.counts.all > 0)}
+              description={noMatch(query.status, search.trim(), selected.size > 0, result.counts.all > 0)}
               action={clearLabel(search.trim() !== "", selected.size > 0 || query.status !== DEFAULT_HOME.status)}
               onAction={clear}
               data="no-match"
@@ -166,12 +166,16 @@ export function HomeOverview({
 const STATUS_WORDS: Record<HomeStatus, string> = { active: "active", attention: "waiting on you", settled: "settled", all: "here" };
 const ONE_OF: Record<HomeStatus, string> = { active: "active brainstorm", attention: "brainstorm waiting on you", settled: "settled brainstorm", all: "brainstorm" };
 
-/** Why nothing shows, naming only what is narrowing it, so the copy never blames a filter that isn't on. */
-/** `elsewhere` is whether another status holds a match; if none does, the status didn't narrow anything, so isn't named. */
-function noMatch(shown: HomeStatus, searched: boolean, picked: boolean, elsewhere: boolean): string {
+/**
+ * Why nothing shows, naming only what is narrowing it, so the copy never blames a filter that isn't on. A search is
+ * named by its words, so the line says what the title above it doesn't. `elsewhere` is whether another status holds a
+ * match; if none does, the status didn't narrow anything, so isn't named.
+ */
+function noMatch(shown: HomeStatus, search: string, picked: boolean, elsewhere: boolean): string {
   const status = elsewhere ? shown : "all";
-  if (searched && picked) return `No ${ONE_OF[status]} in the projects you picked matches the search.`;
-  if (searched) return `No ${ONE_OF[status]} matches the search.`;
+  const has = `has “${search}” in its title or brief`;
+  if (search !== "" && picked) return `No ${ONE_OF[status]} in the projects you picked ${has}.`;
+  if (search !== "") return `No ${ONE_OF[status]} ${has}.`;
   if (picked) return `There is no ${ONE_OF[status]} in the projects you picked.`;
   return `Nothing is ${STATUS_WORDS[status]} right now.`;
 }
@@ -306,7 +310,7 @@ function OverviewCard({
       </div>
       <span className="absolute right-3 bottom-3 opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100">
         <Hint label={label} shortcut={SETTLE_SHORTCUT} side="top">
-          <Button variant="outline" size="icon-xs" onClick={onSettle} aria-label={`${label} ${s.title}`} data-settle={s.id}>
+          <Button variant="ghost" size="icon-xs" onClick={onSettle} aria-label={`${label} ${s.title}`} data-settle={s.id}>
             {settleUndoes(s) ? <Undo2 aria-hidden /> : <CircleCheck aria-hidden />}
           </Button>
         </Hint>

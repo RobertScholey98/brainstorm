@@ -187,7 +187,7 @@ function Still({
           <img
             src={shown.image}
             alt=""
-            className={cn("block w-full ring-1", compact ? "rounded-t-sm ring-border" : "rounded-sm shadow-xs ring-border-strong", muted && "opacity-50 grayscale dark:brightness-50")}
+            className={cn("block w-full ring-1", compact ? "rounded-t-sm ring-border" : "rounded-sm shadow-xs ring-border-strong", muted && "opacity-35 grayscale dark:opacity-50 dark:brightness-50")}
             draggable={false}
             data-preview-still
           />

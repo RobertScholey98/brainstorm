@@ -19,11 +19,23 @@ export function PhaseDot({ phase, tone = PHASE[phase].tone }: { phase: OpenPhase
  * then `after`, such as how long the request has been open. In a row that fits itself (`useRowFit`), the name is the
  * part that gives way, kept for screen readers.
  */
-export function PhaseStatus({ phase, after, collapsible = false, className }: { phase: OpenPhase; after?: string; collapsible?: boolean; className?: string }) {
+export function PhaseStatus({
+  phase,
+  tone = PHASE[phase].tone,
+  after,
+  collapsible = false,
+  className,
+}: {
+  phase: OpenPhase;
+  tone?: Tone;
+  after?: string;
+  collapsible?: boolean;
+  className?: string;
+}) {
   const status = PHASE[phase];
   return (
-    <span className={cn("flex shrink-0 items-center gap-1.5", TONE_TEXT[status.tone], className)} data-session-status={phase}>
-      {phase === "thread_lost" ? <AlertTriangle aria-hidden className="size-3" /> : <PhaseDot phase={phase} />}
+    <span className={cn("flex shrink-0 items-center gap-1.5", TONE_TEXT[tone], className)} data-session-status={phase} data-tone={tone}>
+      {phase === "thread_lost" ? <AlertTriangle aria-hidden className="size-3" /> : <PhaseDot phase={phase} tone={tone} />}
       <span>
         <span data-collapse={collapsible ? 1 : undefined} className="data-collapsed:sr-only">
           {status.short}
@@ -35,8 +47,8 @@ export function PhaseStatus({ phase, after, collapsible = false, className }: { 
 }
 
 /** A listed brainstorm's open phase, counting from when it last moved, as T3 Code counts a thread's turn. */
-export function SessionStatus({ session, now, collapsible, className }: { session: SessionListing; now?: number; collapsible?: boolean; className?: string }) {
+export function SessionStatus({ session, now, tone, collapsible, className }: { session: SessionListing; now?: number; tone?: Tone; collapsible?: boolean; className?: string }) {
   const phase = sessionPhase(session);
   if (phase === null) return null;
-  return <PhaseStatus phase={phase} after={now === undefined || PHASE[phase].ended === true ? undefined : elapsed(session.activeAt, now)} collapsible={collapsible} className={className} />;
+  return <PhaseStatus phase={phase} tone={tone} after={now === undefined || PHASE[phase].ended === true ? undefined : elapsed(session.activeAt, now)} collapsible={collapsible} className={className} />;
 }
