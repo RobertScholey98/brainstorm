@@ -2,12 +2,14 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 import { chip } from "@/components/ui/chip"
 
-function Empty({ className, ...props }: React.ComponentProps<"div">) {
+/** `start` is for a message on a left-aligned page, such as home's, which starts on the page's edge as its heading does. */
+function Empty({ className, align = "center", ...props }: React.ComponentProps<"div"> & { align?: "center" | "start" }) {
   return (
     <div
       data-slot="empty"
+      data-align={align}
       className={cn(
-        "flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl border-dashed p-6 text-center text-balance",
+        "group/empty flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl border-dashed p-6 text-center text-balance data-[align=start]:items-start data-[align=start]:px-0 data-[align=start]:text-left",
         className
       )}
       {...props}
@@ -19,7 +21,7 @@ function EmptyHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="empty-header"
-      className={cn("flex max-w-sm flex-col items-center gap-2", className)}
+      className={cn("flex max-w-sm flex-col items-center gap-2 group-data-[align=start]/empty:items-start", className)}
       {...props}
     />
   )
@@ -86,7 +88,7 @@ function EmptyContent({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="empty-content"
       className={cn(
-        "flex w-full max-w-sm min-w-0 flex-col items-center gap-2 text-sm text-balance",
+        "flex w-full max-w-sm min-w-0 flex-col items-center gap-2 text-sm text-balance group-data-[align=start]/empty:items-start",
         className
       )}
       {...props}

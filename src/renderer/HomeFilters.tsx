@@ -9,6 +9,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Hint } from "@/components/ui/tooltip";
 import { Count } from "@/components/ui/count";
+import { cn } from "cn";
 import type { HomeQuery, HomeSort, HomeStatus } from "../core/prefs";
 import type { ProjectId } from "../core/types";
 import type { ProjectOption } from "./homeQuery";
@@ -60,6 +61,7 @@ export function HomeFilters({
   counts,
   projects,
   selected,
+  disabled = false,
 }: {
   field: RefObject<HTMLInputElement | null>;
   search: string;
@@ -71,9 +73,17 @@ export function HomeFilters({
   projects: readonly ProjectOption[];
   /** The projects the filter names that still have a brainstorm; empty is every project. */
   selected: ReadonlySet<ProjectId>;
+  /** While the list has failed: the row holds its place, at the disabled opacity, and takes no input. */
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2" role="search" data-home-filters>
+    <div
+      inert={disabled}
+      aria-disabled={disabled || undefined}
+      className={cn("flex flex-wrap items-center gap-2", disabled && "opacity-50")}
+      role="search"
+      data-home-filters
+    >
       <div className="relative max-w-popover-sm min-w-0 flex-1">
         <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-fg-muted" />
         <Input

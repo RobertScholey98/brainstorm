@@ -417,6 +417,15 @@ try {
     await window.evaluate(() => Math.round(document.querySelector("[data-home-none]").getBoundingClientRect().top - document.querySelector("[data-home-filters]").getBoundingClientRect().bottom)),
     20,
   );
+  check(
+    "it starts on the page's left edge, under the search, its title and its action too, as the heading does",
+    await window.evaluate(() => {
+      const left = (sel) => Math.round(document.querySelector(sel).getBoundingClientRect().left);
+      const edge = left("[data-home-search]");
+      return ['[data-home-none] [data-slot="empty-icon"]', "[data-home-none] [data-slot=empty-title]", "[data-home-none-action]"].map((sel) => left(sel) - edge);
+    }),
+    [0, 0, 0],
+  );
   await shot(window, shots, "search-empty");
   await window.keyboard.press("Escape");
   check("Escape clears the search, and every active brainstorm is back", [await window.inputValue("[data-home-search]"), (await cards()).length], ["", 3]);
@@ -1095,8 +1104,14 @@ try {
     ["Active", "Attention", "Settled", "All"],
   );
   check("and keeps a count's room, so the row doesn't move when the counts land", await statusWidth(), loadedStatusWidth);
+  const loadingTop = await filtersTop();
   answer();
   await window.waitForSelector("[data-home-error]");
+  check(
+    "a failed home keeps the subtitle and the query row where loading had them, the row off at the disabled opacity",
+    [await window.isVisible("[data-home-hint]"), await filtersTop(), await window.$eval("[data-home-filters]", (f) => [f.inert, getComputedStyle(f).opacity])],
+    [true, loadingTop, [true, "0.5"]],
+  );
   check(
     "a list that fails at launch shows its error with Try again, and the sidebar stops loading and points at Try again",
     [await window.isVisible("[data-home-retry]"), await window.isVisible("[data-home-loading]"), (await window.textContent('[data-sidebar-panel="home"]'))?.includes("The list didn't load. Use Try again on the right.")],
@@ -1104,8 +1119,8 @@ try {
   );
   check("a failed home keeps its page heading over the error", (await window.textContent("[data-home-overview] h1"))?.trim(), "All brainstorms");
   check(
-    "and its message sits under the heading as a no-match sits under the query row, not down the page",
-    await window.evaluate(() => Math.round(document.querySelector("[data-home-error]").getBoundingClientRect().top - document.querySelector("[data-slot=page-header]").getBoundingClientRect().bottom)),
+    "and its message sits under the query row as a no-match does, not down the page",
+    await window.evaluate(() => Math.round(document.querySelector("[data-home-error]").getBoundingClientRect().top - document.querySelector("[data-home-filters]").getBoundingClientRect().bottom)),
     20,
   );
   check(

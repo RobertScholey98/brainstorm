@@ -81,16 +81,17 @@ export function HomeOverview({
     onQuery({ ...query, status: DEFAULT_HOME.status, projects: [] });
   };
   // The heading holds in every state, so loading, empty and failed home keep the page's frame. Empty drops the hint,
-  // which its own message says. The heading and the query row stay put, and only what they find scrolls under them.
+  // which its own message says, and the query row, which has nothing to ask; failed keeps both, the row off. The heading and the query row stay put, and only what they find scrolls under them.
   return (
     <div className="flex size-full flex-col" data-home-overview>
       <div className="flex shrink-0 flex-col gap-5 px-6 pt-6 pb-2" data-home-head>
         <PageHeader
           heading="All brainstorms"
-          description={failed || empty ? undefined : <span data-home-hint>To start a new brainstorm, {START}.</span>}
+          description={empty ? undefined : <span data-home-hint>To start a new brainstorm, {START}.</span>}
         />
-        {!failed && !empty && (
+        {!empty && (
           <HomeFilters
+            disabled={failed}
             field={field}
             search={search}
             onSearch={setSearch}
@@ -178,7 +179,7 @@ const MESSAGE = "flex-none rounded-none py-12";
 function NoneShown({ title, description, action, onAction, data }: { title: string; description: string; action: string; onAction: () => void; data: string }) {
   return (
     // Under the query row it answers, not mid-page: the page's height says nothing about this.
-    <Empty className={MESSAGE} data-home-none={data}>
+    <Empty align="start" className={MESSAGE} data-home-none={data}>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <SearchX aria-hidden />
@@ -293,7 +294,7 @@ function OverviewCard({
 
 function HomeEmpty() {
   return (
-    <Empty className={MESSAGE} data-home-empty>
+    <Empty align="start" className={MESSAGE} data-home-empty>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Lightbulb aria-hidden />
@@ -307,7 +308,7 @@ function HomeEmpty() {
 
 function ListError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <Empty className={MESSAGE} data-home-error>
+    <Empty align="start" className={MESSAGE} data-home-error>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <CloudOff aria-hidden className="text-danger" />
