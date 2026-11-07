@@ -18,4 +18,9 @@ describe("a phase's two names", () => {
     ]);
     expect(words.filter(([short, long]) => !long!.startsWith(short!))).toEqual([]);
   });
+
+  it("gives the accent only to the phase where the agent is running, so sending and starting spin muted, as Export does", () => {
+    expect(Object.entries(PHASE).filter(([, p]) => p.tone === "accent").map(([phase]) => phase)).toEqual(["working"]);
+    expect([PHASE.sending, PHASE.starting].map((p) => [p.tone, p.live])).toEqual([["muted", true], ["muted", true]]);
+  });
 });

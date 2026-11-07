@@ -26,12 +26,13 @@ export const TONE_DOT: Record<Tone, string> = {
 /**
  * Every request phase, the one table the header, the request strip, the brainstorm panel's Thread row and home all
  * read. `short` is the phase's name where room is tight: a list row, the Thread row, a header that has given up its
- * long status. The accent is the agent at work, so only phases where it is running take it; queued waits in T3 with
- * nothing running yet. Live phases pulse, since they change on their own.
+ * long status. The accent is the agent at work, so only the phase where it is running takes it: sending, starting and
+ * queued are Brainstorm and T3 at work, with no agent running yet, so they spin and pulse muted, as Export's spinner
+ * does. Live phases pulse, since they change on their own.
  */
 export const PHASE: Record<RequestPhase["phase"], { readonly short: string; readonly tone: Tone; readonly live?: true }> = {
-  sending: { short: "Sending", tone: "accent", live: true },
-  starting: { short: "Starting", tone: "accent", live: true },
+  sending: { short: "Sending", tone: "muted", live: true },
+  starting: { short: "Starting", tone: "muted", live: true },
   queued: { short: "Queued", tone: "muted" },
   working: { short: "Agent working", tone: "accent", live: true },
   asking: { short: "Agent asking", tone: "info" },
