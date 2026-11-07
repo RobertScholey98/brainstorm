@@ -1,6 +1,6 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, posix, win32 } from "node:path";
 import { z } from "zod";
 import { packageRoot } from "../core/packageRoot";
 
@@ -21,8 +21,13 @@ const apiShape = z.object({
   startedAt: z.string(),
 });
 
-export function brainstormHome(env: NodeJS.ProcessEnv = process.env): string {
-  return env.BRAINSTORM_HOME || join(env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "brainstorm");
+/** BRAINSTORM_HOME, else the per-user app data folder Electron itself would pick on this platform. */
+export function brainstormHome(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string {
+  if (env.BRAINSTORM_HOME) return env.BRAINSTORM_HOME;
+  if (platform === "win32") return win32.join(env.APPDATA ?? win32.join(homedir(), "AppData", "Roaming"), "brainstorm");
+  const home = env.HOME ?? homedir();
+  if (platform === "darwin") return posix.join(home, "Library", "Application Support", "brainstorm");
+  return posix.join(env.XDG_CONFIG_HOME || posix.join(home, ".config"), "brainstorm");
 }
 
 export const apiFile = (home: string): string => join(home, "api.json");

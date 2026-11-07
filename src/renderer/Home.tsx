@@ -23,7 +23,7 @@ import { age, useNow } from "./time";
 
 const START = (
   <>
-    run <Code>/ux-brainstorm</Code> in a T3 thread on your project
+    run <Code>/use-brainstorm</Code> in a T3 thread on your project
   </>
 );
 

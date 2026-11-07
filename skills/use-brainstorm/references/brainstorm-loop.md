@@ -126,7 +126,7 @@ A commit that changes nothing and addresses nothing new returns the latest itera
 
 ```
 [brainstorm] session s_8f2k3a · request 5 · scope: wheel/neon, result/sheet · feedback: #4 #7 · freetext: "make the spin feel less random"
-Handle with the ux-brainstorm skill: run `brainstorm context s_8f2k3a`.
+Handle with the use-brainstorm skill: run `brainstorm context s_8f2k3a`.
 ```
 
 `context` is the source of truth for the request, not the message. It gives the scope, the free text, each requested feedback item with its block, part, text and history, Rob's applicable overrides on in-scope blocks, all open and addressed feedback, the control vocabulary, and the exact `next` commands to run.
@@ -152,7 +152,7 @@ Rob picked one element and asked for new variants of its slot that differ only t
 
 ```
 [brainstorm] session s_q7d1m0 · request 1 · fork of s_8f2k3a iteration 4 · scope: all · feedback: #1 · freetext: "try a calmer wheel for mornings"
-Handle with the ux-brainstorm skill: this thread is new, so run `brainstorm session attach s_q7d1m0`, then `brainstorm context s_q7d1m0`.
+Handle with the use-brainstorm skill: this thread is new, so run `brainstorm session attach s_q7d1m0`, then `brainstorm context s_q7d1m0`.
 ```
 
 A fork is a new brainstorm, linked to its parent, in a new thread. `context` adds a `fork of` line and one `baked default <block> <prop> = <value>` line for each of Rob's settings that became a default. Rob's later requests to the fork arrive as ordinary requests.

@@ -6,7 +6,8 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium } from "playwright";
-import { MARK, solidColours } from "../../src/core/design.ts";
+import { __iconNode as brain } from "lucide-react/dist/esm/icons/brain.js";
+import { solidColours } from "../../src/core/design.ts";
 import { root } from "../verify/electron.mjs";
 
 const { values } = parseArgs({ options: { before: { type: "string", default: "0" }, after: { type: "string", default: "1" } } });
@@ -41,7 +42,7 @@ async function pairs() {
 
 async function markSheet(page) {
   const svg = (size, c) =>
-    `<svg width="${size}" height="${size}" viewBox="0 0 16 16"><path d="${MARK.tile}" fill="${c.accent}"/><circle cx="${MARK.dot.cx}" cy="${MARK.dot.cy}" r="${MARK.dot.r}" fill="${c["accent-fg"]}"/></svg>`;
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${c.accent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${brain.map(([, { d }]) => `<path d="${d}"/>`).join("")}</svg>`;
   const cells = THEMES.map((theme) => {
     const c = solidColours(theme);
     return `<div class="cell" style="background:${c.app};color:${c.fg}">${[16, 20, 48].map((s) => svg(s, c)).join("")}<span>Brainstorm · ${theme}</span></div>`;

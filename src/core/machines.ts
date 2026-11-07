@@ -280,9 +280,9 @@ export function formatRequestMessage(
     fork === undefined
       ? `run \`brainstorm context ${request.session}\`.`
       : `this thread is new, so run \`brainstorm session attach ${request.session}\`, then \`brainstorm context ${request.session}\`.`;
-  const lines = [segments.join(" · "), `Handle with the ux-brainstorm skill: ${run}`];
+  const lines = [segments.join(" · "), `Handle with the use-brainstorm skill: ${run}`];
   if (home !== null) {
-    lines.push(`Brainstorm runs with BRAINSTORM_HOME=${home}. Set it on every brainstorm command: in PowerShell, start each with \`$env:BRAINSTORM_HOME = '${home}';\`.`);
+    lines.push(`Brainstorm runs with BRAINSTORM_HOME=${home}. Set it on every brainstorm command: in PowerShell, start each with \`$env:BRAINSTORM_HOME = '${home}';\`; in a POSIX shell, with \`BRAINSTORM_HOME='${home}'\`.`);
   }
   return lines.join("\n");
 }

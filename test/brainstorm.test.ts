@@ -511,7 +511,7 @@ describe("request phases", () => {
     expect(bridge.sent).toEqual([
       {
         thread: T1,
-        message: `[brainstorm] session ${S} · request 1 · scope: all · freetext: "make the spin feel less random"\nHandle with the ux-brainstorm skill: run \`brainstorm context ${S}\`.`,
+        message: `[brainstorm] session ${S} · request 1 · scope: all · freetext: "make the spin feel less random"\nHandle with the use-brainstorm skill: run \`brainstorm context ${S}\`.`,
       },
     ]);
     await service.tick();
@@ -880,7 +880,7 @@ describe("fork", () => {
     expect(bridge.started[0]!.message).toBe(
       [
         `[brainstorm] session ${F} · request 1 · fork of ${S} iteration 2 · scope: all · feedback: #1 #2 · freetext: "Try it as a slot machine, with three reels"`,
-        `Handle with the ux-brainstorm skill: this thread is new, so run \`brainstorm session attach ${F}\`, then \`brainstorm context ${F}\`.`,
+        `Handle with the use-brainstorm skill: this thread is new, so run \`brainstorm session attach ${F}\`, then \`brainstorm context ${F}\`.`,
       ].join("\n"),
     );
     expect(view.attachment.threadId).toBe(thread);
@@ -1069,7 +1069,7 @@ describe("fork", () => {
     data(await service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: null }));
     data(await service.fork(S, { from: 1 as IterationN, picks: {}, instruction: "x" }));
     expect(bridge.started[0]!.message.split("\n")[2]).toBe(
-      "Brainstorm runs with BRAINSTORM_HOME=C:\\bs-home. Set it on every brainstorm command: in PowerShell, start each with `$env:BRAINSTORM_HOME = 'C:\\bs-home';`.",
+      "Brainstorm runs with BRAINSTORM_HOME=C:\\bs-home. Set it on every brainstorm command: in PowerShell, start each with `$env:BRAINSTORM_HOME = 'C:\\bs-home';`; in a POSIX shell, with `BRAINSTORM_HOME='C:\\bs-home'`.",
     );
     data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null }));
     expect(bridge.sent.at(-1)!.message.split("\n")).toHaveLength(2);

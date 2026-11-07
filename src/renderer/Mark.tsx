@@ -1,10 +1,6 @@
-import { MARK } from "../core/design";
+import { Brain } from "lucide-react";
 
+/** The brand mark: Lucide's brain in the accent, the same shape as the app icon (packaging/icon.svg). */
 export function Mark({ size }: { size: 16 | 20 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden data-mark>
-      <path className="fill-accent" d={MARK.tile} />
-      <circle className="fill-accent-fg" {...MARK.dot} />
-    </svg>
-  );
+  return <Brain size={size} className="text-accent" aria-hidden data-mark />;
 }

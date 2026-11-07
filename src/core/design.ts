@@ -201,9 +201,3 @@ export function deltaE2000([l1, a1, b1]: Lab, [l2, a2, b2]: Lab): number {
 
 /** The renderer's src/renderer/design.css, exactly as `npm run design:tokens` writes it. */
 export const designStylesheet = () => `/* Generated from src/core/design.ts by npm run design:tokens. Edit that file, not this one. */\n${designCss()}`;
-
-/** The mark's geometry on a 16-unit grid: the canvas pin's teardrop, and the point a comment anchors to. */
-export const MARK = {
-  tile: "M8 1a7 7 0 0 1 7 7a7 7 0 0 1-7 7H2.25A1.25 1.25 0 0 1 1 13.75V8a7 7 0 0 1 7-7z",
-  dot: { cx: 8, cy: 8, r: 2.4 },
-} as const;

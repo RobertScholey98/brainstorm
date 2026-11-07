@@ -70,9 +70,12 @@ function launch(home: string): void {
   const root = repoRoot();
   const log = openSync(join(home, "server.log"), "a");
   const headless = process.env.BRAINSTORM_APP === "headless";
+  // An installed app runs this CLI on its own Electron binary in node mode (resources/bin/brainstorm), so that binary
+  // is the app; a packaged Electron ignores the path argument and always loads resources/app.
+  const electron = process.versions.electron !== undefined ? process.execPath : (createRequire(join(root, "package.json"))("electron") as string);
   const [command, args] = headless
     ? [process.execPath, ["--disable-warning=ExperimentalWarning", join(root, "dist", "server", "headless.js")]]
-    : [createRequire(join(root, "package.json"))("electron") as string, [root]];
+    : [electron, [root]];
   // An agent running inside an Electron host such as T3 can inherit this, which would make electron run as plain node.
   const { ELECTRON_RUN_AS_NODE: _, ...env } = process.env;
   // stdout carries the UI URL with its token, which must never reach disk; only stderr is logged.

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "A local design canvas attached to a T3 Code thread",
+  "homepage": "https://github.com/RobertScholey98/brainstorm",
   "type": "module",
   "main": "dist/electron/main.cjs",
   "engines": {
@@ -11,6 +12,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "prepare": "node scripts/build.mjs",
+    "dist": "node scripts/build.mjs && electron-builder --publish never",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.web.json",
     "verify:1": "node scripts/verify/1-storage-api.mjs",
@@ -26,6 +28,7 @@
     "capture": "node scripts/capture/gallery.mjs",
     "capture:sheets": "node scripts/capture/sheets.mjs",
     "design:tokens": "node scripts/design/tokens.mjs",
+    "design:icon": "node scripts/design/icon.mjs",
     "design:checkpoint": "node scripts/design/checkpoint.mjs",
     "verify:8": "node scripts/verify/8-history.mjs",
     "verify:9": "node scripts/verify/9-header.mjs"
@@ -43,12 +46,14 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "2.6.2",
     "@tailwindcss/vite": "4.3.4",
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.2.1",
     "electron": "44.10.2",
+    "electron-builder": "26.18.0",
     "esbuild": "0.28.2",
     "playwright": "1.64.1",
     "shadcn": "4.23.0",

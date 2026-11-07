@@ -203,7 +203,7 @@ try {
     "the fake T3 received exactly the [brainstorm] message",
     t3.sent().map((s) => s.message),
     [
-      `[brainstorm] session ${session} · request 1 · scope: wheel/neon · feedback: #1 · freetext: "make the spin feel less random"\nHandle with the ux-brainstorm skill: run \`brainstorm context ${session}\`.`,
+      `[brainstorm] session ${session} · request 1 · scope: wheel/neon · feedback: #1 · freetext: "make the spin feel less random"\nHandle with the use-brainstorm skill: run \`brainstorm context ${session}\`.`,
     ],
   );
   check("Regenerate is disabled while the request is open", await window.isDisabled("[data-regenerate-toggle]"), true);

@@ -105,6 +105,8 @@ In dark, Lagoon sat 14.3 CIEDE2000 from the old `success` `#5cc48a`, and 14.8 in
 
 ### Mark
 
+Superseded by ADR 006: the mark is now Lucide's brain, which the app icon shares. What follows is the pin it replaced.
+
 The "B" tile is now `src/renderer/Mark.tsx`, an inline SVG drawn from `MARK` in `design.ts` on a 16-unit grid. It is a canvas pin's teardrop, rounded on three corners and square at the bottom left where a pin points, with an `accent-fg` dot where a comment anchors. Brainstorm's one distinct gesture is pinning feedback to a design, so the mark is that pin. The shape has no detail under 2 units, so it holds at 16 and 20 px. `design-review/checkpoint/mark.png` shows it at 16, 20 and 48 px in both themes.
 
 ### Pins show status by form as well as colour

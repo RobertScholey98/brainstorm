@@ -538,7 +538,7 @@ try {
     started[0]?.message.split("\n").slice(0, 2),
     [
       `[brainstorm] session ${forkId} · request 1 · fork of ${session} iteration 2 · scope: all · feedback: #1 · freetext: "Try a calmer wheel for mornings"`,
-      `Handle with the ux-brainstorm skill: this thread is new, so run \`brainstorm session attach ${forkId}\`, then \`brainstorm context ${forkId}\`.`,
+      `Handle with the use-brainstorm skill: this thread is new, so run \`brainstorm session attach ${forkId}\`, then \`brainstorm context ${forkId}\`.`,
     ],
   );
   const forked = context(forkId);

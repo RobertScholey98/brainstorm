@@ -1,0 +1,120 @@
+# Builds, tests and packages Brainstorm on Windows, macOS and Linux. A pushed v* tag also drafts a GitHub release
+# with every installer attached; publish the draft by hand once it looks right.
+#
+# Signing is off until these repository secrets exist (electron-builder picks them up; nothing else changes):
+#   MAC_CERTIFICATE, MAC_CERTIFICATE_PASSWORD   Developer ID Application .p12, base64, and its password
+#   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID   notarization
+#   WIN_CERTIFICATE, WIN_CERTIFICATE_PASSWORD   Windows code-signing .pfx, base64, and its password
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Windows, os: windows-latest, platform: --win }
+          - { name: macOS, os: macos-latest, platform: --mac }
+          - { name: Linux, os: ubuntu-latest, platform: --linux }
+    runs-on: ${{ matrix.os }}
+    steps:
+      # The design.css drift test compares bytes with the generator's LF output.
+      - name: Keep LF line endings
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # Also runs prepare, which builds dist/.
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME doesn't match package.json version $version"
+            exit 1
+          fi
+
+      - name: Package
+        shell: bash
+        env:
+          MAC_CERTIFICATE: ${{ secrets.MAC_CERTIFICATE }}
+          MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          WIN_CERTIFICATE: ${{ secrets.WIN_CERTIFICATE }}
+          WIN_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          flags="${{ matrix.platform }}"
+          case "$RUNNER_OS" in
+            macOS)
+              export CSC_LINK="$MAC_CERTIFICATE" CSC_KEY_PASSWORD="$MAC_CERTIFICATE_PASSWORD"
+              # Without a certificate, sign ad hoc: Apple Silicon refuses to launch an unsigned app at all.
+              if [ -z "$CSC_LINK" ]; then flags="$flags -c.mac.identity=- -c.mac.hardenedRuntime=false"; fi
+              ;;
+            Windows)
+              export CSC_LINK="$WIN_CERTIFICATE" CSC_KEY_PASSWORD="$WIN_CERTIFICATE_PASSWORD"
+              ;;
+          esac
+          npx electron-builder $flags --publish never
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: brainstorm-${{ runner.os }}
+          path: |
+            release/*.exe
+            release/*.pkg
+            release/*.deb
+            release/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          pattern: brainstorm-*
+          merge-multiple: true
+
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --title "Brainstorm $GITHUB_REF_NAME" \
+            --generate-notes
