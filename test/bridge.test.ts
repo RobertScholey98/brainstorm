@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { createT3Bridge, resolveT3Cli, safeTitle } from "../src/core/bridge/t3";
 import type { ProjectId, ThreadId } from "../src/core/types";
 
-const cli = join(import.meta.dirname, "fake-t3", "t3.cmd");
+const cli = join(import.meta.dirname, "fake-t3", process.platform === "win32" ? "t3.cmd" : "t3");
 const thread = "8ee90f34-3a9b-4c75-9a5a-ed220b201be1" as ThreadId;
 const statePath = join(mkdtempSync(join(tmpdir(), "bs-bridge-")), "t3.json");
 process.env.BRAINSTORM_FAKE_T3_STATE = statePath;
@@ -89,9 +89,11 @@ describe("t3 bridge", () => {
   });
 
   test("resolves the CLI path from BRAINSTORM_T3_CLI, then T3CODE_CLI_PATH, then the user profile", () => {
-    expect(resolveT3Cli({ BRAINSTORM_T3_CLI: "C:\\a\\t3.cmd", T3CODE_CLI_PATH: "C:\\b\\t3.cmd" })).toBe("C:\\a\\t3.cmd");
-    expect(resolveT3Cli({ T3CODE_CLI_PATH: "C:\\b\\t3.cmd" })).toBe("C:\\b\\t3.cmd");
-    expect(resolveT3Cli({ USERPROFILE: "C:\\Users\\rob" })).toBe("C:\\Users\\rob\\.t3\\bin\\t3.cmd");
+    expect(resolveT3Cli({ BRAINSTORM_T3_CLI: "C:\\a\\t3.cmd", T3CODE_CLI_PATH: "C:\\b\\t3.cmd" }, "win32")).toBe("C:\\a\\t3.cmd");
+    expect(resolveT3Cli({ T3CODE_CLI_PATH: "C:\\b\\t3.cmd" }, "win32")).toBe("C:\\b\\t3.cmd");
+    expect(resolveT3Cli({ USERPROFILE: "C:\\Users\\rob" }, "win32")).toBe("C:\\Users\\rob\\.t3\\bin\\t3.cmd");
+    expect(resolveT3Cli({ HOME: "/home/rob" }, "linux")).toBe("/home/rob/.t3/bin/t3");
+    expect(resolveT3Cli({ HOME: "/Users/rob", T3CODE_CLI_PATH: "/opt/t3/t3" }, "darwin")).toBe("/opt/t3/t3");
   });
 });
 

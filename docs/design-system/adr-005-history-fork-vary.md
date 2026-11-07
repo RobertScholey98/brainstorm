@@ -60,7 +60,7 @@ The first message is the `[brainstorm]` message for the fork's request 1, with o
 
 ```
 [brainstorm] session <fork> · request 1 · fork of <parent> iteration <n> · scope: all · feedback: #1 · freetext: "<instruction>"
-Handle with the ux-brainstorm skill: this thread is new, so run `brainstorm session attach <fork>`, then `brainstorm context <fork>`.
+Handle with the use-brainstorm skill: this thread is new, so run `brainstorm session attach <fork>`, then `brainstorm context <fork>`.
 ```
 
 T3 starts the new thread's agent with T3's own environment, so when the app runs on a home other than the default, a third line names `BRAINSTORM_HOME`. Only a fork's first message carries that line. A thread that made its own brainstorm already knows its home. `brainstorm context` on a fork adds `fork of <parent> "<title>" iteration <n>` and a `baked default` line for each baked setting. That tells the agent that iteration 1 is Rob's pick, and that it should build from there rather than start over.

@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const skill = join(repo, "skills", "ux-brainstorm");
+const skill = join(repo, "skills", "use-brainstorm");
 const failures = [];
 const expect = (ok, msg) => { if (!ok) failures.push(msg); };
 
@@ -13,7 +13,7 @@ const front = skillMd.match(/^---\n([\s\S]*?)\n---\n/);
 expect(front, "SKILL.md has frontmatter");
 const name = front?.[1].match(/^name: (.+)$/m)?.[1];
 const description = front?.[1].match(/^description: (.+)$/m)?.[1];
-expect(name === "ux-brainstorm", `name is ux-brainstorm, got ${name}`);
+expect(name === "use-brainstorm", `name is use-brainstorm, got ${name}`);
 expect(description && description.length <= 1024, `description present and <= 1024 chars (${description?.length})`);
 console.log(`SKILL.md ${skillMd.split("\n").length} lines, description ${description?.length} chars`);
 

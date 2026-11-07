@@ -1,0 +1,64 @@
+# Installers for Windows, macOS and Linux. `npm run dist` builds the current OS's; .github/workflows/build.yml runs it
+# on all three. Each one ships the brainstorm command (packaging/bin) and puts it on PATH.
+appId: io.github.robertscholey98.brainstorm
+productName: Brainstorm
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+directories:
+  output: release
+  buildResources: packaging
+files:
+  - package.json
+  - dist/**
+  - "!**/*.map"
+  # The app installs this into ~/.claude/skills on start.
+  - skills/use-brainstorm/**
+# Plain files, so the CLI shim's node-mode run and the check pool's worker thread need no asar path handling.
+asar: false
+# No native modules: storage is node:sqlite.
+npmRebuild: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  extraResources:
+    - from: packaging/bin/brainstorm.cmd
+      to: bin/brainstorm.cmd
+    - from: packaging/win/path.ps1
+      to: installer/path.ps1
+nsis:
+  oneClick: true
+  perMachine: false
+  include: packaging/win/installer.nsh
+  # Sessions live in %APPDATA%\brainstorm, which is also the app's name, so an uninstall must never touch it.
+  deleteAppDataOnUninstall: false
+
+# The .pkg's postinstall (packaging/pkg-scripts) links /usr/local/bin/brainstorm. Unsigned builds pass
+# -c.mac.identity=- on the command line to be ad-hoc signed, which Apple Silicon needs to launch the app at all.
+mac:
+  target:
+    - target: pkg
+      arch: [arm64, x64]
+  category: public.app-category.developer-tools
+  extraResources:
+    - from: packaging/bin/brainstorm
+      to: bin/brainstorm
+pkg:
+  installLocation: /Applications
+
+linux:
+  target:
+    - target: deb
+      arch: [x64]
+    - target: tar.gz
+      arch: [x64]
+  # The app binary; `brainstorm` is the CLI.
+  executableName: brainstorm-app
+  category: Development
+  maintainer: Rob (github.com/RobertScholey98)
+  extraResources:
+    - from: packaging/bin/brainstorm
+      to: bin/brainstorm
+deb:
+  afterInstall: packaging/linux/after-install.sh
+  afterRemove: packaging/linux/after-remove.sh

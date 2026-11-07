@@ -1,0 +1,8 @@
+#!/bin/sh
+# Links the brainstorm command into /usr/local/bin, which is on PATH by default. $2 is the install location.
+set -e
+app="${2%/}/Brainstorm.app"
+[ -d "$app" ] || app=/Applications/Brainstorm.app
+chmod 755 "$app/Contents/Resources/bin/brainstorm"
+mkdir -p /usr/local/bin
+ln -sf "$app/Contents/Resources/bin/brainstorm" /usr/local/bin/brainstorm

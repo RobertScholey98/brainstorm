@@ -5,6 +5,30 @@ A local Electron app for iterating on UI designs with an agent. An agent in a T3
 - `docs/brief.md` is the product spec.
 - `docs/design.md` is the contract the code builds against.
 
+## Install
+
+Download the installer for your OS from the [releases](https://github.com/RobertScholey98/brainstorm/releases). Each one installs the app and puts the `brainstorm` command on PATH; it runs on the app's own Electron, so no Node is needed. The builds are unsigned for now.
+
+| OS | File | `brainstorm` on PATH | First run |
+|---|---|---|---|
+| Windows | `Brainstorm-<v>-win-x64.exe` | the installer adds the app's `resources\bin` to your user PATH; open a new terminal | SmartScreen: More info, then Run anyway |
+| macOS | `Brainstorm-<v>-mac-arm64.pkg` (Apple Silicon) or `-mac-x64.pkg` | the installer links `/usr/local/bin/brainstorm` | right-click the .pkg, then Open |
+| Linux | `Brainstorm-<v>-linux-amd64.deb` | the package links `/usr/bin/brainstorm` | `sudo apt install ./Brainstorm-<v>-linux-amd64.deb` |
+| Linux | `Brainstorm-<v>-linux-x64.tar.gz` | link it yourself: `ln -s "$PWD/Brainstorm-<v>-linux-x64/resources/bin/brainstorm" ~/.local/bin/` | |
+
+The app ships the agent skill, `/use-brainstorm`, and copies it to `~/.claude/skills/use-brainstorm` each time it starts, so an update brings the matching skill. A copy you changed is moved to `~/.claude/skill-backups` first. The Windows installer opens the app when it finishes; on macOS and Linux, open Brainstorm once after installing. From a checkout, `node scripts/install-skill.mjs` does the same.
+
+## Release
+
+`.github/workflows/build.yml` builds, tests and packages on Windows, macOS and Linux for every push to `main` and every pull request; the installers are attached to the run. To release, bump `version` in `package.json`, then push a matching tag:
+
+```
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The tag's run drafts a GitHub release with every installer attached; publish it from the Releases page. `npm run dist` builds the current OS's installer into `release/`. Signing switches on when the secrets listed at the top of the workflow exist.
+
 ## Develop
 
 Node 22.18 or later.

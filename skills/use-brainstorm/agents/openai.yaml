@@ -1,0 +1,4 @@
+interface:
+  display_name: "Use Brainstorm"
+  short_description: "Design task flows as live variants on a Brainstorm canvas"
+  default_prompt: "Use $use-brainstorm to simplify this user task, starting with the decisions the user actually needs to make, then build meaningfully different variants as blocks in a Brainstorm session."

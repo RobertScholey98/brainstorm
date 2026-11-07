@@ -97,7 +97,7 @@ try {
   );
   check(
     "with nothing open, the main panel says how to start one",
-    (await window.textContent("[data-home-hint]"))?.includes("run /ux-brainstorm in a T3 thread on your project"),
+    (await window.textContent("[data-home-hint]"))?.includes("run /use-brainstorm in a T3 thread on your project"),
     true,
   );
   check(

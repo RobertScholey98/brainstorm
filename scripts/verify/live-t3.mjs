@@ -24,10 +24,10 @@ function preflight() {
     problems.push(`brainstorm resolves to ${target ?? "nothing"}, not ${root}; run npm link in this repo`);
   }
 
-  const installed = join(homedir(), ".claude", "skills", "ux-brainstorm", "SKILL.md");
-  const source = join(root, "skills", "ux-brainstorm", "SKILL.md");
+  const installed = join(homedir(), ".claude", "skills", "use-brainstorm", "SKILL.md");
+  const source = join(root, "skills", "use-brainstorm", "SKILL.md");
   if (!existsSync(installed) || readFileSync(installed, "utf8") !== readFileSync(source, "utf8")) {
-    problems.push(`the installed ux-brainstorm skill differs from this repo's; run node scripts/install-skill.mjs`);
+    problems.push(`the installed use-brainstorm skill differs from this repo's; run node scripts/install-skill.mjs`);
   }
 
   const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -142,7 +142,7 @@ try {
   const title = `Live check ${new Date().toISOString().replace(/\D/g, "").slice(0, 14)}`;
   const first = startThread(
     title,
-    `/ux-brainstorm\n${envLine(home)}\nTask: a "Copy link" button that confirms it copied. Start a session titled exactly "${title}" with one slot and two variants, and commit until it succeeds.`,
+    `/use-brainstorm\n${envLine(home)}\nTask: a "Copy link" button that confirms it copied. Start a session titled exactly "${title}" with one slot and two variants, and commit until it succeeds.`,
   );
   console.log(`...  first thread ${first}`);
   const session = await waitFor("the study's first iteration", first, async () => {
@@ -157,7 +157,7 @@ try {
   const freetext = "make the confirmation easier to notice";
   const [block, ...more] = await regenerate("blocks", freetext);
   check("Selected blocks defaults to one block", more, []);
-  const firstMessage = `[brainstorm] session ${session.id} · request 1 · scope: ${block} · freetext: ${JSON.stringify(freetext)}\nHandle with the ux-brainstorm skill: run \`brainstorm context ${session.id}\`.`;
+  const firstMessage = `[brainstorm] session ${session.id} · request 1 · scope: ${block} · freetext: ${JSON.stringify(freetext)}\nHandle with the use-brainstorm skill: run \`brainstorm context ${session.id}\`.`;
   check("the first thread received the exact [brainstorm] message", userTexts(first).includes(firstMessage), true);
   await shot(window, shots, "2-sent");
   const second = await waitFor("iteration 2 from the first thread", first, () => fulfilled(session.id, 2));
@@ -171,7 +171,7 @@ try {
   check("the second thread holds the session", (await sessionIn(takeover, title))?.attachedThread, takeover);
 
   await regenerate("all", null);
-  const secondMessage = `[brainstorm] session ${session.id} · request 2 · scope: all\nHandle with the ux-brainstorm skill: run \`brainstorm context ${session.id}\`.`;
+  const secondMessage = `[brainstorm] session ${session.id} · request 2 · scope: all\nHandle with the use-brainstorm skill: run \`brainstorm context ${session.id}\`.`;
   check("the takeover thread received request 2", userTexts(takeover).includes(secondMessage), true);
   check("the first thread did not", userTexts(first).some((t) => t.includes(`session ${session.id} · request 2`)), false);
   const third = await waitFor("iteration 3 from the takeover thread", takeover, () => fulfilled(session.id, 3));

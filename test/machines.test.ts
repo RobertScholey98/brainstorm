@@ -305,7 +305,7 @@ describe("the [brainstorm] message", () => {
   test("formats the design.md example", () => {
     expect(formatRequestMessage(request({ state: "sending" }))).toBe(
       '[brainstorm] session s_8f2k3a · request 5 · scope: wheel/neon, result/sheet · feedback: #4 #7 · freetext: "make the spin feel less random"\n' +
-        "Handle with the ux-brainstorm skill: run `brainstorm context s_8f2k3a`.",
+        "Handle with the use-brainstorm skill: run `brainstorm context s_8f2k3a`.",
     );
   });
 
@@ -347,7 +347,7 @@ describe("a fork's thread start", () => {
     );
     expect(first).toBe(
       '[brainstorm] session s_8f2k3a · request 1 · fork of s_parent1 iteration 3 · scope: all · freetext: "slot machine"\n' +
-        "Handle with the ux-brainstorm skill: this thread is new, so run `brainstorm session attach s_8f2k3a`, then `brainstorm context s_8f2k3a`.",
+        "Handle with the use-brainstorm skill: this thread is new, so run `brainstorm session attach s_8f2k3a`, then `brainstorm context s_8f2k3a`.",
     );
     expect(parseRequestMarker(first)).toEqual({ session: "s_8f2k3a", n: 1 });
   });

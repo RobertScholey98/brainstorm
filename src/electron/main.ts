@@ -1,7 +1,11 @@
 import { app, BrowserWindow, dialog, Menu, nativeTheme, session, shell } from "electron";
 import { readdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { solidColours } from "../core/design";
+import { packageRoot } from "../core/packageRoot";
+import { installSkill, SKILL_NAME } from "../core/skillInstall";
 import { brainstormHome, exportsDir } from "../server/appData";
 import { startServer, type RunningServer } from "../server/index";
 
@@ -28,6 +32,17 @@ const HEADER_HEIGHT = 48;
 const theme = () => solidColours(nativeTheme.shouldUseDarkColors ? "dark" : "light");
 const overlay = () => ({ color: theme()["app"], symbolColor: theme()["fg"], height: HEADER_HEIGHT });
 
+/** An installed app keeps ~/.claude/skills/use-brainstorm on the version it shipped with, so agents can drive it. */
+function installBundledSkill(): void {
+  try {
+    const source = fileURLToPath(new URL(`skills/${SKILL_NAME}`, packageRoot()));
+    const result = installSkill(source, join(homedir(), ".claude"));
+    if (result.kind === "installed") console.error(`installed the ${SKILL_NAME} skill to ${result.target}${result.backup ? `; the old copy is in ${result.backup}` : ""}`);
+  } catch (e) {
+    console.error(`couldn't install the ${SKILL_NAME} skill: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
 if (app.requestSingleInstanceLock()) void run();
 else app.quit();
 
@@ -41,6 +56,8 @@ async function run(): Promise<void> {
 
   await app.whenReady();
   Menu.setApplicationMenu(null);
+  // A BRAINSTORM_HOME marks a test or otherwise isolated app, which leaves the user's skills alone.
+  if (app.isPackaged && !process.env.BRAINSTORM_HOME) installBundledSkill();
 
   let server: RunningServer;
   try {
