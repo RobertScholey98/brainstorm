@@ -135,11 +135,15 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: brainstorm-${{ runner.os }}
+          # latest*.yml is the update feed (latest.yml for Windows, latest-linux.yml for the .deb), and the .blockmap lets
+          # an installed app download only the parts of the installer that changed.
           path: |
             release/*.exe
             release/*.pkg
             release/*.deb
             release/*.tar.gz
+            release/latest*.yml
+            release/*.blockmap
           if-no-files-found: error
 
   release:

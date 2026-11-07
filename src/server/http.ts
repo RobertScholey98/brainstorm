@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import { buildCanvasDocument, CANVAS_CSP } from "../canvas/document";
 import { packageRoot } from "../core/packageRoot";
+import type { AppUpdates } from "../core/appUpdate";
 import type { Brainstorm } from "../core/brainstorm";
 import { zBranded } from "../core/parse";
 import { VARY_MAX } from "../core/fork";
@@ -181,10 +182,16 @@ type Route = {
 const digest = (s: string) => createHash("sha256").update(s).digest();
 const sameToken = (given: string, expected: string) => timingSafeEqual(digest(given), digest(expected));
 
-export type HttpOptions = { readonly service: Brainstorm; readonly agentToken: string; readonly uiToken: string; readonly version: string };
+export type HttpOptions = {
+  readonly service: Brainstorm;
+  readonly agentToken: string;
+  readonly uiToken: string;
+  readonly version: string;
+  readonly updates: AppUpdates;
+};
 
 export function createHttpHandler(options: HttpOptions, port: () => number) {
-  const { service } = options;
+  const { service, updates } = options;
   const streams = new Set<ServerResponse>();
   let closing = false;
 
@@ -322,6 +329,16 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       }),
     },
     { method: "POST", path: /^\/v1\/ui\/sessions\/([^/]+)\/discard$/, auth: "ui", handle: withSession(async (id) => service.discard(id)) },
+    { method: "GET", path: /^\/v1\/ui\/update$/, auth: "ui", handle: async () => ({ ok: true, data: updates.state() }) },
+    {
+      method: "POST",
+      path: /^\/v1\/ui\/update\/install$/,
+      auth: "ui",
+      handle: async () =>
+        updates.install()
+          ? { ok: true, data: updates.state() }
+          : { ok: false, error: { code: "invalid_action", message: "There's no downloaded update to install." } },
+    },
     {
       method: "GET",
       path: /^\/health$/,
@@ -357,10 +374,12 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
     res.write(": connected\n\n");
     streams.add(res);
     const unsubscribe = service.subscribe((session) => res.write(`event: session\ndata: ${JSON.stringify({ session })}\n\n`));
+    const unsubscribeUpdates = updates.subscribe((state) => res.write(`event: update\ndata: ${JSON.stringify(state)}\n\n`));
     const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), HEARTBEAT_MS);
     req.on("close", () => {
       clearInterval(heartbeat);
       unsubscribe();
+      unsubscribeUpdates();
       streams.delete(res);
     });
   };

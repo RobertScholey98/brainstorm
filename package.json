@@ -31,7 +31,8 @@
     "design:icon": "node scripts/design/icon.mjs",
     "design:checkpoint": "node scripts/design/checkpoint.mjs",
     "verify:8": "node scripts/verify/8-history.mjs",
-    "verify:9": "node scripts/verify/9-header.mjs"
+    "verify:9": "node scripts/verify/9-header.mjs",
+    "verify:update": "node scripts/verify/update.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",
@@ -39,6 +40,7 @@
     "@json-render/react": "0.22.0",
     "class-variance-authority": "0.7.1",
     "cn": "0.5.2",
+    "electron-updater": "6.8.10",
     "lucide-react": "0.564.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",

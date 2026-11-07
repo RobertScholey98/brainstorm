@@ -8,6 +8,7 @@ import { packageRoot } from "../core/packageRoot";
 import { installSkill, SKILL_NAME } from "../core/skillInstall";
 import { brainstormHome, exportsDir } from "../server/appData";
 import { startServer, type RunningServer } from "../server/index";
+import { createUpdater } from "./updater";
 
 const home = brainstormHome();
 // Electron's profile defaults to %APPDATA%\<name>, which is BRAINSTORM_HOME's default too. Keeping it under home also
@@ -61,7 +62,7 @@ async function run(): Promise<void> {
 
   let server: RunningServer;
   try {
-    server = await startServer({ home });
+    server = await startServer({ home, updates: createUpdater() });
   } catch (e) {
     dialog.showErrorBox("Brainstorm couldn't start", e instanceof Error ? e.message : String(e));
     app.exit(1);

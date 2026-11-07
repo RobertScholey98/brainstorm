@@ -1,3 +1,4 @@
+import type { AppUpdateState } from "../core/appUpdate";
 import type { UiPrefs, UiPrefsPatch } from "../core/prefs";
 import type {
   ExportResult,
@@ -30,8 +31,12 @@ export type Api = {
   exportHtml(id: SessionId): Promise<Result<ExportResult>>;
   prefs(): Promise<Result<UiPrefs>>;
   setPrefs(patch: UiPrefsPatch): Promise<Result<UiPrefs>>;
-  /** Calls `onSession` with each changed session id until `signal` aborts, reconnecting after a drop. */
-  events(onSession: (id: SessionId) => void, onOpen: () => void, signal: AbortSignal): Promise<void>;
+  /** Where the installed app is in updating itself. */
+  update(): Promise<Result<AppUpdateState>>;
+  /** Quits into the downloaded update, which reopens the app. */
+  installUpdate(): Promise<Result<AppUpdateState>>;
+  /** Calls `onSession` with each changed session id, and `onUpdate` with each update state, until `signal` aborts, reconnecting after a drop. */
+  events(on: { onSession: (id: SessionId) => void; onUpdate: (state: AppUpdateState) => void; onOpen: () => void }, signal: AbortSignal): Promise<void>;
 };
 
 const RECONNECT_MS = 1000;
@@ -49,7 +54,7 @@ export function createApi(token: string): Api {
     }
   }
 
-  async function events(onSession: (id: SessionId) => void, onOpen: () => void, signal: AbortSignal): Promise<void> {
+  async function events({ onSession, onUpdate, onOpen }: Parameters<Api["events"]>[0], signal: AbortSignal): Promise<void> {
     while (!signal.aborted) {
       try {
         // EventSource can't send the bearer header, so the stream is read with fetch.
@@ -68,7 +73,9 @@ export function createApi(token: string): Api {
             const event = buffer.slice(0, end);
             buffer = buffer.slice(end + 2);
             const data = /^data: (.*)$/m.exec(event)?.[1];
-            if (/^event: session$/m.test(event) && data !== undefined) onSession((JSON.parse(data) as { session: SessionId }).session);
+            if (data === undefined) continue;
+            if (/^event: session$/m.test(event)) onSession((JSON.parse(data) as { session: SessionId }).session);
+            else if (/^event: update$/m.test(event)) onUpdate(JSON.parse(data) as AppUpdateState);
           }
         }
       } catch {
@@ -96,6 +103,8 @@ export function createApi(token: string): Api {
     exportHtml: (id) => call("POST", `/v1/ui/sessions/${id}/export`),
     prefs: () => call("GET", "/v1/ui/prefs"),
     setPrefs: (patch) => call("POST", "/v1/ui/prefs", patch),
+    update: () => call("GET", "/v1/ui/update"),
+    installUpdate: () => call("POST", "/v1/ui/update/install"),
     events,
   };
 }

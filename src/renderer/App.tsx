@@ -49,6 +49,7 @@ import { settleUndoes, useSettleShortcut } from "./settle";
 import { SessionBar, TopBar } from "./TopBar";
 import { VaryComposer, VarySection } from "./Vary";
 import { blockedMessage } from "../core/machines";
+import type { AppUpdateState } from "../core/appUpdate";
 
 /** How often an open brainstorm asks T3 whether its thread still exists, besides on window focus. */
 const THREAD_CHECK_MS = 15_000;
@@ -139,23 +140,34 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
 
   useEffect(() => void refreshList(), [refreshList]);
 
+  const [update, setUpdate] = useState<AppUpdateState | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void api.events(
-      (id) => {
-        void refreshList();
-        setRevisions((m) => new Map(m).set(id, (m.get(id) ?? 0) + 1));
-        if (id === current.current) setRevision((r) => r + 1);
-      },
-      () => {
-        void refreshList();
-        setRevisions((m) => new Map([...m].map(([id, n]) => [id, n + 1])));
-        setRevision((r) => r + 1);
+      {
+        onSession: (id) => {
+          void refreshList();
+          setRevisions((m) => new Map(m).set(id, (m.get(id) ?? 0) + 1));
+          if (id === current.current) setRevision((r) => r + 1);
+        },
+        onUpdate: setUpdate,
+        onOpen: () => {
+          void refreshList();
+          setRevisions((m) => new Map([...m].map(([id, n]) => [id, n + 1])));
+          setRevision((r) => r + 1);
+          // The stream only carries changes, so a (re)connect reads where the update is.
+          void api.update().then((r) => r.ok && setUpdate(r.data));
+        },
       },
       controller.signal,
     );
     return () => controller.abort();
   }, [api, refreshList]);
+  const installUpdate = useCallback(async () => {
+    const result = await api.installUpdate();
+    if (result.ok) setUpdate(result.data);
+    else setNotice({ title: failedTitle("update"), detail: result.error.message });
+  }, [api]);
 
   const toggleSettled = useCallback(
     async (s: SessionListing) => {
@@ -185,7 +197,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     />
   );
   const sidebar = (panel: ReactNode) => (
-    <AppSidebar width={fitted.sidebar} limits={sidebarLimits} onWidth={setSidebarWidth}>
+    <AppSidebar width={fitted.sidebar} limits={sidebarLimits} onWidth={setSidebarWidth} update={update} onInstallUpdate={() => void installUpdate()}>
       {panel}
     </AppSidebar>
   );
