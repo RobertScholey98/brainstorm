@@ -172,6 +172,26 @@ body[data-resizing] [data-slot="sidebar-container"] {
   transition: none;
 }
 
+/*
+ * A Truncate that overflows paints its measured cut, which never ends on a space or a comma, over its own text. The
+ * text stays for copy and the accessible name, and the cut's alt text is empty so a screen reader hears the title once.
+ */
+[data-slot="truncate"][data-cut] {
+  position: relative;
+  -webkit-text-fill-color: transparent;
+  text-decoration-color: transparent;
+}
+[data-slot="truncate"][data-cut]::after {
+  content: attr(data-cut) / "";
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  overflow: hidden;
+  -webkit-text-fill-color: currentColor;
+  text-decoration: inherit;
+  text-decoration-color: currentColor;
+}
+
 /* The canvas's dot grid, as the canvas document draws it, for a home preview's mat. */
 @utility canvas-dots {
   background-color: var(--canvas);

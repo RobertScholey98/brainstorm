@@ -9,6 +9,7 @@ import { ResizeHandle } from "@/components/ui/resize-handle";
 import { ScrollPane } from "@/components/ui/scroll-pane";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { HEX_COLOR_PATTERN } from "../core/props";
 import type { AppearanceValue, BlockView, InapplicableOverride, IterationN, Override, OverrideMismatch, PropName, Props, SessionView } from "../core/types";
 import { ControlScopeContext, controlRegistry, createBlockStore } from "./controls";
@@ -153,7 +154,9 @@ export function Inspector({
       header={
         block !== null && props !== null ? (
           <Header>
-            <h2 className="min-w-0 truncate text-base font-semibold">{block.title}</h2>
+            <h2 className="flex min-w-0 text-base font-semibold">
+              <Truncate>{block.title}</Truncate>
+            </h2>
             <span className="ml-auto shrink-0 text-xs text-fg-muted">{slot?.title ?? block.slot}</span>
           </Header>
         ) : (

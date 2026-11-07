@@ -27,6 +27,8 @@
 //                    OverlayPanel for one its caller places, so it keeps the popover's column and nothing leaves its box
 //   blocked-hint     a focusable wrapper written round a disabled control, outside components/ui; the kit's BlockedHint
 //                    is that wrapper, and mounts a fresh tooltip so the hint opens on hover as well as on focus
+//   truncate-text    a title or brief cut by the bare truncate class, outside components/ui; the kit's Truncate cuts it
+//                    after a letter, never after a space or a comma
 //   frame-sandbox    an iframe anywhere in the renderer that isn't the canvas's: its src must be /canvas or
 //                    /canvas/preview and its sandbox exactly "allow-scripts", so agent code always runs in an opaque
 //                    origin under the canvas CSP, a home preview included
@@ -113,7 +115,7 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
     });
   }
   problems.push(...chipRecipe(source, lits), ...frameSandbox(source), ...fieldFill(source));
-  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source), ...dismissGhost(source), ...rawPart(source), ...blockedHint(source));
+  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source), ...dismissGhost(source), ...rawPart(source), ...blockedHint(source), ...truncateText(source, lits));
   return problems.sort((a, b) => a.line - b.line);
 }
 
@@ -225,6 +227,18 @@ function overlayKit(source) {
       ? [{ rule: "overlay-kit", line: i + 1, text: "overlaySurface()", message: "an overlay is the kit's PopoverContent, or OverlayPanel for one placed by hand" }]
       : [],
   );
+}
+
+/** An element cut by the truncate class whose only child is a title or a brief. */
+function truncateText(source, lits) {
+  return jsxElements(source).flatMap((el) => {
+    const cls = el.attrs.find((a) => a.name === "className");
+    if (cls === undefined || source[el.end] !== ">") return [];
+    const cut = lits.some((l) => l.start >= cls.start && l.end <= cls.end && l.text.split(/\s+/).includes("truncate"));
+    const child = source.slice(el.end + 1, source.indexOf("<", el.end)).trim();
+    if (!cut || !/^\{[^{}]*\b(?:title|brief)\b[^{}]*\}$/.test(child)) return [];
+    return [{ rule: "truncate-text", line: el.line, text: `<${el.tag} truncate> ${child}`, message: "cut a title or brief with the kit's Truncate, which never ends on a space or a comma" }];
+  });
 }
 
 /** A span made focusable to carry the hint of the disabled control it wraps. */

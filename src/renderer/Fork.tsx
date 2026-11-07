@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger }
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { carryOver } from "../core/fork";
 import type { ContentHash, ForkInput, IterationView, SessionView, VariantKey } from "../core/types";
 import { COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
@@ -121,9 +122,11 @@ function ForkForm({
         <dl className="grid-carry grid gap-x-3 gap-y-2 rounded-lg bg-muted p-3 text-sm/snug">
           {carried.slots.map(({ slot, title }) => (
             <div key={slot.id} className="contents" data-carry-slot={slot.id}>
-              <dt className="truncate text-xs text-fg-muted">{slot.title}</dt>
+              <dt className="flex min-w-0 text-xs text-fg-muted">
+                <Truncate>{slot.title}</Truncate>
+              </dt>
               <dd className="grid min-w-0 gap-0.5">
-                <span className="truncate">{title}</span>
+                <Truncate>{title}</Truncate>
                 <span className="text-xs text-fg-muted">{slot.variants.length === 1 ? "its only variant" : "the variant showing"}</span>
               </dd>
             </div>

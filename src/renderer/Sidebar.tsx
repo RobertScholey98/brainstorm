@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { blockIdOf, isPendingThread, type BlockView, type ContentHash, type OpenPhase, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
 import type { PaneLimits } from "./hooks/use-pane-width";
 import { Mark } from "./Mark";
@@ -148,7 +149,7 @@ export function HomePanel({
               data-project-label
             >
               {/* The label starts where its rows' titles do, and the chevron ends the row, at one x for every group. */}
-              <span className="truncate">{group.label}</span>
+              <Truncate>{group.label}</Truncate>
               <span className="ml-auto flex shrink-0 items-center gap-1.5">
                 <span className="flex group-data-[panel-open]/label:hidden">
                   <Badge data-project-count>{group.sessions.length}</Badge>
@@ -231,7 +232,7 @@ function SessionRow({
         data-lost={s.lost || undefined}
         data-settled={s.settlement.state === "settled" || undefined}
       >
-        <span className="min-w-0 flex-1 truncate">{s.title}</span>
+        <Truncate className="flex-1">{s.title}</Truncate>
         {/* The branch mark trails the title, so a fork's title keeps its siblings' text edge. */}
         {s.fork !== null && (
           <span className="flex shrink-0 text-fg-muted" data-row-fork>
@@ -381,7 +382,7 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
                 <ThreadMark view={view} />
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="truncate">{view.thread.title}</span>
+                <Truncate>{view.thread.title}</Truncate>
                 <ThreadState view={view} className="text-xs" />
               </span>
               <ExternalLink aria-hidden className="mt-0.5 text-fg-muted" />
@@ -395,16 +396,12 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
             {fork.parent.state === "gone" ? (
               <div className="flex h-8 items-center gap-2 px-2 text-xs text-fg-muted" data-forked-from="gone">
                 <GitBranch aria-hidden className="size-3.5 shrink-0" />
-                <span className="truncate">
-                  Forked from {fork.parent.title} · iteration {fork.from}, since discarded
-                </span>
+                <Truncate>{`Forked from ${fork.parent.title} · iteration ${fork.from}, since discarded`}</Truncate>
               </div>
             ) : (
               <SidebarMenuButton tone="quiet" onClick={() => onOpen(fork.parent.id)} data-forked-from={fork.parent.id}>
                 <GitBranch aria-hidden />
-                <span className="truncate text-xs">
-                  Forked from {fork.parent.title} · iteration {fork.from}
-                </span>
+                <Truncate className="text-xs">{`Forked from ${fork.parent.title} · iteration ${fork.from}`}</Truncate>
               </SidebarMenuButton>
             )}
           </SidebarMenuItem>
@@ -487,7 +484,7 @@ function SlotSection({
           render={<button type="button" onClick={onSlot} />}
           className="w-full cursor-pointer gap-2 hover:bg-hover hover:text-fg"
         >
-          <span className="truncate">{slot.title}</span>
+          <Truncate>{slot.title}</Truncate>
           <span className="ml-auto shrink-0 font-normal text-fg-muted tabular-nums" data-slot-count>
             {slot.variants.length} {slot.variants.length === 1 ? "variant" : "variants"}
           </span>
@@ -526,9 +523,9 @@ function SlotSection({
                     <SidebarMenuMark className={active ? "bg-fg-muted" : undefined} />
                   )}
                   {/* The name Rob reads keeps its width; the raw key beside it gives way first, down to nothing. */}
-                  <span className="max-w-full shrink-0 truncate" data-variant-title>
+                  <Truncate className="max-w-full shrink-0" data-variant-title>
                     {block?.title ?? variant}
-                  </span>
+                  </Truncate>
                   {failed && (
                     <Hint label="This block failed to render" side="left">
                       <CircleAlert aria-label="Failed to render" className="text-danger" data-variant-error />

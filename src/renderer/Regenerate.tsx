@@ -12,6 +12,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { partLabel } from "../core/fork";
 import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
 import { actionRank, COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
@@ -201,7 +202,7 @@ function BlockChoice({ block, showing, checked, onToggle }: { block: BlockView; 
   return (
     <label className="-mx-1.5 flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-hover" data-choice={block.id} data-showing={showing || undefined}>
       <Checkbox checked={checked} onCheckedChange={onToggle} />
-      <span className="truncate">{block.title}</span>
+      <Truncate>{block.title}</Truncate>
       {/* The sidebar's mark for the showing variant, so the tag column only ever holds tags. */}
       {showing && (
         <span className="flex shrink-0 items-center">

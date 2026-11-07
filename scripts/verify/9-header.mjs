@@ -89,6 +89,7 @@ const measure = () =>
       return {
         collapsed: collapsed.map(name),
         title: header.querySelector("[data-session-title]").textContent,
+        cut: header.querySelector("[data-session-title]").dataset.cut ?? null,
         titleShown: Math.round(header.querySelector("[data-session-title]").clientWidth),
         titleWhole: header.querySelector("[data-session-title]").scrollWidth <= header.querySelector("[data-session-title]").clientWidth,
         floors: fits() || collapsed.length === steps.length,
@@ -194,6 +195,17 @@ try {
       .filter(([l]) => l.startsWith("light"))
       .map(([l, m]) => `  ${l.padEnd(34)} title ${String(m.titleShown).padStart(4)} px  gave way: ${m.collapsed.join(", ") || "nothing"}`)
       .join("\n"),
+  );
+  const cuts = [...results].filter(([, m]) => m.cut !== null);
+  check(
+    "a cut title ends on a letter, never on a space or a comma, and keeps its whole text for copy and the screen reader",
+    cuts.filter(([, m]) => /[\s,.;:·]…$/.test(m.cut) || !m.title.startsWith(m.cut.slice(0, -1))).map(([l, m]) => `${l}: ${m.cut}`),
+    [],
+  );
+  check(
+    "at 1100 a fork's title beside a send failure cuts after a word, not after the space that follows it, and in both themes",
+    ["light", "dark"].map((t) => results.get(`${t} 1100 fork send_failed`)?.cut),
+    ["Try a calmer wheel…", "Try a calmer wheel…"],
   );
   check("the window logged no errors or warnings", errors, []);
 } finally {

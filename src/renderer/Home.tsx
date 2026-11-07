@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ScrollPane } from "@/components/ui/scroll-pane";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { DEFAULT_HOME, type HomeQuery, type HomeStatus } from "../core/prefs";
 import type { SessionId, SessionListing } from "../core/types";
 import { HomeFilters, useSearchShortcut } from "./HomeFilters";
@@ -236,7 +237,7 @@ function OverviewCard({
       <CardPreview id={s.id} revision={revision} load={loadPreview} muted={settledAt !== null} />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-4">
         <span className="flex items-center gap-2 text-xs text-fg-muted">
-          <span className="truncate">{s.projectName ?? "Other project"}</span>
+          <Truncate>{s.projectName ?? "Other project"}</Truncate>
           {settledAt !== null ? (
             <span className="ml-auto flex shrink-0 items-center gap-1.5" data-session-status="settled">
               <CircleCheck aria-hidden className="size-3" />
@@ -250,25 +251,23 @@ function OverviewCard({
           type="button"
           onClick={onOpen}
           className={cn(
-            "truncate text-left text-base font-semibold outline-none after:absolute after:inset-0 after:rounded-lg",
+            "flex min-w-0 text-left text-base font-semibold outline-none after:absolute after:inset-0 after:rounded-lg",
             settledAt !== null && "text-fg-muted",
           )}
           data-card-open
         >
-          {s.title}
+          <Truncate>{s.title}</Truncate>
         </button>
         {/* Forks sit flat among the rest, so each says where it came from, in place of the brief it shares with its parent. */}
         {s.fork !== null ? (
           <span className="flex h-4.5 min-w-0 items-center gap-1 text-sm text-fg-muted" data-fork-of={s.fork.from}>
             <GitBranch aria-hidden className="size-3.5 shrink-0" />
-            <span className="truncate">
-              Fork of {s.fork.parentTitle} · iteration {s.fork.from}
-            </span>
+            <Truncate>{`Fork of ${s.fork.parentTitle} · iteration ${s.fork.from}`}</Truncate>
           </span>
         ) : (
-          <span className="h-4.5 truncate text-sm text-fg-muted" data-card-brief>
+          <Truncate className="h-4.5 text-sm text-fg-muted" data-card-brief>
             {brief}
-          </span>
+          </Truncate>
         )}
         <span className="mt-auto flex items-center gap-1 pt-1 text-xs whitespace-nowrap text-fg-muted" data-overview-footer>
           {/* A brainstorm with no iteration says so once, in its preview, so the footer gives only its age. */}

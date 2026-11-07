@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { originText } from "../core/machines";
 import type { ForkBranch, HistoryEntry, IterationN, Result, SessionId, SessionPreview, SessionView, SlotId } from "../core/types";
 import { IterationStill } from "./Preview";
@@ -216,7 +217,7 @@ function Offshoots({ forks, onOpen }: { forks: readonly ForkBranch[]; onOpen: (i
               data-history-fork={f.id}
             >
               <GitBranch aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
-              <span className="truncate">{f.title}</span>
+              <Truncate>{f.title}</Truncate>
             </button>
           </Hint>
         </li>

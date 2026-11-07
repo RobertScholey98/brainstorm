@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { BlockedHint, Hint, HintAnchor } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import type { BlockId, ContentHash, ExportResult, ForkInput, IterationN, IterationView, RobAction, SessionId, SessionView } from "../core/types";
 import { ExportButton } from "./Export";
 import { ForkButton } from "./Fork";
@@ -191,15 +192,15 @@ export function SessionBar({
           {project !== null && (
             <>
               {/* A long title cuts itself, not the project down to a letter. */}
-              <span className="max-w-picker shrink-0 truncate text-fg-muted" data-breadcrumb-project>
+              <Truncate className="max-w-picker shrink-0 text-fg-muted" data-breadcrumb-project>
                 {project}
-              </span>
+              </Truncate>
               <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
             </>
           )}
           {view !== null && <Lineage view={view} onOpen={onOpen} />}
-          <h1 className="truncate font-semibold" data-session-title>
-            {title}
+          <h1 className="flex min-w-0 font-semibold">
+            <Truncate data-session-title>{title}</Truncate>
           </h1>
         </nav>
         {latest !== null && (
@@ -245,17 +246,16 @@ function Lineage({ view, onOpen }: { view: SessionView; onOpen: (id: SessionId) 
       {shown.map((a) => (
         <span key={a.id} className="flex min-w-0 shrink items-center gap-1">
           {a.gone ? (
-            <span className="max-w-menu truncate text-fg-muted line-through" data-lineage={a.id} data-lineage-gone>
+            <Truncate className="max-w-menu text-fg-muted line-through" data-lineage={a.id} data-lineage-gone>
               {a.title}
-            </span>
+            </Truncate>
           ) : (
             <button
               type="button"
               onClick={() => onOpen(a.id)}
-              className="max-w-menu truncate rounded-sm text-fg-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring"
-              data-lineage={a.id}
+              className="flex min-w-0 max-w-menu rounded-sm text-fg-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {a.title}
+              <Truncate data-lineage={a.id}>{a.title}</Truncate>
             </button>
           )}
           <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
