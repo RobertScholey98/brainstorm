@@ -39,21 +39,21 @@
 :root { color-scheme: light; }
 @media (prefers-color-scheme: dark) {
   :root {
-    --app: #1a1a18;
-    --canvas: #232321;
-    --card: #2b2b29;
-    --raised: #343431;
-    --muted: #383834;
+    --app: #161614;
+    --canvas: #1f1f1d;
+    --card: #2e2e2c;
+    --raised: #373734;
+    --muted: #3b3b37;
     --fg: #ecebe8;
     --fg-muted: #a8a7a1;
-    --border: #3a3a36;
-    --border-strong: #55554f;
+    --border: #3d3d39;
+    --border-strong: #585852;
     --ring: #94938d;
     --inverse: #ecebe8;
     --inverse-fg: #1f1f1d;
     --success: #9ccc5a;
     --warning: #f2b860;
-    --danger: #ff8a7f;
+    --danger: #ff8395;
     --info: #86aeff;
     --elevation-xs: 0 1px 2px rgb(0 0 0 / 0.3);
     --elevation-sm: 0 1px 3px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.04);

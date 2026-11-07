@@ -10,8 +10,12 @@ const MIN_HUE_DISTANCE = 20;
 const STATUSES = ["success", "warning", "danger", "info"] as const;
 /** Two subtle fills closer than this read as one tint at a glance. */
 const MIN_SUBTLE_DISTANCE = 5;
-/** Two status fills side by side need more: light warning and danger sat at 5.3 and read as peach on pink (R6-45). */
-const MIN_STATUS_FILL_DISTANCE = 6;
+/**
+ * Two status fills side by side need more: light warning and danger sat at 5.3 and read as peach on pink (R6-45). Dark
+ * fills sit low and dull over the card, so dark needs more again: at 6.0 its send-failed and thread-lost strips read as
+ * one brown (R7-42, R8-29).
+ */
+const MIN_STATUS_FILL_DISTANCE = { light: 6, dark: 7 } as const;
 /** The smallest step a hover fill makes off the surface under it, so the pointer's row reads at a glance. */
 const MIN_HOVER_STEP = 3.5;
 /** The smallest surface step that reads without leaning on a border. */
@@ -105,7 +109,7 @@ describe("design tokens", () => {
       const close = STATUSES.flatMap((x, i) =>
         STATUSES.slice(i + 1)
           .map((y, j) => ({ pair: `${x}/${y}`, distance: deltaE2000(lab(subtle[i]!), lab(subtle[i + 1 + j]!)) }))
-          .filter((p) => p.distance < MIN_STATUS_FILL_DISTANCE),
+          .filter((p) => p.distance < MIN_STATUS_FILL_DISTANCE[theme]),
       );
       expect(close).toEqual([]);
     });
@@ -117,6 +121,13 @@ describe("design tokens", () => {
       expect(L("canvas")).toBeGreaterThan(L("app"));
       expect(deltaE2000(lab(c.card!), lab(c.canvas!)), "a home card lifts off the canvas").toBeGreaterThanOrEqual(MIN_STEP);
       expect(deltaE2000(lab(c.canvas!), lab(c.app!)), "the canvas steps off the window").toBeGreaterThanOrEqual(MIN_STEP);
+    });
+
+    it.runIf(theme === "dark")("steps the dark surfaces at least as clearly as T3 Code does, sampled from its window", () => {
+      const c = solidColours(theme);
+      const step = (a: string, b: string) => Math.round(deltaE2000(lab(c[a]!), lab(c[b]!)) * 100) / 100;
+      // T3 Code's dark window, round 8: its main view off its sidebar is 4.69, and its inset panel off the main view 4.45 (ADR 001).
+      expect({ sidebarToCard: step("app", "card") >= 4.69, cardToCanvas: step("card", "canvas") >= 4.45 }).toEqual({ sidebarToCard: true, cardToCanvas: true });
     });
 
     it(`draws the one chip recipe so its edge reads on every surface in ${theme}`, () => {
