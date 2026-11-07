@@ -13,7 +13,7 @@ import { Count } from "@/components/ui/count";
 import { DEFAULT_HOME, type HomeQuery, type HomeStatus } from "../core/prefs";
 import type { SessionId, SessionListing } from "../core/types";
 import { HomeFilters, useSearchShortcut } from "./HomeFilters";
-import { liveProjects, projectOptions, queryHome } from "./homeQuery";
+import { briefMatch, liveProjects, projectOptions, queryHome, type BriefMatch } from "./homeQuery";
 import { markdownText } from "./markdownSubset";
 import { CardPreview, type LoadPreview, PreviewSkeleton } from "./Preview";
 import { SessionStatus } from "./SessionStatus";
@@ -65,6 +65,7 @@ export function HomeOverview({
     <li key={s.id} className="grid min-w-0">
       <OverviewCard
         session={s}
+        search={search}
         now={now}
         revision={revisions.get(s.id) ?? 0}
         loadPreview={loadPreview}
@@ -214,6 +215,7 @@ function NoneShown({ title, description, action, onAction, data }: { title: stri
  */
 function OverviewCard({
   session: s,
+  search,
   now,
   revision,
   loadPreview,
@@ -221,6 +223,7 @@ function OverviewCard({
   onSettle,
 }: {
   session: SessionListing;
+  search: string;
   now: number;
   revision: number;
   loadPreview: LoadPreview;
@@ -231,6 +234,7 @@ function OverviewCard({
   // With nothing under its title, the title takes that line's room, so a long one wraps to a second line rather than cut beside a blank.
   const lone = s.fork === null && brief === "";
   const settledAt = s.settlement.state === "settled" ? s.settlement.at : null;
+  const found = briefMatch(s, search);
   const label = settleLabel(s);
   return (
     <div
@@ -284,7 +288,9 @@ function OverviewCard({
           )}
         </button>
         {/* Forks sit flat among the rest, so each says where it came from, in place of the brief it shares with its parent. */}
-        {lone ? null : s.fork !== null ? (
+        {lone ? null : found !== null ? (
+          <BriefFragment found={found} settled={settledAt !== null} />
+        ) : s.fork !== null ? (
           <span className="flex h-4.5 min-w-0 items-center gap-1 text-sm text-fg-muted" data-fork-of={s.fork.from}>
             <GitBranch aria-hidden className="size-3.5 shrink-0" />
             <Truncate>{`from ${s.fork.parentTitle} · iteration ${s.fork.from}`}</Truncate>
@@ -315,6 +321,22 @@ function OverviewCard({
         </Hint>
       </span>
     </div>
+  );
+}
+
+/**
+ * The brief on a card the search found through it, from just before the match, so the match shows whatever the card's
+ * width. The match takes the title's ink, at medium weight, and the rest of the brief cuts to fit.
+ */
+function BriefFragment({ found, settled }: { found: BriefMatch; settled: boolean }) {
+  // A space at a part's edge would collapse there, so it is held as a no-break space.
+  const held = (text: string, edge: RegExp) => text.replace(edge, "\u00a0");
+  return (
+    <span className="flex h-4.5 min-w-0 overflow-hidden text-sm text-fg-muted" data-card-brief data-card-match>
+      <span className="shrink-0 whitespace-nowrap">{held(found.before, / $/u)}</span>
+      <mark className={cn("shrink-0 bg-transparent font-medium whitespace-nowrap", settled ? "text-fg-muted" : "text-fg")}>{found.match}</mark>
+      <Truncate>{held(found.after, /^ /u)}</Truncate>
+    </span>
   );
 }
 

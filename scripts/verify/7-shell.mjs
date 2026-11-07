@@ -556,8 +556,38 @@ try {
   check("/ puts Rob in home's search", await inSearch(), true);
   await window.keyboard.type("chore");
   check("the search narrows home as Rob types, by title", await cards(), [roulette]);
+  const briefLine = () =>
+    window.$eval(`[data-overview-session="${roulette}"] [data-card-brief]`, (line) => {
+      const ink = (name) => {
+        const probe = document.body.appendChild(document.createElement("span"));
+        probe.style.color = `var(--${name})`;
+        const colour = getComputedStyle(probe).color;
+        probe.remove();
+        return colour;
+      };
+      const named = (colour) => ["fg", "fg-muted"].find((name) => ink(name) === colour) ?? colour;
+      const mark = line.querySelector("mark");
+      const text = (el) => el.textContent.replaceAll(" ", " ");
+      if (mark === null) return { marked: false, starts: text(line).slice(0, 14) };
+      return {
+        before: text(mark.previousElementSibling),
+        match: mark.textContent,
+        ink: [named(getComputedStyle(mark).color), getComputedStyle(mark).fontWeight, named(getComputedStyle(line).color)],
+        whole: mark.getBoundingClientRect().right <= line.getBoundingClientRect().right,
+      };
+    });
+  check("a title match leaves the card's brief as it is, from its start", await briefLine(), { marked: false, starts: "Give one chore" });
   await window.fill("[data-home-search]", "PHONE cyberpunk");
   check("and by the words of a brief, in any order and any case", await cards(), [roulette]);
+  for (const theme of ["light", "dark"]) {
+    await window.emulateMedia({ colorScheme: theme });
+    check(
+      `in ${theme} a brief match shows the brief from just before the match, the match whole and marked in the title's ink at medium weight on the muted line`,
+      await briefLine(),
+      { before: "…the result stick. A ", match: "cyberpunk", ink: ["fg", "500", "fg-muted"], whole: true },
+    );
+  }
+  await window.emulateMedia({ colorScheme: "light" });
   check(
     "each status counts what the search leaves",
     await window.$$eval("[data-home-status] [data-status-count]", (counts) => counts.map((c) => c.textContent)),

@@ -11,12 +11,42 @@ const IN_STATUS: Record<HomeStatus, (s: SessionListing) => boolean> = {
   all: () => true,
 };
 
+const searchWords = (search: string) => search.toLowerCase().split(/\s+/).filter(Boolean);
+
 /** Every word of the search, in any order and any case, somewhere in the title or the brief's text. */
 export function matchesSearch(s: SessionListing, search: string): boolean {
-  const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+  const words = searchWords(search);
   if (words.length === 0) return true;
   const text = `${s.title}\n${markdownText(s.brief)}`.toLowerCase();
   return words.every((w) => text.includes(w));
+}
+
+/** The brief on a card a search found through it: from a few words before the match, split around the match. */
+export type BriefMatch = { readonly before: string; readonly match: string; readonly after: string };
+
+/** The room for whole words before a match, so the match sits near the line's start whatever the card's width. */
+const LEAD = 20;
+
+/**
+ * Where the brief answers a search the title doesn't: the earliest place in the brief's text of a search word the title
+ * lacks, with the whole words before it that fit in 20 characters, after an ellipsis when the brief starts earlier.
+ * Null when there is no search, or the title holds every word, or the brief holds none of the rest.
+ */
+export function briefMatch(s: SessionListing, search: string): BriefMatch | null {
+  const title = s.title.toLowerCase();
+  const text = markdownText(s.brief).replace(/\s+/gu, " ").trim();
+  const lower = text.toLowerCase();
+  const [first] = searchWords(search)
+    .filter((w) => !title.includes(w))
+    .map((w) => ({ at: lower.indexOf(w), length: w.length }))
+    .filter((found) => found.at >= 0)
+    .sort((a, b) => a.at - b.at);
+  if (first === undefined) return null;
+  const words = text.slice(0, first.at).split(" ");
+  let from = words.length - 1;
+  while (from > 0 && words.slice(from - 1).join(" ").length <= LEAD) from--;
+  const lead = words.slice(from).join(" ");
+  return { before: from === 0 ? lead : `…${lead}`, match: text.slice(first.at, first.at + first.length), after: text.slice(first.at + first.length) };
 }
 
 export type ProjectOption = { readonly id: ProjectId; readonly label: string; readonly count: number };

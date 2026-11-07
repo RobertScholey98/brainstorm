@@ -132,3 +132,11 @@ A card's still scaled the frame to the card's width, so a 980 px frame in a 240 
 - **One rule on both sides of the frame.** The host passes the floor in the preview's `state` message, and sizes the frame's box with `min(100% - 12px, max(100% - 24px, width × floor))`. The preview zooms to `max(its width ÷ the frame's width, floor)` and takes its still of what that zoom shows. Strip stills pass no floor, so a wide frame still shows whole in a strip entry.
 
 `verify:7` gives the wide frame a 200 px mark at its top left and reads it in the card's still, in light and dark. The mark starts at the still's left and reads 100 px, and the frame runs off the well's right edge. The phone frame stays 12 px in from either side. On the old fit the mark read 49 px.
+
+## Amendment: Rob's ruling on round 6. A card says why the brief matched
+
+A card the search found through its brief showed the brief from its start, so the matched word was often past the cut and the card looked unrelated (R6-65). Rob ruled on 2026-11-07 that such a card shows the matched fragment.
+
+When a search word the title lacks is in the brief, the card's brief line starts a few words before the earliest such word, behind an ellipsis when the brief starts earlier. It keeps the whole words that fit in 20 characters, so the match sits near the line's start at any card width. The match takes `fg` at medium weight on the `fg-muted` line, or stays `fg-muted` on a settled card, and the rest of the brief cuts with the kit's `Truncate`. A fork shows the fragment in place of its "from" line while the search matches its brief. A search the title answers, or no search, leaves the line as it was.
+
+`test/homeQuery.test.ts` holds `briefMatch`. `verify:7` reads the line for a title search and for "PHONE cyberpunk" in light and dark: "…the result stick. A " then "cyberpunk", whole, in `fg` at 500 on `fg-muted`.
