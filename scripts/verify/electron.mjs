@@ -54,6 +54,9 @@ export async function launch(home, env, { sessions, args = [] } = {}) {
   const app = await _electron.launch({ args: [root, ...args], env, cwd: root });
   if (sessions !== undefined) await app.context().route("**/v1/ui/sessions", sessions);
   const window = await app.firstWindow();
+  // The window opens under Rob's own cursor. A real move would shift the page's hover from where the script put it and
+  // cancel a hint mid-wait, so the window takes no OS mouse input. The script's input comes through DevTools, not the OS.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setIgnoreMouseEvents(true));
   const errors = [];
   window.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   window.on("console", (m) => {

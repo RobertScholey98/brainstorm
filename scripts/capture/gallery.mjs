@@ -331,8 +331,6 @@ async function startRouted(env, route) {
 
 async function start(home, env) {
   const run = await launch(home, env, { args: PIXELS });
-  // The window is real and on screen, so the desk's own pointer would otherwise leave hover states in the shots.
-  await run.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setIgnoreMouseEvents(true));
   await setCombo(run.window, COMBOS[0]);
   return run;
 }
