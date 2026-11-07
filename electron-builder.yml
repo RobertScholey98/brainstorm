@@ -17,6 +17,15 @@ asar: false
 # No native modules: storage is node:sqlite.
 npmRebuild: false
 
+# The update feed, which electron-updater reads as resources/app-update.yml. The build still runs with --publish never:
+# this only makes electron-builder write the feed's latest*.yml beside each installer, and CI attaches them to the
+# release. An installed app sees a release once it's published, never while it's a draft.
+publish:
+  provider: github
+  owner: RobertScholey98
+  repo: brainstorm
+  releaseType: release
+
 win:
   target:
     - target: nsis
@@ -35,9 +44,13 @@ nsis:
 
 # The .pkg's postinstall (packaging/pkg-scripts) links /usr/local/bin/brainstorm. Unsigned builds pass
 # -c.mac.identity=- on the command line to be ad-hoc signed, which Apple Silicon needs to launch the app at all.
+# The .zip is the update an installed app downloads (src/electron/macUpdater.ts), and the only Mac file latest-mac.yml
+# lists; the .pkg is the first install.
 mac:
   target:
     - target: pkg
+      arch: [arm64, x64]
+    - target: zip
       arch: [arm64, x64]
   category: public.app-category.developer-tools
   extraResources:

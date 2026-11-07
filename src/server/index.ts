@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join, resolve } from "node:path";
+import { updatesOff, type AppUpdates } from "../core/appUpdate";
 import { createT3Bridge } from "../core/bridge/t3";
 import { Brainstorm } from "../core/brainstorm";
 import { createChecker } from "../core/check";
@@ -17,6 +18,8 @@ export type ServerOptions = {
   readonly home?: string;
   readonly bridge?: AgentBridge;
   readonly trackerMs?: number;
+  /** The installed app's updater; the headless server has none. */
+  readonly updates?: AppUpdates;
 };
 
 export type RunningServer = {
@@ -51,7 +54,8 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   const version = packageVersion();
 
   let port = 0;
-  const http = createHttpHandler({ service, agentToken, uiToken, version }, () => port);
+  const updates = options.updates ?? updatesOff("The headless server has no app to update.");
+  const http = createHttpHandler({ service, agentToken, uiToken, version, updates }, () => port);
   const server: Server = createServer(http.listener);
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);

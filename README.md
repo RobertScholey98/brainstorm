@@ -16,13 +16,15 @@ Download the installer for your OS from the [releases](https://github.com/Robert
 | Linux | `Brainstorm-<v>-linux-amd64.deb` | the package links `/usr/bin/brainstorm` | `sudo apt install ./Brainstorm-<v>-linux-amd64.deb` |
 | Linux | `Brainstorm-<v>-linux-x64.tar.gz` | link it yourself: `ln -s "$PWD/Brainstorm-<v>-linux-x64/resources/bin/brainstorm" ~/.local/bin/` | |
 
+After that, the app updates itself on Windows, macOS and the .deb: it checks GitHub for a newer published release 15 seconds after start and every 30 minutes, downloads it in the background, and shows **Restart to update** at the foot of the sidebar. Quitting installs a downloaded update too. The Mac app downloads the release's .zip and swaps its own bundle, since the macOS updater Electron ships only accepts a build signed with a paid Developer ID; the .pkg gives the app to the user who installed it, so the swap asks for no password (an older root-owned install asks once for an administrator's). `~/Library/Logs/Brainstorm/update.log` records each Mac update. The tar.gz doesn't update itself. `BRAINSTORM_DISABLE_AUTO_UPDATE=1` turns updating off.
+
 The app ships the agent skill, `/use-brainstorm`, and copies it to `~/.claude/skills/use-brainstorm` each time it starts, so an update brings the matching skill. A copy you changed is moved to `~/.claude/skill-backups` first. The Windows installer opens the app when it finishes; on macOS and Linux, open Brainstorm once after installing. From a checkout, `node scripts/install-skill.mjs` does the same.
 
 ## Release
 
 `.github/workflows/build.yml` builds, tests and packages on Windows, macOS and Linux for every push to `main` and every pull request; the installers are attached to the run.
 
-To release, open **Actions → Build → Run workflow** on `main` and pick patch, minor or major (or run `gh workflow run build.yml -f bump=patch`). The workflow bumps the latest `vX.Y.Z` tag, builds every installer at that version, then pushes the tag and drafts a GitHub release with them attached; publish it from the Releases page. The first release takes `package.json`'s version. Nobody edits a version by hand, and a failed build leaves no tag. `npm run dist` builds the current OS's installer into `release/`. Signing switches on when the secrets listed at the top of the workflow exist.
+To release, open **Actions → Build → Run workflow** on `main` and pick patch, minor or major (or run `gh workflow run build.yml -f bump=patch`). The workflow bumps the latest `vX.Y.Z` tag, builds every installer at that version, then pushes the tag and drafts a GitHub release with them attached; publish it from the Releases page. Installed apps only see a release once it's published, through the `latest.yml` and `latest-linux.yml` feed files attached beside the installers. The first release takes `package.json`'s version. Nobody edits a version by hand, and a failed build leaves no tag. `npm run dist` builds the current OS's installer into `release/`. Signing switches on when the secrets listed at the top of the workflow exist.
 
 ## Develop
 
@@ -37,6 +39,7 @@ npm run lint:design # renderer classes stay on the closed scales and colour toke
 npm run verify:1   # the built CLI and headless server against a fake T3
 npm run verify:2   # the Electron app: sandboxed canvas and variant switching
 npm run verify:3   # the Electron app: controls, overrides, restart and regenerate
+npm run verify:update # Windows or macOS: installs a build, updates it from a local feed through Restart to update, uninstalls (macOS: into /Applications, with sudo)
 ```
 
 `node scripts/seed-demo.mjs` opens the app on a temp home with a demo session, the cyberpunk chore roulette, committed through the real CLI against a fake T3 thread.

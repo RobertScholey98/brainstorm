@@ -6,3 +6,7 @@ app="${2%/}/Brainstorm.app"
 chmod 755 "$app/Contents/Resources/bin/brainstorm"
 mkdir -p /usr/local/bin
 ln -sf "$app/Contents/Resources/bin/brainstorm" /usr/local/bin/brainstorm
+# The app updates itself by swapping its own bundle (src/electron/macUpdater.ts), so it belongs to the user at the
+# screen, as an app dragged into /Applications does, and an update asks for no password.
+user=$(stat -f%Su /dev/console 2>/dev/null || true)
+if [ -n "$user" ] && [ "$user" != root ]; then chown -R "$user" "$app" || true; fi
