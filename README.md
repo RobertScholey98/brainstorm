@@ -20,14 +20,9 @@ The app ships the agent skill, `/use-brainstorm`, and copies it to `~/.claude/sk
 
 ## Release
 
-`.github/workflows/build.yml` builds, tests and packages on Windows, macOS and Linux for every push to `main` and every pull request; the installers are attached to the run. To release, bump `version` in `package.json`, then push a matching tag:
+`.github/workflows/build.yml` builds, tests and packages on Windows, macOS and Linux for every push to `main` and every pull request; the installers are attached to the run.
 
-```
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-The tag's run drafts a GitHub release with every installer attached; publish it from the Releases page. `npm run dist` builds the current OS's installer into `release/`. Signing switches on when the secrets listed at the top of the workflow exist.
+To release, open **Actions → Build → Run workflow** on `main` and pick patch, minor or major (or run `gh workflow run build.yml -f bump=patch`). The workflow bumps the latest `vX.Y.Z` tag, builds every installer at that version, then pushes the tag and drafts a GitHub release with them attached; publish it from the Releases page. The first release takes `package.json`'s version. Nobody edits a version by hand, and a failed build leaves no tag. `npm run dist` builds the current OS's installer into `release/`. Signing switches on when the secrets listed at the top of the workflow exist.
 
 ## Develop
 
