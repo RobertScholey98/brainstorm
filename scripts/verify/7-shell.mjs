@@ -903,6 +903,24 @@ try {
     await paneHead(window, "[data-inspector-header]", "[data-inspector-body]", { by: 60 }),
     { sameFill: true, rest: { scrolled: false, rule: true, clipGap: 0, through: 0 }, scrolled: { scrolled: true, rule: true, clipGap: 0, through: 0 }, masks: [] },
   );
+  const foot = (to) =>
+    window.$eval(
+      "[data-inspector-body]",
+      async (body, to) => {
+        body.scrollTop = to === "end" ? body.scrollHeight : 0;
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const style = getComputedStyle(body);
+        const shows = parseFloat(style.borderBottomWidth) > 0 && style.borderBottomColor !== "rgba(0, 0, 0, 0)";
+        return { rule: shows, offEdge: Math.round(body.closest("aside").getBoundingClientRect().bottom - body.getBoundingClientRect().bottom) };
+      },
+      to,
+    );
+  check(
+    "the Inspector's foot draws the hairline while more waits below, 8 px off the pane's edge, and drops it at the end",
+    { more: await foot("top"), end: await foot("end") },
+    { more: { rule: true, offEdge: 8 }, end: { rule: false, offEdge: 8 } },
+  );
+  await window.$eval("[data-inspector-body]", (body) => (body.scrollTop = 0));
   await window.setViewportSize({ width: 1100, height: 720 });
   await window.click("[data-pick-toggle]");
   await window.waitForSelector("[data-pick-hint]");
