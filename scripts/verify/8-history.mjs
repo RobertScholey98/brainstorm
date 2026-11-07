@@ -431,6 +431,29 @@ try {
       ["terminal", false],
     ],
   );
+  check(
+    "a new variant's mark is an accent ring and the showing one's a filled dot, so form tells them apart, not hue alone",
+    await window.$$eval('[data-slot-id="wheel"] [data-variant]', (rows) => {
+      const probe = document.body.appendChild(document.createElement("i"));
+      probe.style.color = "var(--accent)";
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      return rows.map((r) => {
+        const mark = getComputedStyle(r.querySelector('[data-slot="sidebar-menu-mark"] > span'));
+        const ring = mark.outlineStyle !== "none" && mark.outlineColor === accent;
+        const dot = mark.backgroundColor !== "rgba(0, 0, 0, 0)";
+        return [r.dataset.variant, ring && dot ? "ring and dot" : ring ? "ring" : dot ? "dot" : "none"];
+      });
+    }),
+    [
+      ["neon", "dot"],
+      ["reel", "none"],
+      ["spin-button-a", "ring"],
+      ["spin-button-b", "ring"],
+      ["spin-button-c", "ring"],
+      ["terminal", "none"],
+    ],
+  );
   check("the strip says what made the iteration", (await strip(window)).at(-1).origin, "Vary Spin button ×3 · bolder");
   await shot(window, shots, "9-vary-landed");
   await window.setViewportSize({ width: 1100, height: 720 });

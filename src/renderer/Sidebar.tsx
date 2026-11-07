@@ -519,14 +519,13 @@ function SlotSection({
                   data-variant={variant}
                   data-showing={active || undefined}
                 >
-                  {/* A variant the agent just added marks its lead slot in the accent, the agent's colour, until Rob has seen it. */}
-                  {block?.isNew === true ? (
-                    <span className="flex" data-variant-new>
-                      <SidebarMenuMark className="bg-accent" />
-                      <span className="sr-only">new</span>
+                  {/* What shows is a filled dot. A variant the agent just added rings the mark in the accent, the agent's colour,
+                      until Rob has seen it, so the two read apart by form and not hue alone, and one row can carry both. */}
+                  <SidebarMenuMark className={cn(active && "bg-fg-muted", block?.isNew === true && "outline-2 outline-offset-1 outline-accent")} />
+                  {block?.isNew === true && (
+                    <span className="sr-only" data-variant-new>
+                      new
                     </span>
-                  ) : (
-                    <SidebarMenuMark className={active ? "bg-fg-muted" : undefined} />
                   )}
                   {/* The name Rob reads keeps its width; the raw key beside it gives way first, down to nothing. */}
                   <Truncate className="max-w-full shrink-0" data-variant-title>
