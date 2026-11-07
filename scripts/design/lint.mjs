@@ -111,7 +111,7 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
     });
   }
   problems.push(...chipRecipe(source, lits), ...frameSandbox(source));
-  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source), ...dismissGhost(source));
+  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source), ...dismissGhost(source), ...rawPart(source));
   return problems.sort((a, b) => a.line - b.line);
 }
 
@@ -193,6 +193,15 @@ function dismissGhost(source) {
       return variant === undefined || source.slice(variant.start, variant.end).replace(/^\{?"?|"?\}?$/g, "") !== "ghost";
     })
     .map((el) => ({ rule: "dismiss-ghost", line: el.line, text: "<Button> Cancel", message: "a dismiss button is ghost, as every overlay footer has it" }));
+}
+
+/** A pin's part rendered as its raw id, "spin-button", where Rob reads the words partLabel gives, "Spin button". */
+function rawPart(source) {
+  return source.split("\n").flatMap((text, i) =>
+    /(?<!=)\{[^{}]*\.part\s*(?:\?\?[^{}]*)?\}/.test(text) && !/partLabel\(/.test(text)
+      ? [{ rule: "raw-part", line: i + 1, text: text.trim(), message: "show a part through partLabel, as every surface names it" }]
+      : [],
+  );
 }
 
 /** An overlay built by hand from the surface recipe, outside the kit components that lay it out. */

@@ -160,6 +160,19 @@ describe("design lint", () => {
     ]);
   });
 
+  it("raw-part: fails a pin's part shown as its raw id, and allows partLabel and a data attribute", () => {
+    const source = [
+      `<span>{f.pin.part ?? "whole block"}</span>`,
+      `<span>{pin.part === null ? "whole block" : partLabel(pin.part)}</span>`,
+      `<i data-part={pin.part} />`,
+      `<b>{target.part}</b>`,
+    ].join("\n");
+    expect(rules(source)).toEqual([
+      { rule: "raw-part", line: 1, text: `<span>{f.pin.part ?? "whole block"}</span>` },
+      { rule: "raw-part", line: 4, text: "<b>{target.part}</b>" },
+    ]);
+  });
+
   it("overlay-kit: fails an overlay drawn from the surface recipe outside the kit, and allows the kit", () => {
     const source = [`<div className={cn(overlaySurface(), "absolute grid w-popover-sm p-3")} />`, `<OverlayPanel style={{ left, top }} />`].join("\n");
     expect(rules(source)).toEqual([{ rule: "overlay-kit", line: 1, text: "overlaySurface()" }]);
