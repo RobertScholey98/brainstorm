@@ -706,7 +706,8 @@ body {
   width: ${PIN_SIZE}px; height: ${PIN_SIZE}px; box-sizing: border-box; padding: 0;
   border: 2px solid var(--bs-card); border-radius: 10px 10px 10px 4px; background: var(--bs-accent); color: var(--bs-accent-fg);
   font: 600 11px/1 var(--bs-font-ui); font-variant-numeric: tabular-nums;
-  box-shadow: var(--bs-elevation-sm); cursor: pointer; transition: scale 120ms ease-out, box-shadow 120ms ease-out;
+  /* A 1 px ring outside the card border, as the confirmed pin's, so on a dark block every pin shows the same 22 px. */
+  box-shadow: 0 0 0 1px var(--bs-border-strong), var(--bs-elevation-sm); cursor: pointer; transition: scale 120ms ease-out, box-shadow 120ms ease-out;
 }
 .bs-pin[data-placed] { display: grid; }
 /* The hit area sits 3 px past the face; an inset is measured inside the 2 px border, so it is 5 px. */

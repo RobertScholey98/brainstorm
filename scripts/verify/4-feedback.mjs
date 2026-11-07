@@ -335,10 +335,25 @@ try {
     ],
     [true, true],
   );
+  // A pin at rest, without the hover or focus look, across its face and the ring drawn outside it.
+  const pinInk = () =>
+    canvas.$eval(PIN, (pin) => {
+      const rest = pin.parentElement.appendChild(pin.cloneNode(true));
+      rest.removeAttribute("data-focused");
+      rest.removeAttribute("data-hovered");
+      rest.classList.remove("bs-pulse");
+      const shadow = getComputedStyle(rest).boxShadow;
+      const ring = Number(shadow.match(/0px 0px 0px ([\d.]+)px/)?.[1] ?? 0);
+      const ink = Math.round(rest.offsetWidth + 2 * ring);
+      rest.remove();
+      return ink === 22 ? ink : [ink, shadow];
+    });
+  const confirmedInk = await pinInk();
   await shot(window, shots, "5-confirmed");
 
   await window.click('[data-feedback="1"] button:has-text("Reopen")');
   await window.waitForSelector('[data-feedback="1"][data-status="open"]');
+  check("an open pin draws the same 22 px of ink as a confirmed one, a 20 px face in a 1 px ring", [await settled(pinInk), confirmedInk], [22, 22]);
   check("Reopen moves it back to open, remembering where it was addressed", await itemText(window, 1, "status"), "Previously addressed in iteration 2");
 
   const reordered = readFileSync(card, "utf8");
