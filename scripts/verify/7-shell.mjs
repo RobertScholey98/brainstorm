@@ -434,6 +434,9 @@ try {
   for (const theme of ["light", "dark"]) {
     await window.emulateMedia({ colorScheme: theme });
     await window.mouse.move(0, 0);
+    // Each theme has its own still, so a switch redraws it.
+    await window.waitForTimeout(300);
+    await window.waitForSelector(settledStill);
     await window.waitForTimeout(300);
     const clip = await window.$eval(settledStill, (img) => {
       const r = img.getBoundingClientRect();
