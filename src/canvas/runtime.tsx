@@ -195,6 +195,24 @@ function revealSelected(behavior: ScrollBehavior): void {
   scrollBy({ left: by(r.left, r.right, clientWidth), top: by(r.top, r.bottom, clientHeight), behavior });
 }
 
+/** How far inside the canvas edge a revealed pin or picked element stops: room for a pin's pulse, and no more. */
+const REVEAL_MARGIN = 12;
+
+/**
+ * Brings `target` into view by the least it takes, and never leaves its frame's label cut by the bar. A target already
+ * in view moves nothing. When the move would leave the label half under the bar, the label sits 24 px under it, as on
+ * a fresh stage, or, when the target lies too far down a tall frame to show beside it, wholly out of view.
+ */
+function revealInFrame(target: Element, behavior: ScrollBehavior): void {
+  const t = target.getBoundingClientRect();
+  const room = document.documentElement.clientHeight;
+  let by = t.top < REVEAL_MARGIN ? t.top - REVEAL_MARGIN : t.bottom > room - REVEAL_MARGIN ? t.bottom - (room - REVEAL_MARGIN) : 0;
+  if (by === 0) return;
+  const label = target.closest(".bs-frame")?.querySelector(".bs-frame-title")?.getBoundingClientRect();
+  if (label !== undefined && label.bottom - by > 0 && label.top - by < CANVAS_PAD) by = by < 0 ? label.top - CANVAS_PAD : Math.max(by, label.bottom);
+  scrollBy({ top: by, behavior });
+}
+
 /**
  * A frame whose block outgrows its declared height scrolls, and its scrollbar sits outside the declared width at the
  * one width every scrollbar has, so the block lays out at that width and the bar never shrinks with the zoom.
@@ -535,8 +553,7 @@ function layoutPins(): void {
     marker.dataset.placed = "";
     if (wantedPulse === id && marker.closest("[data-offstage]") === null) {
       wantedPulse = null;
-      // Nearest, with the pin's scroll margin, so a pin already in view doesn't pull the canvas sideways.
-      marker.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      revealInFrame(marker, "smooth");
       marker.classList.remove("bs-pulse");
       void marker.offsetWidth;
       marker.classList.add("bs-pulse");
@@ -581,7 +598,7 @@ if (live && !preview) {
         if (target !== null) {
           // The composer anchors to the element, so its frame comes into view first, and the click point moves with it.
           const before = target.anchor.getBoundingClientRect();
-          target.anchor.closest(".bs-frame")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+          revealInFrame(target.anchor, "instant");
           const r = target.anchor.getBoundingClientRect();
           const { clientX, clientY } = e as MouseEvent;
           const [x, y] = [clientX + r.left - before.left, clientY + r.top - before.top];
@@ -687,7 +704,7 @@ body {
   width: ${PIN_SIZE}px; height: ${PIN_SIZE}px; box-sizing: border-box; padding: 0;
   border: 2px solid var(--bs-card); border-radius: 10px 10px 10px 4px; background: var(--bs-accent); color: var(--bs-accent-fg);
   font: 600 11px/1 var(--bs-font-ui); font-variant-numeric: tabular-nums;
-  box-shadow: var(--bs-elevation-sm); cursor: pointer; scroll-margin-block: 48px; transition: scale 120ms ease-out, box-shadow 120ms ease-out;
+  box-shadow: var(--bs-elevation-sm); cursor: pointer; transition: scale 120ms ease-out, box-shadow 120ms ease-out;
 }
 .bs-pin[data-placed] { display: grid; }
 /* The hit area sits 3 px past the face; an inset is measured inside the 2 px border, so it is 5 px. */

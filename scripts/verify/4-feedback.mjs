@@ -97,6 +97,25 @@ try {
   await window.keyboard.type("Spin button is too quiet");
   await window.keyboard.press("Control+Enter");
   await window.waitForSelector('[data-feedback="2"]');
+  const stageAt = () => canvas.evaluate(() => [Math.round(scrollY), Math.round(document.querySelector(".bs-frame[data-slot=wheel] .bs-frame-title").getBoundingClientRect().top)]);
+  await canvas.evaluate(() => scrollTo(0, 0));
+  await window.click('[data-feedback="2"] [data-feedback-text]');
+  await canvas.waitForSelector('.bs-pin[data-pin="2"].bs-pulse');
+  check("pulsing a pin already in view near a tall frame's foot moves nothing, so its label stays 24 px under the bar", await settled(stageAt), [0, 24]);
+  await window.setViewportSize({ width: 1440, height: 640 });
+  await canvas.evaluate(() => scrollTo(0, 0));
+  await window.click('[data-feedback="2"] [data-feedback-text]');
+  check(
+    "pulsing it from below the fold brings it in, and takes the label wholly out of view rather than half under the bar",
+    await settled(async () => {
+      const [scrolled, label] = await stageAt();
+      const pin = await canvas.$eval('.bs-pin[data-pin="2"]', (el) => [el.getBoundingClientRect().top >= 0, el.getBoundingClientRect().bottom <= innerHeight]);
+      return [scrolled > 0, label <= -16, pin];
+    }),
+    [true, true, [true, true]],
+  );
+  await window.setViewportSize({ width: 1440, height: 900 });
+  await canvas.evaluate(() => scrollTo(0, 0));
   check(
     "an open comment's Edit and Delete stand 8 px apart, the gap of every row of buttons",
     await window.$eval('[data-feedback="2"]', (li) => {
