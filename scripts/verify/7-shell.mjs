@@ -582,13 +582,20 @@ try {
     );
   check("a stage frame that doesn't scroll sits centred, 24 px off each side of the canvas", await centring(), { scrolls: false, sides: [24, 24] });
   await window.setViewportSize({ width: 1100, height: 720 });
-  // At 1100 the stage's fit has two resting points, 0.52 and 0.53, by whether the scrollbar's gutter is counted, and
-  // the bar can name the other one (worklist R6-68). Until that is fixed this checks the frame fits without sideways scroll.
-  await settled(zoomShown);
-  const at1100 = await fit();
-  check("and at 1100", { sideways: at1100.sideways, fits: at1100.fits }, { sideways: false, fits: true });
-  await window.setViewportSize({ width: 1440, height: 900 });
-  await window.waitForFunction(() => document.querySelector("[data-canvas-zoom]")?.dataset.canvasZoom === "83");
+  const applied = () => canvas.$eval(".bs-frame:not([data-offstage]) .bs-frame-body", (b) => getComputedStyle(b).zoom);
+  const at1100 = [];
+  for (let i = 0; i < 3; i++) {
+    await window.setViewportSize({ width: 1100, height: 720 });
+    await settled(zoomShown);
+    at1100.push({ ...(await fit()), applied: await applied() });
+    await window.setViewportSize({ width: 1440, height: 900 });
+    await window.waitForFunction(() => document.querySelector("[data-canvas-zoom]")?.dataset.canvasZoom === "83");
+  }
+  check(
+    "and at 1100, to one zoom every time the window comes back to it, the one the bar names",
+    at1100,
+    Array(3).fill({ sideways: false, zoom: "53", fits: true, applied: "0.534694" }),
+  );
   check(
     "the page never scrolls sideways",
     await window.evaluate(() => [document.documentElement.scrollWidth <= innerWidth, document.body.scrollWidth <= innerWidth, scrollX]),

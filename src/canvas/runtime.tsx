@@ -205,7 +205,9 @@ function measureScrolling(): void {
   const scrolling = new Set<string>();
   for (const body of document.querySelectorAll<HTMLElement>(".bs-frame-body[data-height]")) {
     const slot = body.closest<HTMLElement>(".bs-frame")?.dataset.slot;
-    if (slot !== undefined && body.scrollHeight > body.clientHeight) scrolling.add(slot);
+    // Under a zoom the heights round at the zoomed size, so a block that exactly fills its frame can read a pixel
+    // over. Counting that pixel added the gutter, which moved the zoom and the rounding: two resting fits (R6-68).
+    if (slot !== undefined && body.scrollHeight - body.clientHeight > 1) scrolling.add(slot);
   }
   if (scrolling.size === state.scrolling.size && [...scrolling].every((slot) => state.scrolling.has(slot))) return;
   setState({ scrolling });
@@ -651,7 +653,7 @@ body {
 .bs-frame:has(.bs-failure) .bs-frame-size { display: none; }
 .bs-frame[data-selected] .bs-frame-title { color: var(--bs-accent); }
 .bs-frame-body {
-  position: relative; overflow-x: hidden; overflow-y: auto; isolation: isolate;
+  position: relative; overflow: hidden; isolation: isolate;
   background: var(--bs-card); border-radius: 4px;
   box-shadow: 0 0 0 calc(1px * var(--bs-unzoom, 1)) var(--bs-border-strong), var(--bs-elevation-sm);
   transition: box-shadow 120ms ease-out;

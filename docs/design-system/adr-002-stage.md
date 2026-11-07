@@ -105,3 +105,9 @@ The floor is gone. The board always fits every frame in one row at one zoom, how
 | "2 more below" chip | counted board frames under the fold | removed, since a board never has any |
 
 `fitFrames` returns only the zooms now, and the frame-to-host `below` message is gone with the chip. `test/fit.test.ts` holds three phones at 41% at the minimum window and a desktop frame between two phones at 20%, and `verify:2` checks that at 1100 the three-slot board sits in one row inside the canvas with no sideways scroll.
+
+## Amendment: round 6. A pixel of rounding is not a scrolling frame
+
+The fix pass found the 980 × 360 stage frame resting at two zooms at 1100, 0.5347 or 0.5245, by the order the window was sized in (R6-68). Under the 0.5347 zoom the frame body's heights round at the zoomed size, so a block that exactly fills its 360 px read 361. The runtime counted that pixel as a block taller than its frame and added the 10 px gutter. The gutter lowered the zoom to 0.5245, where the block read 360 again, and nothing measured it again until the block changed size. So the fit kept whichever answer it reached first, and the bar could name the other.
+
+A frame now scrolls only when its block is more than one pixel taller than its declared height, and a body that doesn't scroll clips rather than drawing a scrollbar of its own inside the declared width. The scroll test no longer depends on the zoom it feeds, so the fit has one resting point. `verify:7` sizes the window to 1100 three times from 1440 and checks it lands on 0.534694 each time, with the bar reading 53%.
