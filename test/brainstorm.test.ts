@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test, vi } from "vitest";
 import { Brainstorm } from "../src/core/brainstorm";
 import { createChecker } from "../src/core/check";
 import type { BlockId, FeedbackId, FileMap, IterationN, PartName, PropName, Result, SessionId, SlotId, ThreadId, VariantKey } from "../src/core/types";
@@ -1016,8 +1016,8 @@ describe("fork", () => {
     const { service, bridge, open } = await withTwoWheels();
     bridge.startMode = "hang";
     const pending = service.fork(S, { from: 2 as IterationN, picks: {}, instruction: "calmer still" });
-    await new Promise((r) => setTimeout(r, 50));
-    expect(await phaseOf(service, F)).toEqual({ phase: "starting", actions: [], message: "Starting a T3 thread" });
+    // The fork saves its session before it asks T3 for a thread, which a slow machine can take well over 50 ms to reach.
+    await vi.waitFor(async () => expect(await phaseOf(service, F)).toEqual({ phase: "starting", actions: [], message: "Starting a T3 thread" }), { timeout: 5000 });
     const restarted = await open();
     expect(await phaseOf(restarted, F)).toEqual({
       phase: "start_failed",

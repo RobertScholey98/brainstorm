@@ -74,14 +74,22 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           flags="${{ matrix.platform }}"
+          # electron-builder reads an empty CSC_LINK as a certificate path, so it's only exported when a secret is set.
           case "$RUNNER_OS" in
             macOS)
-              export CSC_LINK="$MAC_CERTIFICATE" CSC_KEY_PASSWORD="$MAC_CERTIFICATE_PASSWORD"
-              # Without a certificate, sign ad hoc: Apple Silicon refuses to launch an unsigned app at all.
-              if [ -z "$CSC_LINK" ]; then flags="$flags -c.mac.identity=- -c.mac.hardenedRuntime=false"; fi
+              if [ -n "$MAC_CERTIFICATE" ]; then
+                export CSC_LINK="$MAC_CERTIFICATE" CSC_KEY_PASSWORD="$MAC_CERTIFICATE_PASSWORD"
+              else
+                # Sign ad hoc, since Apple Silicon refuses to launch an unsigned app at all. electron-builder skips
+                # every signature on a pull request unless told otherwise; with no certificate there's nothing to leak.
+                flags="$flags -c.mac.identity=- -c.mac.hardenedRuntime=false"
+                export CSC_FOR_PULL_REQUEST=true
+              fi
               ;;
             Windows)
-              export CSC_LINK="$WIN_CERTIFICATE" CSC_KEY_PASSWORD="$WIN_CERTIFICATE_PASSWORD"
+              if [ -n "$WIN_CERTIFICATE" ]; then
+                export CSC_LINK="$WIN_CERTIFICATE" CSC_KEY_PASSWORD="$WIN_CERTIFICATE_PASSWORD"
+              fi
               ;;
           esac
           npx electron-builder $flags --publish never
