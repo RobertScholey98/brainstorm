@@ -1034,6 +1034,20 @@ try {
     ["Couldn't switch the variant", "500", true],
   );
   check(
+    "a notice draws a failure as a danger Callout does: a 13 px danger title over a 12 px fg reason",
+    await window.$eval("[data-slot=toast]", (t) => {
+      const tone = (v) => {
+        const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: `color: var(--${v})` }));
+        const c = getComputedStyle(probe).color;
+        probe.remove();
+        return c;
+      };
+      const [title, reason] = [getComputedStyle(t.querySelector("[data-toast-title]")), getComputedStyle(t.querySelector("[data-toast-title]").nextElementSibling)];
+      return [title.color === tone("danger"), title.fontSize, reason.color === tone("fg"), reason.fontSize];
+    }),
+    [true, "13px", true, "12px"],
+  );
+  check(
     "its edge is the danger tone at 40%, as a danger strip's is",
     await window.$eval("[data-slot=toast]", (t) => {
       const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: color-mix(in oklab, var(--danger) 40%, transparent)" }));
