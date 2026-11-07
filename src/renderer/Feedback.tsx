@@ -191,7 +191,8 @@ function FeedbackItem({
       <div className="flex gap-2">
         {/* On the first line of text: the comment's at rest, the field's while editing it. */}
         <PinNumber aria-hidden n={f.id} state={f.status.state} className={editing ? "mt-1.5" : "mt-px"} />
-        <div className="min-w-0 flex-1">
+        {/* A field and its buttons stand 8 px off the fill's right edge, where text needs only 4. */}
+        <div className={cn("min-w-0 flex-1", editing && "pr-1")}>
           {editing ? (
             <TextEditor
               row

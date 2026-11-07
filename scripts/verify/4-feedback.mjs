@@ -119,12 +119,18 @@ try {
     true,
   );
   check(
-    "the edit field keeps the card's fill, not the row's tint, with Ctrl+Enter beside Cancel",
+    "the edit field keeps the card's fill, not the row's tint, with Ctrl+Enter beside Cancel, the field and Save 8 px off the fill's right edge",
     await window.$eval('[data-feedback="2"]', (li) => {
       const card = getComputedStyle(li.closest("aside")).backgroundColor;
-      return [getComputedStyle(li.querySelector("textarea")).backgroundColor === card, [...li.querySelectorAll("kbd, button")].map((n) => n.textContent).slice(-3)];
+      const right = li.getBoundingClientRect().right;
+      const save = [...li.querySelectorAll("button")].find((n) => n.textContent === "Save");
+      return [
+        getComputedStyle(li.querySelector("textarea")).backgroundColor === card,
+        [...li.querySelectorAll("kbd, button")].map((n) => n.textContent).slice(-3),
+        [li.querySelector("textarea"), save].map((el) => Math.round(right - el.getBoundingClientRect().right)),
+      ];
     }),
-    [true, ["Ctrl+Enter", "Cancel", "Save"]],
+    [true, ["Ctrl+Enter", "Cancel", "Save"], [8, 8]],
   );
   await window.keyboard.press("Control+A");
   await window.keyboard.type("Spin button needs more contrast");
