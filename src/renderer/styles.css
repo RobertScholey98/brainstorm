@@ -280,9 +280,9 @@ body[data-resizing] [data-slot="sidebar-container"] {
   }
 }
 
-/* A history strip entry: the one width the strip measured for all of them (stripFit.ts). */
-@utility w-strip-entry {
-  width: var(--strip-entry, 200px);
+/* The history strip's columns, one per entry at the width stripFit.ts gives it. */
+@utility grid-cols-strip {
+  grid-template-columns: var(--strip-columns);
 }
 
 /*

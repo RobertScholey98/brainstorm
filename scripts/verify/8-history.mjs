@@ -60,6 +60,23 @@ const stripRest = (window) =>
       arrows: document.querySelectorAll("[data-history-step]").length,
     };
   });
+/**
+ * The strip's entries with a line cut, and, while any is, the ones wider than their lines need, which hold room a cut
+ * line could use.
+ */
+const stripLines = (window) =>
+  window.$$eval("[data-history-list] > *", (entries) => {
+    const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : "stub");
+    const cut = entries.filter((el) => [...el.querySelectorAll('[data-slot="truncate"]')].some((t) => t.scrollWidth > t.clientWidth));
+    const spare = entries.filter((el) => {
+      const width = el.getBoundingClientRect().width;
+      el.style.width = "max-content";
+      const need = el.getBoundingClientRect().width;
+      el.style.removeProperty("width");
+      return width > Math.max(180, need) + 1;
+    });
+    return { cut: cut.map(name), spare: cut.length === 0 ? [] : spare.map(name) };
+  });
 /** Runs `act`, then waits for the strip's `scrollend`, so a read never lands while the strip is still moving. */
 async function stripScroll(window, act) {
   await window.$eval("[data-history-scroll]", (el) => {
@@ -120,6 +137,7 @@ try {
     await settled(() => stripRest(window)),
     { inView: ["iteration 1", "iteration 2"], cut: [], shown: true, insets: [16, 16], scrolled: 0, arrows: 0 },
   );
+  check("with room for both, each entry's lines read whole", await settled(() => stripLines(window)), { cut: [], spare: [] });
   check(
     "and with nothing to scroll neither end fades",
     await window.$eval("[data-history-scroll]", (el) => [getComputedStyle(el).getPropertyValue("--fade-start"), getComputedStyle(el).getPropertyValue("--fade-end")]),
@@ -389,6 +407,9 @@ try {
     await settled(() => stripRest(window)),
     { inView: ["iteration 1", "iteration 2", "fork"], cut: [], shown: true, insets: [16, 16], scrolled: 0, arrows: 0 },
   );
+  const lines = await settled(() => stripLines(window));
+  console.log(`  strip lines cut at 1440 with a fork: ${lines.cut.join(", ") || "none"}`);
+  check("an entry wider than its lines need holds no room while another's line is cut", lines.spare, []);
 
   await window.click("[data-back]");
   await window.click("[data-overview]");

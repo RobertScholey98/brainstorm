@@ -23,8 +23,9 @@ type StripItem = { readonly kind: "stub" } | { readonly kind: "iteration"; reado
  * the iteration it came from. It is one listbox: Left and Right step through it, Home and End jump, and the option Rob
  * lands on is what the canvas shows.
  *
- * Every entry is one width. While they fit they share the strip; once they don't, a whole number of them fill it and
- * the strip rests only on an entry's edge, so it never shows a cut entry, and the shown iteration is always whole.
+ * While the entries fit they share the strip by what their lines need; once they don't, a whole number of them fill it
+ * at one width and the strip rests only on an entry's edge, so it never shows a cut entry, and the shown iteration is
+ * always whole.
  */
 export function Filmstrip({
   view,
@@ -56,19 +57,26 @@ export function Filmstrip({
   ];
   const shownAt = items.findIndex((i) => i.kind === "iteration" && i.entry.n === showing);
 
-  const [fit, setFit] = useState<StripFit>(() => stripFit(0, items.length));
+  const [fit, setFit] = useState<StripFit>(() => stripFit(0, items.map(() => 0)));
   const [ends, setEnds] = useState({ start: true, end: true });
   useLayoutEffect(() => {
-    const box = scroller.current;
-    if (box === null) return;
+    const [box, entries] = [scroller.current, list.current];
+    if (box === null || entries === null) return;
     const measure = () => {
-      const next = stripFit(box.clientWidth, items.length);
-      setFit((prev) => (prev.width === next.width && prev.shown === next.shown && prev.overflows === next.overflows ? prev : next));
+      const next = stripFit(box.clientWidth, needs(entries));
+      setFit((prev) => (prev.shown === next.shown && prev.step === next.step && prev.widths.join() === next.widths.join() ? prev : next));
     };
     measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(box);
-    return () => observer.disconnect();
+    const sizes = new ResizeObserver(measure);
+    sizes.observe(box);
+    // An entry's lines change as its age ticks and as an origin lands.
+    const lines = new MutationObserver(measure);
+    lines.observe(entries, { subtree: true, childList: true, characterData: true });
+    void document.fonts.ready.then(measure);
+    return () => {
+      sizes.disconnect();
+      lines.disconnect();
+    };
   }, [items.length]);
 
   // The shown entry stays whole in view as Rob steps, as entries land and as the strip resizes. Only the strip scrolls,
@@ -87,7 +95,7 @@ export function Filmstrip({
 
   const page = (by: -1 | 1) => {
     const box = scroller.current;
-    if (box !== null) box.scrollBy({ left: by * (fit.width + STRIP_GAP), behavior: "smooth" });
+    if (box !== null && fit.step !== null) box.scrollBy({ left: by * (fit.step + STRIP_GAP), behavior: "smooth" });
   };
   const onScrollEnd = () => {
     const box = scroller.current;
@@ -107,10 +115,10 @@ export function Filmstrip({
   };
 
   return (
-    <section className={STRIP} aria-label="History" data-history data-history-overflows={fit.overflows || undefined}>
+    <section className={STRIP} aria-label="History" data-history data-history-overflows={fit.step !== null || undefined}>
       <StripHead
         steps={
-          fit.overflows && (
+          fit.step !== null && (
             <>
               <StripStep side="start" disabled={ends.start} onClick={() => page(-1)} />
               <StripStep side="end" disabled={ends.end} onClick={() => page(1)} />
@@ -129,7 +137,7 @@ export function Filmstrip({
           aria-label="Iterations"
           aria-orientation="horizontal"
           className={STRIP_LIST}
-          style={{ "--strip-entry": `${fit.width}px` } as CSSProperties}
+          style={{ "--strip-columns": fit.widths.map((w) => `${w}px`).join(" ") } as CSSProperties}
           onKeyDown={onKey}
           data-history-list
         >
@@ -162,9 +170,20 @@ export function Filmstrip({
 const STRIP = "flex h-strip shrink-0 items-center border-t bg-card";
 /** Overflow scrolls sideways and rests on an entry's edge. Its ends fade only over the inset, which at rest holds no entry. */
 const STRIP_SCROLL = "scroll-fades-x scrollbar-none flex min-w-0 flex-1 snap-x snap-mandatory scroll-px-4 overflow-x-auto overflow-y-hidden";
-const STRIP_LIST = "flex w-max items-center gap-4 px-4";
-/** Every entry in the strip takes the one width the fit gives. */
-const ENTRY = "w-strip-entry shrink-0 snap-start";
+const STRIP_LIST = "grid w-max grid-flow-col grid-cols-strip items-center gap-4 px-4";
+/** Every entry in the strip takes the width the fit gives it, its column's. */
+const ENTRY = "min-w-0 snap-start";
+
+/** What each entry needs for its lines to read whole: its width at max-content. */
+function needs(list: HTMLElement): number[] {
+  return [...list.children].map((entry) => {
+    if (!(entry instanceof HTMLElement)) return 0;
+    entry.style.width = "max-content";
+    const need = entry.getBoundingClientRect().width;
+    entry.style.removeProperty("width");
+    return need;
+  });
+}
 
 /**
  * The strip's head, one width whatever the count says, so the first entry never moves as iterations land. While the

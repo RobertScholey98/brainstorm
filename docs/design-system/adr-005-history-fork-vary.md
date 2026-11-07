@@ -124,3 +124,7 @@ Two behaviour changes came with it:
 `verify:8` checks the rest at 1440 and 1100, the arrows, End, and a restart at 1100.
 
 The past view says "read-only" once, in the Inspector. Its comments, which belong to the latest, dim with the controls and can't be pressed (R7-8, R7-21). A new variant's mark is an accent ring and the showing one keeps the filled dot, so form tells them apart and a row can carry both (R7-9). The carries-over box in Fork takes `border-strong`, so it keeps its edge in dark (R7-16).
+
+## Amendment: round 8. Entries share the strip by what their lines need
+
+Every entry took one even share, so in round 8's shot 71 "Explain the weighting" sat in room it didn't use while the lines beside it were cut. While the entries fit, an entry whose lines need less than an even share now keeps only that, and the rest share what is left. With room past every need, the narrow ones grow first. Each stays between 180 and 380 px. Once the entries overflow they keep one width, so the arrows step by it and the strip still rests on whole entries. `stripFit` takes each entry's need, measured at max-content, and lays the entries out as grid columns. `verify:8` checks that with room for two entries their lines read whole, and that with a fork beside them no entry holds room a cut line could use. That check fails on the even share.
