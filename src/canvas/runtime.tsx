@@ -180,9 +180,19 @@ function receive(message: HostToFrame): void {
   }
 }
 
-/** Scrolls the selected frame in only as far as it takes, from wherever the selection came: a press, the shell, a resize. */
+/**
+ * Scrolls the selected frame in only as far as it takes, from wherever the selection came: a press, the shell, a
+ * resize. A frame taller or wider than the room shows from its label, 24 px off the bar, never with its label cut:
+ * scrollIntoView's "nearest" would line up its far edge instead, and leave the label tucked under the bar.
+ */
 function revealSelected(behavior: ScrollBehavior): void {
-  document.querySelector(".bs-frame[data-selected]:not([data-offstage])")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior });
+  const frame = document.querySelector(".bs-frame[data-selected]:not([data-offstage])");
+  if (frame === null) return;
+  const r = frame.getBoundingClientRect();
+  const { clientWidth, clientHeight } = document.documentElement;
+  const by = (start: number, end: number, room: number) =>
+    start < CANVAS_PAD ? start - CANVAS_PAD : end > room - CANVAS_PAD ? Math.min(end - (room - CANVAS_PAD), start - CANVAS_PAD) : 0;
+  scrollBy({ left: by(r.left, r.right, clientWidth), top: by(r.top, r.bottom, clientHeight), behavior });
 }
 
 /**

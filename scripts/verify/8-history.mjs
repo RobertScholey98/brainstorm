@@ -34,6 +34,8 @@ function replaceIn(path, from, to) {
 
 const context = (session) => must("context", brainstorm(env, ["context", session, "--json"]));
 const stripHeight = (window) => window.$eval("[data-history]", (el) => Math.round(el.getBoundingClientRect().height));
+/** The first frame label's distance below the canvas's top edge, as Rob sees it. */
+const labelOffset = (canvas) => canvas.evaluate(() => Math.round(document.querySelector(".bs-frame-title").getBoundingClientRect().top));
 const strip = (window) =>
   window.$$eval("[data-history-list] [data-history-n]", (els) =>
     els.map((e) => ({ n: Number(e.dataset.historyN), selected: e.getAttribute("aria-selected") === "true", origin: e.querySelector("[data-history-origin]").textContent.trim() })),
@@ -105,6 +107,8 @@ try {
   await window.waitForSelector("[data-past-bar]");
   await canvas.waitForFunction((sel) => document.querySelector(sel)?.textContent?.includes("Odds lean"), inBlock("wheel/neon", "pool"));
   check("clicking a still shows that iteration, read-only", [await canvasAt(window), (await pool(canvas)).includes("Odds lean")], [{ n: 1, past: 1 }, true]);
+  await window.waitForTimeout(400);
+  check("under the Viewing bar the frame's label sits 24 px below the canvas's top, as on the latest", await labelOffset(canvas), 24);
   check(
     "under a bar naming it, with Back to latest",
     [(await window.textContent("[data-past-bar]")).startsWith("Viewing iteration 1"), (await window.textContent("[data-back-to-latest]")).trim()],
@@ -164,6 +168,8 @@ try {
   // The toggle persists across a restart.
   await window.click("[data-history-toggle]");
   await window.waitForSelector("[data-history]", { state: "detached" });
+  await window.waitForTimeout(400);
+  check("once the strip folds the frame's label still sits 24 px below the canvas's top", await labelOffset(canvas), 24);
   const prefs = await window.evaluate(async () => (await fetch("/v1/ui/prefs").then((r) => r.json()).catch(() => null)));
   void prefs;
   await app.close();
