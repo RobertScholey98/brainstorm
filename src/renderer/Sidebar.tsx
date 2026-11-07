@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ExternalLink, GitBranch, LayoutGrid, Undo2 } from "lucide-react";
-import { useMemo, type KeyboardEvent, type ReactNode } from "react";
+import { useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
 import { Callout } from "@/components/ui/callout";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -27,6 +27,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { Count } from "@/components/ui/count";
 import { blockIdOf, isPendingThread, type BlockView, type ContentHash, type OpenPhase, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
 import type { PaneLimits } from "./hooks/use-pane-width";
+import { useRowFit } from "./headerAction";
 import { Mark } from "./Mark";
 import { TakeoverPhrase } from "./Regenerate";
 import { PhaseDot, SessionStatus } from "./SessionStatus";
@@ -222,9 +223,12 @@ function SessionRow({
 }) {
   const since = s.settlement.state === "settled" ? s.settlement.at : s.activeAt;
   const label = settleLabel(s);
+  const row = useRef<HTMLButtonElement>(null);
+  useRowFit(row);
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
+        ref={row}
         isActive={active}
         tone={s.settlement.state === "settled" ? "quiet" : "default"}
         onClick={onOpen}
@@ -232,7 +236,9 @@ function SessionRow({
         data-lost={s.lost || undefined}
         data-settled={s.settlement.state === "settled" || undefined}
       >
-        <Truncate className="flex-1">{s.title}</Truncate>
+        <Truncate className="flex-1" data-row-title>
+          {s.title}
+        </Truncate>
         {/* The branch mark trails the title, so a fork's title keeps its siblings' text edge. */}
         {s.fork !== null && (
           <span className="flex shrink-0 text-fg-muted" data-row-fork>
@@ -244,7 +250,7 @@ function SessionRow({
         )}
         {/* An open request says what it is waiting on and for how long, as T3 Code's thread rows do, in the age's place. */}
         <span className="flex shrink-0 text-xs font-normal text-fg-muted tabular-nums group-focus-within/menu-item:invisible group-hover/menu-item:invisible">
-          {sessionPhase(s) === null || s.settlement.state === "settled" ? <span data-age={since}>{age(since, now)}</span> : <SessionStatus session={s} now={now} />}
+          {sessionPhase(s) === null || s.settlement.state === "settled" ? <span data-age={since}>{age(since, now)}</span> : <SessionStatus session={s} now={now} collapsible />}
         </span>
       </SidebarMenuButton>
       <Hint label={label} shortcut={SETTLE_SHORTCUT} side="left">

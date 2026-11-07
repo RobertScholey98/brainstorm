@@ -31,12 +31,12 @@ export const TONE_DOT: Record<Tone, string> = {
  */
 export const PHASE: Record<RequestPhase["phase"], { readonly short: string; readonly tone: Tone; readonly live?: true }> = {
   sending: { short: "Sending", tone: "accent", live: true },
-  starting: { short: "Starting thread", tone: "accent", live: true },
-  queued: { short: "Queued in T3", tone: "muted" },
+  starting: { short: "Starting", tone: "accent", live: true },
+  queued: { short: "Queued", tone: "muted" },
   working: { short: "Agent working", tone: "accent", live: true },
   asking: { short: "Agent asking", tone: "info" },
   no_change: { short: "No change", tone: "info" },
-  previous_thread: { short: "Previous thread", tone: "warning" },
+  previous_thread: { short: "Sent to the previous thread", tone: "warning" },
   thread_lost: { short: "Thread lost", tone: "warning" },
   send_failed: { short: "Send failed", tone: "danger" },
   start_failed: { short: "Start failed", tone: "danger" },

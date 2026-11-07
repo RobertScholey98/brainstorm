@@ -521,12 +521,12 @@ describe("request phases", () => {
 
     bridge.startRun(T1, "run:2");
     await service.tick();
-    expect(await phase(service)).toEqual({ phase: "working", actions: ["open_thread", "withdraw"], message: "The agent is working" });
+    expect(await phase(service)).toEqual({ phase: "working", actions: ["open_thread", "withdraw"], message: "Agent working" });
     expect(await listed(), "a listing shows the phase the bar does").toBe("working");
 
     bridge.startRun(T1, "run:2", 1);
     await service.tick();
-    expect(await phase(service)).toEqual({ phase: "asking", actions: ["open_thread", "withdraw"], message: "The agent is asking something in T3" });
+    expect(await phase(service)).toEqual({ phase: "asking", actions: ["open_thread", "withdraw"], message: "Agent asking in T3" });
 
     bridge.endRun(T1, "failed");
     await service.tick();

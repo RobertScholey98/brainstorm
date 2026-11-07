@@ -14,8 +14,8 @@ const NOW = new Date().toISOString();
 const PHASES = {
   sending: { message: "Sending to T3…", actions: [] },
   queued: { message: "Queued in T3", actions: ["open_thread", "withdraw"] },
-  working: { message: "The agent is working", actions: ["open_thread", "withdraw"] },
-  asking: { message: "The agent is asking something in T3", actions: ["open_thread", "withdraw"] },
+  working: { message: "Agent working", actions: ["open_thread", "withdraw"] },
+  asking: { message: "Agent asking in T3", actions: ["open_thread", "withdraw"] },
   run_failed: { message: "The agent's run failed in T3", actions: ["retry", "open_thread", "withdraw"] },
   no_change: { message: "The agent replied in T3 without changing the design", actions: ["retry", "open_thread", "withdraw"] },
   send_failed: { message: "Couldn't send (T3 is not running). The request is saved.", actions: ["retry", "open_thread", "withdraw"], error: "T3 is not running" },
@@ -119,11 +119,14 @@ try {
   await window.click(`[data-session="${spare}"]`);
   await window.waitForSelector('[data-sidebar-panel="session"]');
   check(
-    "a brainstorm with no iteration yet shows no strip, and its history toggle is off and never reads pressed",
-    await window.evaluate(() => {
-      const toggle = document.querySelector("[data-history-toggle]");
-      return [document.querySelector("[data-history], [data-history-loading]") !== null, toggle.getAttribute("aria-pressed"), toggle.disabled];
-    }),
+    "once its view loads, a brainstorm with no iteration yet shows no strip, and its history toggle is off and doesn't read pressed",
+    // While the view loads, the strip's skeleton holds its place (R6-6), so only the loaded view can tell.
+    await settled(() =>
+      window.evaluate(() => {
+        const toggle = document.querySelector("[data-history-toggle]");
+        return [document.querySelector("[data-history], [data-history-loading]") !== null, toggle.getAttribute("aria-pressed"), toggle.disabled];
+      }),
+    ),
     [false, "false", true],
   );
   await window.click("[data-back]");

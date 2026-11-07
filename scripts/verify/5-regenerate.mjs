@@ -183,7 +183,7 @@ try {
   await shot(window, shots, "2-queued");
 
   t3.startRun(DEMO_THREAD);
-  check("the agent picking it up shows as working", await phase("working"), { message: "The agent is working", actions: ["open_thread", "withdraw"] });
+  check("the agent picking it up shows as working", await phase("working"), { message: "Agent working", actions: ["open_thread", "withdraw"] });
   check(
     "working's live dot sits in a 14 px halo, the optical size of the other phases' glyphs",
     await window.$eval("[data-request-phase=working] [data-phase-glyph]", (g) => Math.round(g.getBoundingClientRect().width)),
@@ -332,7 +332,7 @@ try {
   check("Open thread opens the thread's link outside the app", await app.evaluate(() => globalThis.opened), [`https://app.t3.codes/threads/fake/${DEMO_THREAD}`]);
 
   t3.startRun(DEMO_THREAD);
-  check("working", await phase("working"), { message: "The agent is working", actions: ["open_thread", "withdraw"] });
+  check("working", await phase("working"), { message: "Agent working", actions: ["open_thread", "withdraw"] });
   check("working shows progress", await window.isVisible("[data-request-phase] [data-progress]"), true);
   check(
     "the sidebar's thread row says the agent is working and for how long, in the mark home's rows use",
@@ -363,7 +363,7 @@ try {
   await openSession(window, session);
   await window.waitForSelector('[data-request-phase="working"]');
   t3.ask(DEMO_THREAD);
-  check("asking", await phase("asking"), { message: "The agent is asking something in T3", actions: ["open_thread", "withdraw"] });
+  check("asking", await phase("asking"), { message: "Agent asking in T3", actions: ["open_thread", "withdraw"] });
   check("asking shows no spinner", await window.$("[data-request-phase] [data-progress]"), null);
   at.push(await withdrawAt());
   await shot(window, shots, "4-asking");

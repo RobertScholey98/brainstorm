@@ -164,9 +164,9 @@ export function phaseMessage(phase: RequestPhase, context: { title: string; chan
     case "queued":
       return "Queued in T3";
     case "asking":
-      return "The agent is asking something in T3";
+      return "Agent asking in T3";
     case "working":
-      return "The agent is working";
+      return "Agent working";
     case "run_failed":
       return "The agent's run failed in T3";
     case "no_change":

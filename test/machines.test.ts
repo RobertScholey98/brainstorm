@@ -167,7 +167,7 @@ describe("requestPhase, one test per design.md row", () => {
     expect(seen(sent, attached, { kind: "running", pendingRequestCount: 1 })).toEqual({
       phase: "asking",
       actions: ["open_thread", "withdraw"],
-      message: "The agent is asking something in T3",
+      message: "Agent asking in T3",
     });
   });
 
@@ -175,7 +175,7 @@ describe("requestPhase, one test per design.md row", () => {
     expect(seen(sent, attached, { kind: "running", pendingRequestCount: 0 })).toEqual({
       phase: "working",
       actions: ["open_thread", "withdraw"],
-      message: "The agent is working",
+      message: "Agent working",
     });
   });
 

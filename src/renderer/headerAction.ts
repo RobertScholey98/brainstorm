@@ -25,27 +25,41 @@ function crumbFits(header: HTMLElement): boolean {
 }
 
 /**
- * Fits the header to its room. Every element marked `data-collapse` keeps its words until the breadcrumb would fall
- * under its floors; then they give way one at a time in rank order, and no more than the breadcrumb needs. It measures
- * the real row, so it holds at any window width, pane width or native-button inset, and runs before paint, so the
- * header never shows a state it then corrects.
+ * Fits a row to its room. Every element in it marked `data-collapse` keeps its words until `fits` says the row's
+ * main text has dropped under its floor; then they give way one at a time in rank order, and no more than it needs.
+ * It measures the real row, so it holds at any window width, pane width or native-button inset, and runs before
+ * paint, so the row never shows a state it then corrects.
  */
-export function useHeaderFit(ref: RefObject<HTMLElement | null>): void {
+function useFit(ref: RefObject<HTMLElement | null>, fits: (row: HTMLElement) => boolean, watch: string): void {
   useLayoutEffect(() => {
-    const header = ref.current;
-    if (header === null) return;
+    const row = ref.current;
+    if (row === null) return;
     const fit = () => {
-      const steps = [...header.querySelectorAll<HTMLElement>("[data-collapse]")].sort((a, b) => Number(a.dataset.collapse) - Number(b.dataset.collapse));
+      const steps = [...row.querySelectorAll<HTMLElement>("[data-collapse]")].sort((a, b) => Number(a.dataset.collapse) - Number(b.dataset.collapse));
       for (const step of steps) step.removeAttribute("data-collapsed");
       for (const step of steps) {
-        if (crumbFits(header)) break;
+        if (fits(row)) break;
         step.setAttribute("data-collapsed", "");
       }
     };
     fit();
     const observer = new ResizeObserver(fit);
-    observer.observe(header);
-    for (const watched of header.querySelectorAll("[data-header-actions], [data-session-title]")) observer.observe(watched);
+    observer.observe(row);
+    for (const watched of row.querySelectorAll(watch)) observer.observe(watched);
     return () => observer.disconnect();
   });
 }
+
+/** The header keeps its breadcrumb's floors, giving up its labels in `COLLAPSE` order. */
+export const useHeaderFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, crumbFits, "[data-header-actions], [data-session-title]");
+
+/** A list row's title keeps 112 px or reads whole; what the row says after it gives way first. */
+const ROW_TITLE_FLOOR = 112;
+
+const rowFits = (row: HTMLElement): boolean => {
+  const title = row.querySelector("[data-row-title]");
+  return title === null || title.clientWidth >= Math.min(title.scrollWidth, ROW_TITLE_FLOOR);
+};
+
+/** Fits a sidebar row: its status falls to the dot and the elapsed time before its title drops under its floor. */
+export const useRowFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, rowFits, "[data-row-title]");
