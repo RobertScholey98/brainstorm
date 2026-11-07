@@ -49,6 +49,14 @@ try {
     await run.window.$eval('[data-control="spinSeconds"]', (row) => Math.round(row.getBoundingClientRect().right - row.querySelector("[data-value]").getBoundingClientRect().right)),
     0,
   );
+  check(
+    "a switch row stands 22 px off the rows round it, the 16 px gap and the 6 px a slider's track keeps a side",
+    await run.window.$eval("[data-control]:has([role=switch])", (row) => {
+      const line = row.firstElementChild.getBoundingClientRect();
+      return [Math.round(line.top - row.previousElementSibling.getBoundingClientRect().bottom), Math.round(row.nextElementSibling.getBoundingClientRect().top - line.bottom)];
+    }),
+    [22, 22],
+  );
   await run.window.focus(slider);
   for (let i = 0; i < 10; i++) await run.window.keyboard.press("ArrowRight");
   check(

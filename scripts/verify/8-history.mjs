@@ -122,7 +122,11 @@ try {
   check("the past shows no pins", await canvas.$$eval(".bs-pin", (els) => els.length), 0);
   await canvas.click(inBlock("result/card", "chore"));
   await window.waitForSelector("[data-inspector-past]");
-  check("the inspector says it is the past, and its controls are inert", (await window.$("[data-controls-readonly]")) !== null, true);
+  check(
+    "the inspector says it is the past, and its controls are inert, dimmed as one, with no reset on offer",
+    await window.$eval("[data-controls-readonly]", (el) => [el.inert, getComputedStyle(el).opacity, el.querySelectorAll("[data-control-reset]").length]),
+    [true, "0.6", 0],
+  );
   check("Vary is off in the past", await window.isDisabled("[data-vary-toggle]"), true);
   await shot(window, shots, "2-past");
 

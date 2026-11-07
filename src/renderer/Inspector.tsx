@@ -219,9 +219,9 @@ function BlockControls({
     () => ({
       block,
       overridden: new Set<string>(view.overrides.applicable.filter((o) => o.blockId === block.id).map((o) => o.prop)),
-      reset: (prop: PropName) => onReset(block, prop),
+      reset: readOnly ? null : (prop: PropName) => onReset(block, prop),
     }),
-    [block, view.overrides.applicable, onReset],
+    [block, view.overrides.applicable, onReset, readOnly],
   );
   return (
     <div data-block={block.id}>

@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Segmented as SegmentedControl } from "@/components/ui/segmented";
 import { Hint } from "@/components/ui/tooltip";
+import { cn } from "cn";
 import { controlCatalog } from "../core/controls";
 import { HEX_COLOR_PATTERN } from "../core/props";
 import type { AppearanceProp, AppearanceType, AppearanceValue, BlockView, PropName } from "../core/types";
@@ -17,7 +18,8 @@ import type { AppearanceProp, AppearanceType, AppearanceValue, BlockView, PropNa
 type ControlScope = {
   readonly block: BlockView;
   readonly overridden: ReadonlySet<string>;
-  readonly reset: (prop: PropName) => void;
+  /** A past iteration's: the dot still marks an overridden row, but the row offers no reset, since history stays as it was. */
+  readonly reset: ((prop: PropName) => void) | null;
 };
 
 export const ControlScopeContext = createContext<ControlScope | null>(null);
@@ -66,16 +68,18 @@ function Row({
 }) {
   const { scope, spec, label } = bound;
   const overridden = scope.overridden.has(spec.name);
+  const { reset } = scope;
   return (
-    <div className="grid gap-1.5" data-control={spec.name} data-overridden={overridden || undefined}>
+    // An inline row, a switch on its label line, takes the slider's 6 px a side, so it keeps the stacked rows' rhythm.
+    <div className={cn("grid gap-1.5", children === undefined && "py-1.5")} data-control={spec.name} data-overridden={overridden || undefined}>
       <div className="relative flex h-6 items-center gap-1.5">
         {/* In the gutter, 6 px off the pane edge and 4 px before the label, so an overridden label keeps its edge. */}
         {overridden && <span aria-hidden className="absolute top-1/2 -left-2.5 size-1.5 -translate-y-1/2 rounded-full bg-fg" data-overridden-mark />}
         <span className="truncate text-sm" data-control-label>{label}</span>
         <span className="ml-auto flex items-center gap-1">
-          {overridden && (
+          {overridden && reset !== null && (
             <Hint label="Reset to the agent's value" side="left">
-              <Button variant="ghost" size="icon-xs" aria-label={`Reset ${label}`} onClick={() => scope.reset(spec.name)} data-control-reset>
+              <Button variant="ghost" size="icon-xs" aria-label={`Reset ${label}`} onClick={() => reset(spec.name)} data-control-reset>
                 <RotateCcw aria-hidden />
               </Button>
             </Hint>
