@@ -69,7 +69,7 @@ export function Regenerate({
   }, [gate?.ok]);
   if (gate === null || !gate.ok) {
     return (
-      <BlockedHint label={gate === null ? `Back to latest to regenerate. You are viewing iteration ${past}.` : blockedMessage(gate.reason, view.request?.request.n)} side="left" data-regenerate-blocked>
+      <BlockedHint name="Regenerate" label={gate === null ? `Back to latest first. You are viewing iteration ${past}.` : blockedMessage(gate.reason, view.request?.request.n)} side="left" data-regenerate-blocked>
         <Button variant="accent" disabled data-regenerate-toggle>
           Regenerate
         </Button>
@@ -79,7 +79,7 @@ export function Regenerate({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       {/* To the left, so it never covers the Inspector's heading under the bar. */}
-      <Hint label="Ask the agent for a new iteration" shortcut="Ctrl+R" side="left">
+      <Hint name="Regenerate" label="Ask the agent for a new iteration" shortcut="Ctrl+R" side="left">
         <PopoverTrigger render={<Button variant="accent" data-regenerate-toggle />}>Regenerate</PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="end" data-regenerate-menu>
@@ -411,7 +411,7 @@ function PhaseAction({
 function OpenThread({ view, rank }: { view: SessionView; rank: number }) {
   if (view.thread === null) return null;
   return (
-    <Hint label={`Open ${view.thread.title} in T3`} side="left">
+    <Hint name={ACTION_LABEL.open_thread} label={`${view.thread.title}, in T3`} side="left">
       <Button variant="outline" className={COMPACT} nativeButton={false} render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-collapse={rank} data-request-action="open_thread">
         <ActionLabel action="open_thread" />
       </Button>
@@ -461,7 +461,7 @@ function CopyPhrase({ title }: { title: string }) {
 /** Phase actions are full-height outline buttons, the same size as Regenerate and Export beside them. */
 function ActionButton({ action, rank, onClick }: { action: keyof typeof ACTION_HINT; rank: number; onClick: () => void }) {
   return (
-    <Hint label={ACTION_HINT[action]} side="left">
+    <Hint name={ACTION_LABEL[action]} label={ACTION_HINT[action]} side="left">
       <Button variant="outline" className={COMPACT} onClick={onClick} data-collapse={rank} data-request-action={action}>
         <ActionLabel action={action} />
       </Button>

@@ -279,6 +279,20 @@ try {
     ),
     [],
   );
+  check(
+    "and either clears the row's title or covers it from its first letter, so it never lands on a glyph",
+    await settled(() =>
+      window.evaluate((id) => {
+        const hint = document.querySelector('[data-slot="tooltip-content"]').getBoundingClientRect();
+        const title = document.querySelector(`[data-session="${id}"] [data-row-title]`);
+        const ink = document.createRange();
+        ink.selectNodeContents(title);
+        const [start, end] = [title.getBoundingClientRect().left, Math.min(title.getBoundingClientRect().right, ink.getBoundingClientRect().right)];
+        return hint.left >= end + 4 ? "clear" : Math.abs(hint.left - start) < 1 ? "covered from its start" : "on a glyph";
+      }, kitchen),
+    ).then((at) => at !== "on a glyph"),
+    true,
+  );
   await shot(window, shots, "settle-action");
   await window.click(`[data-settle="${kitchen}"]`);
   await window.waitForSelector("[data-settled-group]");

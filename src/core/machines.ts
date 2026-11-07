@@ -71,9 +71,9 @@ export function regenerateGate(state: { readonly hasIteration: boolean; readonly
 export function blockedMessage(reason: Extract<Regenerate, { ok: false }>["reason"], openRequest: RequestN | undefined): string {
   switch (reason) {
     case "no_iteration":
-      return "Regenerate needs a first iteration";
+      return "Needs a first iteration";
     case "request_open":
-      return `Withdraw request ${openRequest} to send another`;
+      return `Withdraw request ${openRequest} first`;
     case "thread_lost":
       return "This session's thread is gone. Take it over from a T3 thread first.";
   }

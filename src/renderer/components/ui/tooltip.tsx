@@ -41,14 +41,14 @@ function TooltipContent({
 }: TooltipPrimitive.Popup.Props &
   Pick<
     TooltipPrimitive.Positioner.Props,
-    "align" | "alignOffset" | "side" | "sideOffset" | "anchor"
-  > & { covers?: HintRow["text"] }) {
+    "align" | "alignOffset" | "side" | "anchor"
+  > & { sideOffset?: number | (() => number); covers?: HintRow["text"] }) {
   // A hint opening left over a line of text either clears it or covers it from its start, so no half-word peeks out.
   const cover = (popup: HTMLElement | null) => {
-    if (popup === null || covers === undefined || side !== "left" || typeof anchor !== "function" || typeof sideOffset !== "number") return
+    if (popup === null || covers === undefined || side !== "left" || typeof anchor !== "function" || typeof sideOffset !== "function") return
     const [text, row] = [covers(), anchor()]
     if (text === null || row == null) return
-    const right = row.getBoundingClientRect().left - sideOffset
+    const right = row.getBoundingClientRect().left - sideOffset()
     if (right - popup.offsetWidth >= text.end) return
     popup.style.minWidth = `${right - text.start}px`
     popup.style.justifyContent = "flex-end"
@@ -93,8 +93,16 @@ type HintRow = {
   text: () => { start: number; end: number } | null
 }
 const HintAnchor = createContext<HintRow | null>(null)
-/** Off a row, a hint stands further out than the row's 8 px gap between buttons, so it never reads as one of them. */
+/**
+ * Off a row, a hint stands further out than the row's 8 px gap between buttons, so it never reads as one of them,
+ * but no further than the text it covers ends, so none of that text shows between the hint and the row.
+ */
 const ROW_OFFSET = 12
+const rowOffset = (row: HintRow) => () => {
+  const [text, at] = [row.text(), row.anchor()]
+  if (text === null || at === null) return ROW_OFFSET
+  return Math.max(0, Math.min(ROW_OFFSET, at.getBoundingClientRect().left - text.end))
+}
 
 /**
  * A styled hint on one control, with its keyboard shortcut when it has one. The renderer uses this instead of a native
@@ -102,15 +110,18 @@ const ROW_OFFSET = 12
  *
  * Every hint names its side, so it opens off the controls it serves and off the Inspector header: a header hint opens
  * to the side, never down over the card. `npm run lint:design` checks both. `disabled` keeps it shut, for a hint that
- * would only repeat text already in full on screen.
+ * would only repeat text already in full on screen. `name` leads with the control's name, for a hint that opens off a
+ * row, away from the control it serves.
  */
 function Hint({
+  name,
   label,
   shortcut,
   side,
   disabled,
   children,
 }: {
+  name?: string
   label: ReactNode
   shortcut?: string
   side: NonNullable<TooltipPrimitive.Positioner.Props["side"]>
@@ -121,7 +132,15 @@ function Hint({
   return (
     <Tooltip disabled={disabled}>
       <TooltipTrigger render={children} />
-      <TooltipContent side={side} anchor={row?.anchor} sideOffset={row === null ? undefined : ROW_OFFSET} covers={row?.text}>
+      <TooltipContent side={side} anchor={row?.anchor} sideOffset={row === null ? undefined : rowOffset(row)} covers={row?.text}>
+        {name !== undefined && (
+          <>
+            <span className="font-medium" data-hint-name>
+              {name}
+            </span>
+            <span aria-hidden>·</span>
+          </>
+        )}
         <span>{label}</span>
         {shortcut !== undefined && <Kbd tone="inverse">{shortcut}</Kbd>}
       </TooltipContent>
@@ -136,19 +155,21 @@ function Hint({
  * or its hint opens on focus but never on hover. `npm run lint:design` fails the wrapper written by hand.
  */
 function BlockedHint({
+  name,
   label,
   side,
   className,
   children,
   ...data
 }: {
+  name?: string
   label: ReactNode
   side: NonNullable<TooltipPrimitive.Positioner.Props["side"]>
   className?: string
   children: ReactElement
 } & { [attr: `data-${string}`]: unknown }) {
   return (
-    <Hint label={label} side={side}>
+    <Hint name={name} label={label} side={side}>
       <span tabIndex={0} className={className} {...data}>
         {children}
       </span>
@@ -157,3 +178,4 @@ function BlockedHint({
 }
 
 export { BlockedHint, Hint, HintAnchor, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+export type { HintRow }

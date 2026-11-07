@@ -29,7 +29,7 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <Hint label={disabled ? "Export needs a first iteration" : "Save the current iteration, with your settings, as one HTML file"} side="left">
+      <Hint name="Export" label={disabled ? "Needs a first iteration" : "Save the current iteration, with your settings, as one HTML file"} side="left">
         <span tabIndex={disabled ? 0 : -1} className="inline-flex">
           <PopoverTrigger disabled={disabled} render={<Button variant="outline" className={COMPACT} data-collapse={COLLAPSE.export} data-export />}>
             <Download data-icon="inline-start" aria-hidden />

@@ -233,10 +233,10 @@ describe("requestPhase, one test per design.md row", () => {
   });
 });
 
-test("blockedMessage says why Regenerate is shut", () => {
+test("blockedMessage says why Regenerate is shut, after the hint's lead name", () => {
   expect([blockedMessage("no_iteration", undefined), blockedMessage("request_open", 3 as RequestN), blockedMessage("thread_lost", undefined)]).toEqual([
-    "Regenerate needs a first iteration",
-    "Withdraw request 3 to send another",
+    "Needs a first iteration",
+    "Withdraw request 3 first",
     "This session's thread is gone. Take it over from a T3 thread first.",
   ]);
 });

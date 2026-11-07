@@ -302,13 +302,18 @@ try {
         const crumb = document.querySelector("[data-topbar] nav").getBoundingClientRect();
         const end = Math.max(crumb.right, document.querySelector("[data-topbar] [data-iteration]").getBoundingClientRect().right);
         const row = (document.querySelector("[data-header-status]") ?? document.querySelector("[data-header-actions]")).getBoundingClientRect();
-        return { gap: Math.round(row.left - hint.right), text: hint.left >= end ? "clear" : Math.abs(hint.left - crumb.left) < 1 ? "covered from its start" : "cut" };
+        return {
+          offRow: Math.round(row.left - hint.right) >= 8,
+          badgeCovered: hint.right >= end - 0.5,
+          text: hint.left >= end ? "clear" : Math.abs(hint.left - crumb.left) < 1 ? "covered from its start" : "cut",
+          name: document.querySelector('[data-slot="tooltip-content"] [data-hint-name]')?.textContent,
+        };
       }),
     );
   check(
-    "the blocked Regenerate's hint stands 12 px off the row, past its 8 px button gap, and covers the breadcrumb from its start, leaving no half-word",
+    "the blocked Regenerate's hint leads with Regenerate, stands at least 8 px off the status's divider, and covers the breadcrumb and badge from start to end, leaving no half-word or sliver",
     await overText(),
-    { gap: 12, text: "covered from its start" },
+    { offRow: true, badgeCovered: true, text: "covered from its start", name: "Regenerate" },
   );
   await window.mouse.move(120, 600);
   await window.setViewportSize({ width: 1100, height: 720 });
@@ -415,9 +420,11 @@ try {
   check("previous thread", await phase("previous_thread"), { message: "Another thread took this brainstorm over. Resend sends the request to it.", actions: ["resend", "open_thread", "withdraw"] });
   await window.hover('[data-request-action="open_thread"]');
   check(
-    "after a takeover, Open thread's hint names the thread it opens",
-    await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" }).then((h) => h.textContent()),
-    "Open Takeover thread in T3",
+    "after a takeover, Open thread's hint leads with its name, then names the thread it opens",
+    await window
+      .waitForSelector('[data-slot="tooltip-content"]', { state: "visible" })
+      .then((h) => h.evaluate((el) => [el.querySelector("[data-hint-name]")?.textContent, el.lastElementChild.textContent])),
+    ["Open thread", "Takeover thread, in T3"],
   );
   await window.mouse.move(120, 600);
   await shot(window, shots, "7-previous-thread");

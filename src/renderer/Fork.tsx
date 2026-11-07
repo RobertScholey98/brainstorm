@@ -40,7 +40,7 @@ export function ForkButton({
   const label = past && iteration !== null ? `Fork iteration ${iteration.n}` : "Fork";
   if (iteration === null) {
     return (
-      <BlockedHint label="Fork needs a first iteration" side="left" data-fork-blocked>
+      <BlockedHint name="Fork" label="Needs a first iteration" side="left" data-fork-blocked>
         <Button variant="outline" disabled className={COMPACT} data-collapse={COLLAPSE.fork} data-fork-toggle>
           <GitBranch data-icon="inline-start" aria-hidden />
           <span className={COMPACT_LABEL}>Fork</span>
@@ -50,7 +50,7 @@ export function ForkButton({
   }
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint label={`Start a new brainstorm from iteration ${iteration.n}, in a new T3 thread`} side="left">
+      <Hint name={label} label={`Start a new brainstorm from iteration ${iteration.n}, in a new T3 thread`} side="left">
         <PopoverTrigger render={<Button variant="outline" className={COMPACT} data-collapse={COLLAPSE.fork} data-fork-toggle />}>
           <GitBranch data-icon="inline-start" aria-hidden />
           <span className={COMPACT_LABEL}>{label}</span>
