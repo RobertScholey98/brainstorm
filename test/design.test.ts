@@ -35,7 +35,7 @@ function paintedSurfaces(theme: (typeof THEMES)[number]): Record<string, string>
   const out: Record<string, string> = Object.fromEntries(SURFACES.map((s) => [s, c[s]!]));
   for (const [, name = "", a = "", p = "", b = ""] of designCss().matchAll(/--([\w-]+): color-mix\(in oklab, var\(--([\w-]+)\) (\d+)%, (transparent|var\(--([\w-]+)\))\)/g)) {
     const pct = Number(p) / 100;
-    if (name.startsWith("scrollbar") || name === "accent-hover" || name === "separator") continue;
+    if (name.startsWith("scrollbar") || name === "accent-hover" || name === "separator" || name.endsWith("-ink")) continue;
     if (b === "transparent") for (const base of ["app", "card"]) out[`${name} on ${base}`] = srgbOver(c[a]!, pct, c[base]!);
     else out[name] = mixOklab(c[a]!, pct, c[b.slice(6, -1)]!);
   }
@@ -169,6 +169,15 @@ describe("design tokens", () => {
       expect(faint).toEqual([]);
     });
 
+    it(`reads a destructive label at 4.5:1 or more on the selection tint, in the danger ink, in ${theme}`, () => {
+      // components/ui/button.tsx: the destructive variant takes danger-ink inside a data-tint surface.
+      const c = solidColours(theme);
+      const painted = paintedSurfaces(theme);
+      const [, p = ""] = /--danger-ink: color-mix(in oklab, var(--danger) (d+)%, var(--fg))/.exec(designCss()) ?? [];
+      expect(contrast(mixOklab(c.danger!, Number(p) / 100, c.fg!), painted["selected on card"]!)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(solidColours(theme)["danger"]!, painted["selected on card"]!)).toBeLessThan(4.5);
+    });
+
     it(`lifts a hovered row off the window, the canvas and the card in ${theme}`, () => {
       const c = solidColours(theme);
       const painted = paintedSurfaces(theme);
@@ -193,4 +202,13 @@ describe("design tokens", () => {
       expect(close).toEqual([]);
     });
   }
+});
+
+describe("the window's rules", () => {
+  it("draws the sidebar's section rules in the separator, the tone its foot rule takes, so one pane's rules read alike", () => {
+    const sidebar = readFileSync("src/renderer/components/ui/sidebar.tsx", "utf8");
+    const pane = readFileSync("src/renderer/components/ui/scroll-pane.tsx", "utf8");
+    const separator = /function SidebarSeparator[\s\S]*?className=\{cn\("([^"]*)"/.exec(sidebar)?.[1]?.split(" ").filter((c) => c.startsWith("bg-"));
+    expect([separator, /window: \{ foot: "data-more:border-(\w+)"/.exec(pane)?.[1]]).toEqual([["bg-separator"], "separator"]);
+  });
 });

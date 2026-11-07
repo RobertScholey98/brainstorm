@@ -34,9 +34,9 @@ const calloutVariants = cva("grid grid-cols-[auto_minmax(0,1fr)] items-start gap
  * request message under the top bar. `inset` sits inside a panel; `strip` runs edge to edge under a bar. Actions only
  * go in `actions`, which sit under the message, so a narrow panel keeps the message at full width. A callout that lists
  * several things, each with its own action, uses one `CalloutItem` per thing. lint:design fails a button written into
- * the message itself (`callout-actions`). `wide` is for a narrow panel such as the sidebar, where a text column beside the
- * icon would squeeze the actions: the icon opens the message's first line, so the message and the actions start on one
- * edge.
+ * the message itself (`callout-actions`). Its fill is a tint, so an outline button in it draws its edge alone, as on a
+ * selected row. `wide` is for a narrow panel such as the sidebar, where a text column beside the icon would squeeze the
+ * actions: the icon opens the message's first line, so the message and the actions start on one edge.
  */
 function Callout({
   tone,
@@ -55,7 +55,7 @@ function Callout({
 }) {
   const Icon = ICON[tone]
   return (
-    <div data-slot="callout" data-tone={tone} className={cn(calloutVariants({ tone, layout }), wide && "grid-cols-1")} {...props}>
+    <div data-slot="callout" data-tone={tone} data-tint className={cn(calloutVariants({ tone, layout }), wide && "grid-cols-1")} {...props}>
       {!wide && <Icon aria-hidden data-callout-tone className="mt-0.5 size-3.5 shrink-0" />}
       <div className={wide ? "min-w-0 text-pretty [&>:nth-child(n+3)]:mt-1" : "grid min-w-0 flex-1 gap-1 text-pretty"}>
         {wide && <Icon aria-hidden data-callout-tone className="float-left mt-0.5 mr-1.5 size-3.5" />}

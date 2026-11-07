@@ -17,7 +17,8 @@ type Option<T extends string> = { readonly value: T; readonly label: ReactNode; 
  * `itemData` names a data attribute each segment carries its value in, for tests and the capture. `fit` sizes it to its
  * labels, every segment as wide as the widest, for a two-way view switch in a bar; `fit="content"` lets each segment hug
  * its own label, so a longer set of uneven labels keeps even gaps, and holds one weight, so a press moves nothing. The
- * default fills its row like a form field.
+ * default fills its row like a form field. Inside a disabled row the chip goes and the chosen label keeps its weight, so
+ * a control that takes no input doesn't show a choice as made.
  */
 function Segmented<T extends string>({
   value,
@@ -49,7 +50,7 @@ function Segmented<T extends string>({
             value={o.value}
             {...(itemData === undefined ? {} : { [`data-${itemData}`]: o.value })}
             className={cn(
-              "min-w-0 truncate rounded-sm whitespace-nowrap px-2 text-sm text-fg-muted transition-colors outline-none select-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring data-pressed:bg-card data-pressed:text-fg data-pressed:shadow-xs data-pressed:inset-ring data-pressed:inset-ring-border-strong dark:data-pressed:bg-border-strong",
+              "min-w-0 truncate rounded-sm whitespace-nowrap px-2 text-sm text-fg-muted transition-colors outline-none select-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring data-pressed:bg-card data-pressed:text-fg data-pressed:shadow-xs data-pressed:inset-ring data-pressed:inset-ring-border-strong dark:data-pressed:bg-border-strong in-aria-disabled:data-pressed:bg-transparent in-aria-disabled:data-pressed:shadow-none in-aria-disabled:data-pressed:inset-ring-0 dark:in-aria-disabled:data-pressed:bg-transparent",
               fit === "content" ? "flex-none" : "flex-1 data-pressed:font-medium"
             )}
           >

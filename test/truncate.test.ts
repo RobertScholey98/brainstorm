@@ -6,7 +6,17 @@ const room = (n: number) => (shown: string) => Array.from(shown).length <= n;
 
 describe("cutText", () => {
   it("cuts after the last letter that fits, with the ellipsis right after it", () => {
-    expect(cutText("Chore roulette", room(8))).toBe("Chore r…");
+    expect(cutText("Chore roulette", room(10))).toBe("Chore rou…");
+  });
+
+  it("never leaves a stub of one or two letters of a word, backing up to the word before", () => {
+    expect(cutText("Onboarding a new flatmate into the rota", room(32))).toBe("Onboarding a new flatmate into…");
+    expect(cutText("right now it reads like a list", room(21))).toBe("right now it reads…");
+    expect(cutText("Chore roulette", room(9))).toBe("Chore…");
+  });
+
+  it("keeps a stub when the word is the first, since backing up would leave nothing", () => {
+    expect(cutText("Wheel", room(3))).toBe("Wh…");
   });
 
   it("never leaves the ellipsis after a space", () => {

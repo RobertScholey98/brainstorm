@@ -80,7 +80,15 @@ function Row({
         <span className="ml-auto flex items-center gap-1">
           {overridden && reset !== null && (
             <Hint label="Reset to the agent's value" side="left">
-              <Button variant="ghost" size="icon-xs" aria-label={`Reset ${label}`} onClick={() => reset(spec.name)} data-control-reset>
+              {/* Last in its row, it reaches past the line by its glyph's inset, so the glyph ends on the column edge. */}
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={trailing === undefined ? "-mr-1.5" : undefined}
+                aria-label={`Reset ${label}`}
+                onClick={() => reset(spec.name)}
+                data-control-reset
+              >
                 <RotateCcw aria-hidden />
               </Button>
             </Hint>

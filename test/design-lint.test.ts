@@ -128,6 +128,23 @@ describe("design lint", () => {
     expect(rules(`<span className="bg-inverse-fg/15 text-inverse-fg" />`, true)).toEqual([]);
   });
 
+  it("layout-transition: fails transition-all anywhere, kit included, and passes transition", () => {
+    expect(rules(`const v = cva("inline-flex transition-all outline-none");
+<span className="hover:transition-all" />`, true)).toEqual([
+      { rule: "layout-transition", line: 1, text: "transition-all" },
+      { rule: "layout-transition", line: 2, text: "hover:transition-all" },
+    ]);
+    expect(rules(`const v = cva("inline-flex transition outline-none transition-opacity");`, true)).toEqual([]);
+  });
+
+  it("tint-mark: fails a status or selection fill without data-tint, and passes one marked or only hovered", () => {
+    expect(rules(`<div className="flex bg-info-subtle">\n  <li className={cn("p-2", on && "bg-selected")} />\n</div>`)).toEqual([
+      { rule: "tint-mark", line: 1, text: "<div> bg-info-subtle" },
+      { rule: "tint-mark", line: 2, text: "<li> bg-selected" },
+    ]);
+    expect(rules(`<div className="bg-warning-subtle" data-tint>\n  <li className={cn("hover:bg-selected", on && "bg-selected")} data-tint={on || undefined} />\n</div>`)).toEqual([]);
+  });
+
   it("prose-wrap: fails balanced wrapping on any copy, kit included", () => {
     expect(rules(`<p className="text-sm text-balance">x</p>
 const v = cva("md:text-balance");`, true)).toEqual([

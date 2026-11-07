@@ -2,12 +2,16 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 import { chip } from "@/components/ui/chip"
 
-/** `start` is for a message on a left-aligned page, such as home's, which starts on the page's edge as its heading does. */
-function Empty({ className, align = "center", ...props }: React.ComponentProps<"div"> & { align?: "center" | "start" }) {
+/**
+ * `start` is for a message on a left-aligned page, such as home's, which starts on the page's edge as its heading does.
+ * `danger` is for a failure: its title takes the danger tone over a reason in fg, as a Callout and a toast state one.
+ */
+function Empty({ className, align = "center", tone, ...props }: React.ComponentProps<"div"> & { align?: "center" | "start"; tone?: "danger" }) {
   return (
     <div
       data-slot="empty"
       data-align={align}
+      data-tone={tone}
       className={cn(
         "group/empty flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl border-dashed p-6 text-center text-pretty data-[align=start]:items-start data-[align=start]:px-0 data-[align=start]:text-left",
         className
@@ -62,7 +66,7 @@ function EmptyTitle({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="empty-title"
       className={cn(
-        "text-sm font-medium tracking-tight",
+        "text-sm font-medium tracking-tight group-data-[tone=danger]/empty:text-danger",
         className
       )}
       {...props}
@@ -75,7 +79,7 @@ function EmptyDescription({ className, ...props }: React.ComponentProps<"p">) {
     <div
       data-slot="empty-description"
       className={cn(
-        "text-sm/relaxed text-fg-muted [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-fg",
+        "text-sm/relaxed text-fg-muted group-data-[tone=danger]/empty:text-fg [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-fg",
         className
       )}
       {...props}

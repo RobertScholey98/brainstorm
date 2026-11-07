@@ -84,8 +84,8 @@ function offScale(utility, compiled) {
 
 function focusRing(variants, utility) {
   if (!RING_COLOUR.test(utility)) return null;
-  if (/^(?:ring|outline)-ring\//.test(utility)) return "the focus ring token takes no opacity; a diluted ring falls under 3:1";
-  if (/focus/.test(variants) && !/^(?:ring|outline)-ring$/.test(utility)) return "focus rings are ring-ring, the one focus colour";
+  if (/^(?:ring|inset-ring|outline)-ring\//.test(utility)) return "the focus ring token takes no opacity; a diluted ring falls under 3:1";
+  if (/focus/.test(variants) && !/^(?:ring|inset-ring|outline)-ring$/.test(utility)) return "focus rings are ring-ring, the one focus colour";
   return null;
 }
 
@@ -114,12 +114,13 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
       const why2 = focusRing(splitClass(token).variants, utility);
       if (why2 !== null) problems.push({ rule: "focus-ring", line: lit.line, text: token, message: why2 });
       if (!kit && PAGE_TITLE.test(utility)) problems.push({ rule: "page-title", line: lit.line, text: token, message: "a page heading is the kit's PageHeader, the one user of the title step" });
+      if (utility === "transition-all") problems.push({ rule: "layout-transition", line: lit.line, text: token, message: "transition-all eases padding and size, which the header and row fits read mid-flight; transition leaves layout alone" });
       if (utility === "text-balance") problems.push({ rule: "prose-wrap", line: lit.line, text: token, message: "copy wraps pretty, the base layer's rule; balance strands a clause's first word" });
       if (INVERSE_FILL.test(utility)) problems.push({ rule: "inverse-fill", line: lit.line, text: token, message: "inverse is the tooltip surface; fill a control with the accent or not at all" });
       if (FLOATING.has(utility)) problems.push({ rule: "surface-recipe", line: lit.line, text: token, message: "floating surfaces come from overlaySurface in components/ui/overlay.ts" });
     });
   }
-  problems.push(...chipRecipe(source, lits), ...frameSandbox(source), ...fieldFill(source));
+  problems.push(...chipRecipe(source, lits), ...frameSandbox(source), ...fieldFill(source), ...tintMark(source, lits));
   if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source), ...dismissGhost(source), ...rawPart(source), ...blockedHint(source), ...truncateText(source, lits), ...countBadge(source));
   return problems.sort((a, b) => a.line - b.line);
 }
@@ -175,6 +176,22 @@ function chipRecipe(source, lits) {
         .flatMap((l) => l.text.split(/\s+/))
         .filter((token) => /^bg-/.test(splitClass(token).utility))
         .map((token) => ({ rule: "chip-recipe", line: attr.line, text: `<${el.tag}> ${token}`, message: "take the chip recipe: Code, Kbd, Badge or chip from components/ui/chip.ts" })),
+    );
+}
+
+const TINT = /^bg-(?:danger|warning|info|success)-subtle$|^bg-selected$/;
+
+/** A surface filled with a status or selection tint says so with `data-tint`, so an outline button on it drops the card fill. */
+function tintMark(source, lits) {
+  return jsxElements(source)
+    .filter((el) => !el.attrs.some((a) => a.name === "data-tint"))
+    .flatMap((el) => el.attrs.filter((a) => a.name === "className").map((attr) => ({ el, attr })))
+    .flatMap(({ el, attr }) =>
+      lits
+        .filter((l) => l.start >= attr.start && l.end <= attr.end)
+        .flatMap((l) => l.text.split(/\s+/))
+        .filter((token) => splitClass(token).variants === "" && TINT.test(splitClass(token).utility))
+        .map((token) => ({ rule: "tint-mark", line: attr.line, text: `<${el.tag}> ${token}`, message: "a tinted surface carries data-tint, so the outline buttons on it draw their edge alone" })),
     );
 }
 

@@ -30,6 +30,7 @@
   --warning-subtle: color-mix(in oklab, var(--warning) 12%, var(--card));
   --danger-subtle: color-mix(in oklab, var(--danger) 12%, var(--card));
   --info-subtle: color-mix(in oklab, var(--info) 12%, var(--card));
+  --danger-ink: color-mix(in oklab, var(--danger) 80%, var(--fg));
   --separator: color-mix(in oklab, var(--fg-muted) 40%, transparent);
   --scrollbar-thumb: color-mix(in oklab, var(--fg) 22%, transparent);
   --scrollbar-thumb-hover: color-mix(in oklab, var(--fg) 36%, transparent);

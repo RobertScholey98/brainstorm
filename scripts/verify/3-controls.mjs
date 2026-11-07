@@ -57,6 +57,21 @@ try {
     }),
     [22, 22],
   );
+  for (const theme of ["light", "dark"]) {
+    await run.window.emulateMedia({ colorScheme: theme });
+    check(
+      `in ${theme}, a slider's unfilled track takes the strong edge every other control draws, and its filled run stands off it`,
+      await run.window.$eval('[data-control="spinSeconds"]', (row) => {
+        const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "background: var(--border-strong)" }));
+        const strong = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        const [track, range] = [row.querySelector("[data-slot=slider-track]"), row.querySelector("[data-slot=slider-range]")].map((el) => getComputedStyle(el).backgroundColor);
+        return [track === strong, range !== track];
+      }),
+      [true, true],
+    );
+  }
+  await run.window.emulateMedia({ colorScheme: "light" });
   await run.window.focus(slider);
   for (let i = 0; i < 10; i++) await run.window.keyboard.press("ArrowRight");
   check(
@@ -98,6 +113,11 @@ try {
     ),
     [true, true],
   );
+  check(
+    "its options are 28 px rows, the height of the trigger and every control beside it",
+    await settled(() => run.window.$$eval("[data-slot=select-item]", (rows) => [...new Set(rows.map((r) => Math.round(r.getBoundingClientRect().height)))])),
+    [28],
+  );
   await run.window.keyboard.press("Escape");
   await run.window.waitForSelector('[data-slot="select-trigger"]:not([data-popup-open])');
   await run.window.click(hex);
@@ -109,21 +129,33 @@ try {
   valueAt.push(await valueRight());
   check("a slider's value keeps its right edge once it is overridden", new Set(valueAt).size, 1);
   check(
-    "each overridden row opens its reset just before the row's end, which keeps the column edge, and its dot 6 px off the pane edge",
+    "each overridden row opens its reset just before the row's end, its last ink on the column edge, a value's or the reset glyph's, and its dot 6 px off the pane edge",
     await run.window.evaluate(() => {
       const aside = document.querySelector("aside[aria-label=Inspector]");
       const pane = { left: aside.getBoundingClientRect().left + aside.clientLeft };
       const rows = [...document.querySelectorAll("[data-control][data-overridden]")];
+      // A glyph's ink is its paths' box and half their stroke, scaled from the view box; a value's is its text's.
+      const ink = (el) => {
+        const svg = el.matches("svg") ? el : el.querySelector("svg");
+        if (svg === null) {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          return range.getBoundingClientRect().right;
+        }
+        const box = svg.getBBox();
+        const scale = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+        return svg.getBoundingClientRect().left + (box.x + box.width + parseFloat(getComputedStyle(svg).strokeWidth) / 2) * scale;
+      };
       return {
         ends: rows.map((r) => {
           const line = r.firstElementChild.getBoundingClientRect();
-          const end = r.firstElementChild.lastElementChild.lastElementChild.getBoundingClientRect();
-          return [Math.round(line.right - end.right), r.querySelector("[data-control-reset]").getBoundingClientRect().right <= end.right];
+          const end = r.firstElementChild.lastElementChild.lastElementChild;
+          return [Math.abs(line.right - ink(end)) <= 1, r.querySelector("[data-control-reset]").getBoundingClientRect().right <= end.getBoundingClientRect().right];
         }),
         dots: rows.map((r) => Math.round(r.querySelector("[data-overridden-mark]").getBoundingClientRect().left - pane.left)),
       };
     }),
-    { ends: [[0, true], [0, true]], dots: [6, 6] },
+    { ends: [[true, true], [true, true]], dots: [6, 6] },
   );
   const adjusted = {
     panel: { spinSeconds: "3.4", accent: "#00f0ff" },
@@ -182,6 +214,19 @@ try {
     await run.window.$eval('[data-override="wheel/neon:accent"] button', (b) => b.getBoundingClientRect().height),
     28,
   );
+  for (const theme of ["light", "dark"]) {
+    await run.window.emulateMedia({ colorScheme: theme });
+    await run.window.mouse.move(700, 10);
+    await run.window.waitForTimeout(250);
+    check(
+      `in ${theme}, the banner's Dismiss drops the card fill on the callout's tint, so its edge alone draws it, as on a selected comment`,
+      await run.window.$$eval("[data-slot=callout] [data-slot=button]", (buttons) =>
+        buttons.filter((b) => getComputedStyle(b).borderTopColor !== "rgba(0, 0, 0, 0)").map((b) => [b.textContent.trim(), getComputedStyle(b).backgroundColor]),
+      ),
+      [["Dismiss", "rgba(0, 0, 0, 0)"]],
+    );
+  }
+  await run.window.emulateMedia({ colorScheme: "light" });
   check("the slider's value still applies", await run.window.getAttribute(slider, "aria-valuenow"), "3.4");
   check("the panel no longer has an accent control", await run.window.isVisible(hex), false);
   await shot(run.window, shots, "4-dropped");
