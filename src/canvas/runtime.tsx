@@ -201,15 +201,18 @@ const REVEAL_MARGIN = 12;
 /**
  * Brings `target` into view by the least it takes, and never leaves its frame's label cut by the bar. A target already
  * in view moves nothing. When the move would leave the label half under the bar, the label sits 24 px under it, as on
- * a fresh stage, or, when the target lies too far down a tall frame to show beside it, wholly out of view.
+ * a fresh stage, or, when the target lies too far down a tall frame to show beside it, wholly out of view with the
+ * frame's top edge.
  */
 function revealInFrame(target: Element, behavior: ScrollBehavior): void {
   const t = target.getBoundingClientRect();
   const room = document.documentElement.clientHeight;
   let by = t.top < REVEAL_MARGIN ? t.top - REVEAL_MARGIN : t.bottom > room - REVEAL_MARGIN ? t.bottom - (room - REVEAL_MARGIN) : 0;
   if (by === 0) return;
-  const label = target.closest(".bs-frame")?.querySelector(".bs-frame-title")?.getBoundingClientRect();
-  if (label !== undefined && label.bottom - by > 0 && label.top - by < CANVAS_PAD) by = by < 0 ? label.top - CANVAS_PAD : Math.max(by, label.bottom);
+  const frame = target.closest(".bs-frame");
+  const label = frame?.querySelector(".bs-frame-title")?.getBoundingClientRect();
+  const top = frame?.querySelector(".bs-frame-body")?.getBoundingClientRect().top;
+  if (label !== undefined && top !== undefined && top - by > 0 && label.top - by < CANVAS_PAD) by = by < 0 ? label.top - CANVAS_PAD : Math.max(by, top);
   scrollBy({ top: by, behavior });
 }
 
@@ -222,6 +225,7 @@ const gutter = (f: CanvasFrame) => (state.scrolling.has(f.slot) ? SCROLLBAR : 0)
 function measureScrolling(): void {
   const scrolling = new Set<string>();
   for (const body of document.querySelectorAll<HTMLElement>(".bs-frame-body[data-height]")) {
+    paintGutter(body);
     const slot = body.closest<HTMLElement>(".bs-frame")?.dataset.slot;
     // Under a zoom the heights round at the zoomed size, so a block that exactly fills its frame can read a pixel
     // over. Counting that pixel added the gutter, which moved the zoom and the rounding: two resting fits (R6-68).
@@ -231,6 +235,19 @@ function measureScrolling(): void {
   setState({ scrolling });
   fitCanvas();
 }
+
+/**
+ * A scrolling frame's gutter takes its block's own background, so a dark block isn't edged with a pale stripe. A block
+ * with no background of its own sits on the frame's card, which the gutter then keeps.
+ */
+function paintGutter(body: HTMLElement): void {
+  const root = body.querySelector(":scope > [data-bid] > *");
+  const fill = root === null ? "rgba(0, 0, 0, 0)" : getComputedStyle(root).backgroundColor;
+  if (fill === "rgba(0, 0, 0, 0)") body.style.removeProperty("--bs-gutter");
+  else body.style.setProperty("--bs-gutter", fill);
+}
+
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => requestAnimationFrame(measureScrolling));
 
 // A block's height changes with its content as well as its DOM, so each block root is watched for size too.
 const blockSizes = new ResizeObserver(measureScrolling);
@@ -682,8 +699,8 @@ body {
 .bs-frame-body:has(> .bs-failure) { height: auto !important; }
 .bs-frame-body[data-scrolls] { overflow-y: scroll; }
 .bs-frame-body::-webkit-scrollbar { width: calc(var(--bs-scrollbar) * var(--bs-unzoom, 1)); }
-/* The gutter a scrolling frame adds outside its width is the scrollbar's track, not more page. */
-.bs-frame-body[data-scrolls]::-webkit-scrollbar { background: var(--bs-muted); }
+/* The gutter a scrolling frame adds outside its width is the scrollbar's track, in its block's own fill. */
+.bs-frame-body[data-scrolls]::-webkit-scrollbar { background: var(--bs-gutter, var(--bs-card)); }
 .bs-failure {
   display: flex; align-items: flex-start; gap: 8px; margin: 16px; padding: 12px; border-radius: 8px;
   color: var(--bs-fg); background: var(--bs-danger-subtle);

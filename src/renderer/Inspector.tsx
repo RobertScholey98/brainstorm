@@ -247,7 +247,11 @@ function BlockControls({
   );
 }
 
-/** `shown` is the block the Inspector's header names, whose own settings need no "On <block>" to say where they were. */
+/**
+ * Rob's settings the latest iteration can't take. Each is kept, since one that fits again applies again, so the heading says
+ * that once and each item says why. `shown` is the block the Inspector's header names, whose own settings need no
+ * "On <block>" to say where they were.
+ */
 function Inapplicable({
   items,
   blocks,
@@ -261,7 +265,7 @@ function Inapplicable({
 }) {
   return (
     <section aria-label="Settings that no longer apply" className="pt-3" data-banner="inapplicable">
-      <Callout tone="warning" role="status" heading={items.length === 1 ? "A setting no longer applies" : `${items.length} settings no longer apply`}>
+      <Callout tone="warning" role="status" heading={items.length === 1 ? "A setting is kept but not applied" : `${items.length} settings are kept but not applied`}>
         <ul className="grid gap-2">
           {items.map((item) => {
             const { override: o, reason } = item;

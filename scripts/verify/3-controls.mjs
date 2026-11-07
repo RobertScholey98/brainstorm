@@ -173,6 +173,11 @@ try {
     ["Accent: #00F0FF The block no longer has this setting. Dismiss", "400"],
   );
   check(
+    "its heading says what became of the value, kept but not applied, so it doesn't repeat the item's reason",
+    (await run.window.textContent('[data-banner="inapplicable"] p[data-callout-tone]'))?.trim(),
+    "A setting is kept but not applied",
+  );
+  check(
     "the banner's Dismiss is the 28 px control height of every button beside it",
     await run.window.$eval('[data-override="wheel/neon:accent"] button', (b) => b.getBoundingClientRect().height),
     28,

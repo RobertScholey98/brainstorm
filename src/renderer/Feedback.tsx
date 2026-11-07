@@ -198,6 +198,7 @@ function FeedbackItem({
       data-place={place}
       data-focused={focused || undefined}
       data-echoed={echoed || undefined}
+      data-tint={focused || echoed || undefined}
       onPointerEnter={() => onHover(f.id)}
       onPointerLeave={() => onHover(null)}
       className="group relative -mx-1 rounded-lg px-1 py-2 hover:bg-hover/60 data-[echoed]:bg-hover/60 data-[focused]:bg-selected scrolling:mr-1"

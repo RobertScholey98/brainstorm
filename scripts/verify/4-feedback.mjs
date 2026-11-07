@@ -120,6 +120,29 @@ try {
     }),
     [true, true, [true, true]],
   );
+  // A pin a few px past the fold while the label sits just under the bar: the least move would hide the label but
+  // leave the frame's top edge a few px under the bar, doubling its rule.
+  const geometry = () =>
+    canvas.evaluate(() => {
+      const frame = document.querySelector(".bs-frame[data-slot=wheel]");
+      return {
+        label: frame.querySelector(".bs-frame-title").getBoundingClientRect().top + scrollY,
+        edge: frame.querySelector(".bs-frame-body").getBoundingClientRect().top + scrollY,
+        pin: document.querySelector('.bs-pin[data-pin="2"]').getBoundingClientRect().bottom + scrollY,
+        room: innerHeight,
+      };
+    });
+  const at640 = await geometry();
+  const height = 640 + Math.round(at640.pin - at640.label + 17 - at640.room);
+  await window.setViewportSize({ width: 1440, height });
+  const near = await geometry();
+  await canvas.evaluate((s) => scrollTo(0, s), Math.round(near.pin - (near.room - 12) - 7));
+  await window.click('[data-feedback="2"] [data-feedback-text]');
+  check(
+    "and a reveal that hides the label takes the frame's top edge with it, never leaving that edge a few px under the bar",
+    await settled(() => canvas.evaluate(() => Math.round(document.querySelector(".bs-frame[data-slot=wheel] .bs-frame-body").getBoundingClientRect().top))).then((top) => [near.label - near.edge < 0, top <= 0 || top >= 24]),
+    [true, true],
+  );
   await window.setViewportSize({ width: 1440, height: 900 });
   await canvas.evaluate(() => scrollTo(0, 0));
   await window.click('[data-slot-id="wheel"] [data-variant="reel"]');
@@ -302,6 +325,39 @@ try {
       }),
     );
   check("the focused comment's fill stands 12 px clear of the Inspector's edge on both sides", await fillAir(), { scrolls: false, air: [12, 12] });
+  // Any bordered button whose surface is a selection or hover tint, not only the comment's, so a new tinted row can't punch the card fill back in.
+  const keysOnTint = () =>
+    window.evaluate(() => {
+      const colour = (value) => {
+        const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: `background: ${value}` }));
+        const c = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return c;
+      };
+      const tints = new Set([colour("var(--selected)"), colour("var(--hover)"), colour("color-mix(in oklab, var(--hover) 60%, transparent)")]);
+      const surface = (el) => {
+        for (el = el.parentElement; el !== null; el = el.parentElement) {
+          const fill = getComputedStyle(el).backgroundColor;
+          if (fill !== "rgba(0, 0, 0, 0)") return fill;
+        }
+        return null;
+      };
+      return [...document.querySelectorAll("[data-slot=button]")]
+        .filter((b) => b.getClientRects().length > 0 && getComputedStyle(b).borderTopColor !== "rgba(0, 0, 0, 0)" && tints.has(surface(b)))
+        .map((b) => [b.textContent.trim(), getComputedStyle(b).backgroundColor]);
+    });
+  for (const theme of ["light", "dark"]) {
+    await window.emulateMedia({ colorScheme: theme });
+    await window.mouse.move(700, 10);
+    await window.waitForTimeout(250);
+    const keys = await keysOnTint();
+    check(
+      `in ${theme}, a bordered button on the focused comment's tint drops the card fill, so its edge alone draws it, as the card's settle button does`,
+      [keys.length > 0, keys.filter(([, fill]) => fill !== "rgba(0, 0, 0, 0)")],
+      [true, []],
+    );
+  }
+  await window.emulateMedia({ colorScheme: "light" });
   await window.setViewportSize({ width: 1440, height: 560 });
   check("and 12 px clear of the scrollbar's thumb once the Inspector scrolls", await fillAir(), { scrolls: true, air: [12, 12] });
   await window.setViewportSize({ width: 1440, height: 900 });

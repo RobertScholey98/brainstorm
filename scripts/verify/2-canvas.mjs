@@ -1,7 +1,7 @@
 import { cpSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";
-import { build, canvasFrame, checks, inBlock, launch, settled, showBoard, shot, workspace } from "./electron.mjs";
+import { build, canvasFrame, checks, inBlock, launch, pixels, settled, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-2");
@@ -224,6 +224,23 @@ try {
       { zoomed: true, layout: 390, bar: 10, overflows: true },
     ],
   );
+  for (const theme of ["light", "dark"]) {
+    await window.emulateMedia({ colorScheme: theme });
+    await window.waitForTimeout(300);
+    const spot = await canvas.$eval('.bs-frame[data-slot="wheel"] .bs-frame-body', (body) => {
+      const r = body.getBoundingClientRect();
+      const fill = getComputedStyle(body.querySelector(":scope > [data-bid] > *")).backgroundColor;
+      return { x: r.right - 1, y: r.top + 100, fill: fill.match(/\d+/g).slice(0, 3).map(Number) };
+    });
+    const frame = await window.$eval("iframe[title=Canvas]", (f) => f.getBoundingClientRect().toJSON());
+    const [[painted]] = await pixels(app, window, { x: Math.round(frame.left + spot.x), y: Math.round(frame.top + spot.y), width: 1, height: 2 });
+    check(
+      `in ${theme}, a scrolling frame's gutter takes its block's own fill, so a dark block has no pale stripe down its side`,
+      painted.every((c, i) => Math.abs(c - spot.fill[i]) <= 3),
+      true,
+    );
+  }
+  await window.emulateMedia({ colorScheme: "light" });
   await canvas.evaluate(() => document.getElementById("verify-grow").remove());
   check("and once it fits again, the frame keeps its declared width with no gutter", (await wheelFrame()).bar, 0);
 
