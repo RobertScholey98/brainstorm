@@ -9,7 +9,7 @@ function Empty({ className, align = "center", ...props }: React.ComponentProps<"
       data-slot="empty"
       data-align={align}
       className={cn(
-        "group/empty flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl border-dashed p-6 text-center text-balance data-[align=start]:items-start data-[align=start]:px-0 data-[align=start]:text-left",
+        "group/empty flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl border-dashed p-6 text-center text-pretty data-[align=start]:items-start data-[align=start]:px-0 data-[align=start]:text-left",
         className
       )}
       {...props}
@@ -88,7 +88,7 @@ function EmptyContent({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="empty-content"
       className={cn(
-        "flex w-full max-w-sm min-w-0 flex-col items-center gap-2 text-sm text-balance group-data-[align=start]/empty:items-start",
+        "flex w-full max-w-sm min-w-0 flex-col items-center gap-2 text-sm text-pretty group-data-[align=start]/empty:items-start",
         className
       )}
       {...props}

@@ -31,6 +31,8 @@
 //                    letter, never after a space or a comma
 //   count-badge      a count in a Badge, outside components/ui; a count is the kit's Count, a muted numeral after its
 //                    label, and a Badge is a label such as the iteration
+//   prose-wrap       balanced wrapping, kit included; it evens a short sentence into two short lines and strands a
+//                    clause's first word at a line end, so copy wraps pretty, as the base layer sets on p
 //   frame-sandbox    an iframe anywhere in the renderer that isn't the canvas's: its src must be /canvas or
 //                    /canvas/preview and its sandbox exactly "allow-scripts", so agent code always runs in an opaque
 //                    origin under the canvas CSP, a home preview included
@@ -112,6 +114,7 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
       const why2 = focusRing(splitClass(token).variants, utility);
       if (why2 !== null) problems.push({ rule: "focus-ring", line: lit.line, text: token, message: why2 });
       if (!kit && PAGE_TITLE.test(utility)) problems.push({ rule: "page-title", line: lit.line, text: token, message: "a page heading is the kit's PageHeader, the one user of the title step" });
+      if (utility === "text-balance") problems.push({ rule: "prose-wrap", line: lit.line, text: token, message: "copy wraps pretty, the base layer's rule; balance strands a clause's first word" });
       if (INVERSE_FILL.test(utility)) problems.push({ rule: "inverse-fill", line: lit.line, text: token, message: "inverse is the tooltip surface; fill a control with the accent or not at all" });
       if (FLOATING.has(utility)) problems.push({ rule: "surface-recipe", line: lit.line, text: token, message: "floating surfaces come from overlaySurface in components/ui/overlay.ts" });
     });

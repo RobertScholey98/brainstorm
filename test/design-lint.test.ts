@@ -128,6 +128,15 @@ describe("design lint", () => {
     expect(rules(`<span className="bg-inverse-fg/15 text-inverse-fg" />`, true)).toEqual([]);
   });
 
+  it("prose-wrap: fails balanced wrapping on any copy, kit included", () => {
+    expect(rules(`<p className="text-sm text-balance">x</p>
+const v = cva("md:text-balance");`, true)).toEqual([
+      { rule: "prose-wrap", line: 1, text: "text-balance" },
+      { rule: "prose-wrap", line: 2, text: "md:text-balance" },
+    ]);
+    expect(rules(`<p className="text-sm text-pretty">x</p>`, true)).toEqual([]);
+  });
+
   it("chip-recipe: fails a code or key element that paints its own fill, kit included", () => {
     const source = [`<code className="rounded-md bg-muted px-1">x</code>`, `<kbd className={cn("bg-card", size)}>K</kbd>`, `<code className={cn(chip, "px-1")}>y</code>`, `<span className="bg-muted" />`].join("\n");
     expect(rules(source, true)).toEqual([

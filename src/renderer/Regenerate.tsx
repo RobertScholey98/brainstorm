@@ -429,7 +429,7 @@ export function TakeoverPhrase({ title }: { title: string }) {
   const at = phrase.indexOf('"');
   return (
     <>
-      <p className={cn(chip, "rounded-sm px-1.5 py-1.5 font-mono text-xs text-balance text-fg select-all")} data-takeover-phrase>
+      <p className={cn(chip, "rounded-sm px-1.5 py-1.5 font-mono text-xs text-pretty text-fg select-all")} data-takeover-phrase>
         {phrase.slice(0, at)}
         <span className={title.length <= 24 ? "whitespace-nowrap" : undefined}>{phrase.slice(at)}</span>
       </p>
