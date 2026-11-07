@@ -220,6 +220,8 @@ function OverviewCard({
   onSettle: () => void;
 }) {
   const brief = markdownText(s.brief).trim();
+  // With nothing under its title, the title takes that line's room, so a long one wraps to a second line rather than cut beside a blank.
+  const lone = s.fork === null && brief === "";
   const settledAt = s.settlement.state === "settled" ? s.settlement.at : null;
   const label = settleLabel(s);
   return (
@@ -254,13 +256,27 @@ function OverviewCard({
           className={cn(
             "flex min-w-0 text-left text-base font-semibold outline-none after:absolute after:inset-0 after:rounded-lg",
             settledAt !== null && "text-fg-muted",
+            lone && "grid *:col-start-1 *:row-start-1",
           )}
           data-card-open
         >
-          <Truncate>{s.title}</Truncate>
+          {lone ? (
+            <>
+              {/* Holds the title's line and the brief's, so this card stays the height of the rest. */}
+              <span aria-hidden className="invisible flex flex-col gap-1.5">
+                <span className="h-5" />
+                <span className="h-4.5" />
+              </span>
+              <span className="line-clamp-2 self-start text-pretty" data-card-title-wraps>
+                {s.title}
+              </span>
+            </>
+          ) : (
+            <Truncate>{s.title}</Truncate>
+          )}
         </button>
         {/* Forks sit flat among the rest, so each says where it came from, in place of the brief it shares with its parent. */}
-        {s.fork !== null ? (
+        {lone ? null : s.fork !== null ? (
           <span className="flex h-4.5 min-w-0 items-center gap-1 text-sm text-fg-muted" data-fork-of={s.fork.from}>
             <GitBranch aria-hidden className="size-3.5 shrink-0" />
             <Truncate>{`Fork of ${s.fork.parentTitle} · iteration ${s.fork.from}`}</Truncate>

@@ -161,6 +161,15 @@ try {
     await window.$$eval("[data-overview-session]", (cards) => new Set(cards.map((c) => Math.round(c.getBoundingClientRect().height))).size),
     1,
   );
+  check(
+    "a card with no brief and no fork gives its title the brief's room, two 20 px lines in 44 px, so a long title wraps instead of cutting beside a blank",
+    await window.$$eval("[data-card-title-wraps]", (titles) => [
+      titles.length > 0,
+      [...new Set(titles.map((t) => Math.round(t.closest("button").getBoundingClientRect().height)))],
+      getComputedStyle(titles[0]).webkitLineClamp,
+    ]),
+    [true, [44], "2"],
+  );
   check("the overview is the active row in the sidebar", (await window.$("[data-overview][data-active]")) !== null, true);
   check(
     "one gutter rule: a sidebar row's fill and the overview's cards sit as far off both edges of their pane",
