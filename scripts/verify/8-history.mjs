@@ -166,6 +166,17 @@ try {
     [true, "0.6", 0],
   );
   check(
+    "an on switch there fills muted, not in the live accent",
+    await window.$eval("[data-controls-readonly]", (el) => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--fg-muted)" }));
+      const muted = getComputedStyle(probe).color;
+      probe.remove();
+      const on = [...el.querySelectorAll("[data-slot=switch][data-checked]")];
+      return [on.length > 0, on.every((s) => getComputedStyle(s).backgroundColor === muted)];
+    }),
+    [true, true],
+  );
+  check(
     "the comments, the latest's, read dimmed as the controls do, and their Edit and Delete can't be pressed, nor a comment opened",
     await window.$$eval("[data-feedback]", (items) =>
       items.map((li) => [li.closest("[inert]") !== null, getComputedStyle(li.closest("[data-group]")).opacity, li.querySelectorAll("[data-feedback-action]").length > 0]),
