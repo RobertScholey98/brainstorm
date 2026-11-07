@@ -1,5 +1,6 @@
 import { MessageSquarePlus, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { flushSync } from "react-dom";
 import { partLabel } from "../core/fork";
 import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, CanvasRect, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
@@ -209,14 +210,15 @@ function FeedbackItem({
           )}
           {!editing && (
             <>
-              {/* Out into the canvas, off the item's status and actions, and only when the line is cut. */}
-              <Hint label={where} side="left" disabled={!metaCut}>
+              {/* Out into the canvas, off the item's status and actions, and only when the line is cut. While Delete asks, the line asks the question, so it reads before its answers. */}
+              <Hint label={where} side="left" disabled={!metaCut || confirming}>
                 <p
-                  className="truncate pt-1 text-xs/snug text-fg-muted"
+                  className={cn("truncate pt-1 text-xs/snug", confirming ? "text-fg" : "text-fg-muted")}
                   onPointerEnter={(e) => setMetaCut(e.currentTarget.scrollWidth > e.currentTarget.clientWidth)}
                   data-feedback-meta
+                  data-feedback-question={confirming || undefined}
                 >
-                  {where}
+                  {confirming ? "Delete this comment?" : where}
                 </p>
               </Hint>
               {line !== null && (
@@ -233,8 +235,8 @@ function FeedbackItem({
                 <DeleteConfirm
                   onDelete={() => void send({ kind: "delete_feedback", id: f.id })}
                   onCancel={() => {
-                    setConfirming(false);
-                    requestAnimationFrame(() => item.current?.querySelector<HTMLElement>('[data-feedback-action="delete"]')?.focus());
+                    flushSync(() => setConfirming(false));
+                    item.current?.querySelector<HTMLElement>('[data-feedback-action="delete"]')?.focus();
                   }}
                 />
               ) : (
@@ -268,7 +270,7 @@ function FeedbackItem({
 
 /**
  * Delete asks once, in place, with Cancel focused so a second Enter keeps the comment. Cancel takes Edit's place and
- * Delete stays where it was, so the pointer that pressed Delete is still on it; the question follows them.
+ * Delete stays where it was, so the pointer that pressed Delete is still on it. The item's meta line asks the question above them.
  */
 function DeleteConfirm({ onDelete, onCancel }: { onDelete: () => void; onCancel: () => void }) {
   const cancel = useRef<HTMLButtonElement>(null);
@@ -289,9 +291,6 @@ function DeleteConfirm({ onDelete, onCancel }: { onDelete: () => void; onCancel:
       <Button variant="destructive" onClick={onDelete} data-feedback-delete>
         Delete
       </Button>
-      <span className="min-w-0 truncate text-xs text-fg" data-feedback-question>
-        Delete it?
-      </span>
     </div>
   );
 }

@@ -134,9 +134,13 @@ try {
   await window.click('[data-feedback="2"] [data-feedback-action="delete"]');
   await window.waitForSelector('[data-feedback="2"] [data-feedback-confirm]');
   check(
-    "Delete asks first, in place, with Cancel focused",
-    [(await window.innerText('[data-feedback="2"] [data-feedback-confirm]')).replace(/\s+/g, " "), await window.evaluate(() => document.activeElement?.hasAttribute("data-feedback-cancel"))],
-    ["Cancel Delete Delete it?", true],
+    "Delete asks first, in place, the question in the meta line above its answers, with Cancel focused and ghost",
+    [
+      await window.$$eval('[data-feedback="2"] [data-feedback-question], [data-feedback="2"] [data-feedback-confirm] button', (els) => els.map((el) => el.textContent.trim())),
+      await window.evaluate(() => document.activeElement?.hasAttribute("data-feedback-cancel")),
+      await window.$eval('[data-feedback="2"] [data-feedback-cancel]', (b) => getComputedStyle(b).backgroundColor),
+    ],
+    [["Delete this comment?", "Cancel", "Delete"], true, "rgba(0, 0, 0, 0)"],
   );
   check(
     "asking leaves Delete where it was, under the pointer that pressed it",
@@ -144,13 +148,14 @@ try {
     deleteAt,
   );
   check(
-    "The question, Cancel and Delete sit on one line in the Inspector, and the question isn't cut",
+    "Cancel and Delete sit on one line under the question, and the question isn't cut",
     await window.evaluate(() => {
       const tops = [...document.querySelectorAll('[data-feedback="2"] [data-feedback-confirm] > *')].map((el) => Math.round(el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2));
       const q = document.querySelector('[data-feedback="2"] [data-feedback-question]');
-      return [new Set(tops).size, q.scrollWidth <= q.clientWidth];
+      const cancel = document.querySelector('[data-feedback="2"] [data-feedback-cancel]');
+      return [new Set(tops).size, q.scrollWidth <= q.clientWidth, q.getBoundingClientRect().bottom <= cancel.getBoundingClientRect().top];
     }),
-    [1, true],
+    [1, true, true],
   );
   await window.keyboard.press("Enter");
   await window.waitForSelector('[data-feedback="2"] [data-feedback-confirm]', { state: "detached" });
