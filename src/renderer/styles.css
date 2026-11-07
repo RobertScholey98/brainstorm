@@ -237,23 +237,6 @@ body[data-resizing] [data-slot="sidebar-container"] {
 }
 
 /*
- * A scroller's edges fade while there is more that way. ScrollPane sets each from where its lines and controls sit:
- * `--fade-top` and `--fade-bottom` hide a band outright that reaches past any line or control it would cut, so each
- * shows whole or not at all, then a ramp starts at 30%, so one in it reads dimmed, never gone.
- */
-@utility scroll-fades {
-  mask-image: linear-gradient(
-    to bottom,
-    transparent var(--fade-top, 0px),
-    rgb(0 0 0 / 0.3) var(--fade-top, 0px),
-    black calc(var(--fade-top, 0px) + var(--fade-top-ramp, 0px)),
-    black calc(100% - var(--fade-bottom, 0px) - var(--fade-bottom-ramp, 0px)),
-    rgb(0 0 0 / 0.3) calc(100% - var(--fade-bottom, 0px)),
-    transparent calc(100% - var(--fade-bottom, 0px))
-  );
-}
-
-/*
  * Fades on the inline axis, for the history strip. Its entries rest on their edges, so at rest each end's 16 px holds
  * only the inset; the fade softens an entry passing that edge mid-scroll, and only on a side with more that way.
  */

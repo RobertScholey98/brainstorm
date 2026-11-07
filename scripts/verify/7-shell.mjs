@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "nod
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, partlyShown, root, settled, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, paneHead, root, settled, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("shell");
@@ -201,9 +201,9 @@ try {
   );
   await window.$eval("[data-home-scroll]", (el) => el.scrollTo(0, 0));
   check(
-    "home's overview shows every card title, brief and status line whole or not at all at any scroll, under the query row and at its foot",
-    await partlyShown(window, "[data-home-scroll]"),
-    [],
+    "home's head and query row fill with the card's surface, rule off only once the cards scroll, and the cards clip at the head's foot with no fade",
+    await paneHead(window, '[data-home-overview] > [data-slot="pane-head"]', "[data-home-scroll]"),
+    { opaque: true, rest: { scrolled: false, rule: false, clipGap: 0, through: 0 }, scrolled: { scrolled: true, rule: true, clipGap: 0, through: 0 }, masks: [] },
   );
   await window.$eval("[data-home-scroll]", (el) => el.scrollTo(0, 0));
   await window.setViewportSize({ width: 1440, height: 900 });
@@ -882,27 +882,13 @@ try {
     ]).then(([zoom, ...rest]) => [Number(zoom) < 100, ...rest]),
     [true, { face: [20, 20], hit: [true, true] }, true],
   );
-  // A short window, so the Inspector has more than both fades' worth to scroll.
+  // A short window, so the Inspector has room to scroll.
   await window.setViewportSize({ width: 1100, height: 520 });
   await settled(() => window.$eval("[data-inspector-body]", (el) => [el.scrollHeight, el.clientHeight]));
   check(
-    "the Inspector's edges fade only while there is more that way: none at the top at rest, at least 16 px at the bottom, and none at the bottom at the end",
-    await window.$eval("[data-inspector-body]", async (el) => {
-      const at = async (y) => {
-        el.scrollTop = y;
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-        return ["--fade-top", "--fade-bottom"].map((p) => parseFloat(el.style.getPropertyValue(p)));
-      };
-      const [rest, end] = [await at(0), await at(el.scrollHeight)];
-      await at(0);
-      return { room: el.scrollHeight - el.clientHeight >= 60, rest: [rest[0], rest[1] >= 16], end: end[1] };
-    }),
-    { room: true, rest: [0, true], end: 0 },
-  );
-  check(
-    "scrolled any distance, the Inspector shows each label, value, switch, slider and field whole or not at all under its header and at its foot",
-    await partlyShown(window, "[data-inspector-body]"),
-    [],
+    "the Inspector's header fills with the card's surface, keeps the canvas bar's rule at rest and scrolled, and its controls clip at the header's foot with no fade",
+    await paneHead(window, "[data-inspector-header]", "[data-inspector-body]", { by: 60 }),
+    { opaque: true, rest: { scrolled: false, rule: true, clipGap: 0, through: 0 }, scrolled: { scrolled: true, rule: true, clipGap: 0, through: 0 }, masks: [] },
   );
   await window.setViewportSize({ width: 1100, height: 720 });
   await window.click("[data-pick-toggle]");
@@ -993,9 +979,12 @@ try {
     { alone: true, notes: false, about: 0 },
   );
   check(
-    "the sidebar ends in a 32 px fade that sticks to its bottom edge, so a row cut there reads as cut",
-    await window.$eval('[data-slot="sidebar-content"] [data-sidebar-fade]', (fade) => [Math.round(fade.getBoundingClientRect().height), getComputedStyle(fade).position, getComputedStyle(fade).bottom]),
-    [32, "sticky", "0px"],
+    "the sidebar ends 32 px after its last row, and nothing fades over its rows: they clip at its edge",
+    await window.$eval('[data-slot="sidebar-content"]', (el) => {
+      const masked = [...el.querySelectorAll("*")].filter((c) => getComputedStyle(c).backgroundImage.includes("gradient") || getComputedStyle(c).maskImage !== "none").length;
+      return [getComputedStyle(el).paddingBottom, getComputedStyle(el).maskImage, masked];
+    }),
+    ["32px", "none", 0],
   );
   check(
     "the sidebar never scrolls sideways",

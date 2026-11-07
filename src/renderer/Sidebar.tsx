@@ -77,11 +77,6 @@ function arrowFocus(e: KeyboardEvent<HTMLElement>, selector: string): HTMLElemen
   return next;
 }
 
-/** The sidebar's end: room after the last row, and a soft edge over rows that scroll under it, so a cut row reads as cut. */
-function BottomFade() {
-  return <div aria-hidden className="pointer-events-none sticky bottom-0 h-8 shrink-0 bg-linear-to-t from-app" data-sidebar-fade />;
-}
-
 export function HomePanel({
   sessions,
   failed,
@@ -110,7 +105,7 @@ export function HomePanel({
   const now = useNow(sessions?.some((s) => sessionPhase(s) !== null) === true ? 1_000 : undefined);
   return (
     <SidebarContent
-      className="animate-in fade-in-0 slide-in-from-left-3 duration-200"
+      className="animate-in pb-8 fade-in-0 slide-in-from-left-3 duration-200"
       data-sidebar-panel="home"
       onKeyDown={(e) => arrowFocus(e, "[data-overview], [data-session]")}
     >
@@ -198,7 +193,6 @@ export function HomePanel({
           </CollapsibleContent>
         </Collapsible>
       )}
-      <BottomFade />
     </SidebarContent>
   );
 }
@@ -305,7 +299,7 @@ export function SessionPanel({
 }) {
   const byId = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
   return (
-    <SidebarContent className="animate-in fade-in-0 slide-in-from-right-3 duration-200" data-sidebar-panel="session">
+    <SidebarContent className="animate-in pb-8 fade-in-0 slide-in-from-right-3 duration-200" data-sidebar-panel="session">
       <SidebarGroup className="pb-0">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -359,7 +353,6 @@ export function SessionPanel({
           onVariant={(v) => onVariant(slot.id, v)}
         />
       ))}
-      <BottomFade />
     </SidebarContent>
   );
 }

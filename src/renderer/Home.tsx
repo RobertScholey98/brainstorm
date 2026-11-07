@@ -81,29 +81,34 @@ export function HomeOverview({
     onQuery({ ...query, status: DEFAULT_HOME.status, projects: [] });
   };
   // The heading holds in every state, so loading, empty and failed home keep the page's frame. Empty drops the hint,
-  // which its own message says, and the query row, which has nothing to ask; failed keeps both, the row off. The heading and the query row stay put, and only what they find scrolls under them.
+  // which its own message says, and the query row, which has nothing to ask; failed keeps both, the row off. The heading and the query row stay put, and only what they find scrolls.
   return (
     <div className="flex size-full flex-col" data-home-overview>
-      <div className="flex shrink-0 flex-col gap-5 px-6 pt-6 pb-2" data-home-head>
-        <PageHeader
-          heading="All brainstorms"
-          description={empty ? undefined : <span data-home-hint>To start a new brainstorm, {START}.</span>}
-        />
-        {!empty && (
-          <HomeFilters
-            disabled={failed}
-            field={field}
-            search={search}
-            onSearch={setSearch}
-            query={query}
-            onQuery={onQuery}
-            counts={sessions === null ? null : result.counts}
-            projects={projects}
-            selected={selected}
-          />
-        )}
-      </div>
-      <ScrollPane inset={6} data-home-scroll>
+      <ScrollPane
+        inset={6}
+        data-home-scroll
+        head={
+          <div className="flex flex-col gap-5 px-6 pt-6 pb-2" data-home-head>
+            <PageHeader
+              heading="All brainstorms"
+              description={empty ? undefined : <span data-home-hint>To start a new brainstorm, {START}.</span>}
+            />
+            {!empty && (
+              <HomeFilters
+                disabled={failed}
+                field={field}
+                search={search}
+                onSearch={setSearch}
+                query={query}
+                onQuery={onQuery}
+                counts={sessions === null ? null : result.counts}
+                projects={projects}
+                selected={selected}
+              />
+            )}
+          </div>
+        }
+      >
         <div className="flex min-h-full flex-col gap-5 pt-3 pb-6">
           {failed ? (
             <ListError message={error} onRetry={onRetry} />

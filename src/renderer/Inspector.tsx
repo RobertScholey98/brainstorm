@@ -35,7 +35,7 @@ function settingLabel(o: Override, blocks: readonly BlockView[]): string {
 
 /**
  * The Inspector's column: its width, the drag handle on its left edge, a header that stays put, and its scrolling body.
- * The header sits outside the scroller, so it never moves or lets content show above it as the body scrolls.
+ * The header sits outside the scroller on the card's surface, so content scrolls out of sight at its rule.
  */
 function Column({ width, handle, header, children }: { width: number; handle?: ReactNode; header?: ReactNode; children: ReactNode }) {
   return (
@@ -51,7 +51,7 @@ function Column({ width, handle, header, children }: { width: number; handle?: R
 
 /** One 40 px line, the canvas bar's height, so the two bars rule off at one height across the seam. */
 function Header({ children }: { children: ReactNode }) {
-  return <header className="flex h-10 shrink-0 items-center gap-2 border-b px-4" data-inspector-header>{children}</header>;
+  return <header className="flex h-10 shrink-0 items-center gap-2 border-b bg-card px-4" data-inspector-header>{children}</header>;
 }
 
 /**
