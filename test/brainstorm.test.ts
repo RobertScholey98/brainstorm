@@ -1175,7 +1175,7 @@ describe("history", () => {
     data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/calm": { tsx: neonTsx.replace("Spin", "Go"), json: calmJson } }), addresses: [], note: "tidied" }));
     expect(data(await service.view(S)).history.iterations.map((i) => [i.n, i.origin])).toEqual([
       [1, { kind: "brief" }],
-      [2, { kind: "request", n: 1, body: { scope: { kind: "all" }, freetext: "calmer" } }],
+      [2, { kind: "request", n: 1, body: { scope: { kind: "all" }, freetext: "calmer" }, changed: [] }],
       [3, { kind: "agent", note: "tidied" }],
     ]);
     const past = data(service.iteration(S, 1 as IterationN));
@@ -1188,5 +1188,12 @@ describe("history", () => {
     const still = data(service.preview(S, { n: 1 as IterationN, slot: "result" as SlotId }));
     expect(still?.frame.blockId).toBe(SHEET);
     expect(data(service.preview(S, { n: 2 as IterationN }))?.frame.blockId).toBe(CALM);
+  });
+
+  test("a request sent without words is named by the blocks its iteration changed", async () => {
+    const { service } = await withIteration();
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null }));
+    data(await service.commit({ session: S, thread: T1, files: copy(1, { "wheel/neon": { tsx: neonTsx.replace("Spin", "Go"), json: neonJson } }), addresses: [], note: null }));
+    expect(data(await service.view(S)).history.iterations.map((i) => i.origin)[1]).toEqual({ kind: "request", n: 1, body: { scope: { kind: "all" }, freetext: null }, changed: ["Neon wheel"] });
   });
 });

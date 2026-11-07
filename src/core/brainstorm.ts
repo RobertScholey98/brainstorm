@@ -598,7 +598,7 @@ export class Brainstorm {
       const request = byIteration.get(i.n);
       const origin: IterationOrigin =
         request !== undefined
-          ? { kind: "request", n: request.n, body: requestBody(request) }
+          ? { kind: "request", n: request.n, body: requestBody(request), changed: request.freetext === null ? this.#changedTitles(id, i.n) : [] }
           : i.n === 1 && fork !== null
             ? { kind: "fork", parent: this.#store.sessionName(fork.parent)?.title ?? fork.parent, from: fork.from }
             : i.n === 1
@@ -1139,6 +1139,12 @@ export class Brainstorm {
 
   #schemas(blocks: readonly IterationBlock[]): Map<BlockId, PropsSchema> {
     return new Map(blocks.map((b) => [b.id, this.#load(b).draft.props]));
+  }
+
+  /** The titles of the blocks iteration `n` changed, as the canvas names them. */
+  #changedTitles(id: SessionId, n: IterationN): readonly string[] {
+    const titles = new Map(this.#store.iterationBlocks(id, n).map((b) => [b.id, this.#load(b).draft.title]));
+    return this.#changedIn(id, n).map((b) => titles.get(b) ?? b);
   }
 
   #changedIn(id: SessionId, n: IterationN): readonly BlockId[] {

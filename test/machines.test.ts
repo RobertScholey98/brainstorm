@@ -370,12 +370,19 @@ describe("vary and history text", () => {
 
   test("originText says where each iteration came from", () => {
     expect(originText({ kind: "brief" })).toBe("First designs, from the brief");
-    expect(originText({ kind: "fork", parent: "Chore wheel", from: 2 as IterationN })).toBe("Forked from Chore wheel · iteration 2");
+    expect(originText({ kind: "fork", parent: "Chore wheel", from: 2 as IterationN })).toBe("Your picks from iteration 2");
     expect(originText({ kind: "agent", note: null })).toBe("The agent's own commit");
     expect(originText({ kind: "agent", note: "tidied" })).toBe("tidied");
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: null } })).toBe("Everything");
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null } })).toBe("Selected blocks");
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: "calmer" } })).toBe("calmer");
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: vary, freetext: "bouncier" } })).toBe("Vary Spin button ×2 · bouncier");
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: null }, changed: ["Neon wheel", "Slot reel", "Assignment card"] })).toBe(
+      "Changed Neon wheel, Slot reel and 1 more",
+    );
+    expect(
+      originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null }, changed: ["Neon wheel"] }),
+    ).toBe("Changed Neon wheel");
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null }, changed: [] })).toBe(
+      "No blocks changed",
+    );
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: "calmer" }, changed: [] })).toBe("calmer");
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: vary, freetext: "bouncier" }, changed: [] })).toBe("Vary Spin button ×2 · bouncier");
   });
 });

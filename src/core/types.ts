@@ -595,7 +595,7 @@ export type Regenerate = { readonly ok: true } | { readonly ok: false; readonly 
 export type IterationOrigin =
   | { readonly kind: "brief" }
   | { readonly kind: "fork"; readonly parent: string; readonly from: IterationN }
-  | { readonly kind: "request"; readonly n: RequestN; readonly body: RequestBody }
+  | { readonly kind: "request"; readonly n: RequestN; readonly body: RequestBody; readonly changed: readonly string[] }
   | { readonly kind: "agent"; readonly note: string | null };
 
 export type HistoryEntry = { readonly n: IterationN; readonly createdAt: string; readonly origin: IterationOrigin };

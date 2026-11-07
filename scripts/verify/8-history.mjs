@@ -226,7 +226,7 @@ try {
     true,
   );
   check("its strip starts with a stub back to the parent", await window.getAttribute("[data-fork-stub]", "data-fork-stub"), session);
-  check("and its first still says where it came from", (await strip(window)).map((s) => s.origin), ["Forked from Chore roulette · iteration 2"]);
+  check("and its first still says where it came from", (await strip(window)).map((s) => s.origin), ["Your picks from iteration 2"]);
   await shot(window, shots, "6-fork-page");
 
   await window.click("[data-fork-stub]");

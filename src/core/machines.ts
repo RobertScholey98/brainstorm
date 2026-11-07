@@ -222,7 +222,8 @@ export function originText(origin: IterationOrigin): string {
     case "brief":
       return "First designs, from the brief";
     case "fork":
-      return `Forked from ${origin.parent} · iteration ${origin.from}`;
+      // The strip's stub beside it already names the parent, so this says what is Rob's.
+      return `Your picks from iteration ${origin.from}`;
     case "agent":
       return origin.note ?? "The agent's own commit";
     case "request": {
@@ -231,7 +232,10 @@ export function originText(origin: IterationOrigin): string {
         const what = scope.target.part === null ? "the block" : partLabel(scope.target.part);
         return `Vary ${what} ×${scope.variants.length}${freetext === null ? "" : ` · ${freetext}`}`;
       }
-      return freetext ?? (scope.kind === "all" ? "Everything" : "Selected blocks");
+      if (freetext !== null) return freetext;
+      // With no words of Rob's, what it changed says more than the scope's name.
+      const changed = changedNames(origin.changed);
+      return changed.charAt(0).toUpperCase() + changed.slice(1);
     }
   }
 }
