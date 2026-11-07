@@ -21,6 +21,8 @@ const buttonVariants = cva(
         default: "h-7 gap-1.5 px-2 text-sm has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         icon: "size-7",
         "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3.5",
+        // A glyph over its count, for a narrow rail with no room to set a corner count clear of the glyph.
+        "icon-count": "h-8 w-7 flex-col gap-0.5 text-2xs [&_svg:not([class*='size-'])]:size-3.5",
       },
     },
     defaultVariants: {

@@ -932,35 +932,32 @@ try {
   await window.click("[data-inspector-toggle]");
   await window.waitForSelector("[data-inspector-rail]");
   check(
-    "the Inspector collapses to a 40 px rail that counts the open feedback in the chip",
+    "the Inspector collapses to a 40 px rail that counts the open feedback with the kit's Count",
     [await inspectorWidth(), (await window.textContent("[data-rail-count]"))?.trim(), await window.getAttribute("[data-rail-count]", "data-slot")],
-    [40, "1", "badge"],
+    [40, "1", "count"],
   );
   check(
-    "the rail's head carries the canvas bar's rule, its button centred on the bar's line with the count on its lower corner, 4 px in from the card's edge and clear of its 12 px radius",
+    "the rail's head carries the canvas bar's rule, its button centred on the bar's line inside the head, and the count stands wholly under its glyph, touching none of it",
     await settled(() =>
       window.evaluate(() => {
         const box = (sel) => document.querySelector(sel).getBoundingClientRect();
-        const [bar, head, button, count] = [box("[data-canvas-bar]"), box("[data-rail-head]"), box("[data-rail-feedback]"), box("[data-rail-count]")];
+        const [bar, head, button, count, glyph] = [box("[data-canvas-bar]"), box("[data-rail-head]"), box("[data-rail-feedback]"), box("[data-rail-count]"), box("[data-rail-feedback] svg")];
+        const overlap = Math.max(0, Math.min(count.right, glyph.right) - Math.max(count.left, glyph.left)) * Math.max(0, Math.min(count.bottom, glyph.bottom) - Math.max(count.top, glyph.top));
         return {
           rule: Math.round(head.bottom) === Math.round(bar.bottom) && parseFloat(getComputedStyle(document.querySelector("[data-rail-head]")).borderBottomWidth) > 0,
           centred: Math.round(button.top + button.height / 2) === Math.round(bar.top + bar.height / 2),
-          corner: [Math.round(head.right - count.right), Math.round(count.top - head.top), Math.round(count.bottom - button.bottom)],
+          inHead: button.top >= head.top && button.bottom <= head.bottom && count.bottom <= head.bottom,
+          overlap,
+          under: count.top >= glyph.bottom,
         };
       }),
     ),
-    { rule: true, centred: true, corner: [4, 20, 2] },
+    { rule: true, centred: true, inHead: true, overlap: 0, under: true },
   );
   check(
-    "the count is 11 px type cut from the glyph under it by a 2 px ring in the card's colour",
-    await window.$eval("[data-rail-count]", (count) => {
-      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--card)" }));
-      const card = getComputedStyle(probe).color;
-      probe.remove();
-      const style = getComputedStyle(count);
-      return [style.fontSize, style.boxShadow.includes(`${card} 0px 0px 0px 2px`)];
-    }),
-    ["11px", true],
+    "the count is 11 px type",
+    await window.$eval("[data-rail-count]", (count) => getComputedStyle(count).fontSize),
+    "11px",
   );
   await window.click("[data-rail-feedback]");
   await window.waitForSelector("[data-feedback-panel]");

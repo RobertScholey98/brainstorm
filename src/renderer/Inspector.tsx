@@ -2,8 +2,8 @@ import { JSONUIProvider, Renderer } from "@json-render/react";
 import type { Spec } from "@json-render/core";
 import { MessageSquare } from "lucide-react";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Count } from "@/components/ui/count";
 import { Callout, CalloutItem } from "@/components/ui/callout";
 import { ResizeHandle } from "@/components/ui/resize-handle";
 import { ScrollPane } from "@/components/ui/scroll-pane";
@@ -63,21 +63,17 @@ export function InspectorRail({ open, onExpand }: { open: number; onExpand: () =
     <aside className="flex w-10 shrink-0 flex-col border-l bg-card" aria-label="Inspector" data-inspector-rail>
       {/* The canvas bar's height and rule, so the bar's line runs on to the card's edge. */}
       <div className="flex h-10 shrink-0 items-center justify-center border-b" data-rail-head>
-        <span className="relative flex">
-          <Hint label={open === 0 ? "No open feedback" : open === 1 ? "1 open comment" : `${open} open comments`} side="left">
-            <Button variant="ghost" size="icon" aria-label="Show the feedback" onClick={onExpand} data-rail-feedback>
-              <MessageSquare aria-hidden />
-            </Button>
-          </Hint>
-          {/* Below the bar's line, clear of the card's 12 px corner radius. */}
-          {open > 0 && (
-            <span className="pointer-events-none absolute -right-0.5 -bottom-0.5 flex">
-              <Badge size="corner" data-rail-count>
+        <Hint label={open === 0 ? "No open feedback" : open === 1 ? "1 open comment" : `${open} open comments`} side="left">
+          {/* The count stands under its glyph: the 40 px rail has no room to set a corner count clear of it. */}
+          <Button variant="ghost" size={open > 0 ? "icon-count" : "icon"} aria-label="Show the feedback" onClick={onExpand} data-rail-feedback>
+            <MessageSquare aria-hidden />
+            {open > 0 && (
+              <Count className="leading-none" data-rail-count>
                 {open}
-              </Badge>
-            </span>
-          )}
-        </span>
+              </Count>
+            )}
+          </Button>
+        </Hint>
       </div>
     </aside>
   );
