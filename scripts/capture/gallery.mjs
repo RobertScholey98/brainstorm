@@ -101,7 +101,7 @@ const SHOTS = [
   ["home-search-empty", "home", "Home's search with nothing matching: the empty state and Clear search and filters"],
   ["home-filter-menu", "home", "The project filter open: each project with how many brainstorms it holds, and Show all"],
   ["home-settled", "home", "Home showing All: the settled Laundry tracker under its own Settled heading, muted, and the sidebar's Settled group open with its row muted"],
-  ["state-settle-action", "home", "The pointer over a sidebar row's settle control: the age gives way to it, and its hint names Ctrl+Shift+S"],
+  ["state-settle-action", "home", "The pointer over a sidebar row's settle action: the age gives way to its glyph and its name, in the row"],
   ["state-hover-card", "home", "The pointer over an overview card: its ring and its settle control in the corner"],
   ["history-strip", "history", "The history strip under the canvas: a still of each iteration with its number, its age and what made it, the latest selected"],
   ["history-collapsed", "history", "The history toggle off: the strip folds away and the canvas takes its height"],
@@ -637,7 +637,6 @@ function scenes(page, home, env, t3, sessions) {
         each: async () => {
           await page.hover(row);
           await page.hover(`[data-slot="sidebar"] [data-settle="${sessions.roulette.id}"]`);
-          await page.waitForSelector("[data-slot=tooltip-content]");
         },
       });
       const card = `[data-overview-session="${sessions.roulette.id}"]`;
