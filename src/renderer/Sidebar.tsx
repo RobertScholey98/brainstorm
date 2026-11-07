@@ -396,12 +396,12 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
             {fork.parent.state === "gone" ? (
               <div className="flex h-8 items-center gap-2 px-2 text-xs text-fg-muted" data-forked-from="gone">
                 <GitBranch aria-hidden className="size-3.5 shrink-0" />
-                <Truncate>{`Forked from ${fork.parent.title} · iteration ${fork.from}, since discarded`}</Truncate>
+                <ForkedFrom title={fork.parent.title} from={`iteration ${fork.from}, since discarded`} />
               </div>
             ) : (
               <SidebarMenuButton tone="quiet" onClick={() => onOpen(fork.parent.id)} data-forked-from={fork.parent.id}>
                 <GitBranch aria-hidden />
-                <Truncate className="text-xs">{`Forked from ${fork.parent.title} · iteration ${fork.from}`}</Truncate>
+                <ForkedFrom title={fork.parent.title} from={`iteration ${fork.from}`} />
               </SidebarMenuButton>
             )}
           </SidebarMenuItem>
@@ -541,5 +541,15 @@ function SlotSection({
         </SidebarMenu>
       </SidebarGroup>
     </>
+  );
+}
+
+/** Only the parent's title gives way, so the iteration, which the breadcrumb doesn't show, always reads whole. */
+function ForkedFrom({ title, from }: { title: string; from: string }) {
+  return (
+    <span className="flex min-w-0 gap-1 text-xs" data-forked-line>
+      <Truncate>{`Forked from ${title}`}</Truncate>
+      <span className="shrink-0">· {from}</span>
+    </span>
   );
 }

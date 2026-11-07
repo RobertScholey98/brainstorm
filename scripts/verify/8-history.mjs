@@ -227,6 +227,11 @@ try {
   const forkId = started[0]?.message.match(/session (s_[a-z0-9]+)/)?.[1];
   check("the window opened the fork, whose sidebar links back to the parent", await window.getAttribute("[data-forked-from]", "data-forked-from"), session);
   check(
+    "a long parent title gives way on that line, and the iteration it forked from reads whole",
+    await window.$eval("[data-forked-line] > span:last-child", (el) => [el.textContent, el.scrollWidth <= el.clientWidth]),
+    ["· iteration 2", true],
+  );
+  check(
     "its first message is the [brainstorm] marker for the fork's request 1, telling the new thread to attach",
     started[0]?.message.split("\n").slice(0, 2),
     [
