@@ -2,7 +2,7 @@ import { AlertTriangle } from "lucide-react";
 import { cn } from "cn";
 import type { OpenPhase, SessionListing } from "../core/types";
 import { PHASE, sessionPhase, TONE_DOT, TONE_TEXT, type Tone } from "./status";
-import { elapsed } from "./time";
+import { elapsed, elapsedSlot } from "./time";
 
 /** A phase's dot, pulsing while it changes on its own. */
 export function PhaseDot({ phase, tone = PHASE[phase].tone }: { phase: OpenPhase; tone?: Tone }) {
@@ -15,20 +15,35 @@ export function PhaseDot({ phase, tone = PHASE[phase].tone }: { phase: OpenPhase
 }
 
 /**
+ * How long a request has been open, the one running count the header, the Thread row, the sidebar and home share. It
+ * keeps its unit's widest room, so the words before it never re-cut as it counts.
+ */
+export function Elapsed({ since, now, rank, className }: { since: string; now: number; rank?: number; className?: string }) {
+  const shown = elapsed(since, now);
+  return (
+    <span className={cn("count-slot data-collapsed:hidden", className)} data-count-slot={elapsedSlot(shown)} data-collapse={rank} data-status-elapsed>
+      <span>{shown}</span>
+    </span>
+  );
+}
+
+/**
  * What a brainstorm waits on, the one mark every list uses: its dot (a warning sign for a lost thread), its short name,
- * then `after`, such as how long the request has been open. In a row that fits itself (`useRowFit`), the name is the
- * part that gives way, kept for screen readers.
+ * then how long the request has been open. In a row that fits itself (`useRowFit`), the time gives way first and then
+ * the name, kept for screen readers, so the ages' column never holds a bare count that reads as an age.
  */
 export function PhaseStatus({
   phase,
   tone = PHASE[phase].tone,
-  after,
+  since,
+  now,
   collapsible = false,
   className,
 }: {
   phase: OpenPhase;
   tone?: Tone;
-  after?: string;
+  since?: string;
+  now?: number;
   collapsible?: boolean;
   className?: string;
 }) {
@@ -36,11 +51,16 @@ export function PhaseStatus({
   return (
     <span className={cn("flex shrink-0 items-center gap-1.5", TONE_TEXT[tone], className)} data-session-status={phase} data-tone={tone}>
       {phase === "thread_lost" ? <AlertTriangle aria-hidden className="size-3" /> : <PhaseDot phase={phase} tone={tone} />}
-      <span>
-        <span data-collapse={collapsible ? 1 : undefined} className="data-collapsed:sr-only">
+      <span className="flex gap-1">
+        <span data-collapse={collapsible ? 2 : undefined} data-status-words className="data-collapsed:sr-only">
           {status.short}
         </span>
-        {after !== undefined && <span className="tabular-nums" data-status-elapsed>{` ${after}`}</span>}
+        {since !== undefined && now !== undefined && (
+          <>
+            {" "}
+            <Elapsed since={since} now={now} rank={collapsible ? 1 : undefined} />
+          </>
+        )}
       </span>
     </span>
   );
@@ -50,5 +70,5 @@ export function PhaseStatus({
 export function SessionStatus({ session, now, tone, collapsible, className }: { session: SessionListing; now?: number; tone?: Tone; collapsible?: boolean; className?: string }) {
   const phase = sessionPhase(session);
   if (phase === null) return null;
-  return <PhaseStatus phase={phase} tone={tone} after={now === undefined || PHASE[phase].ended === true ? undefined : elapsed(session.activeAt, now)} collapsible={collapsible} className={className} />;
+  return <PhaseStatus phase={phase} tone={tone} since={PHASE[phase].ended === true ? undefined : session.activeAt} now={now} collapsible={collapsible} className={className} />;
 }

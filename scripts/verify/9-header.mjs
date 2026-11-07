@@ -12,7 +12,7 @@ const NOW = new Date().toISOString();
 
 /** Every phase as the server words it, with the actions `requestPhase` gives it on an attached thread. */
 const PHASES = {
-  sending: { message: "Sending to T3…", actions: [] },
+  sending: { message: "Sending to T3", actions: [] },
   queued: { message: "Queued in T3", actions: ["open_thread", "withdraw"] },
   working: { message: "Agent working", actions: ["open_thread", "withdraw"] },
   asking: { message: "Agent asking in T3", actions: ["open_thread", "withdraw"] },
@@ -21,7 +21,7 @@ const PHASES = {
   send_failed: { message: "Couldn't send (T3 is not running). The request is saved.", actions: ["retry", "open_thread", "withdraw"], error: "T3 is not running" },
   previous_thread: { message: "Sent to the previous thread", actions: ["resend", "open_thread", "withdraw"] },
   thread_lost: { message: "This session's thread is gone.", actions: ["copy_phrase", "withdraw"], lost: true },
-  starting: { message: "Starting a T3 thread…", actions: [] },
+  starting: { message: "Starting a T3 thread", actions: [] },
   start_failed: { message: "Couldn't start a T3 thread (T3 is not running). The fork is saved.", actions: ["retry", "discard"], error: "T3 is not running" },
   fulfilled: { message: "Iteration 2 · changed Neon wheel and Assignment card", actions: [], iteration: 2 },
   withdrawn: { message: "Request withdrawn", actions: [] },
@@ -31,6 +31,7 @@ const TITLES = {
   short: { title: "Chore roulette", lineage: [] },
   long: { title: "Onboarding a new flatmate into the chore rota without a fight", lineage: [] },
   fork: { title: "Try a calmer wheel for mornings", lineage: [{ id: "s_parent", title: "Rota handover", gone: false }] },
+  rota: { title: "Rota handover", lineage: [] },
 };
 
 let shape = null;
@@ -39,8 +40,10 @@ let shape = null;
 function dress(view) {
   if (shape === null) return view;
   const { title, lineage } = TITLES[shape.title];
-  const phase = shape.phase === null ? null : PHASES[shape.phase];
+  const phase = shape.phase === null ? null : { ...PHASES[shape.phase], ...(shape.message === undefined ? {} : { message: shape.message }) };
   const thread = view.attachment.threadId;
+  // Five minutes before each fetch, so every case reads one count, whenever in the run it lands.
+  const since = new Date(Date.now() - 5 * 60_000).toISOString();
   return {
     ...view,
     session: { ...view.session, title },
@@ -51,7 +54,7 @@ function dress(view) {
       phase === null
         ? null
         : {
-            request: { session: view.session.id, n: 1, scope: { kind: "all" }, freetext: null, feedbackIds: [], base: 1, threadId: thread, state: { state: "sent" }, sentAt: NOW, createdAt: NOW },
+            request: { session: view.session.id, n: 1, scope: { kind: "all" }, freetext: null, feedbackIds: [], base: 1, threadId: thread, state: { state: "sent" }, sentAt: since, createdAt: since },
             phase: { phase: shape.phase, actions: phase.actions, ...(phase.error === undefined ? {} : { error: phase.error }), ...(phase.iteration === undefined ? {} : { iteration: phase.iteration }) },
             message: phase.message,
           },
@@ -67,24 +70,37 @@ const measure = () =>
   window.evaluate(
     ([titleFloor, ancestorFloor]) => {
       const header = document.querySelector("[data-topbar]");
-      const roomy = (el, floor) => el.clientWidth >= Math.min(el.scrollWidth, floor);
+      const ink = (el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return range.getBoundingClientRect().width;
+      };
+      const box = (el) => {
+        const s = getComputedStyle(el);
+        return el.getBoundingClientRect().width - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight) - parseFloat(s.borderLeftWidth) - parseFloat(s.borderRightWidth);
+      };
+      const whole = (el) => ink(el) <= box(el) + 0.01;
+      const roomy = (el, floor) => box(el) >= Math.min(ink(el), floor) - 0.01;
       const fits = () =>
         roomy(header.querySelector("[data-session-title]"), titleFloor) && [...header.querySelectorAll("[data-lineage]")].every((a) => roomy(a, ancestorFloor));
       const steps = [...header.querySelectorAll("[data-collapse]")].sort((a, b) => Number(a.dataset.collapse) - Number(b.dataset.collapse));
       const name = (el) => el.dataset.requestAction ?? (el.matches("[data-fork-toggle]") ? "fork" : el.matches("[data-export]") ? "export" : el.matches("[data-status-elapsed]") ? "elapsed" : el.matches("svg") ? "glyph" : "status");
       const collapsed = steps.filter((s) => s.hasAttribute("data-collapsed"));
-      const inOrder = collapsed.every((s, i) => s === steps[i]);
-      const last = collapsed.at(-1);
-      let needed = true;
-      let shortBy = 0;
-      if (last !== undefined) {
-        last.removeAttribute("data-collapsed");
-        needed = !fits();
+      // The glyph and the time are marks, not labels, so either comes back once a later label frees its room.
+      const labels = steps.filter((s) => Number(s.dataset.collapse) >= 2);
+      const inOrder = labels.filter((s) => s.hasAttribute("data-collapsed")).every((s, i) => s === labels[i]);
+      const back = (part) => {
+        part.removeAttribute("data-collapsed");
+        const broke = !fits();
         const title = header.querySelector("[data-session-title]");
-        shortBy = Math.round(title.scrollWidth - title.clientWidth);
-        last.setAttribute("data-collapsed", "");
-      }
-      const box = header.getBoundingClientRect();
+        const by = Math.round(ink(title) - box(title));
+        part.setAttribute("data-collapsed", "");
+        return { broke, by };
+      };
+      // Labels give way in rank order, so only the last is judged; a mark that gave way must still be needed.
+      const needed = collapsed.filter((part) => !labels.includes(part) || part === collapsed.at(-1)).every((part) => back(part).broke);
+      const shortBy = collapsed.length === 0 ? 0 : back(collapsed.at(-1)).by;
+      const bar = header.getBoundingClientRect();
       const words = [...header.querySelectorAll("[data-request-message], [data-request-label], [data-request-short], [data-regenerate-toggle], [data-collapse]:not([data-collapsed]) span")].filter(
         (el) => el.getClientRects().length > 0,
       );
@@ -94,14 +110,15 @@ const measure = () =>
         elapsed: header.querySelector("[data-status-elapsed]:not([data-collapsed])")?.textContent ?? null,
         title: header.querySelector("[data-session-title]").textContent,
         cut: header.querySelector("[data-session-title]").dataset.cut ?? null,
-        titleShown: Math.round(header.querySelector("[data-session-title]").clientWidth),
-        titleWhole: header.querySelector("[data-session-title]").scrollWidth <= header.querySelector("[data-session-title]").clientWidth,
+        titleShown: Math.round(Math.min(box(header.querySelector("[data-session-title]")), ink(header.querySelector("[data-session-title]")))),
+        titleWhole: whole(header.querySelector("[data-session-title]")),
+        regenerate: Math.round(header.querySelector("[data-regenerate-toggle]").getBoundingClientRect().width * 100) / 100,
         floors: fits() || collapsed.length === steps.length,
         inOrder,
         needed,
         shortBy,
-        whole: words.filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent),
-        inside: controls.every((el) => el.getBoundingClientRect().right <= box.right && el.getBoundingClientRect().left >= box.left),
+        whole: words.filter((el) => !whole(el)).map((el) => el.textContent),
+        inside: controls.every((el) => el.getBoundingClientRect().right <= bar.right && el.getBoundingClientRect().left >= bar.left),
       };
     },
     [TITLE_FLOOR, ANCESTOR_FLOOR],
@@ -144,7 +161,7 @@ try {
       [1100, 720],
     ]) {
       await window.setViewportSize({ width, height });
-      for (const title of Object.keys(TITLES)) {
+      for (const title of ["short", "long", "fork"]) {
         for (const phase of [null, ...Object.keys(PHASES)]) {
           shape = { title, phase };
           // Home keeps an open brainstorm's view until another is chosen, so opening the spare first makes the app
@@ -169,16 +186,101 @@ try {
     }
   }
 
+  /** Opens the dressed brainstorm afresh, through the spare, so the app fetches the view `shape` dresses. */
+  const reopen = async () => {
+    for (const id of [spare, session]) {
+      if (await window.$('[data-sidebar-panel="session"]')) await window.click("[data-back]");
+      await window.click(`[data-session="${id}"]`);
+      await window.waitForSelector('[data-sidebar-panel="session"]');
+    }
+    await window.waitForFunction((t) => document.querySelector("[data-session-title]")?.textContent === t, TITLES[shape.title].title, { timeout: 5000 });
+  };
+  const verdict = (m) => ({ floors: m.floors, inOrder: m.inOrder, needed: m.needed, whole: m.whole });
+  const fitted = { floors: true, inOrder: true, needed: true, whole: [] };
+
+  // Shot 71: a request turns fulfilled in place, its result naming one block, while "Rota handover" all but fills its
+  // room. The room's fraction of a pixel depends on every width around it, so the badge is nudged a tenth at a time
+  // over a whole pixel of the title's shortfall, where rounded widths read a title 0.6 px short as whole.
+  await window.emulateMedia({ colorScheme: "light" });
+  await window.setViewportSize({ width: 1100, height: 720 });
+  shape = { title: "rota", phase: "working" };
+  await reopen();
+  await window.waitForSelector('[data-topbar] [data-request-phase="working"]');
+  shape = { title: "rota", phase: "fulfilled", message: "Iteration 3 · changed Assignment card" };
+  await window.click('[data-variant="reel"]');
+  await window.waitForSelector('[data-topbar] [data-request-phase="fulfilled"]');
+  const shortfall = await window.evaluate(() => {
+    const header = document.querySelector("[data-topbar]");
+    const gone = [...header.querySelectorAll("[data-collapsed]")];
+    for (const part of gone) part.removeAttribute("data-collapsed");
+    const title = header.querySelector("[data-session-title]");
+    const range = document.createRange();
+    range.selectNodeContents(title);
+    const by = range.getBoundingClientRect().width - title.getBoundingClientRect().width;
+    for (const part of gone) part.setAttribute("data-collapsed", "");
+    return by;
+  });
+  await window.setViewportSize({ width: 1100 + Math.floor(shortfall), height: 720 });
+  const nudged = [];
+  for (let tenth = 0; tenth < 10; tenth++) {
+    await window.evaluate((px) => {
+      const style = document.getElementById("nudge") ?? document.head.appendChild(Object.assign(document.createElement("style"), { id: "nudge" }));
+      style.textContent = `[data-topbar] [data-iteration] { margin-left: ${px}px }`;
+    }, tenth / 10);
+    const m = await settled(measure);
+    if (JSON.stringify(verdict(m)) !== JSON.stringify(fitted)) nudged.push({ nudge: tenth / 10, ...verdict(m), gaveWay: m.collapsed, title: m.titleShown });
+  }
+  await window.evaluate(() => document.getElementById("nudge")?.remove());
+  check("a request fulfilled in place, its result naming one block, never leaves the title cut by a fraction of a pixel while labels stay", nudged, []);
+
+  // The status's words change with nothing else in the header moving: the fit hears the status itself, not only what
+  // its change pushes on, so labels that gave way come back when the words shorten.
+  await window.setViewportSize({ width: 1100, height: 720 });
+  shape = { title: "short", phase: "queued" };
+  await reopen();
+  await window.waitForSelector('[data-topbar] [data-request-phase="queued"]');
+  await settled(measure);
+  await window.evaluate(() => {
+    const words = [...document.querySelectorAll("[data-topbar] [data-request-short], [data-topbar] [data-request-message]")].find((el) => el.getClientRects().length > 0);
+    words.firstChild.textContent = "";
+  });
+  check("when the status's words shorten and nothing else in the header moves, every label that gave way is still needed", verdict(await settled(measure)), fitted);
+
+  // While the view loads, the header holds Regenerate at the width it lands with, so Fork doesn't move.
+  shape = { title: "short", phase: null };
+  await window.setViewportSize({ width: 1440, height: 900 });
+  let hold = null;
+  await app.context().route(`**/v1/ui/sessions/${spare}`, async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    await new Promise((r) => (hold = r));
+    await route.continue();
+  });
+  if (await window.$('[data-sidebar-panel="session"]')) await window.click("[data-back]");
+  await window.click(`[data-session="${spare}"]`);
+  await window.waitForSelector("[data-topbar] [data-regenerate-toggle]");
+  const loading = await window.$eval("[data-topbar] [data-regenerate-toggle]", (el) => Math.round(el.getBoundingClientRect().width * 100) / 100);
+  while (hold === null) await new Promise((r) => setTimeout(r, 50));
+  hold();
+  await window.waitForSelector("[data-topbar] [data-regenerate-blocked], [data-topbar] [data-regenerate-toggle]:not([disabled])");
+  await app.context().unroute(`**/v1/ui/sessions/${spare}`);
+  const landed = await settled(() => window.$eval("[data-topbar] [data-regenerate-toggle]", (el) => Math.round(el.getBoundingClientRect().width * 100) / 100));
+  check("while a brainstorm loads, its Regenerate holds the width it lands with, glyph and all", loading, landed);
+
   const gaveWay = (label) => results.get(label)?.collapsed;
+  check(
+    "at 1440 with a short title, Regenerate keeps one shape in every phase: unless the fit takes its glyph, it is as wide with a request open as with none",
+    Object.keys(PHASES).filter((p) => !gaveWay(`light 1440 short ${p}`)?.includes("glyph") && results.get(`light 1440 short ${p}`)?.regenerate !== results.get("light 1440 short idle")?.regenerate),
+    [],
+  );
   check(
     "at 1440 with a short title, the header counts how long a running request has been open, as the sidebar does, an ended one counts nothing, and previous thread, the fullest bar, gives its time up first",
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, /^\d+[smh]/.test(results.get(`light 1440 short ${p}`)?.elapsed ?? "")])),
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, ["sending", "starting", "queued", "working", "asking"].includes(p)])),
   );
   check(
-    "at 1440 a short title keeps every label but in previous thread, where the time goes, the status folds to \"Previous thread\" and Export gives way, in ADR 003's order, and reads whole in every phase",
+    "at 1440 a short title keeps every label but in previous thread, where the time goes, the status folds to \"Previous thread\" and Export gives way, in ADR 003's order, and reads whole in every phase; beside a recovery's three actions, or the asking status and its time, only Regenerate's glyph goes",
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, [gaveWay(`light 1440 short ${p}`)?.join(), results.get(`light 1440 short ${p}`)?.titleWhole]])),
-    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [p === "previous_thread" ? "elapsed,status,export" : "", true]])),
+    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [p === "previous_thread" ? "elapsed,status,export" : ["asking", "no_change", "send_failed"].includes(p) ? "glyph" : "", true]])),
   );
   check(
     "at 1440 in previous thread, the room left of Resend is short of Export's label: putting it back cuts \"Chore roulette\" by 20 px or more",
@@ -189,15 +291,20 @@ try {
   check(
     "at 1100 a long title with a send failure keeps 160 px or more, and Retry, the recovery, is the last label to give way",
     [gaveWay("light 1100 long send_failed"), results.get("light 1100 long send_failed")?.titleShown >= TITLE_FLOOR],
-    [["export", "fork", "withdraw", "open_thread", "retry"], true],
+    [["export", "fork", "open_thread", "withdraw", "retry"], true],
   );
   check(
-    "at 1440 a fork's title reads whole in every phase but four, where it keeps 160 px: queued, whose short status alone reaches the floor, and the three whose remaining labels fill the bar",
+    "at 1440 a fork's title reads whole while nothing fills the bar, and keeps 160 px in every phase whose status and actions do",
     Object.keys(PHASES)
       .filter((p) => !results.get(`light 1440 fork ${p}`)?.titleWhole)
       .map((p) => [p, results.get(`light 1440 fork ${p}`)?.titleShown >= TITLE_FLOOR]),
     [
       ["queued", true],
+      ["working", true],
+      ["asking", true],
+      ["run_failed", true],
+      ["no_change", true],
+      ["send_failed", true],
       ["previous_thread", true],
       ["thread_lost", true],
       ["start_failed", true],

@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ExternalLink, GitBranch, LayoutGrid, Undo2 } from "lucide-react";
-import { useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
 import { Callout } from "@/components/ui/callout";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -31,11 +31,11 @@ import type { PaneLimits } from "./hooks/use-pane-width";
 import { useRowFit } from "./headerAction";
 import { Mark } from "./Mark";
 import { TakeoverPhrase } from "./Regenerate";
-import { PhaseDot, SessionStatus } from "./SessionStatus";
-import { echoTone, PHASE, sessionPhase } from "./status";
+import { Elapsed, PhaseDot, SessionStatus } from "./SessionStatus";
+import { echoTone, loudestPhase, PHASE, sessionPhase } from "./status";
 import { groupByProject, splitSettled } from "./sessionGroups";
 import { SETTLE_SHORTCUT, settleLabel, settleUndoes } from "./settle";
-import { age, elapsed, useNow } from "./time";
+import { age, useNow } from "./time";
 
 export function AppSidebar({
   width,
@@ -122,7 +122,15 @@ export function HomePanel({
       </SidebarGroup>
       {sessions === null && failed ? (
         <p className="px-4 py-3 text-sm/relaxed text-fg-muted" data-home-failed-note>
-          The list didn't load. <span className="whitespace-nowrap">Use Try again</span> on the right.
+          {/* A sentence a line, so the note never ends on a stray pair of words. */}
+          <span className="block">The list didn't load.</span>{" "}
+          <span className="block">
+            Use{" "}
+            <span className="whitespace-nowrap" data-home-retry-name>
+              Try again
+            </span>{" "}
+            on the right.
+          </span>
         </p>
       ) : sessions === null ? (
         // The list it stands for: project groups, each a head over its rows.
@@ -162,7 +170,8 @@ export function HomePanel({
               {/* The label starts where its rows' titles do, and the chevron ends the row, at one x for every group. */}
               <Truncate>{group.label}</Truncate>
               <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                <span className="flex group-data-[panel-open]/label:hidden">
+                <span className="flex items-center gap-1.5 group-data-[panel-open]/label:hidden">
+                  <GroupPhase sessions={group.sessions} />
                   <Count data-project-count>{group.sessions.length}</Count>
                 </span>
                 <ChevronRight aria-hidden className={GROUP_CHEVRON} />
@@ -252,8 +261,8 @@ function SessionRow({
         {/* The branch mark trails the title, so a fork's title keeps its siblings' text edge. */}
         {s.fork !== null && (
           <span className="flex shrink-0 text-fg-muted" data-row-fork>
-            {/* After the status's words, the glyph gives way before the title cuts; the card still names the parent. */}
-            <span data-collapse={2} className="flex data-collapsed:hidden">
+            {/* After the status's time and words, the glyph gives way before the title cuts; the card still names the parent. */}
+            <span data-collapse={3} className="flex data-collapsed:hidden">
               <GitBranch aria-hidden />
             </span>
             <span className="sr-only">
@@ -336,19 +345,22 @@ export function SessionPanel({
             </div>
           </SidebarGroup>
           {[3, 2].map((rows, slot) => (
-            <SidebarGroup key={slot}>
-              <div className="flex h-8 items-center justify-between px-2">
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-3 w-12" />
-              </div>
-              <SidebarMenu>
-                {(["w-1/2", "w-2/3", "w-1/2"] as const).slice(0, rows).map((width, i) => (
-                  <SidebarMenuItem key={i}>
-                    <SidebarMenuSkeleton width={width} />
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroup>
+            <Fragment key={slot}>
+              <SidebarSeparator />
+              <SidebarGroup>
+                <div className="flex h-8 items-center justify-between px-2">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-12" />
+                </div>
+                <SidebarMenu>
+                  {(["w-1/2", "w-2/3", "w-1/2"] as const).slice(0, rows).map((width, i) => (
+                    <SidebarMenuItem key={i}>
+                      <SidebarMenuSkeleton width={width} />
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroup>
+            </Fragment>
           ))}
         </div>
       ) : (
@@ -438,7 +450,8 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
         </SidebarMenu>
       )}
       {showTakeover && (
-        <div className="pt-1" data-takeover>
+        // The room under it matches a row's text above the next rule, so the rule doesn't ride on the callout.
+        <div className="pt-1 pb-1.5" data-takeover>
           <Callout tone="warning" wide actions={<TakeoverPhrase title={view.session.title} />}>
             <p>In a T3 thread on this project, say:</p>
           </Callout>
@@ -468,6 +481,18 @@ function ThreadMark({ view }: { view: SessionView }) {
   );
 }
 
+/** A folded group's open phase, the dot its loudest row shows, so folding a group never hides an agent at work in it. */
+function GroupPhase({ sessions }: { sessions: readonly SessionListing[] }) {
+  const phase = loudestPhase(sessions);
+  if (phase === null) return null;
+  return (
+    <span className="flex" data-group-phase={phase}>
+      <PhaseDot phase={phase} />
+      <span className="sr-only">{PHASE[phase].short}</span>
+    </span>
+  );
+}
+
 /**
  * What the attached thread is doing, in the words home's rows use: the open request's phase and how long it has been
  * open, or Attached once nothing is open. The lead mark carries the tone, so the words stay muted and keep one edge.
@@ -485,9 +510,10 @@ function ThreadState({ view, className }: { view: SessionView; className?: strin
     );
   }
   return (
-    <span className={cn("text-fg-muted", className)} data-thread={phase}>
+    <span className={cn("flex gap-1 text-fg-muted", className)} data-thread={phase}>
       {PHASE[phase].short}
-      {counting && <span className="tabular-nums" data-status-elapsed>{` ${elapsed(request.request.sentAt ?? request.request.createdAt, now)}`}</span>}
+      {counting && " "}
+      {counting && <Elapsed since={request.request.sentAt ?? request.request.createdAt} now={now} />}
     </span>
   );
 }
@@ -579,9 +605,8 @@ function SlotSection({
 /** Only the parent's title gives way, so the iteration, which the breadcrumb doesn't show, always reads whole. */
 function ForkedFrom({ title, from }: { title: string; from: string }) {
   return (
-    <span className="flex min-w-0 gap-1 text-xs" data-forked-line>
-      <Truncate>{`from ${title}`}</Truncate>
-      <span className="shrink-0">· {from}</span>
-    </span>
+    <Truncate className="text-xs" tail={` · ${from}`} data-forked-line>
+      {`from ${title}`}
+    </Truncate>
   );
 }

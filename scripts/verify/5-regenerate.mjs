@@ -218,7 +218,7 @@ try {
   );
   await window.setViewportSize({ width: 1100, height: 720 });
   check(
-    "at 1100 with a request open Withdraw gives up its label for an icon and Open thread keeps its name, so the title keeps 160 px or reads whole, and the status message reads whole",
+    "at 1100 with a request open Open thread gives up its label for its icon and Withdraw keeps its name, since a lone Withdraw glyph would read as the withdrawn status, so the title keeps 160 px or reads whole, and the status message reads whole",
     await settled(() =>
       window.evaluate(() => {
         const [title, message] = [document.querySelector("[data-session-title]"), document.querySelector("[data-request-message]")];
@@ -229,7 +229,7 @@ try {
         ];
       }),
     ),
-    [[110, 28], true, true],
+    [[28, 93], true, true],
   );
   check(
     "in the narrowest window, 1100, the title and message give way, and the phase actions stay clear of Regenerate",
@@ -290,8 +290,12 @@ try {
   await regenerate("all");
   await window.click("[data-regenerate-menu] [data-send]");
   check("queued", await phase("queued"), { message: "Queued in T3", actions: ["open_thread", "withdraw"] });
+  // Where Open thread and Withdraw stand, and where they stand from Regenerate's edge.
   const withdrawAt = () =>
-    window.$$eval('[data-phase-actions] :is([data-request-action="open_thread"], [data-request-action="withdraw"])', (els) => els.map((el) => Math.round(el.getBoundingClientRect().left)).join());
+    window.$$eval('[data-phase-actions] :is([data-request-action="open_thread"], [data-request-action="withdraw"])', (els) => {
+      const regenerate = document.querySelector("[data-regenerate-toggle]").getBoundingClientRect().left;
+      return [els.map((el) => Math.round(el.getBoundingClientRect().left)).join(), els.map((el) => Math.round(regenerate - el.getBoundingClientRect().left)).join()];
+    });
   const at = [await withdrawAt()];
   check(
     "the request's actions sit in the header's right cluster, a divider in the separator tone between them and Regenerate",
@@ -366,6 +370,8 @@ try {
   t3.startRun(DEMO_THREAD);
   check("working", await phase("working"), { message: "Agent working", actions: ["open_thread", "withdraw"] });
   check("working shows progress", await window.isVisible("[data-request-phase] [data-progress]"), true);
+  // A count says nothing in its first second.
+  await window.waitForFunction(() => document.querySelector('[data-thread="working"] [data-status-elapsed]')?.textContent !== "");
   check(
     "the sidebar's thread row says the agent is working and for how long, in the mark home's rows use",
     await window.$eval('[data-thread="working"]', (el) => ({
@@ -379,8 +385,9 @@ try {
   await window.click("[data-back]");
   await window.click("[data-overview]");
   await window.waitForSelector(`[data-overview-session="${session}"] [data-session-status="working"]`, { timeout: PHASE_MS });
+  await window.waitForFunction((id) => document.querySelector(`[data-overview-session="${id}"] [data-status-elapsed]`)?.textContent !== "", session);
   check(
-    "home shows the request's phase on the brainstorm's row and card, in the accent while the agent works",
+    "home shows the request's phase on the brainstorm's row and card, in the accent while the agent works, and both count how long",
     await window.evaluate((id) => {
       const row = document.querySelector(`[data-session="${id}"] [data-session-status]`);
       const card = document.querySelector(`[data-overview-session="${id}"] [data-session-status]`);
@@ -388,9 +395,9 @@ try {
       const probe = document.body.appendChild(Object.assign(document.createElement("i"), { style: `color: ${accent}` }));
       const tone = getComputedStyle(probe).color;
       probe.remove();
-      return { row: row.textContent.trim().replace(/\d+/, "N"), card: card.textContent.trim(), tone: [row, card].every((el) => getComputedStyle(el).color === tone), pulses: row.querySelector(".animate-ping") !== null };
+      return { row: row.textContent.trim().replace(/\d+/, "N"), card: card.textContent.trim().replace(/\d+/, "N"), tone: [row, card].every((el) => getComputedStyle(el).color === tone), pulses: row.querySelector(".animate-ping") !== null };
     }, session),
-    { row: "Agent working Ns", card: "Agent working", tone: true, pulses: true },
+    { row: "Agent working Ns", card: "Agent working Ns", tone: true, pulses: true },
   );
   await openSession(window, session);
   await window.waitForSelector('[data-request-phase="working"]');
@@ -423,7 +430,12 @@ try {
   t3.endRun(DEMO_THREAD, "completed");
   check("no change", await phase("no_change"), { message: "The agent replied in T3 without changing the design.", actions: ["retry", "open_thread", "withdraw"] });
   at.push(await withdrawAt());
-  check("Open thread and Withdraw keep one x from queued through working, asking, run failed and no change", new Set(at).size, 1);
+  // At no change the header fit takes Regenerate's glyph for the longer message, and the actions move by it (R10-6).
+  check(
+    "Open thread and Withdraw keep one x from queued through working, asking and run failed, and at no change move only by what the fit takes from Regenerate",
+    [at.slice(0, -1).map(([x]) => x), at.map(([, fromRegenerate]) => fromRegenerate)],
+    [Array(at.length - 1).fill(at[0][0]), Array(at.length).fill(at[0][1])],
+  );
   await window.click('[data-request-action="withdraw"]');
   check("Withdraw closes the request", await phase("withdrawn"), { message: "Request withdrawn", actions: [] });
 
@@ -445,6 +457,9 @@ try {
   const attached = brainstorm(env, ["session", "attach", "Chore roulette", "--thread", TAKEOVER, "--json"]);
   check("a new thread takes the session over through the CLI", [attached.code, attached.json?.data?.previous], [0, DEMO_THREAD]);
   check("previous thread", await phase("previous_thread"), { message: "Another thread took this brainstorm over. Resend sends the request to it.", actions: ["resend", "open_thread", "withdraw"] });
+  // The pointer rests where Retry was, and Resend now stands there with its hint open.
+  await window.mouse.move(1, 1);
+  await window.waitForSelector("[data-slot=tooltip-content]", { state: "detached" });
   await window.hover('[data-request-action="open_thread"]');
   check(
     "after a takeover, Open thread's hint leads with its name, then names the thread it opens",
@@ -516,6 +531,15 @@ try {
     ["In a T3 thread on this project, say:", phrase, "Copy phrase"],
   );
   check("Regenerate is disabled while the session is unattached", await window.isDisabled("[data-regenerate-toggle]"), true);
+  check(
+    "the takeover callout stands 8 to 12 px clear of the next section's rule, the room a row's text keeps above it",
+    await window.$eval("[data-takeover] [data-slot=callout]", (callout) => {
+      const bottom = callout.getBoundingClientRect().bottom;
+      const rule = [...document.querySelectorAll("[data-sidebar=separator]")].map((r) => r.getBoundingClientRect().top).find((top) => top > bottom);
+      return rule !== undefined && rule - bottom >= 8 && rule - bottom <= 12;
+    }),
+    true,
+  );
   await window.setViewportSize({ width: 1100, height: 720 });
   check(
     "in the 240 px sidebar at 1100 the icon opens the sentence's line, so the icon, the sentence and the phrase start on one edge, and the phrase keeps to three lines",

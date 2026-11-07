@@ -149,12 +149,12 @@ export function takeoverPhrase(title: string): string {
 export function phaseMessage(phase: RequestPhase, context: { title: string; changed: readonly string[]; scope?: RequestScope }): string {
   switch (phase.phase) {
     case "sending":
-      return "Sending to T3…";
+      return "Sending to T3";
     case "send_failed":
       // The reason in brackets, so its own colons never read as part of the sentence.
       return `Couldn't send (${phase.error}). The request is saved.`;
     case "starting":
-      return "Starting a T3 thread…";
+      return "Starting a T3 thread";
     case "start_failed":
       return `Couldn't start a T3 thread (${phase.error}). The fork is saved.`;
     case "previous_thread":

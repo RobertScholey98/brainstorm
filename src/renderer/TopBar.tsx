@@ -11,7 +11,7 @@ import { ExportButton } from "./Export";
 import { ForkButton } from "./Fork";
 import { COLLAPSE, COMPACT, COMPACT_LABEL, useHeaderFit } from "./headerAction";
 import { Mark } from "./Mark";
-import { PhaseActions, phaseActions, Regenerate, RequestStatus } from "./Regenerate";
+import { PhaseActions, phaseActions, Regenerate, RegenerateLabel, RequestStatus } from "./Regenerate";
 
 /** The right panel's toggle, as T3 Code has it: pressed while the panel shows. */
 export type PanelToggle = {
@@ -176,7 +176,7 @@ export function SessionBar({
               <span className={COMPACT_LABEL}>Fork</span>
             </Button>
             <Button variant="accent" disabled data-regenerate-toggle>
-              Regenerate
+              <RegenerateLabel />
             </Button>
             <Button variant="outline" disabled className={COMPACT} data-collapse={COLLAPSE.export} data-export>
               <Download data-icon="inline-start" aria-hidden />

@@ -606,7 +606,7 @@ describe("request phases", () => {
     const { service, bridge, open } = await withIteration();
     bridge.sendMode = "hang";
     const pending = service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: null });
-    expect(await phase(service)).toEqual({ phase: "sending", actions: [], message: "Sending to T3…" });
+    expect(await phase(service)).toEqual({ phase: "sending", actions: [], message: "Sending to T3" });
 
     const restarted = await open();
     expect(await phase(restarted)).toEqual({
@@ -1017,7 +1017,7 @@ describe("fork", () => {
     bridge.startMode = "hang";
     const pending = service.fork(S, { from: 2 as IterationN, picks: {}, instruction: "calmer still" });
     await new Promise((r) => setTimeout(r, 50));
-    expect(await phaseOf(service, F)).toEqual({ phase: "starting", actions: [], message: "Starting a T3 thread…" });
+    expect(await phaseOf(service, F)).toEqual({ phase: "starting", actions: [], message: "Starting a T3 thread" });
     const restarted = await open();
     expect(await phaseOf(restarted, F)).toEqual({
       phase: "start_failed",

@@ -18,8 +18,9 @@ import { partLabel } from "../core/fork";
 import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
 import { actionRank, COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
 import { PHASE, TONE_TEXT } from "./status";
+import { Elapsed } from "./SessionStatus";
 import { PinNumber } from "./PinNumber";
-import { elapsed, useNow } from "./time";
+import { useNow } from "./time";
 import type { BlockId, BlockView, IterationN, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
 /** Vary has its own pick and popover, so Regenerate offers the other three. */
@@ -72,11 +73,7 @@ export function Regenerate({
     return (
       <BlockedHint name="Regenerate" label={gate === null ? `Back to latest first. You are viewing iteration ${past}.` : blockedMessage(gate.reason, view.request?.request.n)} side="left" data-regenerate-blocked>
         <Button variant="accent" disabled data-regenerate-toggle>
-          {/* An open request fills the bar with its status and actions, so the glyph stays off and those keep one x from phase to phase. */}
-          {gate?.ok === false && gate.reason === "request_open" ? null : (
-            <Sparkles data-icon="inline-start" data-collapse={COLLAPSE.glyph} className="data-collapsed:hidden" aria-hidden />
-          )}
-          Regenerate
+          <RegenerateLabel />
         </Button>
       </BlockedHint>
     );
@@ -86,8 +83,7 @@ export function Regenerate({
       {/* To the left, so it never covers the Inspector's heading under the bar. */}
       <Hint name="Regenerate" label="Ask the agent for a new iteration" shortcut="Ctrl+R" side="left">
         <PopoverTrigger render={<Button variant="accent" data-regenerate-toggle />}>
-          <Sparkles data-icon="inline-start" data-collapse={COLLAPSE.glyph} className="data-collapsed:hidden" aria-hidden />
-          Regenerate
+          <RegenerateLabel />
         </PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="end" data-regenerate-menu>
@@ -95,6 +91,16 @@ export function Regenerate({
         <RegenerateForm view={view} selected={selected} onClose={() => setOpen(false)} send={send} />
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Regenerate's one shape in every state, loading and blocked included; the header fit alone decides when its glyph goes. */
+export function RegenerateLabel() {
+  return (
+    <>
+      <Sparkles data-icon="inline-start" data-collapse={COLLAPSE.glyph} className="data-collapsed:hidden" aria-hidden />
+      Regenerate
+    </>
   );
 }
 
@@ -340,11 +346,7 @@ export function RequestStatus({ view }: { view: SessionView }) {
           {short}
         </Truncate>
       )}
-      {counting && (
-        <span className="tabular-nums data-collapsed:hidden" data-collapse={COLLAPSE.elapsed} data-status-elapsed>
-          {elapsed(request!.request.sentAt ?? request!.request.createdAt, now)}
-        </span>
-      )}
+      {counting && <Elapsed since={request!.request.sentAt ?? request!.request.createdAt} now={now} rank={COLLAPSE.elapsed} />}
     </div>
   );
 }
@@ -366,7 +368,7 @@ export function PhaseActions({ view, send, onDiscard }: { view: SessionView; sen
   return (
     <span className="flex shrink-0 items-center gap-2" data-phase-actions>
       {actions.map((action, i) => (
-        <PhaseAction key={action} action={action} rank={actionRank(i, actions.length)} view={view} send={send} onDiscard={onDiscard} />
+        <PhaseAction key={action} action={action} rank={actionRank(action, i, actions.length)} view={view} send={send} onDiscard={onDiscard} />
       ))}
     </span>
   );

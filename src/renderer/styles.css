@@ -282,6 +282,21 @@ body[data-resizing] [data-slot="sidebar-container"] {
   }
 }
 
+/* A running count holds the room of its unit's widest form, from data-count-slot, so what sits before it stays still as it counts. */
+@utility count-slot {
+  display: inline-grid;
+  justify-items: end;
+  font-variant-numeric: tabular-nums;
+  &::before {
+    content: attr(data-count-slot) / "";
+    visibility: hidden;
+    grid-area: 1 / 1;
+  }
+  & > * {
+    grid-area: 1 / 1;
+  }
+}
+
 /* A scroller whose position another control shows, such as the strip with its arrows, draws no scrollbar. */
 @utility scrollbar-none {
   &::-webkit-scrollbar {

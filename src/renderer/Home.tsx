@@ -18,6 +18,7 @@ import { markdownText } from "./markdownSubset";
 import { CardPreview, type LoadPreview, PreviewSkeleton } from "./Preview";
 import { SessionStatus } from "./SessionStatus";
 import { SETTLE_SHORTCUT, settleLabel, settleUndoes } from "./settle";
+import { sessionPhase } from "./status";
 import { age, useNow } from "./time";
 
 const START = (
@@ -52,7 +53,7 @@ export function HomeOverview({
   query: HomeQuery;
   onQuery: (query: HomeQuery) => void;
 }) {
-  const now = useNow();
+  const now = useNow(sessions?.some((s) => sessionPhase(s) !== null) === true ? 1_000 : undefined);
   const [search, setSearch] = useState("");
   const field = useRef<HTMLInputElement>(null);
   useSearchShortcut(field);
@@ -254,7 +255,7 @@ function OverviewCard({
               Settled
             </span>
           ) : (
-            <SessionStatus session={s} className="ml-auto" />
+            <SessionStatus session={s} now={now} className="ml-auto" />
           )}
         </span>
         <button
@@ -333,7 +334,7 @@ function HomeEmpty() {
 
 function ListError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <Empty align="start" className={MESSAGE} data-home-error>
+    <Empty align="start" tone="danger" className={MESSAGE} data-home-error>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <CloudOff aria-hidden className="text-danger" />

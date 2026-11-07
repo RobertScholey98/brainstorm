@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { age, clock, elapsed } from "../src/renderer/time";
+import { age, clock, elapsed, elapsedSlot } from "../src/renderer/time";
 
 const now = Date.parse("2026-11-05T12:00:00.000Z");
 const before = (ms: number) => new Date(now - ms).toISOString();
@@ -25,8 +25,12 @@ describe("age", () => {
 });
 
 describe("elapsed", () => {
-  it("counts seconds, then minutes, then hours and minutes", () => {
-    expect([0, 12_000, 59_999, MIN, 59 * MIN, 65 * MIN, 125 * MIN].map((ms) => elapsed(before(ms), now))).toEqual(["0s", "12s", "59s", "1m", "59m", "1h 5m", "2h 5m"]);
+  it("counts seconds, then minutes, then hours and minutes, and says nothing in its first second", () => {
+    expect([0, 999, 1_000, 12_000, 59_999, MIN, 59 * MIN, 65 * MIN, 125 * MIN].map((ms) => elapsed(before(ms), now))).toEqual(["", "", "1s", "12s", "59s", "1m", "59m", "1h 5m", "2h 5m"]);
+  });
+
+  it("keeps the room of its unit's widest form, so a count from 5s to 17s never moves what sits before it", () => {
+    expect(["", "5s", "17s", "1m", "12m", "1h 5m"].map(elapsedSlot)).toEqual(["00s", "00s", "00s", "00m", "00m", "00h 00m"]);
   });
 });
 

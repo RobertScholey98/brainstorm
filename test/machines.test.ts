@@ -124,7 +124,7 @@ describe("requestPhase, one test per design.md row", () => {
   const sent: RequestState = { state: "sent" };
 
   test("sending", () => {
-    expect(seen({ state: "sending" }, attached, null)).toEqual({ phase: "sending", actions: [], message: "Sending to T3…" });
+    expect(seen({ state: "sending" }, attached, null)).toEqual({ phase: "sending", actions: [], message: "Sending to T3" });
   });
 
   test("send_failed", () => {
@@ -332,7 +332,7 @@ describe("a fork's thread start", () => {
   const unstarted: Attachment = { ...attached, threadId: pending };
 
   test("starting has nothing to press, and a failed start offers Retry and Discard only", () => {
-    expect(seen({ state: "sending" }, unstarted, null, pending)).toEqual({ phase: "starting", actions: [], message: "Starting a T3 thread…" });
+    expect(seen({ state: "sending" }, unstarted, null, pending)).toEqual({ phase: "starting", actions: [], message: "Starting a T3 thread" });
     expect(seen({ state: "send_failed", error: "t3 exited 1" }, unstarted, null, pending)).toEqual({
       phase: "start_failed",
       actions: ["retry", "discard"],

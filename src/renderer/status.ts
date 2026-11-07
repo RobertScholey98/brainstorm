@@ -57,8 +57,20 @@ export function needsAttention(s: SessionListing): boolean {
 }
 
 /**
- * The tone a phase takes beside the header. The header and the request strip carry a status hue, so a second surface
- * names the phase in muted text rather than repeat the alarm, as the lost thread does (R5-66). The agent's own activity
- * keeps the accent wherever it shows.
+ * The tone a phase's mark takes beside the header. A phase that alarms or has ended has a strip under the bar in its
+ * hue, so a second surface marks it muted rather than repeat the alarm, as the lost thread does (R5-66). A running
+ * phase keeps its hue, so the agent at work and the agent asking Rob never share the grey of a queue.
  */
-export const echoTone = (phase: RequestPhase["phase"]): Tone => (ATTENTION.has(PHASE[phase].tone) ? "muted" : PHASE[phase].tone);
+export const echoTone = (phase: RequestPhase["phase"]): Tone => {
+  const { tone, ended } = PHASE[phase];
+  return ended === true || tone === "danger" || tone === "warning" ? "muted" : tone;
+};
+
+/** Which tone wins when one mark speaks for several brainstorms: what stops Rob first, then the agent at work. */
+const LOUDEST: readonly Tone[] = ["danger", "warning", "info", "accent", "success", "muted"];
+
+/** The phase a folded group's head shows for its brainstorms, the one that most needs Rob, or null when none is open. */
+export function loudestPhase(sessions: readonly SessionListing[]): OpenPhase | null {
+  const open = sessions.map(sessionPhase).filter((phase) => phase !== null);
+  return open.sort((a, b) => LOUDEST.indexOf(PHASE[a].tone) - LOUDEST.indexOf(PHASE[b].tone))[0] ?? null;
+}
