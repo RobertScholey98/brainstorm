@@ -659,7 +659,8 @@ body {
   display: flex; align-items: flex-start; gap: ${GAP}px;
   padding: ${CANVAS_PAD}px calc(${CANVAS_PAD}px - var(--bs-scrollbar)) 48px;
 }
-#canvas[data-view="stage"] { justify-content: center; }
+/* Both views centre what fits; safe keeps a row a rounding pixel too wide from losing its left edge. */
+#canvas { justify-content: safe center; }
 /* A reveal stops at the canvas padding, so a frame's label sits the same way off the bar in both views. */
 .bs-frame { flex: none; min-width: 0; scroll-margin: ${CANVAS_PAD}px; }
 .bs-frame[data-offstage] { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none; }

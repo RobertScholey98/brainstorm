@@ -868,6 +868,18 @@ try {
     [["wheel", "result"], true, true],
   );
   check("a frame's label sits as far off the canvas bar on the board as on the stage", [stageLabel, await labelTop()], [24, 24]);
+  check(
+    "a board row that fits at 100% sits centred, as the stage centres its frame",
+    await settled(() =>
+      rouletteCanvas.evaluate(() => {
+        const bodies = [...document.querySelectorAll(".bs-frame:not([data-offstage]) .bs-frame-body")].map((b) => b.getBoundingClientRect());
+        const left = Math.min(...bodies.map((b) => b.left));
+        const right = innerWidth - Math.max(...bodies.map((b) => b.right));
+        return [document.querySelector("[data-zoom]") === null, Math.abs(Math.round(left - right)) <= 1];
+      }),
+    ),
+    [true, true],
+  );
   const row = () =>
     rouletteCanvas.evaluate(() => {
       const de = document.documentElement;

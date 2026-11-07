@@ -117,3 +117,9 @@ A frame now scrolls only when its block is more than one pixel taller than its d
 A pin pulse or a pick scrolled the stage with `scrollIntoView` and a 48 px margin, which could leave a frame's label sliced under the canvas bar (R7-7). A reveal now moves the least that brings its target in, and goes on past the label or stops short of it, so the label shows whole or not at all. `verify:4` pulses a pin in view and one from below the fold.
 
 An open pin's 2 px card border vanished on a dark block, so its face read 16 px against a confirmed pin's 22 (R7-30). Every pin now draws a 1 px `border-strong` ring outside its border, as the confirmed pin's muted ring does. `verify:4` measures both at rest at 22 px.
+
+## Amendment: round 8 fix pass. The board centres what fits
+
+A board that fit at 100% sat 6 to 7 px left of centre, because only the stage centred its row. A zoomed board fills its room, so the board shifted sideways when it reached full size (R8-26). `#canvas` now centres in both views with `safe center`, so a row a rounding pixel too wide keeps its left edge. `verify:7` checks a two-phone board at 1440 has equal room on both sides, within a pixel.
+
+A pin cut at the canvas foot after a vary pick's reveal stays as it is (R8-31). The reveal brings in its target. Pin 1 marks the Pool line under the target, and the canvas foot clips it as it clips any content scrolled past the edge. A wider margin would only move the cut to the next line down.
