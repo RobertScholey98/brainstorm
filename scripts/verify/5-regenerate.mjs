@@ -122,6 +122,14 @@ try {
 
   await regenerate("blocks", "make the spin feel less random");
   check(
+    "Regenerate leads with a glyph as Fork and Export do, and its popover's description takes their grammar, the brainstorm then a clause",
+    [
+      await window.$eval("[data-regenerate-toggle]", (b) => b.firstElementChild?.tagName.toLowerCase()),
+      (await window.textContent("[data-regenerate-menu] [data-slot=popover-description]"))?.trim(),
+    ],
+    ["svg", "Chore roulette · a new iteration from the agent"],
+  );
+  check(
     "Selected blocks defaults to the selected block",
     await window.$$eval("[data-block-choices] input:checked", (els) => els.map((e) => e.closest("[data-choice]").dataset.choice)),
     ["wheel/neon"],

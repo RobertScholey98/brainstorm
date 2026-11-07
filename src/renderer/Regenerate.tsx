@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, CircleAlert, CircleHelp, CircleSlash, Clock, ExternalLink, Info, RotateCw, Send, Trash2, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Check, CircleAlert, CircleHelp, CircleSlash, Clock, ExternalLink, Info, RotateCw, Send, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machine
 import { actionRank, COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
 import { PHASE, TONE_TEXT } from "./status";
 import { PinNumber } from "./PinNumber";
+import { elapsed, useNow } from "./time";
 import type { BlockId, BlockView, IterationN, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
 /** Vary has its own pick and popover, so Regenerate offers the other three. */
@@ -71,6 +72,10 @@ export function Regenerate({
     return (
       <BlockedHint name="Regenerate" label={gate === null ? `Back to latest first. You are viewing iteration ${past}.` : blockedMessage(gate.reason, view.request?.request.n)} side="left" data-regenerate-blocked>
         <Button variant="accent" disabled data-regenerate-toggle>
+          {/* An open request fills the bar with its status and actions, so the glyph stays off and those keep one x from phase to phase. */}
+          {gate?.ok === false && gate.reason === "request_open" ? null : (
+            <Sparkles data-icon="inline-start" data-collapse={COLLAPSE.glyph} className="data-collapsed:hidden" aria-hidden />
+          )}
           Regenerate
         </Button>
       </BlockedHint>
@@ -80,10 +85,13 @@ export function Regenerate({
     <Popover open={open} onOpenChange={setOpen}>
       {/* To the left, so it never covers the Inspector's heading under the bar. */}
       <Hint name="Regenerate" label="Ask the agent for a new iteration" shortcut="Ctrl+R" side="left">
-        <PopoverTrigger render={<Button variant="accent" data-regenerate-toggle />}>Regenerate</PopoverTrigger>
+        <PopoverTrigger render={<Button variant="accent" data-regenerate-toggle />}>
+          <Sparkles data-icon="inline-start" data-collapse={COLLAPSE.glyph} className="data-collapsed:hidden" aria-hidden />
+          Regenerate
+        </PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="end" data-regenerate-menu>
-        <PopoverHeader heading="Regenerate" description="Ask the agent for a new iteration." />
+        <PopoverHeader heading="Regenerate" description={`${view.session.title} · a new iteration from the agent`} />
         <RegenerateForm view={view} selected={selected} onClose={() => setOpen(false)} send={send} />
       </PopoverContent>
     </Popover>
@@ -297,13 +305,16 @@ const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; re
 };
 
 /**
- * The request's phase in the header: its glyph and its words in the phase's tone. A short header gives up the long
- * words for the phase's short name first, since the glyph and tone still say it and the strip keeps any detail.
+ * The request's phase in the header: its glyph, its words in the phase's tone, and how long it has been open, as the
+ * sidebar counts it. A short header gives up the time first, then the long words for the phase's short name, since
+ * the glyph and tone still say it and the strip keeps any detail.
  */
 export function RequestStatus({ view }: { view: SessionView }) {
   const request = view.request;
   // A lost thread stays named once its request closes, since nothing can be sent until it is taken over.
   const lost = view.attachment.lostAt !== null && (request === null || request.phase.actions.length === 0);
+  const counting = !lost && request !== null && PHASE[request.phase.phase].ended !== true;
+  const now = useNow(counting ? 1_000 : undefined);
   if (!lost && request === null) return null;
   const phase = lost ? "thread_lost" : request!.phase.phase;
   const detail = DETAIL[phase];
@@ -328,6 +339,11 @@ export function RequestStatus({ view }: { view: SessionView }) {
         <Truncate className={cn("hidden in-data-collapsed:block", detail !== undefined && "font-medium")} data-request-short>
           {short}
         </Truncate>
+      )}
+      {counting && (
+        <span className="tabular-nums data-collapsed:hidden" data-collapse={COLLAPSE.elapsed} data-status-elapsed>
+          {elapsed(request!.request.sentAt ?? request!.request.createdAt, now)}
+        </span>
       )}
     </div>
   );

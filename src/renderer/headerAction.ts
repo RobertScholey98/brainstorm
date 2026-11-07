@@ -1,11 +1,11 @@
 import { useLayoutEffect, type RefObject } from "react";
 
 /**
- * The order the header gives up its words when the breadcrumb runs short, first to last: the request status falls to
- * its short name, then Export, then Fork, then the phase actions from the last one in. Each step costs the least
+ * The order the header gives up its words when the breadcrumb runs short, first to last: Regenerate drops its glyph,
+ * the request status drops its time, then falls to its short name, then Export, then Fork, then the phase actions from the last one in. Each step costs the least
  * where Rob is looking: Export matters least while a request is open, and the first phase action is its recovery.
  */
-export const COLLAPSE = { status: 1, export: 2, fork: 3, action: 10 } as const;
+export const COLLAPSE = { glyph: 0, elapsed: 1, status: 2, export: 3, fork: 4, action: 10 } as const;
 
 /** The rank of the phase action at `index` of `count`: the last one gives way first. */
 export const actionRank = (index: number, count: number): number => COLLAPSE.action + (count - 1 - index);

@@ -71,7 +71,7 @@ const measure = () =>
       const fits = () =>
         roomy(header.querySelector("[data-session-title]"), titleFloor) && [...header.querySelectorAll("[data-lineage]")].every((a) => roomy(a, ancestorFloor));
       const steps = [...header.querySelectorAll("[data-collapse]")].sort((a, b) => Number(a.dataset.collapse) - Number(b.dataset.collapse));
-      const name = (el) => el.dataset.requestAction ?? (el.matches("[data-fork-toggle]") ? "fork" : el.matches("[data-export]") ? "export" : "status");
+      const name = (el) => el.dataset.requestAction ?? (el.matches("[data-fork-toggle]") ? "fork" : el.matches("[data-export]") ? "export" : el.matches("[data-status-elapsed]") ? "elapsed" : el.matches("svg") ? "glyph" : "status");
       const collapsed = steps.filter((s) => s.hasAttribute("data-collapsed"));
       const inOrder = collapsed.every((s, i) => s === steps[i]);
       const last = collapsed.at(-1);
@@ -91,6 +91,7 @@ const measure = () =>
       const controls = [...header.querySelectorAll("button, a")].filter((el) => el.getClientRects().length > 0);
       return {
         collapsed: collapsed.map(name),
+        elapsed: header.querySelector("[data-status-elapsed]:not([data-collapsed])")?.textContent ?? null,
         title: header.querySelector("[data-session-title]").textContent,
         cut: header.querySelector("[data-session-title]").dataset.cut ?? null,
         titleShown: Math.round(header.querySelector("[data-session-title]").clientWidth),
@@ -170,16 +171,21 @@ try {
 
   const gaveWay = (label) => results.get(label)?.collapsed;
   check(
-    "at 1440 a short title keeps every label but in previous thread, where the status folds to \"Previous thread\" and Export gives way, in ADR 003's order, and reads whole in every phase",
+    "at 1440 with a short title, the header counts how long a running request has been open, as the sidebar does, an ended one counts nothing, and previous thread, the fullest bar, gives its time up first",
+    Object.fromEntries(Object.keys(PHASES).map((p) => [p, /^\d+[smh]/.test(results.get(`light 1440 short ${p}`)?.elapsed ?? "")])),
+    Object.fromEntries(Object.keys(PHASES).map((p) => [p, ["sending", "starting", "queued", "working", "asking"].includes(p)])),
+  );
+  check(
+    "at 1440 a short title keeps every label but in previous thread, where the time goes, the status folds to \"Previous thread\" and Export gives way, in ADR 003's order, and reads whole in every phase",
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, [gaveWay(`light 1440 short ${p}`)?.join(), results.get(`light 1440 short ${p}`)?.titleWhole]])),
-    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [p === "previous_thread" ? "status,export" : "", true]])),
+    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [p === "previous_thread" ? "elapsed,status,export" : "", true]])),
   );
   check(
     "at 1440 in previous thread, the room left of Resend is short of Export's label: putting it back cuts \"Chore roulette\" by 20 px or more",
     results.get("light 1440 short previous_thread")?.shortBy >= 20,
     true,
   );
-  check("at 1100 with a short title and a request queued, the status drops \"in T3\" and Export and Fork give way, so Withdraw and Open thread keep their names and the title reads whole", [gaveWay("light 1100 short queued"), results.get("light 1100 short queued")?.titleWhole], [["status", "export", "fork"], true]);
+  check("at 1100 with a short title and a request queued, the time goes, the status drops \"in T3\" and Export and Fork give way, so Withdraw and Open thread keep their names and the title reads whole", [gaveWay("light 1100 short queued"), results.get("light 1100 short queued")?.titleWhole], [["elapsed", "status", "export", "fork"], true]);
   check(
     "at 1100 a long title with a send failure keeps 160 px or more, and Retry, the recovery, is the last label to give way",
     [gaveWay("light 1100 long send_failed"), results.get("light 1100 long send_failed")?.titleShown >= TITLE_FLOOR],

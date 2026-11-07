@@ -73,7 +73,7 @@ export function blockedMessage(reason: Extract<Regenerate, { ok: false }>["reaso
     case "no_iteration":
       return "Needs a first iteration";
     case "request_open":
-      return `Withdraw request ${openRequest} first`;
+      return `Request ${openRequest} is still open`;
     case "thread_lost":
       return "This session's thread is gone. Take it over from a T3 thread first.";
   }
