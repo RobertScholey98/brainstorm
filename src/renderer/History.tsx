@@ -1,5 +1,5 @@
-import { GitBranch, History as HistoryIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, GitBranch, History as HistoryIcon } from "lucide-react";
+import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -9,15 +9,22 @@ import { Truncate } from "@/components/ui/truncate";
 import { originText } from "../core/machines";
 import type { ForkBranch, HistoryEntry, IterationN, Result, SessionId, SessionPreview, SessionView, SlotId } from "../core/types";
 import { IterationStill } from "./Preview";
+import { STRIP_GAP, stripFit, stripRest, type StripFit } from "./stripFit";
 import { age, useNow } from "./time";
 
 export type LoadIterationStill = (at: { readonly n: IterationN; readonly slot: SlotId | null }) => Promise<Result<SessionPreview | null>>;
 
+/** One place in the strip, in the order it shows: the stub back to a fork's parent, then each iteration and its forks. */
+type StripItem = { readonly kind: "stub" } | { readonly kind: "iteration"; readonly entry: HistoryEntry } | { readonly kind: "fork"; readonly fork: ForkBranch };
+
 /**
  * The brainstorm's history along the bottom of the canvas: a still per iteration, oldest first, each with what made it
- * and its age, and the forks made from an iteration as links in the row after its still. Inside a fork the strip starts with a
- * stub back to the iteration it came from. It is one listbox: Left and Right step through it, Home and End jump, and
- * the option Rob lands on is what the canvas shows.
+ * and its age, and the forks made from an iteration after its still. Inside a fork the strip starts with a stub back to
+ * the iteration it came from. It is one listbox: Left and Right step through it, Home and End jump, and the option Rob
+ * lands on is what the canvas shows.
+ *
+ * Every entry is one width. While they fit they share the strip; once they don't, a whole number of them fill it and
+ * the strip rests only on an entry's edge, so it never shows a cut entry, and the shown iteration is always whole.
  */
 export function Filmstrip({
   view,
@@ -41,26 +48,51 @@ export function Filmstrip({
   const now = useNow();
   const { iterations, forks } = view.history;
   const list = useRef<HTMLDivElement>(null);
-  const latest = iterations.at(-1)?.n;
-
   const scroller = useRef<HTMLDivElement>(null);
-  // The option on the canvas stays in view as Rob steps and as the window resizes, so the strip opens at its newest
-  // end. Only the strip scrolls: scrollIntoView would move the panes around it too.
-  useEffect(() => {
+  const latest = iterations.at(-1)?.n;
+  const items: StripItem[] = [
+    ...(view.fork === null ? [] : [{ kind: "stub" } as const]),
+    ...iterations.flatMap((entry) => [{ kind: "iteration", entry } as const, ...forks.filter((f) => f.from === entry.n).map((fork) => ({ kind: "fork", fork }) as const)]),
+  ];
+  const shownAt = items.findIndex((i) => i.kind === "iteration" && i.entry.n === showing);
+
+  const [fit, setFit] = useState<StripFit>(() => stripFit(0, items.length));
+  const [ends, setEnds] = useState({ start: true, end: true });
+  useLayoutEffect(() => {
     const box = scroller.current;
     if (box === null) return;
-    const reveal = () => {
-      const option = box.querySelector<HTMLElement>(`[data-history-n="${showing}"]`);
-      if (option === null) return;
-      const [edge, at] = [box.getBoundingClientRect(), option.getBoundingClientRect()];
-      if (at.right > edge.right) box.scrollLeft += at.right - edge.right;
-      else if (at.left < edge.left) box.scrollLeft -= edge.left - at.left;
+    const measure = () => {
+      const next = stripFit(box.clientWidth, items.length);
+      setFit((prev) => (prev.width === next.width && prev.shown === next.shown && prev.overflows === next.overflows ? prev : next));
     };
-    reveal();
-    const observer = new ResizeObserver(reveal);
+    measure();
+    const observer = new ResizeObserver(measure);
     observer.observe(box);
     return () => observer.disconnect();
-  }, [showing, iterations.length]);
+  }, [items.length]);
+
+  // The shown entry stays whole in view as Rob steps, as entries land and as the strip resizes. Only the strip scrolls,
+  // so the panes around it stay put.
+  useLayoutEffect(() => {
+    const box = scroller.current;
+    if (box === null) return;
+    const rest = () => {
+      box.scrollTo({ left: stripRest(fit, items.length, Math.max(0, shownAt), box.scrollLeft), behavior: "instant" });
+      setEnds({ start: box.scrollLeft <= 1, end: box.scrollLeft >= box.scrollWidth - box.clientWidth - 1 });
+    };
+    rest();
+    const frame = requestAnimationFrame(rest);
+    return () => cancelAnimationFrame(frame);
+  }, [fit, shownAt, items.length]);
+
+  const page = (by: -1 | 1) => {
+    const box = scroller.current;
+    if (box !== null) box.scrollBy({ left: by * (fit.width + STRIP_GAP), behavior: "smooth" });
+  };
+  const onScrollEnd = () => {
+    const box = scroller.current;
+    if (box !== null) setEnds({ start: box.scrollLeft <= 1, end: box.scrollLeft >= box.scrollWidth - box.clientWidth - 1 });
+  };
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const at = iterations.findIndex((i) => i.n === showing);
@@ -71,64 +103,94 @@ export function Filmstrip({
     const next = iterations[Math.max(0, Math.min(iterations.length - 1, to))];
     if (next === undefined) return;
     onShow(next.n);
-    list.current?.querySelector<HTMLElement>(`[data-history-n="${next.n}"]`)?.focus();
+    list.current?.querySelector<HTMLElement>(`[data-history-n="${next.n}"]`)?.focus({ preventScroll: true });
   };
 
   return (
-    <section className={STRIP} aria-label="History" data-history>
-      <StripHead>
-        {iterations.length} {iterations.length === 1 ? "iteration" : "iterations"}
-        {forks.length > 0 && ` · ${forks.length} ${forks.length === 1 ? "fork" : "forks"}`}
+    <section className={STRIP} aria-label="History" data-history data-history-overflows={fit.overflows || undefined}>
+      <StripHead
+        steps={
+          fit.overflows && (
+            <>
+              <StripStep side="start" disabled={ends.start} onClick={() => page(-1)} />
+              <StripStep side="end" disabled={ends.end} onClick={() => page(1)} />
+            </>
+          )
+        }
+      >
+        <Truncate data-history-count>
+          {`${iterations.length} ${iterations.length === 1 ? "iteration" : "iterations"}${forks.length > 0 ? ` · ${forks.length} ${forks.length === 1 ? "fork" : "forks"}` : ""}`}
+        </Truncate>
       </StripHead>
-      <div ref={scroller} className={STRIP_SCROLL} data-history-scroll>
-        {view.fork !== null && <ForkStub view={view} onOpen={onOpen} />}
+      <div ref={scroller} className={STRIP_SCROLL} onScrollEnd={onScrollEnd} data-history-scroll>
         <div
           ref={list}
           role="listbox"
           aria-label="Iterations"
           aria-orientation="horizontal"
-          className="flex items-center gap-3"
+          className={STRIP_LIST}
+          style={{ "--strip-entry": `${fit.width}px` } as CSSProperties}
           onKeyDown={onKey}
           data-history-list
         >
-          {iterations.map((entry) => (
-            <div key={entry.n} className="flex shrink-0 snap-start items-center gap-2">
+          {items.map((item) =>
+            item.kind === "stub" ? (
+              <ForkStub key="stub" view={view} onOpen={onOpen} />
+            ) : item.kind === "fork" ? (
+              <Offshoot key={item.fork.id} fork={item.fork} onOpen={onOpen} />
+            ) : (
               <StillOption
-                entry={entry}
-                latest={entry.n === latest}
-                selected={entry.n === showing}
+                key={item.entry.n}
+                entry={item.entry}
+                latest={item.entry.n === latest}
+                selected={item.entry.n === showing}
                 now={now}
                 slot={slot}
                 revision={revision}
                 loadStill={loadStill}
-                onShow={() => onShow(entry.n)}
+                onShow={() => onShow(item.entry.n)}
               />
-              <Offshoots forks={forks.filter((f) => f.from === entry.n)} onOpen={onOpen} />
-            </div>
-          ))}
+            ),
+          )}
         </div>
       </div>
     </section>
   );
 }
 
-/**
- * The strip is one row at one height whether or not it has forks or overflows: its head stands to the left, an
- * offshoot hangs beside the still it came from rather than under it, and the scrollbar's lane is always kept.
- */
-const STRIP = "flex h-strip shrink-0 items-stretch border-t bg-card";
-/** Overflow scrolls sideways under fades at either end, and comes to rest on a still's edge. */
-const STRIP_SCROLL = "scroll-fades-x flex min-w-0 flex-1 snap-x snap-proximity scroll-px-2 items-center gap-3 overflow-x-scroll overflow-y-hidden px-2";
+/** The strip is one row at one height whether or not it has forks or overflows, with its head standing to the left. */
+const STRIP = "flex h-strip shrink-0 items-center border-t bg-card";
+/** Overflow scrolls sideways and rests on an entry's edge. Its ends fade only over the inset, which at rest holds no entry. */
+const STRIP_SCROLL = "scroll-fades-x scrollbar-none flex min-w-0 flex-1 snap-x snap-mandatory scroll-px-4 overflow-x-auto overflow-y-hidden";
+const STRIP_LIST = "flex w-max items-center gap-4 px-4";
+/** Every entry in the strip takes the one width the fit gives. */
+const ENTRY = "w-strip-entry shrink-0 snap-start";
 
-function StripHead({ children }: { children: ReactNode }) {
+/**
+ * The strip's head, one width whatever the count says, so the first entry never moves as iterations land. While the
+ * entries overflow, its arrows say so and step through them, which is why the strip draws no scrollbar.
+ */
+function StripHead({ children, steps }: { children: ReactNode; steps?: ReactNode }) {
   return (
-    <h2 className="flex shrink-0 flex-col justify-center gap-0.5 pr-2 pl-4 text-xs text-fg-muted">
-      <span className="flex items-center gap-1.5 font-medium text-fg">
+    <div className="flex w-menu shrink-0 flex-col justify-center gap-0.5 pl-4 text-xs text-fg-muted">
+      <h2 className="flex items-center gap-1.5 font-medium text-fg">
         <HistoryIcon aria-hidden className="size-3.5" />
         History
-      </span>
-      <span>{children}</span>
-    </h2>
+      </h2>
+      {children}
+      {steps && <span className="-ml-1 mt-1 flex gap-1">{steps}</span>}
+    </div>
+  );
+}
+
+function StripStep({ side, disabled, onClick }: { side: "start" | "end"; disabled: boolean; onClick: () => void }) {
+  const label = side === "start" ? "Earlier in the history" : "Later in the history";
+  return (
+    <Hint label={label} side="top">
+      <Button variant="ghost" size="icon-xs" aria-label={label} disabled={disabled} onClick={onClick} data-history-step={side}>
+        {side === "start" ? <ChevronLeft aria-hidden /> : <ChevronRight aria-hidden />}
+      </Button>
+    </Hint>
   );
 }
 
@@ -140,7 +202,9 @@ export function FilmstripSkeleton() {
         <Skeleton className="mt-0.5 h-3 w-16" />
       </StripHead>
       <div className={STRIP_SCROLL}>
-        <Skeleton className="h-still w-picker rounded-lg" />
+        <div className={STRIP_LIST}>
+          <Skeleton className="h-still w-picker rounded-lg" />
+        </div>
       </div>
     </div>
   );
@@ -177,52 +241,59 @@ function StillOption({
         onClick={onShow}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onShow())}
         className={cn(
-          "flex w-picker cursor-pointer items-center gap-2 rounded-lg p-1 outline-none ring-1 ring-border hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring",
+          ENTRY,
+          "flex cursor-pointer items-center gap-2 rounded-lg p-1 outline-none ring-1 ring-border hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring",
           selected && "bg-selected ring-border-strong",
         )}
         data-history-n={entry.n}
         data-selected={selected || undefined}
       >
         <IterationStill load={load} revision={revision} />
-        <span className="grid min-w-0 gap-0.5">
-          <span className="flex items-baseline gap-1.5 text-sm">
+        <span className="grid min-w-0 flex-1 gap-0.5 pr-1">
+          <span className="flex min-w-0 items-baseline gap-1.5 text-sm">
             <span className="shrink-0 font-medium">Iteration {entry.n}</span>
-            <span className="truncate text-xs text-fg-muted tabular-nums">
-              {latest ? "latest · " : ""}
-              {age(entry.createdAt, now)}
-            </span>
+            <Truncate className="text-xs text-fg-muted tabular-nums">{`${latest ? "latest · " : ""}${age(entry.createdAt, now)}`}</Truncate>
           </span>
-          <span className="truncate text-xs" data-history-origin>
+          <Truncate className="text-xs" data-history-origin>
             {origin}
-          </span>
+          </Truncate>
         </span>
       </div>
     </Hint>
   );
 }
 
-/** The forks made from one iteration, each a link to its brainstorm, branching off beside the still they came from. */
-function Offshoots({ forks, onOpen }: { forks: readonly ForkBranch[]; onOpen: (id: SessionId) => void }) {
-  if (forks.length === 0) return null;
+/** A fork made from the iteration before it, as wide as a still and dashed as the fork's own stub, so it never reads as one more iteration. */
+function Offshoot({ fork, onOpen }: { fork: ForkBranch; onOpen: (id: SessionId) => void }) {
   return (
-    <ul className="flex items-center gap-1" aria-label="Forks from this iteration">
-      {forks.map((f) => (
-        <li key={f.id} className="flex">
-          <Hint label={`Open the fork ${f.title}`} side="top">
-            {/* Dashed, as the fork's own stub is, so a branch never reads as one more iteration in the row. */}
-            <button
-              type="button"
-              onClick={() => onOpen(f.id)}
-              className="flex h-7 max-w-picker items-center gap-1.5 rounded-md border border-dashed px-2 text-xs outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
-              data-history-fork={f.id}
-            >
-              <GitBranch aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
-              <Truncate>{f.title}</Truncate>
-            </button>
-          </Hint>
-        </li>
-      ))}
-    </ul>
+    <Hint label={`Open the fork ${fork.title}`} side="top">
+      <button
+        type="button"
+        onClick={() => onOpen(fork.id)}
+        className={cn(ENTRY, FORK_BOX, "outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring")}
+        data-history-fork={fork.id}
+        data-history-from={fork.from}
+      >
+        <ForkLines first={fork.title} second={`Fork of iteration ${fork.from}`} />
+      </button>
+    </Hint>
+  );
+}
+
+const FORK_BOX = "flex h-still items-center gap-2 rounded-lg border border-dashed px-3 text-left";
+
+function ForkLines({ first, second, lead }: { first: string; second: string; lead?: string }) {
+  return (
+    <>
+      <GitBranch aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
+      <span className="grid min-w-0 flex-1 gap-0.5 text-xs">
+        <span className="flex min-w-0 gap-1">
+          {lead !== undefined && <span className="shrink-0">{lead}</span>}
+          <Truncate className="font-medium">{first}</Truncate>
+        </span>
+        <span className="text-fg-muted">{second}</span>
+      </span>
+    </>
   );
 }
 
@@ -230,28 +301,16 @@ function Offshoots({ forks, onOpen }: { forks: readonly ForkBranch[]; onOpen: (i
 function ForkStub({ view, onOpen }: { view: SessionView; onOpen: (id: SessionId) => void }) {
   const fork = view.fork;
   if (fork === null) return null;
-  const label = (
-    <>
-      <GitBranch aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
-      <span className="grid min-w-0 gap-0.5 text-left text-xs">
-        <span className="truncate">
-          from <span className="font-medium">{fork.parent.title}</span>
-        </span>
-        <span className="text-fg-muted">{fork.parent.state === "gone" ? `iteration ${fork.from} · discarded` : `iteration ${fork.from}`}</span>
-      </span>
-    </>
-  );
-  // As tall as a still, and as wide as its words up to a still's width.
-  const box = "flex h-still max-w-picker shrink-0 snap-start items-center gap-1.5 rounded-lg border border-dashed px-2";
+  const label = <ForkLines lead="from" first={fork.parent.title} second={fork.parent.state === "gone" ? `iteration ${fork.from} · discarded` : `iteration ${fork.from}`} />;
   return fork.parent.state === "gone" ? (
-    <span className={box} data-fork-stub="gone">
+    <span className={cn(ENTRY, FORK_BOX)} data-fork-stub="gone">
       {label}
     </span>
   ) : (
     <button
       type="button"
       onClick={() => onOpen(fork.parent.id)}
-      className={cn(box, "outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring")}
+      className={cn(ENTRY, FORK_BOX, "outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring")}
       data-fork-stub={fork.parent.id}
     >
       {label}
@@ -268,7 +327,7 @@ export function PastBar({ n, onLatest }: { n: IterationN; onLatest: () => void }
     <div role="status" className="flex h-10 shrink-0 items-center gap-2 border-b border-info/40 bg-info-subtle px-4 text-sm" data-past-bar={n}>
       <HistoryIcon aria-hidden className="size-3.5 shrink-0 text-info" />
       <span className="shrink-0 font-medium">Viewing iteration {n}</span>
-      <span className="w-0 flex-1 truncate text-fg-muted">Read-only. Pick variants, then fork from here.</span>
+      <Truncate className="w-0 flex-1 text-fg-muted">Read-only. Pick variants, then fork from here.</Truncate>
       <Kbd>Esc</Kbd>
       <Button variant="outline" onClick={onLatest} data-back-to-latest>
         Back to latest

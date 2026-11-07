@@ -40,6 +40,26 @@ const strip = (window) =>
   window.$$eval("[data-history-list] [data-history-n]", (els) =>
     els.map((e) => ({ n: Number(e.dataset.historyN), selected: e.getAttribute("aria-selected") === "true", origin: e.querySelector("[data-history-origin]").textContent.trim() })),
   );
+/**
+ * How the strip rests: which entries are in view, any of them cut or under the 16 px fade at either end, whether the
+ * shown iteration is among them, the insets of the first and last in view, and whether its arrows show.
+ */
+const stripRest = (window) =>
+  window.evaluate(() => {
+    const scroller = document.querySelector("[data-history-scroll]");
+    const box = scroller.getBoundingClientRect();
+    const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : "stub");
+    const inView = [...document.querySelectorAll("[data-history-list] > *")].filter((el) => el.getBoundingClientRect().right > box.left + 1 && el.getBoundingClientRect().left < box.right - 1);
+    const [first, last] = [inView.at(0).getBoundingClientRect(), inView.at(-1).getBoundingClientRect()];
+    return {
+      inView: inView.map(name),
+      cut: inView.filter((el) => el.getBoundingClientRect().left < box.left + 15.5 || el.getBoundingClientRect().right > box.right - 15.5).map(name),
+      shown: inView.some((el) => el.getAttribute("aria-selected") === "true"),
+      insets: [Math.round(first.left - box.left), Math.round(box.right - last.right)],
+      scrolled: Math.round(scroller.scrollLeft),
+      arrows: document.querySelectorAll("[data-history-step]").length,
+    };
+  });
 const canvasAt = (window) =>
   window.$eval("[data-canvas-iteration]", (el) => ({ n: Number(el.dataset.canvasIteration), past: el.dataset.canvasPast === undefined ? null : Number(el.dataset.canvasPast) }));
 const pool = (canvas) => canvas.textContent(inBlock("wheel/neon", "pool"));
@@ -85,6 +105,16 @@ try {
       ];
     }),
     [84, 48, true, true],
+  );
+  check(
+    "two iterations fit at 1440, so the strip rests at its start with no arrows, every entry whole and 16 px off both ends",
+    await settled(() => stripRest(window)),
+    { inView: ["iteration 1", "iteration 2"], cut: [], shown: true, insets: [16, 16], scrolled: 0, arrows: 0 },
+  );
+  check(
+    "and with nothing to scroll neither end fades",
+    await window.$eval("[data-history-scroll]", (el) => [getComputedStyle(el).getPropertyValue("--fade-start"), getComputedStyle(el).getPropertyValue("--fade-end")]),
+    ["0px", "0px"],
   );
   check(
     "the strip has a still per iteration, oldest first, each saying what made it, with the latest selected",
@@ -281,7 +311,16 @@ try {
   await window.waitForSelector(`[data-history-fork="${forkId}"]`);
   await app.context().unroute(`**/v1/ui/sessions/${session}`);
   check("and with a fork hanging off a still it is still 84 px", await stripHeight(window), 84);
-  check("the parent's strip hangs the fork off iteration 2", await window.$eval(`[data-history-fork="${forkId}"]`, (el) => el.closest("[data-history-list] > div").querySelector("[data-history-n]").dataset.historyN), "2");
+  check(
+    "the parent's strip hangs the fork off iteration 2, the entry after its still, saying where it came from",
+    await window.$eval(`[data-history-fork="${forkId}"]`, (el) => [el.previousElementSibling.dataset.historyN, el.dataset.historyFrom, [...el.querySelectorAll(".grid > *")].map((line) => line.textContent.trim())]),
+    ["2", "2", ["Try a calmer wheel for mornings", "Fork of iteration 2"]],
+  );
+  check(
+    "two iterations and a fork still fit at 1440: the strip rests at its start, nothing cut",
+    await settled(() => stripRest(window)),
+    { inView: ["iteration 1", "iteration 2", "fork"], cut: [], shown: true, insets: [16, 16], scrolled: 0, arrows: 0 },
+  );
 
   await window.click("[data-back]");
   await window.click("[data-overview]");
@@ -395,7 +434,43 @@ try {
       ["Spin button C", true, true],
     ],
   );
+  check(
+    "at 1100 the overflowing strip shows two whole entries, the latest among them, 16 px off both ends, with its arrows",
+    await settled(async () => {
+      const rest = await stripRest(window);
+      return [rest.inView, rest.cut, rest.shown, rest.insets, rest.arrows];
+    }),
+    [["fork", "iteration 3"], [], true, [16, 16], 2],
+  );
+  check("the later arrow is off at the end, the earlier one on", [await window.isDisabled('[data-history-step="end"]'), await window.isDisabled('[data-history-step="start"]')], [true, false]);
+  await window.click('[data-history-step="start"]');
+  check(
+    "the earlier arrow steps back one entry and rests on an edge, nothing cut",
+    await settled(async () => {
+      const rest = await stripRest(window);
+      return [rest.inView, rest.cut, rest.insets];
+    }),
+    [["iteration 2", "fork"], [], [16, 16]],
+  );
+  await window.focus('[data-history-n="3"]');
+  await window.keyboard.press("End");
+  check(
+    "End on the strip brings the latest back whole",
+    await settled(async () => {
+      const rest = await stripRest(window);
+      return [rest.inView, rest.cut, rest.shown];
+    }),
+    [["fork", "iteration 3"], [], true],
+  );
   await window.setViewportSize({ width: 1440, height: 900 });
+  check(
+    "at 1440 the strip shows three whole entries, the latest last",
+    await settled(async () => {
+      const rest = await stripRest(window);
+      return [rest.inView, rest.cut, rest.shown, rest.insets, rest.arrows];
+    }),
+    [["iteration 2", "fork", "iteration 3"], [], true, [16, 16], 2],
+  );
   await window.click('[data-slot-id="wheel"] [data-variant="spin-button-a"]');
   await window.waitForSelector('[data-variant="spin-button-a"] [data-variant-new]', { state: "detached", timeout: PHASE_MS });
   check(
@@ -405,6 +480,21 @@ try {
   );
 
   check("the window logged no errors or warnings", errors, []);
+
+  await app.close();
+  ({ app, window, errors } = await launch(home, env));
+  await window.setViewportSize({ width: 1100, height: 720 });
+  await openSession(window, session);
+  await window.waitForSelector("[data-history-n]");
+  check(
+    "after a restart at 1100 the strip opens on the latest, whole, with nothing cut at either end",
+    await settled(async () => {
+      const rest = await stripRest(window);
+      return [rest.inView, rest.cut, rest.shown];
+    }),
+    [["fork", "iteration 3"], [], true],
+  );
+  await shot(window, shots, "10-strip-restart-1100");
 } finally {
   await app.close();
 }

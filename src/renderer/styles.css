@@ -276,8 +276,8 @@ body[data-resizing] [data-slot="sidebar-container"] {
 }
 
 /*
- * The same fades on the inline axis, for a strip that scrolls sideways: each end fades over 32 px while there is more
- * that way, hiding its outer half outright, so a still cut at the edge reads as more to come, not as a clipped card.
+ * Fades on the inline axis, for the history strip. Its entries rest on their edges, so at rest each end's 16 px holds
+ * only the inset; the fade softens an entry passing that edge mid-scroll, and only on a side with more that way.
  */
 @property --fade-start {
   syntax: "<length>";
@@ -291,12 +291,12 @@ body[data-resizing] [data-slot="sidebar-container"] {
 }
 @keyframes scroll-fade-start {
   to {
-    --fade-start: 32px;
+    --fade-start: 16px;
   }
 }
 @keyframes scroll-fade-end {
   from {
-    --fade-end: 32px;
+    --fade-end: 16px;
   }
 }
 @utility scroll-fades-x {
@@ -309,7 +309,19 @@ body[data-resizing] [data-slot="sidebar-container"] {
   );
   animation: scroll-fade-start linear both, scroll-fade-end linear both;
   animation-timeline: scroll(self inline), scroll(self inline);
-  animation-range: 0 32px, calc(100% - 32px) 100%;
+  animation-range: 0 16px, calc(100% - 16px) 100%;
+}
+
+/* A scroller whose position another control shows, such as the strip with its arrows, draws no scrollbar. */
+@utility scrollbar-none {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* A history strip entry: the one width the strip measured for all of them (stripFit.ts). */
+@utility w-strip-entry {
+  width: var(--strip-entry, 200px);
 }
 
 /*
