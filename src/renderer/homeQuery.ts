@@ -28,16 +28,16 @@ export type BriefMatch = { readonly before: string; readonly match: string; read
 const LEAD = 20;
 
 /**
- * Where the brief answers a search the title doesn't: the earliest place in the brief's text of a search word the title
- * lacks, with the whole words before it that fit in 20 characters, after an ellipsis when the brief starts earlier.
+ * Where `brief`, a brief's text, answers a search `title` doesn't: the earliest place in it of a search word the title
+ * lacks, with the whole words before it that fit in {@link LEAD}, after an ellipsis when the brief starts earlier.
  * Null when there is no search, or the title holds every word, or the brief holds none of the rest.
  */
-export function briefMatch(s: SessionListing, search: string): BriefMatch | null {
-  const title = s.title.toLowerCase();
-  const text = markdownText(s.brief).replace(/\s+/gu, " ").trim();
+export function briefMatch(title: string, brief: string, search: string): BriefMatch | null {
+  const titled = title.toLowerCase();
+  const text = brief.replace(/\s+/gu, " ").trim();
   const lower = text.toLowerCase();
   const [first] = searchWords(search)
-    .filter((w) => !title.includes(w))
+    .filter((w) => !titled.includes(w))
     .map((w) => ({ at: lower.indexOf(w), length: w.length }))
     .filter((found) => found.at >= 0)
     .sort((a, b) => a.at - b.at);

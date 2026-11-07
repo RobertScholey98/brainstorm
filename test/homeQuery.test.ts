@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import { DEFAULT_HOME, type HomeQuery } from "../src/core/prefs";
 import type { OpenPhase, ProjectId, SessionListing, Settlement } from "../src/core/types";
 import { briefMatch, matchesSearch, projectOptions, queryHome } from "../src/renderer/homeQuery";
+import { markdownText } from "../src/renderer/markdownSubset";
 import { needsAttention } from "../src/renderer/status";
 
 type Spec = { project?: string; name?: string | null; brief?: string; at?: string; created?: string; request?: OpenPhase | null; lost?: boolean; settled?: string };
@@ -22,6 +23,8 @@ const listing = (title: string, spec: Spec = {}): SessionListing => {
 };
 
 const ids = (list: readonly SessionListing[]) => list.map((s) => s.title);
+/** The match a card shows, from the brief's text as the card reads it. */
+const found = (s: SessionListing, search: string) => briefMatch(s.title, markdownText(s.brief).trim(), search);
 
 const wheel = listing("Chore wheel", { brief: "Spin to pick **who** does the bins", at: "2026-11-05T09:00:00Z", created: "2026-11-02T09:00:00Z" });
 const rota = listing("Kitchen rota", { project: "p-kitchen", name: "kitchen", request: "asking", at: "2026-11-04T09:00:00Z", created: "2026-11-04T09:00:00Z" });
@@ -41,23 +44,23 @@ test("search matches every word, in any case, in the title or the brief's text",
 
 test("a search the brief answers shows the brief from just before the word the title lacks, split around it", () => {
   const flatmate = listing("Onboarding a new flatmate", { brief: "Walk them through the **house rules**, the shared kitchen and the cleaning rota for the bins." });
-  expect(briefMatch(flatmate, "the"), "near the start, from the start, with no ellipsis").toEqual({ before: "Walk ", match: "the", after: "m through the house rules, the shared kitchen and the cleaning rota for the bins." });
-  expect(briefMatch(flatmate, "rota")).toEqual({ before: "…and the cleaning ", match: "rota", after: " for the bins." });
-  expect(briefMatch(flatmate, "flatmate ROTA"), "only the word the title lacks, in the brief's own case").toEqual({ before: "…and the cleaning ", match: "rota", after: " for the bins." });
-  expect(briefMatch(flatmate, "bins kitchen"), "the earliest of the words the title lacks").toEqual({ before: "…rules, the shared ", match: "kitchen", after: " and the cleaning rota for the bins." });
-  expect(briefMatch(flatmate, "hou"), "the whole words that fit in 20 characters before it").toEqual({ before: "…them through the ", match: "hou", after: "se rules, the shared kitchen and the cleaning rota for the bins." });
-  expect(briefMatch(flatmate, "ota"), "inside a word, from that word's start").toEqual({ before: "…and the cleaning r", match: "ota", after: " for the bins." });
+  expect(found(flatmate, "the"), "near the start, from the start, with no ellipsis").toEqual({ before: "Walk ", match: "the", after: "m through the house rules, the shared kitchen and the cleaning rota for the bins." });
+  expect(found(flatmate, "rota")).toEqual({ before: "…and the cleaning ", match: "rota", after: " for the bins." });
+  expect(found(flatmate, "flatmate ROTA"), "only the word the title lacks, in the brief's own case").toEqual({ before: "…and the cleaning ", match: "rota", after: " for the bins." });
+  expect(found(flatmate, "bins kitchen"), "the earliest of the words the title lacks").toEqual({ before: "…rules, the shared ", match: "kitchen", after: " and the cleaning rota for the bins." });
+  expect(found(flatmate, "hou"), "the whole words that fit in 20 characters before it").toEqual({ before: "…them through the ", match: "hou", after: "se rules, the shared kitchen and the cleaning rota for the bins." });
+  expect(found(flatmate, "ota"), "inside a word, from that word's start").toEqual({ before: "…and the cleaning r", match: "ota", after: " for the bins." });
 });
 
 test("a search the title answers, or no search, leaves the brief as it is", () => {
-  expect([briefMatch(wheel, "wheel"), briefMatch(wheel, "CHORE"), briefMatch(wheel, "  "), briefMatch(wheel, "zebra")]).toEqual([null, null, null, null]);
+  expect([found(wheel, "wheel"), found(wheel, "CHORE"), found(wheel, "  "), found(wheel, "zebra")]).toEqual([null, null, null, null]);
 });
 
 test("a long word before the match gives up its context first, so the match stays near the start", () => {
   const long = listing("Plan", { brief: "Reconsider the internationalisation-responsibilities rota" });
-  expect(briefMatch(long, "rota")).toEqual({ before: "…", match: "rota", after: "" });
+  expect(found(long, "rota")).toEqual({ before: "…", match: "rota", after: "" });
   const lines = listing("Plan", { brief: "First line\n\nSecond   line with bins" });
-  expect(briefMatch(lines, "bins"), "the brief's breaks and runs of spaces read as one space").toEqual({ before: "…Second line with ", match: "bins", after: "" });
+  expect(found(lines, "bins"), "the brief's breaks and runs of spaces read as one space").toEqual({ before: "…Second line with ", match: "bins", after: "" });
 });
 
 test("home shows active brainstorms by default, newest activity first, with a count for each status", () => {

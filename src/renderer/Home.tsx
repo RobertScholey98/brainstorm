@@ -234,7 +234,7 @@ function OverviewCard({
   // With nothing under its title, the title takes that line's room, so a long one wraps to a second line rather than cut beside a blank.
   const lone = s.fork === null && brief === "";
   const settledAt = s.settlement.state === "settled" ? s.settlement.at : null;
-  const found = briefMatch(s, search);
+  const found = briefMatch(s.title, brief, search);
   const label = settleLabel(s);
   return (
     <div
