@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -31,13 +31,44 @@ export function elapsed(iso: string, now: number): string {
   return `${Math.floor(ms / HOUR)}h ${Math.floor((ms % HOUR) / MINUTE)}m`;
 }
 
-/** The current time, refreshed every `every` ms (a minute by default) so ages stay true while the window is open. */
+/** Each reader of the clock, by how often it needs a fresh time. */
+const readers = new Map<() => void, number>();
+let current = Date.now();
+let timer: ReturnType<typeof setInterval> | undefined;
+let rate = 0;
+
+function tick() {
+  current = Date.now();
+  for (const read of readers.keys()) read();
+}
+
+function retime() {
+  const next = readers.size === 0 ? 0 : Math.min(...readers.values());
+  if (next === rate) return;
+  clearInterval(timer);
+  rate = next;
+  timer = next === 0 ? undefined : setInterval(tick, next);
+}
+
+/**
+ * The one clock every age reads. It ticks as often as its most frequent reader needs, and a new reader brings every
+ * reader up to date, so a sidebar row and a card never show one brainstorm at two ages.
+ */
+export const clock = {
+  now: () => current,
+  subscribe(read: () => void, every: number): () => void {
+    readers.set(read, every);
+    retime();
+    tick();
+    return () => {
+      readers.delete(read);
+      retime();
+    };
+  },
+};
+
+/** The current time, fresh at least every `every` ms (a minute by default) so ages stay true while the window is open. */
 export function useNow(every = MINUTE): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), every);
-    return () => clearInterval(timer);
-  }, [every]);
-  return now;
+  const subscribe = useCallback((read: () => void) => clock.subscribe(read, every), [every]);
+  return useSyncExternalStore(subscribe, clock.now);
 }
