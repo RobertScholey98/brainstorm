@@ -202,6 +202,19 @@ async function handTo(page, frame, selector) {
   // A pointer that crosses into the frame on its first step never leaves the host element it clicked, so that keeps
   // its hover. It sets off from the park spot in the host instead.
   await park(page, page.viewportSize());
+  // The way up from the park spot crosses the history strip's stills, so the hand goes by an empty spot on the canvas
+  // bar, and the last host element it leaves on the way in is one nothing hovers.
+  const inert = await page.evaluate(() => {
+    const bar = document.querySelector("[data-canvas-bar]")?.getBoundingClientRect();
+    if (bar === undefined) return null;
+    const live = ":is(button, a, input, select, textarea, [role], [tabindex])";
+    for (const share of [0.5, 0.4, 0.6, 0.3, 0.7]) {
+      const [x, y] = [bar.left + bar.width * share, bar.bottom - 2];
+      if (document.elementFromPoint(x, y)?.closest(live) === null) return [x, y];
+    }
+    return null;
+  });
+  if (inert !== null) await page.mouse.move(inert[0], inert[1], { steps: 6 });
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 12 });
   const stale = await page.evaluate(() =>
     [...document.querySelectorAll(":is(button, a, input, select, textarea, [role], [tabindex]):hover")].map((e) => e.outerHTML.slice(0, 80)),
