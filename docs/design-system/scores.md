@@ -289,3 +289,34 @@ These findings recur across members:
 - once the strip overflows, the latest entry's line cuts while another entry has room
 - the settled card's still is dimmed with opacity, so the dot grid shows through
 - the loading skeletons don't match what lands (strip entry height, home sidebar groups)
+
+## Round 10 (captures round-10, after the round 9 fix pass: notices kept until Rob acts, the strip paged by need, Regenerate's glyph and hint grammar, the settled still in grey, the header counting a running request's time)
+
+The slices match round 9. Shot 56 was refused again because the screen was locked. GPT Sol reviewed all 308 shots and the four sheets. No read failed. Each Claude score is the member's lowest across its slices.
+
+| Area | Claude Opus 5.5 | GPT-6.1 Sol | Claude Sonnet 5.5 |
+| --- | --- | --- | --- |
+| Shell | 9.0 | 9.6 | 8.0 |
+| Navigation and lists | 9.0 | 9.5 | 8.0 |
+| Canvas chrome | 9.0 | 9.6 | 8.0 |
+| Inspector and controls | 9.4 | 9.5 | 8.0 |
+| Overlays | 9.4 | 9.6 | 9.0 |
+| Feedback | 9.4 | 9.5 | 9.0 |
+| States and request phases | 9.0 | 9.6 | 8.0 |
+| Dark mode | 9.3 | 9.6 | 9.0 |
+| Self-consistency | 9.0 | 9.5 | 8.0 |
+| Fitness for all-day use | 9.0 | 9.5 | 8.0 |
+| Completely happy | no | yes | no |
+| Blocker / major / minor / nit (all slices) | 0 / 0 / 10 / 24 | 0 / 0 / 0 / 0 | 0 / 1 / 4 / 12 |
+| Comparison sheets won | 4 of 4 in slice A, with ties on navigation and self-consistency. Slice B ahead in every area on both T3 sheets | 4 of 4 named | 4 of 4 named in slice A, with T3 ahead on lists. Slice B named Brainstorm on both T3 sheets, with T3 ahead on navigation |
+
+GPT reached 9.5 or higher in every area and was completely happy, the first member to clear its whole bar. Opus C reached 9.2 to 9.7 and Opus E 9 to 9.5. Sonnet E gave 9 in every area with one nit. Sonnet D raised the round's only major.
+
+These findings recur across members:
+- after a successful Regenerate the header cuts the title to about 85 px while every label stays (Sonnet D major, Opus D minor, shots 71, 75 and 79). Shot 80 shows the reverse, the Regenerate glyph dropped with room to spare. `useHeaderFit` doesn't observe the status, so a status-only change never refits
+- the paged strip fills by its 180 px minimum, so entries cut their lines and the newest loses "latest", and the shown entry can cut while a neighbour reads whole (Opus C, D and E, Sonnet D)
+- the fork tile still says "Fork of iteration N" where the rest of the app says "from … · iteration N" (five reviewers)
+- a live row's elapsed time sits in the age column and reads as a second age, it re-cuts the title as it ticks, and the card shows the same request with no time (Opus A, B and C)
+- a folded project group hides its only live row (Opus A, Sonnet A)
+- disabled Regenerate drops its glyph only while a request is open, and the loading header lacks it (Opus B and E)
+- outline buttons keep a solid fill inside status callouts (Opus A and B)
