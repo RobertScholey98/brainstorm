@@ -22,6 +22,16 @@ describe("cutText", () => {
     expect(cutText("Wheel", room(1))).toBe("…");
   });
 
+  it("paints nothing when even the ellipsis doesn't fit, rather than a fleck of it", () => {
+    expect(cutText("Wheel", room(0))).toBe("");
+  });
+
+  it("cuts before a middle dot rather than leave a stub of two letters or fewer after it", () => {
+    expect(cutText("Vary Spin button ×3 · bolder", room(24))).toBe("Vary Spin button ×3…");
+    expect(cutText("Vary Spin button ×3 · bolder", room(25))).toBe("Vary Spin button ×3…");
+    expect(cutText("Vary Spin button ×3 · bolder", room(26))).toBe("Vary Spin button ×3 · bol…");
+  });
+
   it("never splits a character made of two code units", () => {
     expect(cutText("Spin 🎡 wheel", room(7))).toBe("Spin 🎡…");
   });

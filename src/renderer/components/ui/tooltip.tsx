@@ -5,6 +5,7 @@ import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 import { cn } from "cn"
 
 import { Kbd } from "@/components/ui/kbd"
+import { Truncate } from "@/components/ui/truncate"
 import { overlaySurface } from "@/components/ui/overlay"
 
 function TooltipProvider({
@@ -69,8 +70,9 @@ function TooltipContent({
           data-slot="tooltip-content"
           className={cn(
             overlaySurface({ tone: "inverse" }),
-            // 24 px against the 28 px controls, so a hint beside a row of buttons never reads as one more of them.
-            "inline-flex min-h-6 w-fit max-w-xs items-center gap-2 px-2 py-0.5 text-xs",
+            // One 24 px line against the 28 px controls, so a hint beside a row of buttons never reads as one more of
+            // them. It never wraps: a long label cuts at the window's edge instead.
+            "inline-flex h-6 w-fit max-w-[calc(100vw-16px)] items-center gap-2 px-2 text-xs whitespace-nowrap",
             className
           )}
           {...props}
@@ -141,7 +143,7 @@ function Hint({
             <span aria-hidden>·</span>
           </>
         )}
-        <span>{label}</span>
+        {typeof label === "string" ? <Truncate>{label}</Truncate> : <span>{label}</span>}
         {shortcut !== undefined && <Kbd tone="inverse">{shortcut}</Kbd>}
       </TooltipContent>
     </Tooltip>

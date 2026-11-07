@@ -80,6 +80,15 @@ try {
   await showBoard(window, canvas);
   await canvas.waitForSelector(inBlock("wheel/neon", "screen"));
   await canvas.waitForSelector(inBlock("result/card", "card"));
+  await window.hover("[data-regenerate-toggle]");
+  check(
+    "at 1440 Regenerate's hint, with its name, words and key, is one 24 px line, nothing cut",
+    await window
+      .waitForSelector('[data-slot="tooltip-content"]', { state: "visible" })
+      .then((h) => h.evaluate((el) => [Math.round(el.getBoundingClientRect().height), el.textContent.trim(), el.querySelector("[data-cut]") === null])),
+    [24, "Regenerate·Ask the agent for a new iterationCtrl+R", true],
+  );
+  await window.mouse.move(120, 600);
 
   await canvas.click(inBlock("result/card", "chore"));
   await window.waitForSelector('[data-block="result/card"]');
