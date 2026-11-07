@@ -244,8 +244,7 @@ async function capture(page, name, { keepFocus = false, loading = false, brief =
     if (each !== undefined) await each(c);
     const cover = covered === undefined ? null : await covered(c);
     if (cover !== null) {
-      writeFileSync(join(comboDir(c), `${shot.file}.missing.txt`), `The element the shot is about is covered: ${cover}
-`);
+      writeFileSync(join(comboDir(c), `${shot.file}.missing.txt`), `The element the shot is about is covered: ${cover}\n`);
       problems.push(`${c.theme} ${c.width}: covered by ${cover}`);
       continue;
     }
