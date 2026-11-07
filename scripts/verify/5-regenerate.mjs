@@ -447,7 +447,16 @@ try {
   );
   await window.click('[data-request-detail] [data-request-action="copy_phrase"]');
   await window.waitForSelector('[data-request-detail] [data-request-action="copy_phrase"] [data-copied]');
-  check("Copy phrase puts the takeover phrase on the clipboard", await app.evaluate(({ clipboard }) => clipboard.readText()), phrase);
+  // The clipboard is the machine's, and an app holding it open makes a read come back empty, so the read is retried.
+  const clipboardText = async () => {
+    for (let tries = 0; tries < 20; tries++) {
+      const text = await app.evaluate(({ clipboard }) => clipboard.readText());
+      if (text !== "") return text;
+      await window.waitForTimeout(100);
+    }
+    return "";
+  };
+  check("Copy phrase puts the takeover phrase on the clipboard", await clipboardText(), phrase);
   await shot(window, shots, "8-thread-lost");
   await window.click('[data-request-action="withdraw"]');
   await window.waitForSelector('[data-thread-lost][data-request-phase="withdrawn"]', { timeout: PHASE_MS });
