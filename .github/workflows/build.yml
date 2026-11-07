@@ -135,16 +135,44 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: brainstorm-${{ runner.os }}
-          # latest*.yml is the update feed (latest.yml for Windows, latest-linux.yml for the .deb), and the .blockmap lets
-          # an installed app download only the parts of the installer that changed.
+          # latest*.yml is the update feed (latest.yml for Windows, latest-mac.yml for the Mac .zip, latest-linux.yml for
+          # the .deb), and the .blockmap lets an installed app download only the parts of the installer that changed.
           path: |
             release/*.exe
             release/*.pkg
+            release/*.zip
             release/*.deb
             release/*.tar.gz
             release/latest*.yml
             release/*.blockmap
           if-no-files-found: error
+
+  # Installs a build, updates it from a local feed through the sidebar's Restart to update, and uninstalls
+  # (scripts/verify/update.mjs). Linux's .deb update is electron-updater's own and isn't covered here.
+  update:
+    name: Update (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Windows, os: windows-latest }
+          - { name: macOS, os: macos-latest }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Keep LF line endings
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run verify:update
 
   release:
     if: needs.version.outputs.release == 'true'

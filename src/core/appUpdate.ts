@@ -93,8 +93,14 @@ export function updateOffReason(host: UpdateHost): string | null {
   if (host.isolatedHome) return "Updates are off while BRAINSTORM_HOME points at another home.";
   if (host.disabledByEnv) return "BRAINSTORM_DISABLE_AUTO_UPDATE turned updates off.";
   if (!host.hasFeed) return "This build has no update feed.";
-  // Squirrel.Mac only installs a build signed by the same Developer ID, and the macOS builds are ad hoc signed for now.
-  if (host.platform === "darwin") return "The macOS build can't update itself until it's signed. Download the new .pkg from the releases page.";
   if (host.platform === "linux" && host.linuxPackage !== "deb") return "On Linux only the .deb updates itself. Download the new archive from the releases page.";
   return null;
+}
+
+/**
+ * The Mac update to download from latest-mac.yml's files: the .zip built for this process's arch, so an Intel build
+ * running under Rosetta stays Intel. Null when the release has none.
+ */
+export function macZipFor<T extends { readonly url: URL }>(files: readonly T[], arch: string): T | null {
+  return files.find((f) => f.url.pathname.endsWith(`-mac-${arch}.zip`)) ?? null;
 }

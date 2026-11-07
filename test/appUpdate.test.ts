@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { nextUpdateState, updateOffReason, type AppUpdateEvent, type AppUpdateState, type UpdateHost } from "../src/core/appUpdate";
+import { macZipFor, nextUpdateState, updateOffReason, type AppUpdateEvent, type AppUpdateState, type UpdateHost } from "../src/core/appUpdate";
 
 const run = (events: readonly AppUpdateEvent[], from: AppUpdateState = { kind: "idle", checkedAt: null }) => events.reduce(nextUpdateState, from);
 
@@ -55,8 +55,9 @@ describe("app update state", () => {
 describe("updateOffReason", () => {
   const windows: UpdateHost = { packaged: true, platform: "win32", isolatedHome: false, disabledByEnv: false, hasFeed: true, linuxPackage: null };
 
-  test("an installed Windows app or .deb updates itself", () => {
+  test("an installed Windows app, Mac app or .deb updates itself", () => {
     expect(updateOffReason(windows)).toBeNull();
+    expect(updateOffReason({ ...windows, platform: "darwin" })).toBeNull();
     expect(updateOffReason({ ...windows, platform: "linux", linuxPackage: "deb" })).toBeNull();
   });
 
@@ -65,7 +66,21 @@ describe("updateOffReason", () => {
     expect(updateOffReason({ ...windows, isolatedHome: true })).toBe("Updates are off while BRAINSTORM_HOME points at another home.");
     expect(updateOffReason({ ...windows, disabledByEnv: true })).toBe("BRAINSTORM_DISABLE_AUTO_UPDATE turned updates off.");
     expect(updateOffReason({ ...windows, hasFeed: false })).toBe("This build has no update feed.");
-    expect(updateOffReason({ ...windows, platform: "darwin" })).toMatch(/^The macOS build can't update itself/);
     expect(updateOffReason({ ...windows, platform: "linux", linuxPackage: null })).toMatch(/^On Linux only the \.deb/);
+  });
+});
+
+describe("macZipFor", () => {
+  const files = ["Brainstorm-0.2.0-mac-arm64.zip", "Brainstorm-0.2.0-mac-x64.zip", "Brainstorm-0.2.0-mac-arm64.pkg"].map((name) => ({
+    url: new URL(`https://github.com/RobertScholey98/brainstorm/releases/download/v0.2.0/${name}`),
+  }));
+
+  test("picks the zip for this process's arch, so an Intel build under Rosetta stays Intel", () => {
+    expect(macZipFor(files, "arm64")?.url.pathname).toMatch(/-mac-arm64\.zip$/);
+    expect(macZipFor(files, "x64")?.url.pathname).toMatch(/-mac-x64\.zip$/);
+  });
+
+  test("finds nothing when the release has no zip for the arch", () => {
+    expect(macZipFor(files.slice(1), "arm64")).toBeNull();
   });
 });

@@ -1,7 +1,8 @@
 import { app } from "electron";
-import { autoUpdater } from "electron-updater";
+import { autoUpdater as platformUpdater, type AppUpdater } from "electron-updater";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { MacZipUpdater } from "./macUpdater";
 import { installable, nextUpdateState, updateOffReason, type AppUpdateEvent, type AppUpdates, type AppUpdateState } from "../core/appUpdate";
 
 /** T3 Code's cadence: a first look soon after start, then a poll. Brainstorm releases are rarer, so it polls less. */
@@ -43,7 +44,9 @@ export function createUpdater(): AppUpdates {
     for (const listener of listeners) listener(state);
   };
 
-  if (reason === null) {
+  // Squirrel.Mac, which electron-updater uses on macOS, only installs a build signed by the same Developer ID.
+  const autoUpdater: AppUpdater | null = reason === null ? (process.platform === "darwin" ? new MacZipUpdater() : platformUpdater) : null;
+  if (autoUpdater !== null) {
     // electron-updater logs to the console by default, which the packaged app has nowhere to show.
     autoUpdater.logger = null;
     if (testFeed !== null) autoUpdater.setFeedURL({ provider: "generic", url: testFeed });
@@ -76,11 +79,11 @@ export function createUpdater(): AppUpdates {
       if (installable(state) === null) return false;
       apply({ kind: "install" });
       // After the HTTP answer goes out. Silent, then reopen the app, as T3 Code does; the quit runs main's before-quit,
-      // which closes the server first. The installer reopens it with the user's environment, not this one, so an app
-      // on a test feed isn't reopened: it would come back on Rob's own home.
+      // which closes the server first. An app on a test feed isn't reopened: the Windows installer reopens it with the
+      // user's environment, which would bring it back on Rob's own home.
       setImmediate(() => {
         try {
-          autoUpdater.quitAndInstall(true, testFeed === null);
+          autoUpdater?.quitAndInstall(true, testFeed === null);
         } catch (e) {
           apply({ kind: "error", message: errorMessage(e) });
         }
