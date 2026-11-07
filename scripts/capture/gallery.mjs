@@ -197,7 +197,18 @@ const park = (page, c) => page.mouse.move(Math.round(c.width * 0.55), c.height -
  */
 async function handTo(page, frame, selector) {
   const el = await frame.waitForSelector(selector);
-  await el.scrollIntoViewIfNeeded();
+  // Brought in as the canvas's own reveal does, so the frame's label shows whole or not at all. Playwright's
+  // scrollIntoViewIfNeeded is blind to the label and left it sliced under the canvas bar (round 8's shot 78).
+  await el.evaluate((target) => {
+    const [margin, pad] = [12, 24];
+    const t = target.getBoundingClientRect();
+    const room = document.documentElement.clientHeight;
+    let by = t.top < margin ? t.top - margin : t.bottom > room - margin ? t.bottom - (room - margin) : 0;
+    if (by === 0) return;
+    const label = target.closest(".bs-frame")?.querySelector(".bs-frame-title")?.getBoundingClientRect();
+    if (label !== undefined && label.bottom - by > 0 && label.top - by < pad) by = by < 0 ? label.top - pad : Math.max(by, label.bottom);
+    scrollBy({ top: by });
+  });
   const box = await el.boundingBox();
   // A pointer that crosses into the frame on its first step never leaves the host element it clicked, so that keeps
   // its hover. It sets off from the park spot in the host instead.
