@@ -227,3 +227,34 @@ These findings recur across members:
 - the frame label is cut by the canvas bar after a pin, pick or vary reveal
 - the past view leaves feedback Edit and Delete live
 - a new variant's dot differs from "showing" only by colour
+
+## Round 8 (captures round-8, after the round 7 fix pass and the fade removal: opaque pane heads, the strip that lands on whole cards, the sidebar title floor)
+
+The slices match round 7. Shot 56 was refused again because the screen was locked. GPT Sol reviewed all 308 shots and the four sheets. No read failed. Each Claude score is the member's lowest across its slices.
+
+| Area | Claude Opus 5.5 | GPT-6.1 Sol | Claude Sonnet 5.5 |
+| --- | --- | --- | --- |
+| Shell | 9.2 | 9.5 | 8.0 |
+| Navigation and lists | 8.9 | 9.5 | 8.0 |
+| Canvas chrome | 9.1 | 9.3 | 8.0 |
+| Inspector and controls | 9.5 | 9.6 | 8.0 |
+| Overlays | 9.1 | 9.0 | 8.0 |
+| Feedback | 9.6 | 9.6 | 8.0 |
+| States and request phases | 9.4 | 9.6 | 8.0 |
+| Dark mode | 9.4 | 9.5 | 7.0 |
+| Self-consistency | 9.2 | 9.3 | 8.0 |
+| Fitness for all-day use | 9.1 | 9.4 | 8.0 |
+| Completely happy | no | no | no |
+| Blocker / major / minor / nit (all slices) | 0 / 0 / 14 / 20 | 0 / 0 / 1 / 2 | 0 / 0 / 14 / 11 |
+| Comparison sheets won | 4 of 4 named. Slice A has Claude ahead on shell on vs-claude-home (the new head band). Slice B ahead in every area on both T3 sheets | 4 of 4 named | 3 of 4 in slice A (T3 took vs-t3-home-dark on its two-line rows). Slice B gave vs-t3-session-dark to T3 by a hair, on dark surface layering |
+
+No member raised a major. Every Opus slice scored 8.9 or higher in every area, and Opus D reached 9.2 to 9.6. GPT reached 9.5 or higher in six areas. Sonnet scores in whole points and gave 8 to 9 in four slices and 7 to 8 in slice B.
+
+These findings recur across members:
+- the pane head paints `bg-card` over a `canvas` body (`scroll-pane.tsx:40`), so home shows a head band with no rule (five reviewers)
+- the strip's head column holds 144 to 160 px for about 80 px of text, so entries cut their lines and "latest" loses its age (seven reviewers)
+- the settle hint covers home's search field, a regression of R5-4 (four reviewers)
+- the Regenerate hint wraps to two lines (four reviewers)
+- a live fork row still cuts its title at 1440
+- Export drops its label in shot 35 with about 54 px free
+- in dark the sidebar-to-card step is thin against T3 (Sonnet, two slices; disputed as V45)
