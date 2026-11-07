@@ -111,3 +111,9 @@ The floor is gone. The board always fits every frame in one row at one zoom, how
 The fix pass found the 980 × 360 stage frame resting at two zooms at 1100, 0.5347 or 0.5245, by the order the window was sized in (R6-68). Under the 0.5347 zoom the frame body's heights round at the zoomed size, so a block that exactly fills its 360 px read 361. The runtime counted that pixel as a block taller than its frame and added the 10 px gutter. The gutter lowered the zoom to 0.5245, where the block read 360 again, and nothing measured it again until the block changed size. So the fit kept whichever answer it reached first, and the bar could name the other.
 
 A frame now scrolls only when its block is more than one pixel taller than its declared height, and a body that doesn't scroll clips rather than drawing a scrollbar of its own inside the declared width. The scroll test no longer depends on the zoom it feeds, so the fit has one resting point. `verify:7` sizes the window to 1100 three times from 1440 and checks it lands on 0.534694 each time, with the bar reading 53%.
+
+## Amendment: round 7. A reveal keeps the frame label whole, and every pin one size of ink
+
+A pin pulse or a pick scrolled the stage with `scrollIntoView` and a 48 px margin, which could leave a frame's label sliced under the canvas bar (R7-7). A reveal now moves the least that brings its target in, and goes on past the label or stops short of it, so the label shows whole or not at all. `verify:4` pulses a pin in view and one from below the fold.
+
+An open pin's 2 px card border vanished on a dark block, so its face read 16 px against a confirmed pin's 22 (R7-30). Every pin now draws a 1 px `border-strong` ring outside its border, as the confirmed pin's muted ring does. `verify:4` measures both at rest at 22 px.

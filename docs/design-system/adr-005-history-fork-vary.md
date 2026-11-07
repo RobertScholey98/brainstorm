@@ -111,3 +111,16 @@ T3 starts the new thread's agent with T3's own environment, so when the app runs
   - the fork's lineage, stub and offshoot, and home's "Fork of" line
   - a vary request's exact marker and context, the new variants landing marked new, and the mark clearing once one is seen
 - `verify:live`: one fork against the real T3, which starts a real thread.
+
+## Amendment: round 7. The strip rests on whole entries
+
+The strip could rest with an entry cut at either end, its origin ending on a space, and its scrollbar sitting on the stills (R7-1, R7-3, R7-4). Entries now share the strip's room while they fit, up to 380 px each. Once they overflow, a whole number fills it exactly, and the strip snaps to entry edges. The shown iteration comes in whole on every fit change, so a restart or a resized pane doesn't leave it cut.
+
+Two behaviour changes came with it:
+
+- The scrollbar gives way to earlier and later arrows in a fixed-width head (`scrollbar-none`).
+- A fork link is an entry-sized tile that names its source.
+
+`verify:8` checks the rest at 1440 and 1100, the arrows, End, and a restart at 1100.
+
+The past view says "read-only" once, in the Inspector. Its comments, which belong to the latest, dim with the controls and can't be pressed (R7-8, R7-21). A new variant's mark is an accent ring and the showing one keeps the filled dot, so form tells them apart and a row can carry both (R7-9). The carries-over box in Fork takes `border-strong`, so it keeps its edge in dark (R7-16).
