@@ -331,6 +331,22 @@ body:is([data-resizing], [data-window-resizing]) [data-slot="sidebar-container"]
   padding-right: max(12px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
 }
 
+/*
+ * Room at the window's top left for macOS's traffic lights, which main.ts puts 16 px in on the header. The row that
+ * starts at the window's left edge, the sidebar's header or the top bar's lead when the sidebar is hidden, puts its
+ * first control 90 px in, T3 Code's inset, so the toggle and the mark keep one x either side of Ctrl+B. The sidebar's
+ * header box starts 8 px in, the inset sidebar's padding, and the top bar's lead 12 px in. Full screen hides the
+ * lights, and the row takes the room back.
+ */
+:root[data-traffic-lights]:not([data-fullscreen]) {
+  & [data-slot="sidebar-header"][data-window-start] {
+    padding-left: 82px;
+  }
+  & [data-topbar] [data-window-start] {
+    padding-left: 78px;
+  }
+}
+
 /* A settled card's still. Contrast comes off first, around mid-grey, then the result lifts toward the card in light and sinks toward it in dark. Tailwind's own filters run brightness before contrast, which pulls every still to mid-grey. */
 @utility still-settled {
   filter: grayscale(1) contrast(0.3) brightness(1.7);

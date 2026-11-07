@@ -18,6 +18,12 @@ When the OS theme changes, `nativeTheme` emits `updated` and the main process ca
 
 The minimum window size is 1100 × 720, the smallest size the brief designs for.
 
+### macOS: the traffic lights at the left
+
+Added 2026-11-07, after the first Mac build drew its traffic lights over the sidebar toggle and the mark. macOS has no title bar overlay; its window buttons sit at the top left. The Mac window uses `titleBarStyle: "hiddenInset"` with the lights 16 px in and centred on the 48 px header, as T3 Code places them, and no `setTitleBarOverlay`.
+
+The renderer marks `<html data-traffic-lights>` when its user agent says Electron on a Mac, before the first paint. Under that mark, the row that starts at the window's left edge (the sidebar's header, or the top bar's lead when the sidebar is hidden) puts its first control 90 px in, T3 Code's inset, in place of 12 px, so the toggle and the mark still keep one x either side of Ctrl+B. Full screen hides the lights, so the main process marks `data-fullscreen` on the page as it enters and leaves, and the row takes the room back. The right end needs no room on a Mac: with no overlay, `titlebar-inset` falls back to 12 px.
+
 ### The session top bar becomes the header
 
 The session top bar moves out of the inset card and becomes the window header, on the app background at the window's top edge. A second bar under the header would repeat the 88 px problem, and the top bar's breadcrumb, iteration and request phase are what a window title should say anyway.
