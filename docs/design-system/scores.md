@@ -258,3 +258,34 @@ These findings recur across members:
 - a live fork row still cuts its title at 1440
 - Export drops its label in shot 35 with about 54 px free
 - in dark the sidebar-to-card step is thin against T3 (Sonnet, two slices; disputed as V45)
+
+## Round 9 (captures round-9, after the round 8 fix pass: pane heads on their pane's surface, the content-sized strip head, Settle in the row, one-line hints, dark surfaces re-stepped against T3)
+
+The slices match round 8. Shot 56 was refused again because the screen was locked. GPT Sol reviewed all 308 shots and the four sheets. No read failed. Each Claude score is the member's lowest across its slices.
+
+| Area | Claude Opus 5.5 | GPT-6.1 Sol | Claude Sonnet 5.5 |
+| --- | --- | --- | --- |
+| Shell | 9.0 | 9.5 | 8.5 |
+| Navigation and lists | 8.5 | 9.5 | 8.0 |
+| Canvas chrome | 8.5 | 9.5 | 8.5 |
+| Inspector and controls | 9.5 | 9.5 | 9.0 |
+| Overlays | 9.0 | 9.4 | 9.0 |
+| Feedback | 9.5 | 9.5 | 8.5 |
+| States and request phases | 9.0 | 9.3 | 8.0 |
+| Dark mode | 8.5 | 9.5 | 9.0 |
+| Self-consistency | 8.5 | 9.6 | 9.0 |
+| Fitness for all-day use | 9.0 | 9.5 | 8.5 |
+| Completely happy | no | no | no (slice A yes) |
+| Blocker / major / minor / nit (all slices) | 0 / 0 / 8 / 20 | 0 / 0 / 1 / 0 | 0 / 0 / 5 / 9 |
+| Comparison sheets won | 4 of 4, ahead in every area (slice A); both T3 sheets in every area (slice B) | 4 of 4 named | 4 of 4 named in slice A, with T3 ahead on navigation on both T3 sheets (sidebar search row, two-line rows, footer). Slice B named Brainstorm on both T3 sheets |
+
+Three slices scored 9.5 or higher in every area: Sonnet A, Sonnet B and Opus B. Sonnet A was completely happy, the first slice to say so. GPT reached 9.5 or higher in eight areas. No member raised a blocker or a major for the second round running. The minimums come from the 1440 shots 41 to 80 (Opus E, Sonnet C, Sonnet E).
+
+These findings recur across members:
+- the light capture of shot 51 shows no failure toast. `App.tsx:128-137` clears the notice on every list refresh, and a refresh runs on every server event, so a notice can vanish before Rob acts (X3 reopened)
+- the sidebar's foot has no hairline, so U58 regressed when the fades went (three reviewers)
+- the strip's overflow cue is drawn in the text colour at entry height (`History.tsx:194`), so it reads as a cut entry, and in dark as a glow
+- the fork tile and stub keep the faint dashed `border` edge that R8-11 moved entries off
+- once the strip overflows, the latest entry's line cuts while another entry has room
+- the settled card's still is dimmed with opacity, so the dot grid shows through
+- the loading skeletons don't match what lands (strip entry height, home sidebar groups)
