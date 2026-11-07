@@ -75,7 +75,7 @@ const FRAME = "absolute inset-x-3 top-3 bottom-0";
 const CARD_FLOOR = 0.5;
 
 /**
- * The frame's width on the mat. A frame that fits at the floor or above takes the mat less 12 px each side, as before.
+ * The frame's width on the mat. A frame that fits at the floor or above takes the mat less 12 px each side.
  * One the floor cuts runs off the mat's right edge as it runs off its bottom, so its cut edge reads as more to come.
  * Between the two, the frame shows whole at the floor. The preview zooms to the larger of its fit and the floor, so it
  * matches this box in every case.

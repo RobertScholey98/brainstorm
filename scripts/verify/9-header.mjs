@@ -246,7 +246,6 @@ try {
   });
   check("when the status's words shorten and nothing else in the header moves, every label that gave way is still needed", verdict(await settled(measure)), fitted);
 
-  // While the view loads, the header holds Regenerate at the width it lands with, so Fork doesn't move.
   shape = { title: "short", phase: null };
   await window.setViewportSize({ width: 1440, height: 900 });
   let hold = null;

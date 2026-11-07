@@ -33,7 +33,6 @@ type CanvasState = {
   readonly stage: SlotId | null;
   /** Each slot zoomed below 1 to fit, keyed by slot. */
   readonly zooms: ReadonlyMap<string, number>;
-  /** A preview's least zoom, from the host. */
   readonly floor: number;
   readonly mode: CanvasMode;
   readonly pins: readonly CanvasPin[];
@@ -427,7 +426,6 @@ function Canvas() {
   );
 }
 
-/** The preview's zoom: the frame across the window's width, or the host's floor when that is less. */
 const previewZoom = (width: number) => Math.max(innerWidth / width, state.floor);
 
 /**
@@ -466,7 +464,6 @@ async function still(): Promise<string | null> {
     const frameWidth = state.frames[0]?.frame.width;
     if (shown === null || frameWidth === undefined) return null;
     const zoom = previewZoom(frameWidth);
-    // What the window shows of the frame: its full width, or its left part at the floor, and down to the window's bottom.
     // A frame shorter than the window ends there, and the host's mat shows under it.
     const width = Math.min(frameWidth, innerWidth / zoom);
     const height = Math.min(Math.ceil(innerHeight / zoom), Math.ceil(shown.offsetHeight));

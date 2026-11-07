@@ -365,7 +365,6 @@ function StillOption({
       >
         <IterationStill load={load} revision={revision} />
         <span className="grid min-w-0 flex-1 gap-0.5 pr-1">
-          {/* One line that never cuts: its floor holds "latest" too, which wraps out of sight, whole, only mid-resize. */}
           <span className="flex h-4.5 min-w-0 flex-wrap items-baseline gap-x-1.5 overflow-hidden text-sm">
             <span className="font-medium">Iteration {entry.n}</span>
             <span className="text-xs text-fg-muted">·</span>

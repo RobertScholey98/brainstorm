@@ -32,12 +32,10 @@ function crumbFits(header: HTMLElement): boolean {
 }
 
 /**
- * Fits a row to its room. Every element in it marked `data-collapse` keeps its words until `fits` says the row's
- * main text has dropped under its floor; then they give way one at a time in rank order, and no more than it needs.
- * A mark ranked under `marks`, such as a glyph, can come back once a later label has freed its room, so a label that
- * frees 200 px doesn't leave a 20 px glyph gone. Labels never do, so they always give way in rank order. It measures
- * the real row, so it holds at any window width, pane width or native-button inset, and runs before paint, so the row
- * never shows a state it then corrects.
+ * Fits a row to its room, giving way in `data-collapse` rank order until `fits` holds. A mark ranked under `marks`,
+ * such as a glyph, comes back once a later label frees its room, so a label that frees 200 px doesn't leave a 20 px
+ * glyph gone. It measures the real row before paint, so it holds at any window width, pane width or native-button
+ * inset and never shows a state it then corrects.
  */
 function useFit(ref: RefObject<HTMLElement | null>, fits: (row: HTMLElement) => boolean, watch: string, marks = 0): void {
   useLayoutEffect(() => {

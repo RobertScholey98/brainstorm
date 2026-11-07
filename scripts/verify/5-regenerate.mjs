@@ -290,7 +290,6 @@ try {
   await regenerate("all");
   await window.click("[data-regenerate-menu] [data-send]");
   check("queued", await phase("queued"), { message: "Queued in T3", actions: ["open_thread", "withdraw"] });
-  // Where Open thread and Withdraw stand, and where they stand from Regenerate's edge.
   const withdrawAt = () =>
     window.$$eval('[data-phase-actions] :is([data-request-action="open_thread"], [data-request-action="withdraw"])', (els) => {
       const regenerate = document.querySelector("[data-regenerate-toggle]").getBoundingClientRect().left;
@@ -430,7 +429,6 @@ try {
   t3.endRun(DEMO_THREAD, "completed");
   check("no change", await phase("no_change"), { message: "The agent replied in T3 without changing the design.", actions: ["retry", "open_thread", "withdraw"] });
   at.push(await withdrawAt());
-  // At no change the header fit takes Regenerate's glyph for the longer message, and the actions move by it (R10-6).
   check(
     "Open thread and Withdraw keep one x from queued through working, asking and run failed, and at no change move only by what the fit takes from Regenerate",
     [at.slice(0, -1).map(([x]) => x), at.map(([, fromRegenerate]) => fromRegenerate)],
