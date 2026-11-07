@@ -175,6 +175,19 @@ try {
       ["result", "Assignment card"],
     ],
   );
+  const carriesEdge = () =>
+    window.$eval("[data-fork-menu] [data-fork-carries] dl", (box) => {
+      const probe = document.body.appendChild(document.createElement("div"));
+      probe.style.color = "var(--border-strong)";
+      const strong = getComputedStyle(probe).color;
+      probe.remove();
+      return getComputedStyle(box).borderTopColor === strong ? "border-strong" : getComputedStyle(box).borderTopColor;
+    });
+  const edges = [await carriesEdge()];
+  await window.emulateMedia({ colorScheme: "dark" });
+  edges.push(await settled(carriesEdge));
+  await window.emulateMedia({ colorScheme: "light" });
+  check("the carries-over box keeps the strong edge in both themes, so it holds its shape on the popover in dark", edges, ["border-strong", "border-strong"]);
   await shot(window, shots, "3-fork-past");
   await window.keyboard.press("Escape");
   await window.waitForSelector("[data-fork-menu]", { state: "detached" });

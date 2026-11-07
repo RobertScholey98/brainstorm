@@ -121,7 +121,7 @@ function ForkForm({
       <div className="grid gap-1.5" data-fork-carries>
         <FieldLabel as="h3">Carries over</FieldLabel>
         {/* Its edge separates it from the popover in dark, where muted sits one small step off the raised surface. */}
-        <dl className="grid-carry grid gap-x-3 gap-y-2 rounded-lg border bg-muted p-3 text-sm/snug">
+        <dl className="grid-carry grid gap-x-3 gap-y-2 rounded-lg border border-border-strong bg-muted p-3 text-sm/snug">
           {carried.slots.map(({ slot, title }) => (
             <div key={slot.id} className="contents" data-carry-slot={slot.id}>
               <dt className="flex min-w-0 text-xs text-fg-muted">
