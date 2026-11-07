@@ -74,7 +74,7 @@ try {
   // History.
   check("the history toggle starts pressed, with the strip open", [await window.getAttribute("[data-history-toggle]", "aria-pressed"), (await window.$("[data-history]")) !== null], ["true", true]);
   check(
-    "the strip is 84 px tall, its stills landscape cards 56 px tall, and it fades its scrolling edge",
+    "the strip is 84 px tall, its stills landscape cards 48 px tall, and it fades its scrolling edge",
     await window.evaluate(() => {
       const card = document.querySelector("[data-history-n] [data-preview]").getBoundingClientRect();
       return [
@@ -353,6 +353,24 @@ try {
   );
   check("the strip says what made the iteration", (await strip(window)).at(-1).origin, "Vary Spin button ×3 · bolder");
   await shot(window, shots, "9-vary-landed");
+  await window.setViewportSize({ width: 1100, height: 720 });
+  check(
+    "at 1100 the new variants' names read whole, the raw key giving way first, and each is marked new by its accent lead mark",
+    await settled(() =>
+      window.$$eval('[data-slot-id="wheel"] [data-variant^="spin-button"]', (rows) =>
+        rows.map((r) => {
+          const title = r.querySelector("[data-variant-title]");
+          return [title.textContent, title.scrollWidth <= title.clientWidth, r.querySelector("[data-variant-new]") !== null];
+        }),
+      ),
+    ),
+    [
+      ["Spin button A", true, true],
+      ["Spin button B", true, true],
+      ["Spin button C", true, true],
+    ],
+  );
+  await window.setViewportSize({ width: 1440, height: 900 });
   await window.click('[data-slot-id="wheel"] [data-variant="spin-button-a"]');
   await window.waitForSelector('[data-variant="spin-button-a"] [data-variant-new]', { state: "detached", timeout: PHASE_MS });
   check(

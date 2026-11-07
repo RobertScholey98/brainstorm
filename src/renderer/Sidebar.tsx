@@ -516,21 +516,27 @@ function SlotSection({
                   data-variant={variant}
                   data-showing={active || undefined}
                 >
-                  <SidebarMenuMark className={active ? "bg-fg-muted" : undefined} />
-                  <span className="min-w-0 flex-1 truncate" data-variant-title>
+                  {/* A variant the agent just added marks its lead slot in the accent, the agent's colour, until Rob has seen it. */}
+                  {block?.isNew === true ? (
+                    <span className="flex" data-variant-new>
+                      <SidebarMenuMark className="bg-accent" />
+                      <span className="sr-only">new</span>
+                    </span>
+                  ) : (
+                    <SidebarMenuMark className={active ? "bg-fg-muted" : undefined} />
+                  )}
+                  {/* The name Rob reads keeps its width; the raw key beside it gives way first, down to nothing. */}
+                  <span className="max-w-full shrink-0 truncate" data-variant-title>
                     {block?.title ?? variant}
                   </span>
-                  {block?.isNew === true && (
-                    <span className="shrink-0 rounded-full bg-accent px-1.5 text-2xs font-medium text-accent-fg" data-variant-new>
-                      new
-                    </span>
-                  )}
                   {failed && (
                     <Hint label="This block failed to render" side="left">
                       <CircleAlert aria-label="Failed to render" className="text-danger" data-variant-error />
                     </Hint>
                   )}
-                  <span className="shrink-0 text-xs font-normal text-fg-muted">{variant}</span>
+                  <span className="min-w-0 flex-1 truncate text-right text-xs font-normal text-fg-muted" data-variant-key>
+                    {variant}
+                  </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );
