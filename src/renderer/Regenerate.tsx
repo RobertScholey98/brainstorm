@@ -360,15 +360,15 @@ export function phaseActions(view: SessionView): readonly RequestPhaseAction[] {
 
 /**
  * The request's actions, in the header's right cluster before Regenerate. Anchored there, they stay put as the phase's
- * label changes length, so Withdraw sits at one x from queued to working. The last gives up its words first, so the
- * phase's recovery, its first action, keeps its name longest.
+ * label changes length, so Withdraw sits at one x from queued to working. The phase's recovery keeps its name longest
+ * (`actionRank`).
  */
 export function PhaseActions({ view, send, onDiscard }: { view: SessionView; send: (action: RobAction) => Promise<unknown>; onDiscard: () => void }) {
   const actions = phaseActions(view);
   return (
     <span className="flex shrink-0 items-center gap-2" data-phase-actions>
-      {actions.map((action, i) => (
-        <PhaseAction key={action} action={action} rank={actionRank(action, i, actions.length)} view={view} send={send} onDiscard={onDiscard} />
+      {actions.map((action) => (
+        <PhaseAction key={action} action={action} rank={actionRank(action)} view={view} send={send} onDiscard={onDiscard} />
       ))}
     </span>
   );

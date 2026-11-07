@@ -11,10 +11,12 @@ import type { RequestPhaseAction } from "../core/types";
 export const COLLAPSE = { glyph: 0, elapsed: 1, status: 2, export: 3, fork: 4, action: 10 } as const;
 
 /**
- * The rank of `action`, the phase action at `index` of `count`. Open thread gives way first, since its glyph reads alone
- * where Withdraw's would read as the withdrawn status; then the last one in, so the first, the recovery, goes last.
+ * The order the phase actions give way. Open thread goes first, since its glyph reads alone where Withdraw's would read
+ * as the withdrawn status; the phase's own step, its recovery, goes last.
  */
-export const actionRank = (action: RequestPhaseAction, index: number, count: number): number => COLLAPSE.action + (action === "open_thread" ? 0 : count - index);
+const ACTION_RANK: Record<RequestPhaseAction, number> = { open_thread: 0, withdraw: 1, discard: 1, retry: 2, resend: 2, copy_phrase: 2 };
+
+export const actionRank = (action: RequestPhaseAction): number => COLLAPSE.action + ACTION_RANK[action];
 
 /** A header button that gives up its label for its icon, its name kept for screen readers and in its hint. */
 export const COMPACT = "data-collapsed:size-7";
