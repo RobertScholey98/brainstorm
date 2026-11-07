@@ -145,6 +145,14 @@ try {
     [true, "Back to latest"],
   );
   check(
+    "Back to latest ends where the canvas bar's view switch ends",
+    await window.evaluate(() => {
+      const right = (el) => Math.round(el.getBoundingClientRect().right);
+      return right(document.querySelector("[data-back-to-latest]")) - right(document.querySelector('[data-canvas-bar] [data-slot="segmented"]'));
+    }),
+    0,
+  );
+  check(
     "in the past Regenerate is off, Fork reads Fork iteration 1, and the badge reads Iteration 1 of 2",
     [await window.isDisabled("[data-regenerate-toggle]"), (await window.textContent("[data-fork-toggle]")).trim(), (await window.textContent("[data-iteration-past]")).trim()],
     [true, "Fork iteration 1", "Iteration 1 of 2"],
@@ -156,6 +164,18 @@ try {
     "the inspector says it is the past, and its controls are inert, dimmed as one, with no reset on offer",
     await window.$eval("[data-controls-readonly]", (el) => [el.inert, getComputedStyle(el).opacity, el.querySelectorAll("[data-control-reset]").length]),
     [true, "0.6", 0],
+  );
+  check(
+    "the comments, the latest's, read dimmed as the controls do, and their Edit and Delete can't be pressed, nor a comment opened",
+    await window.$$eval("[data-feedback]", (items) =>
+      items.map((li) => [li.closest("[inert]") !== null, getComputedStyle(li.closest("[data-group]")).opacity, li.querySelectorAll("[data-feedback-action]").length > 0]),
+    ),
+    [[true, "0.6", true]],
+  );
+  check(
+    "the past says read-only once, in the Inspector beside what it dims",
+    await window.evaluate(() => document.body.innerText.match(/read-only/gi)?.length ?? 0),
+    1,
   );
   check("Vary is off in the past", await window.isDisabled("[data-vary-toggle]"), true);
   await shot(window, shots, "2-past");

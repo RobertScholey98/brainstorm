@@ -393,6 +393,8 @@ function Canvas() {
                     data-hovered={s.hovered === p.id || undefined}
                     aria-label={`Feedback ${p.id}`}
                     onClick={() => post({ kind: "pin_clicked", id: p.id })}
+                    onPointerEnter={() => post({ kind: "pin_hovered", id: p.id })}
+                    onPointerLeave={() => post({ kind: "pin_hovered", id: null })}
                   >
                     {p.id}
                   </button>

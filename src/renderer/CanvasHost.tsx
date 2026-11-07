@@ -22,6 +22,7 @@ export function CanvasHost({
   onBlockError,
   onPicked,
   onPinClicked,
+  onPinHovered,
   onPlacement,
   onZooms,
 }: {
@@ -43,6 +44,7 @@ export function CanvasHost({
   onBlockError: (blockId: BlockId, message: string) => void;
   onPicked: (pin: Pin, at: { x: number; y: number }, rect: CanvasRect) => void;
   onPinClicked: (id: FeedbackId) => void;
+  onPinHovered: (id: FeedbackId | null) => void;
   onPlacement: (placement: Placement) => void;
   onZooms: (zooms: Readonly<Record<string, number>>) => void;
 }) {
@@ -50,8 +52,8 @@ export function CanvasHost({
   // The version of each block the frame holds. A past iteration can bring back an older one, so it is sent again.
   const sent = useRef(new Map<BlockId, ContentHash>());
   const [readyCount, setReadyCount] = useState(0);
-  const handlers = useRef({ onSelect, onBlockError, onPicked, onPinClicked, onPlacement, onZooms });
-  handlers.current = { onSelect, onBlockError, onPicked, onPinClicked, onPlacement, onZooms };
+  const handlers = useRef({ onSelect, onBlockError, onPicked, onPinClicked, onPinHovered, onPlacement, onZooms });
+  handlers.current = { onSelect, onBlockError, onPicked, onPinClicked, onPinHovered, onPlacement, onZooms };
 
   const post = (message: HostToFrame) => frame.current?.contentWindow?.postMessage(message, "*");
 
@@ -75,6 +77,9 @@ export function CanvasHost({
           return;
         case "pin_clicked":
           handlers.current.onPinClicked(message.id);
+          return;
+        case "pin_hovered":
+          handlers.current.onPinHovered(message.id);
           return;
         case "pin_placement":
           handlers.current.onPlacement({ placed: new Set(message.placed), detached: new Set(message.detached) });

@@ -116,6 +116,21 @@ try {
   );
   await window.setViewportSize({ width: 1440, height: 900 });
   await canvas.evaluate(() => scrollTo(0, 0));
+  await window.click('[data-slot-id="wheel"] [data-variant="reel"]');
+  await window.waitForSelector('[data-feedback="2"][data-place="hidden"]');
+  check(
+    "a comment on a variant that isn't showing says so in the muted text with an eye-off glyph, not the amber of a lost pin",
+    await window.$eval('[data-feedback="2"] [data-feedback-place]', (p) => {
+      const probe = document.body.appendChild(document.createElement("i"));
+      probe.style.color = "var(--fg-muted)";
+      const muted = getComputedStyle(probe).color;
+      probe.remove();
+      return [p.textContent.trim(), getComputedStyle(p).color === muted, p.querySelector("svg.lucide-eye-off") !== null];
+    }),
+    ["On a variant that isn't showing", true, true],
+  );
+  await window.click('[data-slot-id="wheel"] [data-variant="neon"]');
+  await window.waitForSelector('[data-feedback="2"][data-place="placed"]');
   check(
     "an open comment's Edit and Delete stand 8 px apart, the gap of every row of buttons",
     await window.$eval('[data-feedback="2"]', (li) => {
@@ -227,6 +242,21 @@ try {
   await window.mouse.move(frameBox.x + resting.x, frameBox.y + resting.y);
   await canvas.waitForTimeout(300);
   check("a hovered pin grows where it is and stays under the pointer, and its frame never scrolls sideways", await pinAt(), { ...resting, hovered: true });
+  const commentFill = () =>
+    settled(() =>
+      window.$eval('[data-feedback="1"]', (li) => {
+        // The tint a comment takes under the pointer, read off a copy of the comment held in that state.
+        const probe = li.parentElement.appendChild(document.createElement("li"));
+        probe.className = li.className;
+        probe.dataset.echoed = "";
+        const hover = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return getComputedStyle(li).backgroundColor === hover ? "hover tint" : getComputedStyle(li).backgroundColor;
+      }),
+    );
+  check("the hovered pin's comment takes the tint a pointer on it would give", await commentFill(), "hover tint");
+  await window.mouse.move(frameBox.x + resting.x - 120, frameBox.y + resting.y);
+  check("and drops it once the pointer leaves the pin", await commentFill(), "rgba(0, 0, 0, 0)");
   check("the pin is coloured addressed", await canvas.getAttribute(PIN, "data-status"), "addressed");
   check(
     "the list shows it addressed in iteration 2, on a line of its own under where it is pinned",

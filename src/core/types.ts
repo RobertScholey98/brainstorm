@@ -676,6 +676,8 @@ export type FrameToHost =
    */
   | { readonly kind: "picked"; readonly pin: Pin; readonly at: { readonly x: number; readonly y: number }; readonly rect: CanvasRect }
   | { readonly kind: "pin_clicked"; readonly id: FeedbackId }
+  /** The pin under the pointer, or null once it leaves, so the comment it pins can echo the hover. */
+  | { readonly kind: "pin_hovered"; readonly id: FeedbackId | null }
   | { readonly kind: "select_block"; readonly blockId: BlockId }
   | { readonly kind: "pin_placement"; readonly placed: readonly FeedbackId[]; readonly detached: readonly FeedbackId[] }
   | { readonly kind: "block_error"; readonly blockId: BlockId; readonly message: string }

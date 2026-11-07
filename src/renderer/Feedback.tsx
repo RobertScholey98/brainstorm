@@ -1,4 +1,4 @@
-import { MessageSquarePlus, Plus } from "lucide-react";
+import { EyeOff, MessageSquarePlus, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { partLabel } from "../core/fork";
@@ -59,9 +59,11 @@ export function FeedbackPanel({
   blocks,
   place,
   canPin,
+  past = false,
   pinBlocked = "There is nothing on the canvas to pin to yet",
   picking,
   focused,
+  echoed,
   onHover,
   onPickToggle,
   onOpen,
@@ -72,10 +74,14 @@ export function FeedbackPanel({
   place: (f: Feedback) => PinPlace;
   /** False before the first iteration, when the canvas has nothing to pin to. */
   canPin: boolean;
+  /** A past iteration shows: the comments belong to the latest, so they read here and wait for Back to latest. */
+  past?: boolean;
   /** Why Pin comment is off, when it is. */
   pinBlocked?: string;
   picking: boolean;
   focused: FeedbackId | null;
+  /** The comment whose pin is under the pointer on the canvas, tinted as if the pointer were on it. */
+  echoed: FeedbackId | null;
   /** The item under the pointer, so its pin can echo the hover on the canvas. */
   onHover: (id: FeedbackId | null) => void;
   onPickToggle: () => void;
@@ -112,7 +118,7 @@ export function FeedbackPanel({
           const items = feedback.filter((f) => f.status.state === state);
           if (items.length === 0) return null;
           return (
-            <div key={state} className="pb-2" data-group={state}>
+            <div key={state} inert={past} className={cn("pb-2", past && "opacity-60")} data-group={state}>
               <h3 className="flex items-center gap-1.5 pt-1 pb-1 text-xs font-medium">
                 {title}
                 <Count>{items.length}</Count>
@@ -125,6 +131,7 @@ export function FeedbackPanel({
                     block={blocks.find((b) => b.id === f.pin.blockId) ?? null}
                     place={place(f)}
                     focused={focused === f.id}
+                    echoed={echoed === f.id}
                     onHover={onHover}
                     onOpen={() => onOpen(f)}
                     send={send}
@@ -144,6 +151,7 @@ function FeedbackItem({
   block,
   place,
   focused,
+  echoed,
   onHover,
   onOpen,
   send,
@@ -152,6 +160,7 @@ function FeedbackItem({
   block: BlockView | null;
   place: PinPlace;
   focused: boolean;
+  echoed: boolean;
   onHover: (id: FeedbackId | null) => void;
   onOpen: () => void;
   send: (action: RobAction) => Promise<unknown>;
@@ -185,9 +194,10 @@ function FeedbackItem({
       data-status={f.status.state}
       data-place={place}
       data-focused={focused || undefined}
+      data-echoed={echoed || undefined}
       onPointerEnter={() => onHover(f.id)}
       onPointerLeave={() => onHover(null)}
-      className="group relative -mx-1 rounded-lg px-1 py-2 hover:bg-hover/60 data-[focused]:bg-selected scrolling:mr-1"
+      className="group relative -mx-1 rounded-lg px-1 py-2 hover:bg-hover/60 data-[echoed]:bg-hover/60 data-[focused]:bg-selected scrolling:mr-1"
     >
       <div className="flex gap-2">
         {/* On the first line of text: the comment's at rest, the field's while editing it. */}
@@ -228,10 +238,18 @@ function FeedbackItem({
                   {line}
                 </p>
               )}
-              {place !== "placed" && (
-                <p className="pt-0.5 text-xs/snug text-warning" data-feedback-place>
+              {/* A lost pin is a fault, so amber; one on a variant that isn't showing is only where it is. */}
+              {place === "hidden" ? (
+                <p className="flex items-center gap-1 pt-0.5 text-xs/snug text-fg-muted" data-feedback-place>
+                  <EyeOff aria-hidden className="size-3 shrink-0" />
                   {PLACE_NOTE[place]}
                 </p>
+              ) : (
+                place !== "placed" && (
+                  <p className="pt-0.5 text-xs/snug text-warning" data-feedback-place>
+                    {PLACE_NOTE[place]}
+                  </p>
+                )
               )}
               {confirming ? (
                 <DeleteConfirm

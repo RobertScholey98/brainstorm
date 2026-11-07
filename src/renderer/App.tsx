@@ -307,6 +307,7 @@ function SessionWorkspace({
   const [placement, setPlacement] = useState<Placement>(NO_PLACEMENT);
   const [focusedFeedback, setFocusedFeedback] = useState<FeedbackId | null>(null);
   const [hoveredFeedback, setHoveredFeedback] = useState<FeedbackId | null>(null);
+  const [hoveredPin, setHoveredPin] = useState<FeedbackId | null>(null);
   const [zooms, setZooms] = useState<Readonly<Record<string, number>>>({});
   const [pulse, setPulse] = useState<{ id: FeedbackId; seq: number } | null>(null);
   const canvasArea = useRef<HTMLElement>(null);
@@ -608,6 +609,7 @@ function SessionWorkspace({
             onBlockError={onBlockError}
             onPicked={onPicked}
             onPinClicked={onPinClicked}
+            onPinHovered={setHoveredPin}
             onPlacement={setPlacement}
             onZooms={setZooms}
           />
@@ -677,9 +679,11 @@ function SessionWorkspace({
             blocks={blocks}
             place={(f) => pinPlace(f, blocks, activeBlocks, placement)}
             canPin={iteration !== null && past === null && unrendered === null}
+            past={past !== null}
             pinBlocked={past !== null ? "Back to latest to pin a comment" : (unrendered ?? undefined)}
             picking={picking === "comment"}
             focused={focusedFeedback}
+            echoed={hoveredPin}
             onHover={setHoveredFeedback}
             onPickToggle={() => togglePick("comment")}
             onOpen={openFeedback}

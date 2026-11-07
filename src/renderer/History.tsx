@@ -320,14 +320,15 @@ function ForkStub({ view, onOpen }: { view: SessionView; onOpen: (id: SessionId)
 
 /**
  * One row over the canvas while Rob looks at a past iteration, as the canvas bar is one row: which iteration, the way
- * back, and what he can do from here. Its message gives way before its button in a narrow window.
+ * back, and what he can do from here. Its message gives way before its button in a narrow window. Its text starts 16 px
+ * in, and its button ends 8 px in, where the canvas bar's view switch ends.
  */
 export function PastBar({ n, onLatest }: { n: IterationN; onLatest: () => void }) {
   return (
-    <div role="status" className="flex h-10 shrink-0 items-center gap-2 border-b border-info/40 bg-info-subtle px-4 text-sm" data-past-bar={n}>
+    <div role="status" className="flex h-10 shrink-0 items-center gap-2 border-b border-info/40 bg-info-subtle pr-2 pl-4 text-sm" data-past-bar={n}>
       <HistoryIcon aria-hidden className="size-3.5 shrink-0 text-info" />
       <span className="shrink-0 font-medium">Viewing iteration {n}</span>
-      <Truncate className="w-0 flex-1 text-fg-muted">Read-only. Pick variants, then fork from here.</Truncate>
+      <Truncate className="w-0 flex-1 text-fg-muted">Pick variants, then fork from here.</Truncate>
       <Kbd>Esc</Kbd>
       <Button variant="outline" onClick={onLatest} data-back-to-latest>
         Back to latest
