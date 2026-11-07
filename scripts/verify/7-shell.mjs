@@ -233,6 +233,19 @@ try {
   await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
   check("its hint names the action and T3's chord", (await window.textContent('[data-slot="tooltip-content"]'))?.trim(), "SettleCtrl+Shift+S");
   check(
+    "the settle control is the 24 px ghost icon button, centred on its row, with a 14 px glyph and the hover fill",
+    await settled(() =>
+      window.$eval(`[data-settle="${kitchen}"]`, (b) => {
+        const [box, row] = [b.getBoundingClientRect(), b.closest("li").querySelector("[data-session]").getBoundingClientRect()];
+        const fill = document.body.appendChild(Object.assign(document.createElement("span"), { style: "background: var(--hover)" }));
+        const hover = getComputedStyle(fill).backgroundColor;
+        fill.remove();
+        return [box.width, box.height, Math.round(box.top + box.height / 2 - (row.top + row.height / 2)), b.querySelector("svg").getBoundingClientRect().width, getComputedStyle(b).backgroundColor === hover];
+      }),
+    ),
+    [24, 24, 0, 14, true],
+  );
+  check(
     "pointing at the settle control keeps its row's hover fill, so the row still reads as the one in hand",
     await settled(() => window.$eval(`[data-session="${kitchen}"]`, (row) => getComputedStyle(row).backgroundColor !== "rgba(0, 0, 0, 0)")),
     true,
