@@ -214,7 +214,7 @@ The slices match round 6. Shot 56 was refused because the screen was locked, so 
 | Blocker / major / minor / nit (all slices) | 0 / 1 / 28 / 23 | 0 / 0 / 2 / 0 | 0 / 1 / 14 / 34 |
 | Comparison sheets won | 4 of 4, ahead in every area (slice A); both T3 sheets in every area but a states tie (slice B) | 4 of 4 named | 3 of 4 in slice A (T3 took vs-t3-session-dark narrowly); slice B named Brainstorm on both T3 sheets with T3 ahead on navigation on the session sheet |
 
-Eight of the ten Claude slices scored 9.0 or higher in every area. Opus A, Opus B, Opus D and Sonnet B reached 9.2 to 9.6. The minimums come from the 1440 shots 41 to 80: Opus E (7.0 to 8.5) and Sonnet C (7.0 to 8.0).
+Five of the ten Claude slices scored 9.0 or higher in every area: Opus A, B and D, and Sonnet A and B. The minimums come from the 1440 shots 41 to 80, Opus E (7.0 to 8.5) and Sonnet C (7.0 to 8.0).
 
 The two majors:
 - **Opus E:** the history strip cuts entries at its edges. The still on screen is cut mid-word after a restart (64), a fork link shows as a bare icon (78), and fragments sit at the edge (79, 80). With three iterations it rests about 10 px scrolled, so the left fade never clears.
