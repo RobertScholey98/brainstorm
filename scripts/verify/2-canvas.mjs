@@ -234,6 +234,16 @@ try {
   await window.keyboard.type("Louder");
   await window.click('[data-composer] button:has-text("Pin comment")');
   await canvas.waitForSelector(".bs-pin[data-placed]");
+  check(
+    "a pin at the frame's edge is 20 px whole, inside the frame's body and not clipped by it",
+    await settled(() =>
+      canvas.$eval(".bs-pin[data-placed]", (pin) => {
+        const [p, body] = [pin.getBoundingClientRect(), pin.closest(".bs-frame").querySelector(".bs-frame-body").getBoundingClientRect()];
+        return [Math.round(p.width), Math.round(p.height), p.left >= body.left && p.right <= body.right && p.top >= body.top && p.bottom <= body.bottom];
+      }),
+    ),
+    [20, 20, true],
+  );
   const sideways = () =>
     settled(() => canvas.$$eval(".bs-frame-body", (bodies) => bodies.map((b) => b.scrollWidth - b.clientWidth)));
   const edges = [await sideways()];
