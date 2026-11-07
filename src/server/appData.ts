@@ -27,6 +27,8 @@ export function brainstormHome(env: NodeJS.ProcessEnv = process.env): string {
 
 export const apiFile = (home: string): string => join(home, "api.json");
 
+export const exportsDir = (home: string): string => join(home, "exports");
+
 /** Null when the file is missing or isn't one the server wrote. */
 export function readApi(home: string): ApiInfo | null {
   try {

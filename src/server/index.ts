@@ -7,7 +7,7 @@ import { createT3Bridge } from "../core/bridge/t3";
 import { Brainstorm } from "../core/brainstorm";
 import { createChecker } from "../core/check";
 import type { AgentBridge } from "../core/types";
-import { brainstormHome, packageVersion, writeApi } from "./appData";
+import { brainstormHome, exportsDir, packageVersion, writeApi } from "./appData";
 import { createHttpHandler } from "./http";
 
 const TRACKER_MS = 3000;
@@ -37,11 +37,11 @@ function agentHomeOf(home: string): string | null {
 
 export async function startServer(options: ServerOptions = {}): Promise<RunningServer> {
   const home = options.home ?? brainstormHome();
-  mkdirSync(join(home, "exports"), { recursive: true });
+  mkdirSync(exportsDir(home), { recursive: true });
   const checker = createChecker();
   const service = await Brainstorm.open({
     dbPath: join(home, "brainstorm.db"),
-    exportsDir: join(home, "exports"),
+    exportsDir: exportsDir(home),
     bridge: options.bridge ?? createT3Bridge(),
     checker,
     agentHome: agentHomeOf(home),

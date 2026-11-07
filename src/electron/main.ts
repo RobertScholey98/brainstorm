@@ -1,8 +1,8 @@
 import { app, BrowserWindow, dialog, Menu, nativeTheme, session, shell } from "electron";
-import { existsSync, readdirSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { solidColours } from "../core/design";
-import { brainstormHome } from "../server/appData";
+import { brainstormHome, exportsDir } from "../server/appData";
 import { startServer, type RunningServer } from "../server/index";
 
 const home = brainstormHome();
@@ -10,8 +10,18 @@ const home = brainstormHome();
 // scopes the single-instance lock to one home, so a test app on a temp home never focuses Rob's window.
 app.setPath("userData", join(home, "electron"));
 
-const exports = join(home, "exports");
-const exported = (file: string) => existsSync(exports) && readdirSync(exports).includes(file);
+const exports = exportsDir(home);
+
+/** The file a /reveal-export/<file> link names, only when the exports folder holds a file of exactly that name, so a link can never reach a path outside it. */
+function exported(pathname: string): string | null {
+  try {
+    const file = decodeURIComponent(/^\/reveal-export\/([^/]+)$/.exec(pathname)?.[1] ?? "");
+    const listed = readdirSync(exports, { withFileTypes: true }).some((entry) => entry.isFile() && entry.name === file);
+    return file.endsWith(".html") && listed ? file : null;
+  } catch {
+    return null;
+  }
+}
 
 /** The app draws its own header; the native buttons overlay its right end in the header's own colours. */
 const HEADER_HEIGHT = 48;
@@ -76,9 +86,8 @@ async function run(): Promise<void> {
   // The renderer has no preload, so Show in folder is a link to /reveal-export/<file> that never opens a window.
   contents.setWindowOpenHandler(({ url }) => {
     const target = new URL(url);
-    const file = decodeURIComponent(/^\/reveal-export\/([^/]+)$/.exec(target.pathname)?.[1] ?? "");
-    // Only a name the exports folder lists, so a link can never reach a path outside it.
-    if (target.origin === origin && file.endsWith(".html") && exported(file)) shell.showItemInFolder(join(exports, file));
+    const file = target.origin === origin ? exported(target.pathname) : null;
+    if (file) shell.showItemInFolder(join(exports, file));
     else if (/^https?:$/.test(target.protocol) && target.origin !== origin) void shell.openExternal(url);
     return { action: "deny" };
   });
