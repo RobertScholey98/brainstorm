@@ -952,6 +952,17 @@ try {
     ),
     { rule: true, centred: true, corner: [4, 20, 2] },
   );
+  check(
+    "the count is 11 px type cut from the glyph under it by a 2 px ring in the card's colour",
+    await window.$eval("[data-rail-count]", (count) => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--card)" }));
+      const card = getComputedStyle(probe).color;
+      probe.remove();
+      const style = getComputedStyle(count);
+      return [style.fontSize, style.boxShadow.includes(`${card} 0px 0px 0px 2px`)];
+    }),
+    ["11px", true],
+  );
   await window.click("[data-rail-feedback]");
   await window.waitForSelector("[data-feedback-panel]");
   const narrow = await inspectorWidth();
