@@ -130,6 +130,19 @@ describe("design tokens", () => {
       expect({ sidebarToCard: step("app", "card") >= 4.69, cardToCanvas: step("card", "canvas") >= 4.45 }).toEqual({ sidebarToCard: true, cardToCanvas: true });
     });
 
+    it.runIf(theme === "dark")("lifts an overlay off the card as clearly as the card lifts off the canvas, where a shadow barely shows", () => {
+      const c = solidColours(theme);
+      const step = (a: string, b: string) => Math.round(deltaE2000(lab(c[a]!), lab(c[b]!)) * 100) / 100;
+      expect({ cardToRaised: step("card", "raised"), cardToCanvas: step("card", "canvas") }).toEqual({ cardToRaised: 4.85, cardToCanvas: 4.74 });
+    });
+
+    it(`casts the strip's edge shade darker than the card it falls on in ${theme}, never lighter`, () => {
+      const c = solidColours(theme);
+      const alpha = Number(/^rgb\(0 0 0 \/ ([\d.]+)\)$/.exec(c.shade!)?.[1]);
+      const over = srgbOver("#000000", alpha, c.card!);
+      expect(lab(c.card!)[0] - lab(over)[0]).toBeGreaterThanOrEqual(5);
+    });
+
     it(`draws the one chip recipe so its edge reads on every surface in ${theme}`, () => {
       // components/ui/chip.ts: a card fill inside a border-strong edge.
       const c = solidColours(theme);

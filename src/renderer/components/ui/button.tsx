@@ -10,17 +10,21 @@ const buttonVariants = cva(
         // The border takes the fill, so an accent button paints the same 28 px box as the outline one beside it. An
         // open trigger is one whose popover or menu shows: a Hint's tooltip marks its trigger `data-popup-open` too.
         accent: "border-accent bg-accent text-accent-fg hover:border-accent-hover hover:bg-accent-hover aria-expanded:border-accent-hover aria-expanded:bg-accent-hover",
+        // On a tinted surface, marked `data-tint`, the card fill would punch a hole in the tint, so the edge alone draws it.
         outline:
-          "border-border-strong bg-card hover:bg-hover hover:text-fg aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
+          "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
         ghost:
           "hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg aria-pressed:bg-selected aria-pressed:text-fg",
         destructive:
-          "border-border-strong bg-card text-danger hover:bg-danger-subtle",
+          "border-border-strong bg-card text-danger in-data-tint:not-hover:bg-transparent hover:bg-danger-subtle",
       },
       size: {
-        default: "h-7 gap-1.5 px-2 text-sm has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
+        // An icon a fitted row has collapsed gives its padding back, so the label keeps the plain button's air.
+        default: "h-7 gap-1.5 px-2 text-sm has-[[data-icon=inline-end]:not([data-collapsed])]:pr-1.5 has-[[data-icon=inline-start]:not([data-collapsed])]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         icon: "size-7",
         "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3.5",
+        // A 24 px action that names itself, as a list row's hover action does.
+        xs: "h-6 gap-1 px-1.5 text-xs font-normal [&_svg:not([class*='size-'])]:size-3.5",
         // A glyph over its count, for a narrow rail with no room to set a corner count clear of the glyph.
         "icon-count": "h-8 w-7 flex-col gap-0.5 text-2xs [&_svg:not([class*='size-'])]:size-3.5",
       },

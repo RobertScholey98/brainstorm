@@ -103,7 +103,7 @@ function OverlayHeader({ id, heading, description }: { id: string; heading: Reac
  */
 function PopoverFooter({ hint, children }: { hint?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div data-slot="popover-footer" className="-mx-3 -mb-3 flex items-center gap-4 border-t px-3 py-2">
+    <div data-slot="popover-footer" className="-mx-3 -mb-3 flex items-center gap-4 border-t border-fg/10 px-3 py-2">
       {hint !== undefined && <span className="min-w-0 truncate text-xs text-fg-muted">{hint}</span>}
       <span className="ml-auto flex shrink-0 items-center gap-1.5">{children}</span>
     </div>

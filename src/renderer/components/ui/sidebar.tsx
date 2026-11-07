@@ -7,6 +7,7 @@ import { cn } from "cn"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ScrollPane } from "@/components/ui/scroll-pane"
 import { Separator } from "@/components/ui/separator"
 import {
   Sheet,
@@ -379,14 +380,16 @@ function SidebarSeparator({
 
 function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div
+    <ScrollPane
+      inset="none"
+      surface="window"
       data-slot="sidebar-content"
       data-sidebar="content"
       className={cn(
         // Out into the container's padding by the gutter on the left, and only 4 px on the right, where the main card
         // starts: a group pads its right side 6 px less, so a row's fill sits as far off both edges and the thumb
         // stands 6 px off the card, as the card's own thumbs stand off its edge.
-        "scroll-gutter -mr-1 -ml-(--scrollbar) flex min-h-0 flex-1 flex-col gap-0 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+        "-mr-1 -ml-(--scrollbar) flex flex-col gap-0 group-data-[collapsible=icon]:overflow-hidden",
         className
       )}
       {...props}
@@ -601,7 +604,8 @@ function SidebarMenuAction({
         className: cn(
           // The 24 px ghost icon button, centred on its row, so a row's action reads as the icon actions elsewhere do.
           "absolute top-1 right-1 flex h-6 items-center justify-center rounded-md text-fg ring-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-fg peer-data-[size=default]/menu-button:top-1 peer-data-[size=lg]/menu-button:top-3 peer-data-[size=sm]/menu-button:top-0.5 after:absolute after:-inset-2 hover:bg-hover hover:text-fg focus-visible:ring-2 md:after:hidden [&>svg]:size-3.5 [&>svg]:shrink-0",
-          labelled ? "gap-1 px-1.5 text-xs" : "w-6 p-0",
+          // A labelled action ends its words on the row's trailing text edge, the ages', so it takes 4 px on its right, not 6.
+          labelled ? "gap-1 pr-1 pl-1.5 text-xs" : "w-6 p-0",
           showOnHover &&
             "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 peer-data-active/menu-button:text-fg aria-expanded:opacity-100 md:opacity-0",
           className

@@ -109,6 +109,7 @@
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-separator: var(--separator);
+  --color-shade: var(--shade);
   --color-ring: var(--ring);
   --color-inverse: var(--inverse);
   --color-inverse-fg: var(--inverse-fg);
@@ -309,4 +310,12 @@ body[data-resizing] [data-slot="sidebar-container"] {
  */
 @utility titlebar-inset {
   padding-right: max(12px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
+}
+
+/* A settled card's still. Contrast comes off first, around mid-grey, then the result lifts toward the card in light and sinks toward it in dark. Tailwind's own filters run brightness before contrast, which pulls every still to mid-grey. */
+@utility still-settled {
+  filter: grayscale(1) contrast(0.3) brightness(1.7);
+  @media (prefers-color-scheme: dark) {
+    filter: grayscale(1) contrast(0.5) brightness(0.55);
+  }
 }

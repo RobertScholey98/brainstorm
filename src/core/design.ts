@@ -37,12 +37,14 @@ const SOLID = {
     // An overlay over the white Inspector or a card needs a lift you can see, not only its 1 px edge (T45).
     "elevation-md": "0 8px 24px rgb(0 0 0 / 0.14), 0 2px 6px rgb(0 0 0 / 0.08)",
     "elevation-lg": "0 8px 24px rgb(0 0 0 / 0.14), 0 2px 6px rgb(0 0 0 / 0.06)",
+    // The shadow an edge casts over what scrolls under it, such as the history strip's ends: dark in both themes.
+    shade: "rgb(0 0 0 / 0.08)",
   },
   dark: {
     app: "#161614",
     canvas: "#1f1f1d",
     card: "#2e2e2c",
-    raised: "#373734",
+    raised: "#3d3d3a",
     muted: "#3b3b37",
     fg: "#ecebe8",
     "fg-muted": "#a8a7a1",
@@ -59,6 +61,7 @@ const SOLID = {
     "elevation-sm": "0 1px 3px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.04)",
     "elevation-md": "0 6px 20px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.06)",
     "elevation-lg": "0 10px 32px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.08)",
+    shade: "rgb(0 0 0 / 0.32)",
   },
 } as const satisfies Record<Theme, Record<string, string>>;
 

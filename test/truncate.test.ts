@@ -32,6 +32,12 @@ describe("cutText", () => {
     expect(cutText("Vary Spin button ×3 · bolder", room(26))).toBe("Vary Spin button ×3 · bol…");
   });
 
+  it("never cuts a count from its noun", () => {
+    expect(cutText("Vary Spin button ×3 · bolder", room(18))).toBe("Vary Spin button…");
+    expect(cutText("Vary Spin button ×12 · bolder", room(19))).toBe("Vary Spin button…");
+    expect(cutText("Vary Spin button ×3 · bolder", room(20))).toBe("Vary Spin button ×3…");
+  });
+
   it("never splits a character made of two code units", () => {
     expect(cutText("Spin 🎡 wheel", room(7))).toBe("Spin 🎡…");
   });

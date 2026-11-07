@@ -177,6 +177,75 @@ export async function paneHead(window, head, body, { by = 120 } = {}) {
   );
 }
 
+/** The painted pixels in `clip`, row by row, each `[r, g, b]`, decoded by the main process since the page can't read its own screen. */
+export async function pixels(app, window, clip) {
+  const png = await window.screenshot({ clip });
+  const { width, data } = await app.evaluate(({ nativeImage }, b64) => {
+    const image = nativeImage.createFromBuffer(Buffer.from(b64, "base64"));
+    return { width: image.getSize().width, data: [...image.toBitmap()] };
+  }, png.toString("base64"));
+  const out = [];
+  for (let i = 0; i < data.length; i += 4) out.push([data[i + 2], data[i + 1], data[i]]);
+  return clip.height === 1 ? out : Array.from({ length: out.length / width }, (_, y) => out.slice(y * width, (y + 1) * width));
+}
+
+/** What `paneFeet` reads off a pane that ends the way R8-17 rules a foot. */
+export const FOOT = { more: { ruled: true, reads: true }, end: { ruled: false } };
+
+/**
+ * Every element in the window that scrolls down and has more below, by name: whether its foot rule shows with more
+ * below, whether that rule reads at 1.15:1 or more on the surface the pane sits on, and whether it is gone at the end.
+ */
+export async function paneFeet(window) {
+  await window.mouse.move(1, 1);
+  return window.evaluate(async () => {
+    const paint = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    const rgb = (...colours) => {
+      paint.clearRect(0, 0, 1, 1);
+      for (const c of colours) {
+        paint.fillStyle = c;
+        paint.fillRect(0, 0, 1, 1);
+      }
+      return [...paint.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+    };
+    const lum = (c) => {
+      const [r, g, b] = c.map((v) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const fill = (el) => {
+      for (; el !== null; el = el.parentElement) {
+        const colour = getComputedStyle(el).backgroundColor;
+        if (colour !== "rgba(0, 0, 0, 0)") return colour;
+      }
+      return "white";
+    };
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const scrollers = [...document.querySelectorAll("*")].filter((el) => {
+      const s = getComputedStyle(el);
+      return /auto|scroll/.test(s.overflowY) && el.scrollHeight > el.clientHeight + 1 && el.getBoundingClientRect().height > 0;
+    });
+    const out = {};
+    for (const el of scrollers) {
+      const name = el.dataset.slot && el.dataset.slot !== "scroll-pane" ? el.dataset.slot : Object.keys(el.dataset).find((k) => k !== "slot" && k !== "more")?.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`) ?? el.tagName.toLowerCase();
+      const read = async (top) => {
+        el.scrollTop = top;
+        await frame();
+        // A pane can ease its rule in and out, so it is read where it comes to rest.
+        await Promise.all(el.getAnimations().map((a) => a.finished.catch(() => {})));
+        const s = getComputedStyle(el);
+        const ruled = parseFloat(s.borderBottomWidth) > 0 && rgb(fill(el)).join() !== rgb(fill(el), s.borderBottomColor).join();
+        const [a, b] = [lum(rgb(fill(el))), lum(rgb(fill(el), s.borderBottomColor))].sort((x, y) => y - x);
+        return { ruled, reads: (a + 0.05) / (b + 0.05) >= 1.15 };
+      };
+      const more = await read(0);
+      const { ruled } = await read(el.scrollHeight);
+      out[name] = { more, end: { ruled } };
+      el.scrollTop = 0;
+    }
+    return out;
+  });
+}
+
 export async function shot(window, shots, name) {
   await window.screenshot({ path: join(shots, `${name}.png`) });
 }

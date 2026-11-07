@@ -4,13 +4,21 @@ import { cn } from "cn"
 const INSET = {
   4: "px-[calc(var(--spacing-4)-var(--scrollbar))]",
   6: "px-[calc(var(--spacing-6)-var(--scrollbar))]",
+  none: "",
+} as const
+
+/** `border` all but vanishes on the window, so a pane there rules its edges in the separator's tone. */
+const RULE = {
+  card: { foot: "data-more:border-border", head: "data-scrolled:after:border-border" },
+  window: { foot: "data-more:border-separator", head: "data-scrolled:after:border-separator" },
 } as const
 
 type Edges = { readonly scrolled: boolean; readonly more: boolean }
 
 /**
  * A pane's scrolling body. It keeps the scrollbar's gutter on both sides and pads each side by its inset less the
- * gutter, so content, and any rule drawn across it, sits `inset` off both edges whether or not it scrolls. Its content
+ * gutter, so content, and any rule drawn across it, sits `inset` off both edges whether or not it scrolls. Every
+ * vertical scroller in the app is one, the sidebar's included, so every pane ends the same way. Its content
  * can style itself for a showing scrollbar (`scrolling:`).
  *
  * A `head` stands above the body, and content scrolls out of sight at its bottom edge. It paints no fill of its own, so
@@ -22,11 +30,12 @@ type Edges = { readonly scrolled: boolean; readonly more: boolean }
 function ScrollPane({
   head,
   inset = 4,
+  surface = "card",
   className,
   onScroll,
   ref: outer,
   ...props
-}: ComponentProps<"div"> & { inset?: keyof typeof INSET; head?: ReactNode }) {
+}: ComponentProps<"div"> & { inset?: keyof typeof INSET; surface?: keyof typeof RULE; head?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   const [edges, setEdges] = useState<Edges>({ scrolled: false, more: false })
   const read = (el: HTMLElement) => {
@@ -68,7 +77,8 @@ function ScrollPane({
         onScroll?.(e)
       }}
       className={cn(
-        "scroll-gutter mb-2 min-h-0 [container-type:scroll-state] flex-1 overflow-x-hidden overflow-y-auto border-b border-transparent data-more:border-border",
+        "scroll-gutter mb-2 min-h-0 [container-type:scroll-state] flex-1 overflow-x-hidden overflow-y-auto border-b border-transparent",
+        RULE[surface].foot,
         INSET[inset],
         className
       )}
@@ -78,7 +88,7 @@ function ScrollPane({
   if (head === undefined) return body
   return (
     <>
-      <div data-slot="pane-head" data-scrolled={edges.scrolled || undefined} className="relative shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:border-b after:border-transparent data-scrolled:after:border-border">
+      <div data-slot="pane-head" data-scrolled={edges.scrolled || undefined} className={cn("relative shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:border-b after:border-transparent", RULE[surface].head)}>
         {head}
       </div>
       {body}
