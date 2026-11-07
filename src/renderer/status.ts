@@ -67,10 +67,12 @@ export const echoTone = (phase: RequestPhase["phase"]): Tone => {
 };
 
 /** Which tone wins when one mark speaks for several brainstorms: what stops Rob first, then the agent at work. */
-const LOUDEST: readonly Tone[] = ["danger", "warning", "info", "accent", "success", "muted"];
+const LOUDNESS: Record<Tone, number> = { danger: 0, warning: 1, info: 2, accent: 3, success: 4, muted: 5 };
 
 /** The phase a folded group's head shows for its brainstorms, the one that most needs Rob, or null when none is open. */
 export function loudestPhase(sessions: readonly SessionListing[]): OpenPhase | null {
-  const open = sessions.map(sessionPhase).filter((phase) => phase !== null);
-  return open.sort((a, b) => LOUDEST.indexOf(PHASE[a].tone) - LOUDEST.indexOf(PHASE[b].tone))[0] ?? null;
+  return sessions.reduce<OpenPhase | null>((loudest, s) => {
+    const phase = sessionPhase(s);
+    return phase !== null && (loudest === null || LOUDNESS[PHASE[phase].tone] < LOUDNESS[PHASE[loudest].tone]) ? phase : loudest;
+  }, null);
 }
