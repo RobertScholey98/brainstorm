@@ -14,6 +14,7 @@ const RETIRED: readonly { readonly pattern: RegExp; readonly say: string }[] = [
   { pattern: /matches the search/, say: "the search's own words: Nothing here has “zebra” in its title or brief" },
   { pattern: /heading={`Fork iteration/, say: "the Fork button's own label, so button and popover share one name in both states" },
   { pattern: /. Everything else stays./, say: "<context> · <clause>, the one grammar a popover description takes" },
+  { pattern: /Fork of/, say: "from … · iteration N, the one wording for a fork's lineage on the card, the row, the stub and the parent's tile" },
   { pattern: /Try again, and if it still fails/, say: "If it happens again, restart Brainstorm: the same copy shows in a toast, which has no Try again button" },
 ];
 

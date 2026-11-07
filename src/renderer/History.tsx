@@ -83,9 +83,9 @@ export function Filmstrip({
     measure();
     const sizes = new ResizeObserver(measure);
     sizes.observe(strip);
-    // An entry's lines change as its age ticks and as an origin lands.
+    // An entry's lines change as its age ticks and as an origin lands, and the shown one takes its room first.
     const lines = new MutationObserver(measure);
-    lines.observe(entries, { subtree: true, childList: true, characterData: true });
+    lines.observe(entries, { subtree: true, childList: true, characterData: true, attributeFilter: ["aria-selected"] });
     void document.fonts.ready.then(measure);
     return () => {
       sizes.disconnect();
@@ -229,19 +229,24 @@ const STRIP_LIST = "grid w-max grid-flow-col grid-cols-strip items-center gap-4 
 const ENTRY = "min-w-0 transition-opacity data-off:pointer-events-none data-off:opacity-0";
 /** A page's first entry, the only place the strip rests. */
 const SNAP = "snap-start";
-/** An iteration's entry: its still, then its lines, inside a 1 px edge that holds on the card in both themes. */
-const ENTRY_BOX = "flex items-center gap-2 rounded-lg p-1 ring-1";
+/**
+ * An iteration's entry: its still, then its lines, inside a 1 px edge that holds on the card in both themes. The edge
+ * is drawn inside the box, since the strip clips at the entries' own top and bottom.
+ */
+const ENTRY_BOX = "flex items-center gap-2 rounded-lg p-1 inset-ring";
 
 /**
- * What each entry needs: its width at max-content for every line to read whole, and its width with only its number
- * and its age, the words that never give way.
+ * What each entry needs: its width at max-content for every line to read whole, and its width with only the words
+ * that never give way: an iteration's number, its age and "latest", and a fork's link line.
  */
 function needs(list: HTMLElement): EntryNeed[] {
   return [...list.children].map((entry) => {
     if (!(entry instanceof HTMLElement)) return { need: 0, floor: 0 };
+    const link = entry.dataset.historyN === undefined;
+    const shown = entry.getAttribute("aria-selected") === "true";
     entry.style.width = "max-content";
     const need = entry.getBoundingClientRect().width;
-    const optional = [...entry.querySelectorAll<HTMLElement>("[data-history-origin], [data-history-latest]")];
+    const optional = [...entry.querySelectorAll<HTMLElement>("[data-history-origin], [data-history-link-name]")];
     let floor = 0;
     if (optional.length > 0) {
       for (const el of optional) el.style.display = "none";
@@ -249,7 +254,7 @@ function needs(list: HTMLElement): EntryNeed[] {
       for (const el of optional) el.style.removeProperty("display");
     }
     entry.style.removeProperty("width");
-    return { need, floor };
+    return { need, floor, link, shown };
   });
 }
 
@@ -294,12 +299,12 @@ export function FilmstripSkeleton() {
       <div className={STRIP_SCROLL}>
         <div className={STRIP_LIST}>
           {/* A first iteration's entry, its words hidden in the bars, in the landed entry's frame, edge and still. */}
-          <div className={cn(ENTRY_BOX, "ring-border-strong")} data-history-skeleton-entry>
+          <div className={cn(ENTRY_BOX, "inset-ring-border-strong")} data-history-skeleton-entry>
             <Skeleton className={STILL_BOX} data-history-skeleton-still />
             <span className="grid gap-0.5 pr-1">
               <span className="flex h-4.5 items-baseline gap-x-1.5 text-sm">
                 <Skeleton className="font-medium text-transparent">Iteration 1</Skeleton>
-                <Skeleton className="text-xs text-transparent">·</Skeleton>
+                <span aria-hidden className="text-xs text-transparent">·</span>
                 <Skeleton className="text-xs text-transparent">now</Skeleton>
                 <Skeleton className="text-xs text-transparent">· latest</Skeleton>
               </span>
@@ -345,13 +350,14 @@ function StillOption({
         tabIndex={selected ? 0 : -1}
         onClick={onShow}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onShow())}
-        className={cn(ENTRY, snap && SNAP, ENTRY_BOX, "cursor-pointer outline-none ring-border-strong hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring", selected && "bg-selected")}
+        className={cn(ENTRY, snap && SNAP, ENTRY_BOX, "cursor-pointer outline-none inset-ring-border-strong hover:bg-hover focus-visible:inset-ring-2 focus-visible:inset-ring-ring", selected && "bg-selected")}
         data-history-n={entry.n}
         data-selected={selected || undefined}
+        data-tint={selected || undefined}
       >
         <IterationStill load={load} revision={revision} />
         <span className="grid min-w-0 flex-1 gap-0.5 pr-1">
-          {/* One line that never cuts: "latest" comes last and wraps out of sight, whole, when it doesn't fit. */}
+          {/* One line that never cuts: its floor holds "latest" too, which wraps out of sight, whole, only mid-resize. */}
           <span className="flex h-4.5 min-w-0 flex-wrap items-baseline gap-x-1.5 overflow-hidden text-sm">
             <span className="font-medium">Iteration {entry.n}</span>
             <span className="text-xs text-fg-muted">·</span>
@@ -384,7 +390,7 @@ function Offshoot({ fork, snap, onOpen }: { fork: ForkBranch; snap: boolean; onO
         data-history-fork={fork.id}
         data-history-from={fork.from}
       >
-        <ForkLines first={fork.title} second={`Fork of iteration ${fork.from}`} />
+        <ForkLines first={fork.title} second={`from iteration ${fork.from}`} />
       </button>
     </Hint>
   );
@@ -400,7 +406,9 @@ function ForkLines({ first, second, lead }: { first: string; second: string; lea
       <span className="grid min-w-0 flex-1 gap-0.5 text-xs">
         <span className="flex min-w-0 gap-1">
           {lead !== undefined && <span className="shrink-0">{lead}</span>}
-          <Truncate className="font-medium">{first}</Truncate>
+          <Truncate className="font-medium" data-history-link-name>
+            {first}
+          </Truncate>
         </span>
         <span className="text-fg-muted">{second}</span>
       </span>
@@ -436,7 +444,7 @@ function ForkStub({ view, snap, onOpen }: { view: SessionView; snap: boolean; on
  */
 export function PastBar({ n, onLatest }: { n: IterationN; onLatest: () => void }) {
   return (
-    <div role="status" className="flex h-10 shrink-0 items-center gap-2 border-b border-info/40 bg-info-subtle pr-2 pl-4 text-sm" data-past-bar={n}>
+    <div role="status" className="flex h-10 shrink-0 items-center gap-2 border-b border-info/40 bg-info-subtle pr-2 pl-4 text-sm" data-tint data-past-bar={n}>
       <HistoryIcon aria-hidden className="size-3.5 shrink-0 text-info" />
       <span className="shrink-0 font-medium">Viewing iteration {n}</span>
       <Truncate className="w-0 flex-1 text-fg-muted">Pick variants, then fork from here.</Truncate>

@@ -146,12 +146,62 @@ const stripEdges = (window) =>
       el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : el.dataset.forkStub !== undefined ? "stub" : "loading";
     return [...document.querySelectorAll("[data-history-list] > *, [data-history-skeleton-entry]")].map((el) => {
       const s = getComputedStyle(el);
-      const ring = s.boxShadow.split(/,(?![^(]*\))/).find((layer) => layer.trim().endsWith("0px 0px 0px 1px"));
-      const edge = parseFloat(s.borderTopWidth) > 0 ? s.borderTopColor : ring?.trim().replace(/ 0px 0px 0px 1px$/, "");
+      const ring = s.boxShadow.split(/,(?![^(]*\))/).find((layer) => / 0px 0px 0px 1px( inset)?$/.test(layer.trim()));
+      const edge = parseFloat(s.borderTopWidth) > 0 ? s.borderTopColor : ring?.trim().replace(/ 0px 0px 0px 1px( inset)?$/, "");
       const [a, b] = [lum(rgb(card)), lum(rgb(card, edge))].sort((x, y) => y - x);
       return [name(el), rgb(edge).join() === rgb(strong).join(), Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100 >= 1.3];
     });
   });
+/** The entries, links and stubs, and the loading entry, whose edge reaches past the strip's clip at its top or bottom, so it draws as brackets. */
+const edgesClipped = (window) =>
+  window.evaluate(() => {
+    const clip = (el) => el.closest("[data-history-scroll], [data-history-loading] .overflow-x-auto, [data-history-loading]").getBoundingClientRect();
+    const name = (el) =>
+      el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : el.dataset.forkStub !== undefined ? "stub" : "loading";
+    return [...document.querySelectorAll("[data-history-list] > *, [data-history-skeleton-entry]")]
+      .filter((el) => {
+        const s = getComputedStyle(el);
+        const outset = parseFloat(s.borderTopWidth) > 0 || /inset/.test(s.boxShadow) ? 0 : 1;
+        const [r, c] = [el.getBoundingClientRect(), clip(el)];
+        return r.top - outset < c.top - 0.01 || r.bottom + outset > c.bottom + 0.01;
+      })
+      .map(name);
+  });
+/**
+ * One page of the strip as it rests: the entries in view, the ones with a line cut, whether the latest names itself
+ * "latest" in full, and whether a fork's tile is wider than its words, which would take room an entry's line needs.
+ */
+const pageRead = (window) =>
+  window.evaluate(() => {
+    const box = document.querySelector("[data-history-scroll]").getBoundingClientRect();
+    const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : "stub");
+    const inView = [...document.querySelectorAll("[data-history-list] > *:not([data-off])")].filter((el) => el.getBoundingClientRect().right > box.left + 1 && el.getBoundingClientRect().left < box.right - 1);
+    const latest = inView.find((el) => el.querySelector("[data-history-latest]") !== null)?.querySelector("[data-history-latest]");
+    const line = latest?.parentElement.getBoundingClientRect();
+    const wide = inView.filter((el) => el.dataset.historyFork !== undefined).filter((el) => {
+      const width = el.getBoundingClientRect().width;
+      el.style.width = "max-content";
+      const need = el.getBoundingClientRect().width;
+      el.style.removeProperty("width");
+      return width > need + 1;
+    });
+    return {
+      inView: inView.map(name),
+      cut: inView.filter((el) => el.querySelector("[data-slot=truncate][data-cut]") !== null).map(name),
+      latest: latest === undefined ? null : latest.getBoundingClientRect().top < line.bottom - 0.5 && latest.getBoundingClientRect().right <= line.right + 0.5,
+      wideFork: wide.length > 0,
+    };
+  });
+/** Every page of the strip, from the start to the end, read by `pageRead`. */
+async function stripPages(window) {
+  while (!(await window.isDisabled('[data-history-step="start"]'))) await stripScroll(window, () => window.click('[data-history-step="start"]'));
+  const pages = [await settled(() => pageRead(window))];
+  while (!(await window.isDisabled('[data-history-step="end"]'))) {
+    await stripScroll(window, () => window.click('[data-history-step="end"]'));
+    pages.push(await settled(() => pageRead(window)));
+  }
+  return pages;
+}
 /** Runs `act`, then waits for the strip's `scrollend`, so a read never lands while the strip is still moving. */
 async function stripScroll(window, act) {
   await window.$eval("[data-history-scroll]", (el) => {
@@ -224,6 +274,7 @@ try {
     await window.$eval('[data-history-n="2"] [data-history-age]', (age) => [...age.parentElement.children].map((el) => el.textContent.trim())),
     ["Iteration 2", "·", (await window.textContent('[data-history-n="2"] [data-history-age]')).trim(), "· latest"],
   );
+  await window.mouse.move(1, 1);
   await window.hover('[data-history-n="2"]');
   check(
     "an entry's hint names it, then its age, then what made it",
@@ -429,14 +480,37 @@ try {
   const forkId = started[0]?.message.match(/session (s_[a-z0-9]+)/)?.[1];
   check("the window opened the fork, whose sidebar links back to the parent", await window.getAttribute("[data-forked-from]", "data-forked-from"), session);
   check(
-    "a long parent title gives way on that line, and the iteration it forked from reads whole",
-    await window.$eval("[data-forked-line] > span:last-child", (el) => [el.textContent, el.scrollWidth <= el.clientWidth]),
-    ["· iteration 2", true],
+    "the line words the fork as the strip's stub does, from its parent and then the iteration, the branch glyph saying fork, so the parent's name keeps the room",
+    await window.$eval("[data-forked-line]", (el) => [el.textContent, el.dataset.cut ?? null]),
+    ["from Chore roulette · iteration 2", null],
   );
   check(
-    "the line words the fork as the strip's stub does, from its parent, the branch glyph saying fork, so the parent's name keeps the room",
-    await window.$eval("[data-forked-line]", (el) => [el.textContent, el.querySelector("[data-cut]") === null]),
-    ["from Chore roulette· iteration 2", true],
+    "the line is one phrase on one line, the iteration one space after the parent's name, not a second column",
+    await window.$eval("[data-forked-line]", (el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
+      return [el.children.length, lines.size];
+    }),
+    [0, 1],
+  );
+  check(
+    "a long parent title gives way on that line, and the iteration it forked from reads whole after the cut",
+    await window.$eval("[data-forked-line]", (el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      el.style.maxWidth = `${range.getBoundingClientRect().width - 30}px`;
+      return new Promise((done) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const cut = el.dataset.cut ?? "";
+            el.style.removeProperty("max-width");
+            done([cut.startsWith("from Chore"), cut.endsWith("… · iteration 2")]);
+          }),
+        ),
+      );
+    }),
+    [true, true],
   );
   check(
     "the fork line's glyph sits on the Thread row's mark column, and its text on the Thread title's edge",
@@ -504,6 +578,16 @@ try {
   await window.click("[data-fork-stub]");
   await window.waitForSelector("[data-history-loading]");
   check("while the parent loads, the strip's place is held at the same 84 px", await window.$eval("[data-history-loading]", (el) => Math.round(el.getBoundingClientRect().height)), 84);
+  check(
+    "and its panel draws the landed panel's rule before each slot, in the tone of the sidebar's other rules",
+    await window.$$eval("[data-session-loading] [data-sidebar=separator]", (rules) => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "background: var(--separator)" }));
+      const tone = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return rules.map((rule) => getComputedStyle(rule).backgroundColor === tone);
+    }),
+    [true, true],
+  );
   // The head's count line holds what loads, so only the entry's top and size, and its still's place in it, can match.
   const entryAndStill = (entry, still) => {
     const [e, s] = [entry.getBoundingClientRect(), still.getBoundingClientRect()];
@@ -513,9 +597,11 @@ try {
     `(${entryAndStill})(document.querySelector("[data-history-skeleton-entry]"), document.querySelector("[data-history-skeleton-still]"))`,
   );
   const loadingEdge = await stripEdges(window);
+  const loadingClipped = await edgesClipped(window);
   await window.waitForSelector(`[data-history-fork="${forkId}"]`);
   await app.context().unroute(`**/v1/ui/sessions/${session}`);
   check("the loading entry's edge is the landed entry's strong edge", loadingEdge, [["loading", true, true]]);
+  check("and it draws on all four sides, none cut by the strip's clip, so the placeholder reads as a tile", loadingClipped, []);
   const landed = await window.evaluate(`(() => {
     const el = document.querySelector('[data-history-n="1"]');
     el.style.width = "max-content";
@@ -530,10 +616,11 @@ try {
     { entry: true, still: true },
   );
   check("and with a fork hanging off a still it is still 84 px", await stripHeight(window), 84);
+  check("every landed entry, link and stub draws its edge on all four sides inside the strip's clip", await edgesClipped(window), []);
   check(
-    "the parent's strip hangs the fork off iteration 2, the entry after its still, saying where it came from",
+    "the parent's strip hangs the fork off iteration 2, the entry after its still, saying where it came from in the lineage's one wording",
     await window.$eval(`[data-history-fork="${forkId}"]`, (el) => [el.previousElementSibling.dataset.historyN, el.dataset.historyFrom, [...el.querySelectorAll(".grid > *")].map((line) => line.textContent.trim())]),
-    ["2", "2", ["Try a calmer wheel for mornings", "Fork of iteration 2"]],
+    ["2", "2", ["Try a calmer wheel for mornings", "from iteration 2"]],
   );
   check(
     "two iterations and a fork still fit at 1440: the strip rests at its start, nothing cut",
@@ -554,21 +641,35 @@ try {
   await window.waitForSelector(`[data-overview-session="${forkId}"] [data-fork-of]`);
   check("home names the fork's parent and iteration with the session's word, from, behind the branch mark", (await window.textContent(`[data-overview-session="${forkId}"] [data-fork-of]`)).replace(/\s+/g, " ").trim(), "from Chore roulette · iteration 2");
   await shot(window, shots, "7-home-fork");
-  /** Whether a sidebar row's title reads whole, and whether its status has fallen to the dot and the time. */
+  /** Whether a sidebar row's title reads whole, and which of its status's words and time still show. */
   const rowFit = (id) =>
     settled(() =>
       window.$eval(`[data-session="${id}"]`, (row) => {
         const title = row.querySelector("[data-row-title]");
-        return {
-          whole: title.clientWidth >= title.scrollWidth,
-          short: row.querySelector('[data-collapse="1"]').hasAttribute("data-collapsed"),
-          time: /^\d+[smh]$/.test(row.querySelector("[data-status-elapsed]").textContent.trim()),
-        };
+        const range = document.createRange();
+        range.selectNodeContents(title);
+        const shown = (el) => el !== null && !el.hasAttribute("data-collapsed");
+        const [words, time] = [shown(row.querySelector("[data-status-words]")), shown(row.querySelector("[data-status-elapsed]"))];
+        return { whole: range.getBoundingClientRect().width <= title.getBoundingClientRect().width + 0.01, bareTime: time && !words };
       }),
     );
-  check("at 1440 the live fork row's title reads whole, its status falling to the dot and the time to make room", await rowFit(forkId), { whole: true, short: true, time: true });
+  check("at 1440 the live fork row's title reads whole, its status giving up its time before its words, so no bare count sits in the ages' column", await rowFit(forkId), { whole: true, bareTime: false });
   await window.setViewportSize({ width: 1100, height: 720 });
-  check("at 1100 the status has fallen to the dot and the time before the title cuts", await rowFit(forkId).then(({ short, time }) => ({ short, time })), { short: true, time: true });
+  check("at 1100 too the status never folds to a bare count", await rowFit(forkId).then(({ bareTime }) => bareTime), false);
+  check(
+    "a running count keeps its unit's widest room, so the words before it never move as it goes from 5 to 17",
+    await window.$eval(`[data-overview-session="${forkId}"] [data-status-elapsed]`, (slot) => {
+      const count = slot.firstElementChild;
+      const [was, unit] = [count.textContent, slot.dataset.countSlot.slice(-1)];
+      const widths = [`5${unit}`, `17${unit}`].map((text) => {
+        count.textContent = text;
+        return slot.getBoundingClientRect().width;
+      });
+      count.textContent = was;
+      return widths[0] === widths[1];
+    }),
+    true,
+  );
   await window.setViewportSize({ width: 1440, height: 900 });
 
   // Vary, back in the parent.
@@ -765,20 +866,32 @@ try {
     [overflowHead.spare, overflowHead.heading],
     [0, restHead.heading],
   );
-  await stripScroll(window, () => window.click('[data-history-step="start"]'));
-  check(
-    "the earlier arrow steps back a page and rests on its start, every entry it shows whole, the cut one out of sight",
-    await settled(async () => {
+  // Each iteration here needs more than half the strip's 407 px, so each takes a page of its own.
+  const restRead = () =>
+    settled(async () => {
       const rest = await stripRest(window);
       const offInView = await window.$$eval("[data-history-list] > [data-off]", (els) => {
         const box = document.querySelector("[data-history-scroll]").getBoundingClientRect();
-        return els.filter((el) => el.getBoundingClientRect().left < box.right).length;
+        return els.filter((el) => el.getBoundingClientRect().left < box.right && el.getBoundingClientRect().right > box.left).length;
       });
       return [rest.inView, rest.cut, rest.insets[0], offInView];
-    }),
-    [["iteration 1", "iteration 2"], [], 16, 1],
+    });
+  const back = [];
+  const backCues = [];
+  for (let i = 0; i < 2; i++) {
+    await stripScroll(window, () => window.click('[data-history-step="start"]'));
+    back.push(await restRead());
+    backCues.push(await edgeCues(window));
+  }
+  check(
+    "the earlier arrow steps back a page at a time and rests on each page's start, every entry it shows whole, the cut one out of sight",
+    back,
+    [
+      [["iteration 2"], [], 16, 1],
+      [["iteration 1"], [], 16, 1],
+    ],
   );
-  check("at the start only the end shows its cue", await edgeCues(window), ["end"]);
+  check("between pages both ends show their cue, and at the start only the end", backCues, [["start", "end"], ["end"]]);
   // Focusing the latest scrolls it into view, so the wait spans the focus as well as End.
   await stripScroll(window, async () => {
     await window.focus('[data-history-n="3"]');
@@ -821,6 +934,19 @@ try {
   );
   console.log(`  strip lines cut at 1440 once it overflows: ${overflowLines.cut.join(", ") || "none"}`);
   check("once the strip overflows, no entry in view holds room while another's line is cut", overflowLines.spare, []);
+  for (const [width, height] of [
+    [1100, 720],
+    [1440, 900],
+  ]) {
+    await window.setViewportSize({ width, height });
+    const pages = await stripPages(window);
+    console.log(`  strip pages at ${width}: ${pages.map((page) => page.inView.join(" + ")).join(" | ")}`);
+    check(
+      `at ${width}, on every page of a forked and varied brainstorm's strip, each iteration's lines read whole, latest names itself in full, and the fork's tile takes no more than its words`,
+      pages.filter((page) => page.cut.some((name) => name.startsWith("iteration")) || page.latest === false || page.wideFork),
+      [],
+    );
+  }
   await window.click('[data-slot-id="wheel"] [data-variant="spin-button-a"]');
   await window.waitForSelector('[data-variant="spin-button-a"] [data-variant-new]', { state: "detached", timeout: PHASE_MS });
   check(
