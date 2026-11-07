@@ -1037,7 +1037,7 @@ try {
   check(
     "dark mode follows prefers-color-scheme",
     await window.evaluate(() => getComputedStyle(document.body).backgroundColor),
-    "rgb(26, 26, 24)",
+    "rgb(22, 22, 20)",
   );
 
   const bundle = readdirSync(join(root, "dist", "renderer"), { recursive: true })
