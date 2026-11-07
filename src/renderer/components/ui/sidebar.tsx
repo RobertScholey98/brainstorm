@@ -586,10 +586,13 @@ function SidebarMenuAction({
   className,
   render,
   showOnHover = false,
+  labelled = false,
   ...props
 }: useRender.ComponentProps<"button"> &
   React.ComponentProps<"button"> & {
     showOnHover?: boolean
+    /** It shows its name after its glyph, as T3 Code shows a thread row's actions, so it needs no hint. */
+    labelled?: boolean
   }) {
   return useRender({
     defaultTagName: "button",
@@ -597,7 +600,8 @@ function SidebarMenuAction({
       {
         className: cn(
           // The 24 px ghost icon button, centred on its row, so a row's action reads as the icon actions elsewhere do.
-          "absolute top-1 right-1 flex size-6 items-center justify-center rounded-md p-0 text-fg ring-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-fg peer-data-[size=default]/menu-button:top-1 peer-data-[size=lg]/menu-button:top-3 peer-data-[size=sm]/menu-button:top-0.5 after:absolute after:-inset-2 hover:bg-hover hover:text-fg focus-visible:ring-2 md:after:hidden [&>svg]:size-3.5 [&>svg]:shrink-0",
+          "absolute top-1 right-1 flex h-6 items-center justify-center rounded-md text-fg ring-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden peer-hover/menu-button:text-fg peer-data-[size=default]/menu-button:top-1 peer-data-[size=lg]/menu-button:top-3 peer-data-[size=sm]/menu-button:top-0.5 after:absolute after:-inset-2 hover:bg-hover hover:text-fg focus-visible:ring-2 md:after:hidden [&>svg]:size-3.5 [&>svg]:shrink-0",
+          labelled ? "gap-1 px-1.5 text-xs" : "w-6 p-0",
           showOnHover &&
             "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 peer-data-active/menu-button:text-fg aria-expanded:opacity-100 md:opacity-0",
           className

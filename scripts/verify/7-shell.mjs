@@ -239,58 +239,73 @@ try {
     await settled(() =>
       window.evaluate((id) => {
         const item = document.querySelector(`[data-session="${id}"]`).closest("li");
-        return [getComputedStyle(item.querySelector("[data-age]")).visibility, getComputedStyle(item.querySelector("[data-settle]")).opacity];
+        return [item.querySelector("[data-age]").getClientRects().length > 0, getComputedStyle(item.querySelector("[data-settle]")).opacity];
       }, kitchen),
     ),
-    ["hidden", "1"],
+    [false, "1"],
   );
   await window.hover(`[data-settle="${kitchen}"]`);
-  await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" });
-  check("its hint names the action and T3's chord", (await window.textContent('[data-slot="tooltip-content"]'))?.trim(), "SettleCtrl+Shift+S");
   check(
-    "the settle control is the 24 px ghost icon button, centred on its row, with a 14 px glyph and the hover fill",
+    "the settle action shows in the row with its glyph and its name, 24 px tall and centred on its row, with the hover fill, and names T3's chord to a screen reader",
     await settled(() =>
       window.$eval(`[data-settle="${kitchen}"]`, (b) => {
         const [box, row] = [b.getBoundingClientRect(), b.closest("li").querySelector("[data-session]").getBoundingClientRect()];
         const fill = document.body.appendChild(Object.assign(document.createElement("span"), { style: "background: var(--hover)" }));
         const hover = getComputedStyle(fill).backgroundColor;
         fill.remove();
-        return [box.width, box.height, Math.round(box.top + box.height / 2 - (row.top + row.height / 2)), b.querySelector("svg").getBoundingClientRect().width, getComputedStyle(b).backgroundColor === hover];
+        return [
+          b.textContent.trim(),
+          box.height,
+          Math.round(box.top + box.height / 2 - (row.top + row.height / 2)),
+          b.querySelector("svg").getBoundingClientRect().width,
+          getComputedStyle(b).backgroundColor === hover,
+          b.getAttribute("aria-label"),
+          b.getAttribute("aria-keyshortcuts"),
+        ];
       }),
     ),
-    [24, 24, 0, 14, true],
+    ["Settle", 24, 0, 14, true, "Settle Kitchen rota, Ctrl+Shift+S", "Control+Shift+S"],
   );
   check(
-    "pointing at the settle control keeps its row's hover fill, so the row still reads as the one in hand",
+    "pointing at the settle action keeps its row's hover fill, so the row still reads as the one in hand",
     await settled(() => window.$eval(`[data-session="${kitchen}"]`, (row) => getComputedStyle(row).backgroundColor !== "rgba(0, 0, 0, 0)")),
     true,
   );
   check(
-    "and opens right of the control, over the main card, so it never covers the title of the brainstorm it settles",
+    "the row's title gives way to the action rather than run under it",
     await settled(() =>
       window.evaluate((id) => {
-        const hint = document.querySelector('[data-slot="tooltip-content"]').getBoundingClientRect();
         const title = document.querySelector(`[data-session="${id}"] [data-row-title]`).getBoundingClientRect();
-        const control = document.querySelector(`[data-settle="${id}"]`).getBoundingClientRect();
-        const over = hint.left < title.right && hint.right > title.left && hint.top < title.bottom && hint.bottom > title.top;
-        return { overTitle: over, rightOfControl: hint.left >= control.right };
+        return Math.round(document.querySelector(`[data-settle="${id}"]`).getBoundingClientRect().left - title.right) >= 0;
       }, kitchen),
     ),
-    { overTitle: false, rightOfControl: true },
+    true,
   );
+  // The first row sits beside home's search field, where an overlay off the row covered it (R5-4, R8-12).
+  const first = await window.$eval("[data-sidebar-panel] [data-session]", (row) => row.dataset.session);
+  await window.hover(`[data-settle="${first}"]`);
+  await window.waitForTimeout(900);
   check(
-    "and covers no other control, in the sidebar or on home, past the sidebar's edge handle it crosses",
-    await settled(() =>
-      window.evaluate(() => {
-        const hint = document.querySelector('[data-slot="tooltip-content"]').getBoundingClientRect();
-        const over = (r) => hint.left < r.right && hint.right > r.left && hint.top < r.bottom && hint.bottom > r.top;
-        return [...document.querySelectorAll('button, a, input, [tabindex="0"]')]
-          .filter((c) => c.getClientRects().length > 0 && over(c.getBoundingClientRect()) && !c.matches('[data-settle], [data-slot="resize-handle"]'))
-          .map((c) => c.getAttribute("aria-label") ?? c.textContent.trim());
-      }),
-    ),
-    [],
+    "pointing at the top row's settle action covers nothing outside the sidebar: no hint opens, the action stays inside its row, and home's search field is still what sits under its own corners",
+    await window.evaluate((id) => {
+      const action = document.querySelector(`[data-settle="${id}"]`).getBoundingClientRect();
+      const row = document.querySelector(`[data-session="${id}"]`).closest("li").getBoundingClientRect();
+      const search = document.querySelector("[data-home-filters] input").getBoundingClientRect();
+      const field = document.querySelector("[data-home-filters] input").closest("div");
+      const corners = [
+        [search.left + 2, search.top + 2],
+        [search.right - 2, search.top + 2],
+        [search.left + 2, search.bottom - 2],
+      ];
+      return {
+        hint: document.querySelector('[data-slot="tooltip-content"]') !== null,
+        inRow: action.left >= row.left && action.right <= row.right && action.top >= row.top && action.bottom <= row.bottom,
+        search: corners.every(([x, y]) => field.contains(document.elementFromPoint(x, y))),
+      };
+    }, first),
+    { hint: false, inRow: true, search: true },
   );
+  await window.hover(`[data-settle="${kitchen}"]`);
   await shot(window, shots, "settle-action");
   await window.click(`[data-settle="${kitchen}"]`);
   await window.waitForSelector("[data-settled-group]");

@@ -38,5 +38,5 @@ export function PhaseStatus({ phase, after, collapsible = false, className }: { 
 export function SessionStatus({ session, now, collapsible, className }: { session: SessionListing; now?: number; collapsible?: boolean; className?: string }) {
   const phase = sessionPhase(session);
   if (phase === null) return null;
-  return <PhaseStatus phase={phase} after={now === undefined || session.lost ? undefined : elapsed(session.activeAt, now)} collapsible={collapsible} className={className} />;
+  return <PhaseStatus phase={phase} after={now === undefined || PHASE[phase].ended === true ? undefined : elapsed(session.activeAt, now)} collapsible={collapsible} className={className} />;
 }

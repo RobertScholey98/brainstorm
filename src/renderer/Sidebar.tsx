@@ -219,6 +219,7 @@ function SessionRow({
 }) {
   const since = s.settlement.state === "settled" ? s.settlement.at : s.activeAt;
   const label = settleLabel(s);
+  const glyph = settleUndoes(s) ? <Undo2 aria-hidden className="size-3.5" /> : <CircleCheck aria-hidden className="size-3.5" />;
   const row = useRef<HTMLButtonElement>(null);
   useRowFit(row);
   return (
@@ -238,23 +239,37 @@ function SessionRow({
         {/* The branch mark trails the title, so a fork's title keeps its siblings' text edge. */}
         {s.fork !== null && (
           <span className="flex shrink-0 text-fg-muted" data-row-fork>
-            <GitBranch aria-hidden />
+            {/* After the status's words, the glyph gives way before the title cuts; the card still says Fork of. */}
+            <span data-collapse={2} className="flex data-collapsed:hidden">
+              <GitBranch aria-hidden />
+            </span>
             <span className="sr-only">
               Fork of {s.fork.parentTitle} · iteration {s.fork.from}
             </span>
           </span>
         )}
         {/* An open request says what it is waiting on and for how long, as T3 Code's thread rows do, in the age's place. */}
-        <span className="flex shrink-0 text-xs font-normal text-fg-muted tabular-nums group-focus-within/menu-item:invisible group-hover/menu-item:invisible">
+        <span className="flex shrink-0 text-xs font-normal text-fg-muted tabular-nums group-focus-within/menu-item:hidden group-hover/menu-item:hidden">
           {sessionPhase(s) === null || s.settlement.state === "settled" ? <span data-age={since}>{age(since, now)}</span> : <SessionStatus session={s} now={now} collapsible />}
         </span>
+        {/* The settle action's room, held while it shows in the age's place, so the title gives way to it rather than run under it. */}
+        <span aria-hidden data-label={label} className="content-label invisible hidden shrink-0 gap-1 px-1.5 text-xs group-focus-within/menu-item:flex group-hover/menu-item:flex">
+          {glyph}
+        </span>
       </SidebarMenuButton>
-      {/* Right, over the main card: over its own row the hint would cover the title of the brainstorm it settles. */}
-      <Hint label={label} shortcut={SETTLE_SHORTCUT} side="right">
-        <SidebarMenuAction showOnHover className="text-fg-muted" onClick={onSettle} aria-label={`${label} ${s.title}`} data-settle={s.id}>
-          {settleUndoes(s) ? <Undo2 aria-hidden /> : <CircleCheck aria-hidden />}
-        </SidebarMenuAction>
-      </Hint>
+      {/* In the row, in the age's place, as T3 Code shows a thread's actions: a hint off the row had no side that cleared both the title and the main card. */}
+      <SidebarMenuAction
+        showOnHover
+        labelled
+        className="text-fg-muted"
+        onClick={onSettle}
+        aria-label={`${label} ${s.title}, ${SETTLE_SHORTCUT}`}
+        aria-keyshortcuts="Control+Shift+S"
+        data-settle={s.id}
+      >
+        {glyph}
+        {label}
+      </SidebarMenuAction>
     </SidebarMenuItem>
   );
 }
@@ -447,7 +462,8 @@ function ThreadMark({ view }: { view: SessionView }) {
 function ThreadState({ view, className }: { view: SessionView; className?: string }) {
   const request = view.request;
   const phase = openPhase(view);
-  const now = useNow(phase === null ? undefined : 1_000);
+  const counting = phase !== null && PHASE[phase].ended !== true;
+  const now = useNow(counting ? 1_000 : undefined);
   if (request === null || phase === null) {
     return (
       <span className={cn("text-fg-muted", className)} data-thread="attached">
@@ -458,7 +474,7 @@ function ThreadState({ view, className }: { view: SessionView; className?: strin
   return (
     <span className={cn("text-fg-muted", className)} data-thread={phase}>
       {PHASE[phase].short}
-      <span className="tabular-nums" data-status-elapsed>{` ${elapsed(request.request.sentAt ?? request.request.createdAt, now)}`}</span>
+      {counting && <span className="tabular-nums" data-status-elapsed>{` ${elapsed(request.request.sentAt ?? request.request.createdAt, now)}`}</span>}
     </span>
   );
 }

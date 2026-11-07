@@ -53,13 +53,11 @@ function useFit(ref: RefObject<HTMLElement | null>, fits: (row: HTMLElement) => 
 /** The header keeps its breadcrumb's floors, giving up its labels in `COLLAPSE` order. */
 export const useHeaderFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, crumbFits, "[data-header-actions], [data-session-title]");
 
-/** A list row's title keeps 112 px or reads whole; what the row says after it gives way first. */
-const ROW_TITLE_FLOOR = 112;
-
+/** A list row's title outranks its status: what the row says after the title gives way before the title cuts. */
 const rowFits = (row: HTMLElement): boolean => {
   const title = row.querySelector("[data-row-title]");
-  return title === null || title.clientWidth >= Math.min(title.scrollWidth, ROW_TITLE_FLOOR);
+  return title === null || title.clientWidth >= title.scrollWidth;
 };
 
-/** Fits a sidebar row: its status falls to the dot and the elapsed time before its title drops under its floor. */
+/** Fits a sidebar row: its status falls to the dot and the elapsed time before its title cuts. */
 export const useRowFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, rowFits, "[data-row-title]");

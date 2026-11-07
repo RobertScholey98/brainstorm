@@ -28,22 +28,23 @@ export const TONE_DOT: Record<Tone, string> = {
  * read. `short` is the phase's name where room is tight: a list row, the Thread row, a header that has given up its
  * long status. The accent is the agent at work, so only the phase where it is running takes it: sending, starting and
  * queued are Brainstorm and T3 at work, with no agent running yet, so they spin and pulse muted, as Export's spinner
- * does. Live phases pulse, since they change on their own.
+ * does. Live phases pulse, since they change on their own. An ended phase has stopped, so nothing counts how long it
+ * has run: "Run failed 33s" would read as a 33 s run.
  */
-export const PHASE: Record<RequestPhase["phase"], { readonly short: string; readonly tone: Tone; readonly live?: true }> = {
+export const PHASE: Record<RequestPhase["phase"], { readonly short: string; readonly tone: Tone; readonly live?: true; readonly ended?: true }> = {
   sending: { short: "Sending", tone: "muted", live: true },
   starting: { short: "Starting", tone: "muted", live: true },
   queued: { short: "Queued", tone: "muted" },
   working: { short: "Agent working", tone: "accent", live: true },
   asking: { short: "Agent asking", tone: "info" },
-  no_change: { short: "No change", tone: "info" },
+  no_change: { short: "No change", tone: "info", ended: true },
   previous_thread: { short: "Previous thread", tone: "warning" },
-  thread_lost: { short: "Thread lost", tone: "warning" },
-  send_failed: { short: "Send failed", tone: "danger" },
-  start_failed: { short: "Start failed", tone: "danger" },
-  run_failed: { short: "Run failed", tone: "danger" },
-  fulfilled: { short: "Fulfilled", tone: "success" },
-  withdrawn: { short: "Withdrawn", tone: "muted" },
+  thread_lost: { short: "Thread lost", tone: "warning", ended: true },
+  send_failed: { short: "Send failed", tone: "danger", ended: true },
+  start_failed: { short: "Start failed", tone: "danger", ended: true },
+  run_failed: { short: "Run failed", tone: "danger", ended: true },
+  fulfilled: { short: "Fulfilled", tone: "success", ended: true },
+  withdrawn: { short: "Withdrawn", tone: "muted", ended: true },
 };
 
 /** A lost thread outranks any request, since nobody can answer it. */

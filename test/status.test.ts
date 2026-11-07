@@ -23,4 +23,8 @@ describe("a phase's two names", () => {
     expect(Object.entries(PHASE).filter(([, p]) => p.tone === "accent").map(([phase]) => phase)).toEqual(["working"]);
     expect([PHASE.sending, PHASE.starting].map((p) => [p.tone, p.live])).toEqual([["muted", true], ["muted", true]]);
   });
+
+  it("counts how long a phase has run only while it runs, so a failure never reads as a long run", () => {
+    expect(Object.entries(PHASE).filter(([, p]) => p.ended !== true).map(([phase]) => phase)).toEqual(["sending", "starting", "queued", "working", "asking", "previous_thread"]);
+  });
 });

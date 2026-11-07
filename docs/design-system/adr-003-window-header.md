@@ -81,3 +81,9 @@ A sidebar row's status gave way last, so a fork's title fell to six letters in t
 ## Amendment: round 8. Every phase's short name is shorter than its words
 
 Round 7 gave the previous thread "Sent to the previous thread" as both its short name and its header words (R7-20), so folding the status saved nothing. At 1440 with a short title the header gave up Export, Fork and Withdraw rather than the status. Its short name is now "Previous thread", which the header words hold. The status folds first, by rule 1 above, and only Export gives way after it. `status.test` holds each row name inside its header words, and `verify:9` reads the previous thread's give-way as status, then Export.
+
+## Amendment: round 8 fix pass. A row's title outranks its status, and the header's fit is right by its rule
+
+At 1440 a live fork row still cut "Try a calmer wheel f…" while "Queued 38s" kept its width, because the status folded only under a 112 px floor (R8-13). A sidebar row's status now folds whenever the title would otherwise cut. Its words go first, leaving the dot and the age, then the fork's branch glyph, whose words stay for screen readers and which the card repeats as "Fork of". `verify:8` checks the fork row's title reads whole at 1440, and at 1100 that the status has folded before the title cuts.
+
+A phase that has ended no longer counts on. "Run failed 33s" read as a 33 s run (R8-24). `PHASE` marks ended phases, and the Thread row and a list row show the elapsed time only while a phase runs. `status.test` holds which phases count.

@@ -273,6 +273,13 @@ body[data-resizing] [data-slot="sidebar-container"] {
   animation-range: 0 16px, calc(100% - 16px) 100%;
 }
 
+/* Room for a word that shows elsewhere, such as a row action laid over its row: the word sizes the box from data-label, out of the text. */
+@utility content-label {
+  &::after {
+    content: attr(data-label);
+  }
+}
+
 /* A scroller whose position another control shows, such as the strip with its arrows, draws no scrollbar. */
 @utility scrollbar-none {
   &::-webkit-scrollbar {

@@ -490,21 +490,21 @@ try {
   await window.waitForSelector(`[data-overview-session="${forkId}"] [data-fork-of]`);
   check("home names the fork's parent and iteration", (await window.textContent(`[data-overview-session="${forkId}"] [data-fork-of]`)).replace(/\s+/g, " ").trim(), "Fork of Chore roulette · iteration 2");
   await shot(window, shots, "7-home-fork");
-  /** A sidebar row's title keeps 112 px or reads whole, and whether its status has fallen to the dot and the time. */
+  /** Whether a sidebar row's title reads whole, and whether its status has fallen to the dot and the time. */
   const rowFit = (id) =>
     settled(() =>
       window.$eval(`[data-session="${id}"]`, (row) => {
         const title = row.querySelector("[data-row-title]");
         return {
-          title: title.clientWidth >= Math.min(title.scrollWidth, 112),
-          short: row.querySelector("[data-collapse]").hasAttribute("data-collapsed"),
+          whole: title.clientWidth >= title.scrollWidth,
+          short: row.querySelector('[data-collapse="1"]').hasAttribute("data-collapsed"),
           time: /^\d+[smh]$/.test(row.querySelector("[data-status-elapsed]").textContent.trim()),
         };
       }),
     );
-  check("at 1440 the live fork row keeps its title's 112 px with its status whole", await rowFit(forkId), { title: true, short: false, time: true });
+  check("at 1440 the live fork row's title reads whole, its status falling to the dot and the time to make room", await rowFit(forkId), { whole: true, short: true, time: true });
   await window.setViewportSize({ width: 1100, height: 720 });
-  check("at 1100 the status falls to the dot and the time, so the title keeps its 112 px", await rowFit(forkId), { title: true, short: true, time: true });
+  check("at 1100 the status has fallen to the dot and the time before the title cuts", await rowFit(forkId).then(({ short, time }) => ({ short, time })), { short: true, time: true });
   await window.setViewportSize({ width: 1440, height: 900 });
 
   // Vary, back in the parent.
