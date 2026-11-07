@@ -37,7 +37,7 @@ export const PHASE: Record<RequestPhase["phase"], { readonly short: string; read
   working: { short: "Agent working", tone: "accent", live: true },
   asking: { short: "Agent asking", tone: "info" },
   no_change: { short: "No change", tone: "info" },
-  previous_thread: { short: "Sent to the previous thread", tone: "warning" },
+  previous_thread: { short: "Previous thread", tone: "warning" },
   thread_lost: { short: "Thread lost", tone: "warning" },
   send_failed: { short: "Send failed", tone: "danger" },
   start_failed: { short: "Start failed", tone: "danger" },

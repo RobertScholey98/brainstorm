@@ -166,9 +166,9 @@ try {
 
   const gaveWay = (label) => results.get(label)?.collapsed;
   check(
-    "at 1440 a short title keeps every label but in previous thread, whose status reads the same short or long, so Export, Fork and Withdraw give way, and reads whole in every phase",
+    "at 1440 a short title keeps every label but in previous thread, where the status folds to \"Previous thread\" and Export gives way, in ADR 003's order, and reads whole in every phase",
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, [gaveWay(`light 1440 short ${p}`)?.join(), results.get(`light 1440 short ${p}`)?.titleWhole]])),
-    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [p === "previous_thread" ? "export,fork,withdraw" : "", true]])),
+    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [p === "previous_thread" ? "status,export" : "", true]])),
   );
   check("at 1100 with a short title and a request queued, the status drops \"in T3\" and Export and Fork give way, so Withdraw and Open thread keep their names and the title reads whole", [gaveWay("light 1100 short queued"), results.get("light 1100 short queued")?.titleWhole], [["status", "export", "fork"], true]);
   check(
