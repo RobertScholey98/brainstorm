@@ -160,11 +160,20 @@ async function untilStill(page, deadline = Date.now() + SETTLE_MS) {
   }
 }
 
-/** A card's preview waits for its card to scroll into view, so a skeleton below the fold is never going to clear. */
+/**
+ * A preview waits for its box to scroll into view, so a skeleton below the fold is never going to clear, and nor is one
+ * a scroller clips, such as a history still a page before the one the strip rests on.
+ */
 const SKELETON_IN_VIEW = () =>
   [...document.querySelectorAll("[data-slot=skeleton], .animate-pulse")].some((el) => {
-    const r = el.getBoundingClientRect();
-    return r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+    let { left, top, right, bottom } = el.getBoundingClientRect();
+    [left, top, right, bottom] = [Math.max(left, 0), Math.max(top, 0), Math.min(right, innerWidth), Math.min(bottom, innerHeight)];
+    for (let up = el.parentElement; up !== null; up = up.parentElement) {
+      if (getComputedStyle(up).overflow === "visible") continue;
+      const c = up.getBoundingClientRect();
+      [left, top, right, bottom] = [Math.max(left, c.left), Math.max(top, c.top), Math.min(right, c.right), Math.min(bottom, c.bottom)];
+    }
+    return right > left && bottom > top;
   });
 
 /** Null once the page is settled, else why it never did. A `loading` shot is of the skeletons, so it doesn't wait them out. */
