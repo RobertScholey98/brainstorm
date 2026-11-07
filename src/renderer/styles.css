@@ -227,32 +227,6 @@ body[data-resizing] [data-slot="sidebar-container"] {
 }
 
 /*
- * A scroller's edges fade only while there is more that way: the top over 32 px once scrolled, the bottom over the
- * sidebar's 32 px short of the end. The top hides its outer 24 px outright, a switch's 20 px track and its ring, so an
- * accent control cut there leaves no crescent; the bottom hides its outer half. A scroll timeline drives both, so
- * neither needs a script.
- */
-@property --fade-top {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
-@property --fade-bottom {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
-@keyframes scroll-fade-top {
-  to {
-    --fade-top: 32px;
-  }
-}
-@keyframes scroll-fade-bottom {
-  from {
-    --fade-bottom: 32px;
-  }
-}
-/*
  * Inside a ScrollPane while it can scroll: its thumb then stands in the right gutter, 8 px in from the pane's edge, so
  * a fill that reaches into the padding stops short of it by as much as it stands off the left edge.
  */
@@ -262,17 +236,21 @@ body[data-resizing] [data-slot="sidebar-container"] {
   }
 }
 
+/*
+ * A scroller's edges fade while there is more that way. ScrollPane sets each from where its lines and controls sit:
+ * `--fade-top` and `--fade-bottom` hide a band outright that reaches past any line or control it would cut, so each
+ * shows whole or not at all, then a ramp starts at 30%, so one in it reads dimmed, never gone.
+ */
 @utility scroll-fades {
   mask-image: linear-gradient(
     to bottom,
-    transparent calc(var(--fade-top) * 0.75),
-    black var(--fade-top),
-    black calc(100% - var(--fade-bottom)),
-    transparent calc(100% - var(--fade-bottom) * 0.5)
+    transparent var(--fade-top, 0px),
+    rgb(0 0 0 / 0.3) var(--fade-top, 0px),
+    black calc(var(--fade-top, 0px) + var(--fade-top-ramp, 0px)),
+    black calc(100% - var(--fade-bottom, 0px) - var(--fade-bottom-ramp, 0px)),
+    rgb(0 0 0 / 0.3) calc(100% - var(--fade-bottom, 0px)),
+    transparent calc(100% - var(--fade-bottom, 0px))
   );
-  animation: scroll-fade-top linear both, scroll-fade-bottom linear both;
-  animation-timeline: scroll(self), scroll(self);
-  animation-range: 0 32px, calc(100% - 32px) 100%;
 }
 
 /*

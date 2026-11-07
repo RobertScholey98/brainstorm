@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "nod
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, root, settled, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, partlyShown, root, settled, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("shell");
@@ -198,6 +198,12 @@ try {
     "scrolled down the cards, home's search and filters stay where they were, over what scrolls",
     [await window.$eval("[data-home-scroll]", (el) => el.scrollTop > 0), await filtersTop()],
     [true, restTop],
+  );
+  await window.$eval("[data-home-scroll]", (el) => el.scrollTo(0, 0));
+  check(
+    "home's overview shows every card title, brief and status line whole or not at all at any scroll, under the query row and at its foot",
+    await partlyShown(window, "[data-home-scroll]"),
+    [],
   );
   await window.$eval("[data-home-scroll]", (el) => el.scrollTo(0, 0));
   await window.setViewportSize({ width: 1440, height: 900 });
@@ -839,19 +845,23 @@ try {
   await window.setViewportSize({ width: 1100, height: 520 });
   await settled(() => window.$eval("[data-inspector-body]", (el) => [el.scrollHeight, el.clientHeight]));
   check(
-    "the Inspector's edges fade only while there is more that way: none at rest, 32 px at the top once scrolled, past a switch's track and ring, and 32 px at the bottom short of the end",
+    "the Inspector's edges fade only while there is more that way: none at the top at rest, at least 16 px at the bottom, and none at the bottom at the end",
     await window.$eval("[data-inspector-body]", async (el) => {
-      const read = () => ["--fade-top", "--fade-bottom"].map((p) => getComputedStyle(el).getPropertyValue(p));
       const at = async (y) => {
         el.scrollTop = y;
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-        return read();
+        return ["--fade-top", "--fade-bottom"].map((p) => parseFloat(el.style.getPropertyValue(p)));
       };
-      const result = { room: el.scrollHeight - el.clientHeight >= 60, top: await at(0), down: await at(32), end: await at(el.scrollHeight) };
+      const [rest, end] = [await at(0), await at(el.scrollHeight)];
       await at(0);
-      return result;
+      return { room: el.scrollHeight - el.clientHeight >= 60, rest: [rest[0], rest[1] >= 16], end: end[1] };
     }),
-    { room: true, top: ["0px", "32px"], down: ["32px", "32px"], end: ["32px", "0px"] },
+    { room: true, rest: [0, true], end: 0 },
+  );
+  check(
+    "scrolled any distance, the Inspector shows each label, value, switch, slider and field whole or not at all under its header and at its foot",
+    await partlyShown(window, "[data-inspector-body]"),
+    [],
   );
   await window.setViewportSize({ width: 1100, height: 720 });
   await window.click("[data-pick-toggle]");
