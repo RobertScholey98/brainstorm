@@ -76,9 +76,12 @@ const measure = () =>
       const inOrder = collapsed.every((s, i) => s === steps[i]);
       const last = collapsed.at(-1);
       let needed = true;
+      let shortBy = 0;
       if (last !== undefined) {
         last.removeAttribute("data-collapsed");
         needed = !fits();
+        const title = header.querySelector("[data-session-title]");
+        shortBy = Math.round(title.scrollWidth - title.clientWidth);
         last.setAttribute("data-collapsed", "");
       }
       const box = header.getBoundingClientRect();
@@ -95,6 +98,7 @@ const measure = () =>
         floors: fits() || collapsed.length === steps.length,
         inOrder,
         needed,
+        shortBy,
         whole: words.filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent),
         inside: controls.every((el) => el.getBoundingClientRect().right <= box.right && el.getBoundingClientRect().left >= box.left),
       };
@@ -170,6 +174,11 @@ try {
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, [gaveWay(`light 1440 short ${p}`)?.join(), results.get(`light 1440 short ${p}`)?.titleWhole]])),
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, [p === "previous_thread" ? "status,export" : "", true]])),
   );
+  check(
+    "at 1440 in previous thread, the room left of Resend is short of Export's label: putting it back cuts \"Chore roulette\" by 20 px or more",
+    results.get("light 1440 short previous_thread")?.shortBy >= 20,
+    true,
+  );
   check("at 1100 with a short title and a request queued, the status drops \"in T3\" and Export and Fork give way, so Withdraw and Open thread keep their names and the title reads whole", [gaveWay("light 1100 short queued"), results.get("light 1100 short queued")?.titleWhole], [["status", "export", "fork"], true]);
   check(
     "at 1100 a long title with a send failure keeps 160 px or more, and Retry, the recovery, is the last label to give way",
@@ -197,7 +206,7 @@ try {
   console.log(
     [...results]
       .filter(([l]) => l.startsWith("light"))
-      .map(([l, m]) => `  ${l.padEnd(34)} title ${String(m.titleShown).padStart(4)} px  gave way: ${m.collapsed.join(", ") || "nothing"}`)
+      .map(([l, m]) => `  ${l.padEnd(34)} title ${String(m.titleShown).padStart(4)} px  gave way: ${m.collapsed.join(", ") || "nothing"}${m.collapsed.length > 0 ? `, last one back cuts the title by ${m.shortBy} px` : ""}`)
       .join("\n"),
   );
   const cuts = [...results].filter(([, m]) => m.cut !== null);
