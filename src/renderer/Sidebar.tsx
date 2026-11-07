@@ -512,8 +512,13 @@ function ThreadState({ view, className }: { view: SessionView; className?: strin
   return (
     <span className={cn("flex gap-1 text-fg-muted", className)} data-thread={phase}>
       {PHASE[phase].short}
-      {counting && " "}
-      {counting && <Elapsed since={request.request.sentAt ?? request.request.createdAt} now={now} />}
+      {counting && (
+        <>
+          {/* The gap lays the words apart; the space keeps them apart in the row's text and for screen readers. */}
+          {" "}
+          <Elapsed since={request.request.sentAt ?? request.request.createdAt} now={now} />
+        </>
+      )}
     </span>
   );
 }

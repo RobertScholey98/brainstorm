@@ -23,20 +23,19 @@ export function age(iso: string, now: number): string {
   return date.getFullYear() === new Date(now).getFullYear() ? day : `${day} ${date.getFullYear()}`;
 }
 
-/**
- * How long something has been running since `iso`, as T3 Code counts a working turn: 12s, 3m, then 1h 5m. Its first
- * second is empty, since "0s" reads as a count that has stuck.
- */
-export function elapsed(iso: string, now: number): string {
+/** How long something has been running since `iso`, as T3 Code counts a working turn: 12s, 3m, then 1h 5m. */
+function count(iso: string, now: number): string {
   const ms = Math.max(0, now - Date.parse(iso));
-  if (ms < 1000) return "";
   if (ms < MINUTE) return `${Math.floor(ms / 1000)}s`;
   if (ms < HOUR) return `${Math.floor(ms / MINUTE)}m`;
   return `${Math.floor(ms / HOUR)}h ${Math.floor((ms % HOUR) / MINUTE)}m`;
 }
 
-/** The widest form of `shown`'s unit, "00s", "00m" or "00h 00m", the room a running count keeps until its unit changes. */
-export const elapsedSlot = (shown: string): string => (shown === "" ? "0s" : shown).replace(/\d+/g, "00");
+/** The count since `iso`, empty in its first second, since "0s" reads as a count that has stuck. */
+export const elapsed = (iso: string, now: number): string => (now - Date.parse(iso) < 1000 ? "" : count(iso, now));
+
+/** The widest form of the count's unit, "00s", "00m" or "00h 00m", the room it keeps until its unit changes. */
+export const elapsedSlot = (iso: string, now: number): string => count(iso, now).replace(/\d+/g, "00");
 
 /** Each reader of the clock, by how often it needs a fresh time. */
 const readers = new Map<() => void, number>();

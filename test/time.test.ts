@@ -30,7 +30,7 @@ describe("elapsed", () => {
   });
 
   it("keeps the room of its unit's widest form, so a count from 5s to 17s never moves what sits before it", () => {
-    expect(["", "5s", "17s", "1m", "12m", "1h 5m"].map(elapsedSlot)).toEqual(["00s", "00s", "00s", "00m", "00m", "00h 00m"]);
+    expect([0, 5_000, 17_000, MIN, 12 * MIN, 65 * MIN].map((ms) => elapsedSlot(before(ms), now))).toEqual(["00s", "00s", "00s", "00m", "00m", "00h 00m"]);
   });
 });
 

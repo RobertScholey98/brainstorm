@@ -19,10 +19,9 @@ export function PhaseDot({ phase, tone = PHASE[phase].tone }: { phase: OpenPhase
  * keeps its unit's widest room, so the words before it never re-cut as it counts.
  */
 export function Elapsed({ since, now, rank, className }: { since: string; now: number; rank?: number; className?: string }) {
-  const shown = elapsed(since, now);
   return (
-    <span className={cn("count-slot data-collapsed:hidden", className)} data-count-slot={elapsedSlot(shown)} data-collapse={rank} data-status-elapsed>
-      <span>{shown}</span>
+    <span className={cn("count-slot data-collapsed:hidden", className)} data-count-slot={elapsedSlot(since, now)} data-collapse={rank} data-status-elapsed>
+      <span>{elapsed(since, now)}</span>
     </span>
   );
 }
@@ -57,6 +56,7 @@ export function PhaseStatus({
         </span>
         {since !== undefined && now !== undefined && (
           <>
+            {/* The gap lays the words apart; the space keeps them apart in the text and for screen readers. */}
             {" "}
             <Elapsed since={since} now={now} rank={collapsible ? 1 : undefined} />
           </>
