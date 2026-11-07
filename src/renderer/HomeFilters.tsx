@@ -162,7 +162,8 @@ function ProjectFilter({
     <Popover>
       <PopoverTrigger render={<Button variant="outline" aria-pressed={names.length > 0} data-project-filter />}>
         <Folder aria-hidden data-icon="inline-start" />
-        <span className="max-w-picker truncate">{label}</span>
+        {/* Regular, as the sort and the status segments beside it are, so the row holds one weight. */}
+        <span className="max-w-picker truncate font-normal">{label}</span>
         <ChevronDown aria-hidden data-icon="inline-end" className="text-fg-muted" />
       </PopoverTrigger>
       <PopoverContent align="start" data-project-menu>

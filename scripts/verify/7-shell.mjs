@@ -337,6 +337,25 @@ try {
       })),
     );
   const switchAt = [await statusSwitch()];
+  check(
+    "home's status switch is one 28 px control with the search field's edge, on a track that shows against the page",
+    await window.$eval("[data-home-filters] [data-slot=segmented]", (group) => {
+      const search = getComputedStyle(document.querySelector("[data-home-search]"));
+      const track = getComputedStyle(group);
+      let under = group.parentElement;
+      while (getComputedStyle(under).backgroundColor === "rgba(0, 0, 0, 0)") under = under.parentElement;
+      const page = getComputedStyle(under).backgroundColor;
+      return [group.getBoundingClientRect().height, track.boxShadow.includes(search.borderTopColor), track.backgroundColor !== page];
+    }),
+    [28, true, true],
+  );
+  check(
+    "home's query row holds one text weight: the status segments, the project filter and the sort",
+    await window.evaluate(() =>
+      ["[data-home-status=active] > span", "[data-project-filter] span", "[data-home-sort] [data-slot=select-value]"].map((s) => getComputedStyle(document.querySelector(s)).fontWeight),
+    ),
+    ["400", "400", "400"],
+  );
   await window.hover('[data-home-status="attention"]');
   check(
     "Attention's hint says it is the part of Active waiting on Rob",
