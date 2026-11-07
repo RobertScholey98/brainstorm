@@ -4,7 +4,7 @@
  */
 export function HeldLabel({ active, idle, busy }: { active: boolean; idle: string; busy: string }) {
   return (
-    <span className="grid *:col-start-1 *:row-start-1">
+    <span className="grid justify-items-start *:col-start-1 *:row-start-1">
       <span className={active ? "invisible" : undefined}>{idle}</span>
       <span className={active ? undefined : "invisible"}>{busy}</span>
     </span>
