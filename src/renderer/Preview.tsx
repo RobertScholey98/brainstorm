@@ -58,7 +58,7 @@ function useInView(target: React.RefObject<Element | null>): boolean {
  */
 export function CardPreview({ id, revision, load, muted }: { id: SessionId; revision: number; load: LoadPreview; muted: boolean }) {
   const loadStill = useCallback(() => load(id), [load, id]);
-  return <Still load={loadStill} revision={revision} className={WELL} muted={muted} empty={WAITING} />;
+  return <Still load={loadStill} revision={revision} className={WELL} muted={muted} empty={WAITING} floor={CARD_FLOOR} />;
 }
 
 /** One brainstorm with no iteration yet, in the words the canvas and the sidebar use too. */
@@ -67,6 +67,20 @@ export const WAITING = "Waiting for the first commit";
 const WELL = "h-preview shrink-0 rounded-t-lg border-b canvas-dots";
 /** The frame's place on the mat: 12 px in from the top and sides, running off the bottom. */
 const FRAME = "absolute inset-x-3 top-3 bottom-0";
+
+/**
+ * The least zoom a card's still takes. A page-width frame fitted to the card's width would be a strip of 3 px text, so
+ * past this it keeps the zoom and shows its top left, at half its size on the stage.
+ */
+const CARD_FLOOR = 0.5;
+
+/**
+ * The frame's width on the mat. A frame that fits at the floor or above takes the mat less 12 px each side, as before.
+ * One the floor cuts runs off the mat's right edge as it runs off its bottom, so its cut edge reads as more to come.
+ * Between the two, the frame shows whole at the floor. The preview zooms to the larger of its fit and the floor, so it
+ * matches this box in every case.
+ */
+const frameBox = (frameWidth: number, floor: number) => `min(100% - 12px, max(100% - 24px, ${frameWidth * floor}px))`;
 
 /** The well while the card itself loads: the mat, and a frame-shaped skeleton where the still will land. */
 export function PreviewSkeleton() {
@@ -111,6 +125,7 @@ function Still({
   empty = "",
   compact = false,
   muted = false,
+  floor = 0,
 }: {
   load: LoadStill;
   revision: number;
@@ -120,6 +135,8 @@ function Still({
   muted?: boolean;
   /** A thumbnail: its states show as an icon alone. */
   compact?: boolean;
+  /** The least zoom the frame takes, cut from its top left past it. */
+  floor?: number;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
@@ -180,7 +197,7 @@ function Still({
       const post = (m: HostToFrame) => frame.current?.contentWindow?.postMessage(m, "*");
       if (message.kind === "ready" && p !== null) {
         post({ kind: "modules", modules: [p.module] });
-        post({ kind: "state", frames: [p.frame], props: { [p.frame.blockId]: p.props }, selected: null, stage: null });
+        post({ kind: "state", frames: [p.frame], props: { [p.frame.blockId]: p.props }, selected: null, stage: null, floor });
       } else if (message.kind === "block_error") {
         failed = true;
         keep({ kind: "failed", message: message.message });
@@ -191,7 +208,7 @@ function Still({
     };
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
-  }, [turn, key]);
+  }, [turn, key, floor]);
 
   return (
     <div
@@ -200,7 +217,10 @@ function Still({
       className={cn("relative overflow-hidden bg-canvas", className)}
       data-preview={shown.kind}
     >
-      <div className={compact ? "absolute inset-x-1 top-1 bottom-0" : FRAME}>
+      <div
+        className={compact ? "absolute inset-x-1 top-1 bottom-0" : FRAME}
+        style={floor > 0 && preview !== null ? { width: frameBox(preview.frame.frame.width, floor) } : undefined}
+      >
         {shown.kind === "still" && (
           <img
             src={shown.image}

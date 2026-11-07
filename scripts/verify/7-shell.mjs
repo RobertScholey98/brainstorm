@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
@@ -35,6 +35,8 @@ function wideSession() {
   const work = join(home, "work", id);
   must("pull wide", brainstorm(env, ["pull", id, "--out", work, "--json"]));
   cpSync(join(root, "scripts", "demo", "chore-roulette", "slots", "result", "card"), join(work, "slots", "result", "card"), { recursive: true });
+  // A 200 by 16 px mark at the frame's top left, above the card's padding, so a still's scale and crop can be read off its pixels.
+  appendFileSync(join(work, "slots", "result", "card", "block.css"), "\n.card-app { background: linear-gradient(#f0f, #f0f) 0 0 / 200px 16px no-repeat, var(--bg); }\n");
   const manifest = JSON.parse(readFileSync(join(work, "brainstorm.json"), "utf8"));
   writeFileSync(join(work, "brainstorm.json"), JSON.stringify({ ...manifest, slots: [{ id: "result", title: "Wide frame", frame: { width: 980, height: 360 } }] }));
   must("commit wide", brainstorm(env, ["commit", id, "--from", work, "--json"]));
@@ -115,27 +117,55 @@ try {
     ],
   );
   check(
-    "a short block in a tall frame fills its card's still as it fills its frame on the stage, with no page showing under it",
+    "a block that fills its frame fills its card's still down to the still's bottom edge, with no page showing under it",
     await window.$eval(`[data-overview-session="${wide}"] [data-preview="still"] img`, (img) => {
       const canvas = document.createElement("canvas");
       [canvas.width, canvas.height] = [img.naturalWidth, img.naturalHeight];
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0);
-      const [r, g, b] = ctx.getImageData(Math.floor(canvas.width / 2), canvas.height - 2, 1, 1).data;
+      const [r, g, b] = ctx.getImageData(Math.floor(img.naturalWidth / img.getBoundingClientRect().width), canvas.height - 2, 1, 1).data;
       return (r + g + b) / 3 < 64;
     }),
     true,
   );
   check(
-    "every preview, still, waiting or failed, sits on one mat, and the wide frame, shorter than its well, ends on the mat rather than on a blank band",
-    await window.$$eval("[data-overview-session] [data-preview]", (wells) => {
-      const mats = new Set(wells.map((w) => getComputedStyle(w).backgroundColor + getComputedStyle(w).backgroundImage));
-      const stills = wells.map((w) => w.querySelector("img[data-preview-still]")).filter(Boolean);
-      const ends = stills.map((img) => Math.round(img.closest("[data-preview]").getBoundingClientRect().bottom - img.getBoundingClientRect().bottom));
-      return [mats.size, ends.some((gap) => gap > 12)];
-    }),
-    [1, true],
+    "every preview, still, waiting or failed, sits on one mat",
+    await window.$$eval("[data-overview-session] [data-preview]", (wells) => new Set(wells.map((w) => getComputedStyle(w).backgroundColor + getComputedStyle(w).backgroundImage)).size),
+    1,
   );
+  const stillScale = (id) =>
+    window.$eval(`[data-overview-session="${id}"] [data-preview="still"] img`, (img) => {
+      const canvas = document.createElement("canvas");
+      [canvas.width, canvas.height] = [img.naturalWidth, img.naturalHeight];
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const dpr = img.naturalWidth / img.getBoundingClientRect().width;
+      const row = ctx.getImageData(0, Math.floor(2 * dpr), canvas.width, 1).data;
+      const mark = (x) => row[x * 4] > 200 && row[x * 4 + 1] < 80 && row[x * 4 + 2] > 200;
+      let run = 0;
+      while (run < canvas.width && mark(run)) run++;
+      const [well, shown] = [img.closest("[data-preview]").getBoundingClientRect(), img.getBoundingClientRect()];
+      return { markFromLeft: mark(0), markWidth: Math.round(run / dpr), offRight: Math.round(well.right - shown.right), inset: Math.round(shown.left - well.left) };
+    });
+  const fitInset = () =>
+    window.$eval(`[data-overview-session="${roulette}"] [data-preview="still"] img`, (img) => {
+      const [well, shown] = [img.closest("[data-preview]").getBoundingClientRect(), img.getBoundingClientRect()];
+      return [Math.round(shown.left - well.left), Math.round(well.right - shown.right)];
+    });
+  for (const theme of ["light", "dark"]) {
+    await window.emulateMedia({ colorScheme: theme });
+    // Stills are kept per theme, so a switch sends each card back to loading in the frames after it applies.
+    await window.waitForFunction((dark) => matchMedia("(prefers-color-scheme: dark)").matches === dark, theme === "dark");
+    await window.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    await window.waitForFunction(() => [...document.querySelectorAll("[data-overview-session] [data-preview]")].every((p) => p.dataset.preview !== "loading"), null, { timeout: 15_000 });
+    check(
+      `in ${theme} a page-width frame's still keeps half its stage size and shows its top left: its 200 px mark reads 100 px from the still's left, and the frame runs off the well's right edge`,
+      await stillScale(wide),
+      { markFromLeft: true, markWidth: 100, offRight: 0, inset: 12 },
+    );
+    check(`in ${theme} a phone-width frame keeps its fit, 12 px in from either side of the well`, await fitInset(), [12, 12]);
+  }
+  await window.emulateMedia({ colorScheme: "light" });
   check(
     "no preview frame is left running once every still is taken",
     await window.$$eval('iframe[title="Preview"]', (frames) => frames.length),

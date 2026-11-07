@@ -657,6 +657,11 @@ export type HostToFrame =
       readonly selected: BlockId | null;
       /** The slot the stage shows on its own, or null for the board, every slot side by side. Export is always the board. */
       readonly stage: SlotId | null;
+      /**
+       * A preview only: the least zoom its frame takes. A frame that would fit the window only below it keeps this zoom
+       * and shows its top left, cut at the window's right edge.
+       */
+      readonly floor?: number;
     }
   | { readonly kind: "mode"; readonly mode: CanvasMode }
   /** `focused` is the comment open in the Inspector, ringed on the canvas; `hovered` is the one under the pointer there. */

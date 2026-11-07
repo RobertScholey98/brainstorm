@@ -122,3 +122,13 @@ The settle hint opened off the row, and no side cleared both the row's title and
 - **A card names its fork's parent with the session's word.** The card said "Fork of Rota handover · iteration 3" where the session says "from" (R9-18). It now says "from" behind the branch mark. `verify:8` reads it.
 - **The header counts a running request's time.** The sidebar showed "Agent working 12s" while the header showed only "Agent working" (R9-20). The header now counts the time too, and gives it up first when its breadcrumb runs short. `verify:9` reads it at 1440 for every phase that counts.
 - **The mark holds still.** With the sidebar open the mark sat 8 px after the toggle, and with it collapsed 12 px, so Ctrl+B nudged it 4 px (R9-13). The header now groups the toggle and the mark with the sidebar's own gap. `verify:7` reads the mark's x on both sides of the toggle.
+
+## Amendment: Rob's ruling on round 6. A page-width still keeps half its size
+
+A card's still scaled the frame to the card's width, so a 980 px frame in a 240 px well became a band of 2 to 3 px text (R6-64). Rob ruled on 2026-11-07 that a still has a scale floor and crops from the top left past it.
+
+- **The floor is 0.5.** `CARD_FLOOR` in `src/renderer/Preview.tsx` is the least zoom a card's still takes. A frame that fits the well at 0.5 or more keeps its fit, 12 px in from either side, so a 390 px phone frame shows whole as before. A wider frame stays at 0.5 and shows its top left, about the left 500 px of the page at 1440, with 14 px text at 7 px.
+- **A cut frame runs off the well's right edge**, as every frame already runs off its bottom, so the cut reads as more page to come and not as the frame's end. A frame that fits at 0.5 only once it takes the right inset too shows whole at 0.5 with a narrower inset.
+- **One rule on both sides of the frame.** The host passes the floor in the preview's `state` message, and sizes the frame's box with `min(100% - 12px, max(100% - 24px, width × floor))`. The preview zooms to `max(its width ÷ the frame's width, floor)` and takes its still of what that zoom shows. Strip stills pass no floor, so a wide frame still shows whole in a strip entry.
+
+`verify:7` gives the wide frame a 200 px mark at its top left and reads it in the card's still, in light and dark. The mark starts at the still's left and reads 100 px, and the frame runs off the well's right edge. The phone frame stays 12 px in from either side. On the old fit the mark read 49 px.

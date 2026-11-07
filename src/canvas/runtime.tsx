@@ -33,6 +33,8 @@ type CanvasState = {
   readonly stage: SlotId | null;
   /** Each slot zoomed below 1 to fit, keyed by slot. */
   readonly zooms: ReadonlyMap<string, number>;
+  /** A preview's least zoom, from the host. */
+  readonly floor: number;
   readonly mode: CanvasMode;
   readonly pins: readonly CanvasPin[];
   readonly focused: FeedbackId | null;
@@ -111,6 +113,7 @@ let state: CanvasState = {
   selected: null,
   stage: null,
   zooms: new Map(),
+  floor: 0,
   mode: "view",
   pins: [],
   focused: null,
@@ -145,7 +148,7 @@ function receive(message: HostToFrame): void {
     }
     case "state": {
       if (preview) {
-        setState({ frames: message.frames, props: message.props });
+        setState({ frames: message.frames, props: message.props, floor: message.floor ?? 0 });
         void paint();
         return;
       }
@@ -424,16 +427,19 @@ function Canvas() {
   );
 }
 
+/** The preview's zoom: the frame across the window's width, or the host's floor when that is less. */
+const previewZoom = (width: number) => Math.max(innerWidth / width, state.floor);
+
 /**
  * The preview: the block in its frame's declared size, as on the stage, zoomed to the window's width, so the card
- * shows its top edge to edge.
+ * shows its top edge to edge. A frame too wide to read at that zoom keeps the floor and shows its top left.
  */
 function Preview() {
   const s = useSyncExternalStore(subscribe, () => state);
   const frame = s.frames[0];
   if (frame === undefined) return null;
   return (
-    <div className="bs-preview" style={{ width: frame.frame.width, height: frame.frame.height ?? undefined, zoom: innerWidth / frame.frame.width }}>
+    <div className="bs-preview" style={{ width: frame.frame.width, height: frame.frame.height ?? undefined, zoom: previewZoom(frame.frame.width) }}>
       <Block frame={frame} hash={s.hashes.get(frame.blockId)} props={s.props[frame.blockId] ?? {}} />
     </div>
   );
@@ -457,10 +463,13 @@ async function paint(): Promise<void> {
 async function still(): Promise<string | null> {
   try {
     const shown = document.querySelector<HTMLElement>(".bs-preview");
-    const width = state.frames[0]?.frame.width;
-    if (shown === null || width === undefined) return null;
-    // The frame, down to the window's bottom: a frame shorter than the window ends there, and the host's mat shows under it.
-    const height = Math.min(Math.ceil((innerHeight * width) / innerWidth), Math.ceil(shown.offsetHeight));
+    const frameWidth = state.frames[0]?.frame.width;
+    if (shown === null || frameWidth === undefined) return null;
+    const zoom = previewZoom(frameWidth);
+    // What the window shows of the frame: its full width, or its left part at the floor, and down to the window's bottom.
+    // A frame shorter than the window ends there, and the host's mat shows under it.
+    const width = Math.min(frameWidth, innerWidth / zoom);
+    const height = Math.min(Math.ceil(innerHeight / zoom), Math.ceil(shown.offsetHeight));
     const body = getComputedStyle(document.body);
     const wrap = document.createElement("div");
     wrap.className = "bs-still";
@@ -479,8 +488,8 @@ async function still(): Promise<string | null> {
     image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     await image.decode();
     const canvas = document.createElement("canvas");
-    canvas.width = Math.round(innerWidth * devicePixelRatio);
-    canvas.height = Math.round(((height * innerWidth) / width) * devicePixelRatio);
+    canvas.width = Math.round(width * zoom * devicePixelRatio);
+    canvas.height = Math.round(height * zoom * devicePixelRatio);
     canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
     return canvas.toDataURL("image/png");
   } catch {
