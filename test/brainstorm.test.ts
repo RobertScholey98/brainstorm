@@ -772,7 +772,7 @@ describe("preview", () => {
 });
 
 describe("exportHtml", () => {
-  test("writes the latest iteration with every variant, Rob's choices and overrides, named by session, iteration and time", async () => {
+  test("writes the latest iteration with every variant, Rob's choices and overrides, named by title, iteration and time", async () => {
     const { service, exportsDir } = await withIteration();
     const reelJson = JSON.stringify({ title: "Slot reel", props: { appearance: { headline: { type: "text", label: "Headline", default: "Pull" } } } });
     data(await service.commit({ session: S, thread: T1, files: copy(1, { "wheel/reel": { tsx: sheetTsx, json: reelJson } }), addresses: [], note: null }));
@@ -783,7 +783,7 @@ describe("exportHtml", () => {
     process.env.TZ = "UTC";
     const result = await service.exportHtml(S);
     process.env.TZ = tz;
-    const file = "s_wheel01-i2-20261105-100000.html";
+    const file = "Chore wheel-i2-20261105-100000.html";
     expect(result).toEqual({ ok: true, data: { path: join(exportsDir, file), file } });
 
     const html = readFileSync(join(exportsDir, file), "utf8");

@@ -19,6 +19,7 @@ import {
 import { prefRows, readPrefs, type UiPrefs, type UiPrefsPatch } from "./prefs";
 import { projectNameAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
+import { exportFileName } from "./fileName";
 import { bakeDefaults, carryOver, forkTitle, VARY_MAX, varyNames } from "./fork";
 import { Store, type FeedbackRecord, type IterationBlock, type StoredContent, type StoredFork, type StoredIteration } from "./store";
 import {
@@ -1011,11 +1012,12 @@ export class Brainstorm {
   }
 
   async exportHtml(id: SessionId): Promise<Result<ExportResult>> {
-    if (this.#store.session(id) === null) return fail(notFound("session", `no session ${id}`));
+    const session = this.#store.session(id);
+    if (session === null) return fail(notFound("session", `no session ${id}`));
     const latest = this.#store.latestIteration(id);
     const { iteration } = this.#current(id, latest);
     if (latest === null || iteration === null) return fail(notFound("iteration", `${id} has no iteration to export yet`));
-    const file = `${id}-i${latest.n}-${fileStamp(new Date(this.#now()))}.html`;
+    const file = exportFileName(session.title, id, latest.n, new Date(this.#now()));
     const path = join(this.#exportsDir, file);
     mkdirSync(this.#exportsDir, { recursive: true });
     writeFileSync(path, buildCanvasDocument(exportPayload(iteration), "export"));
@@ -1179,12 +1181,6 @@ const FEEDBACK_VERB: Record<
   confirm_feedback: { action: "confirm", past: "confirmed" },
   reopen_feedback: { action: "reopen", past: "reopened" },
 };
-
-/** yyyyMMdd-HHmmss in local time, which is what Rob reads in Explorer. */
-function fileStamp(d: Date): string {
-  const two = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}`;
-}
 
 const requestBody = (request: Request): RequestBody =>
   request.scope.kind === "described"

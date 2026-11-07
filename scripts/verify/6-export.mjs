@@ -94,12 +94,17 @@ try {
   );
   exported = (await window.textContent("[data-export-path]"))?.trim();
   const name = exported?.slice(join(home, "exports").length + 1);
-  check("the file lands in exports, named by session, iteration and time", /^s_[0-9a-z]+-i1-\d{8}-\d{6}\.html$/.test(name ?? "") && name.startsWith(`${session}-i1-`), true);
+  check("the file lands in exports, named by the brainstorm's title, iteration and time", /^Chore roulette-i1-\d{8}-\d{6}\.html$/.test(name ?? ""), true);
   check("the file exists", existsSync(exported), true);
   await shot(window, shots, "1-exported");
   await window.click("[data-reveal]");
   await window.waitForTimeout(300);
   check("Show in folder reveals the file through the main process", await app.evaluate(() => globalThis.revealed), [exported]);
+  await window.evaluate(() => {
+    for (const file of ["..\\brainstorm.db.html", "../brainstorm.db.html", "Chore roulette.html"]) window.open(`/reveal-export/${encodeURIComponent(file)}`, "_blank");
+  });
+  await window.waitForTimeout(300);
+  check("and reveals nothing the exports folder doesn't list, so a link can't reach outside it", await app.evaluate(() => globalThis.revealed), [exported]);
   check("the window logged no errors or warnings", errors, []);
 } finally {
   await app.close();

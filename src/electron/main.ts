@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, Menu, nativeTheme, session, shell } from "electron";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { solidColours } from "../core/design";
 import { brainstormHome } from "../server/appData";
@@ -8,6 +9,9 @@ const home = brainstormHome();
 // Electron's profile defaults to %APPDATA%\<name>, which is BRAINSTORM_HOME's default too. Keeping it under home also
 // scopes the single-instance lock to one home, so a test app on a temp home never focuses Rob's window.
 app.setPath("userData", join(home, "electron"));
+
+const exports = join(home, "exports");
+const exported = (file: string) => existsSync(exports) && readdirSync(exports).includes(file);
 
 /** The app draws its own header; the native buttons overlay its right end in the header's own colours. */
 const HEADER_HEIGHT = 48;
@@ -73,7 +77,8 @@ async function run(): Promise<void> {
   contents.setWindowOpenHandler(({ url }) => {
     const target = new URL(url);
     const file = decodeURIComponent(/^\/reveal-export\/([^/]+)$/.exec(target.pathname)?.[1] ?? "");
-    if (target.origin === origin && /^[\w.-]+\.html$/.test(file)) shell.showItemInFolder(join(home, "exports", file));
+    // Only a name the exports folder lists, so a link can never reach a path outside it.
+    if (target.origin === origin && file.endsWith(".html") && exported(file)) shell.showItemInFolder(join(exports, file));
     else if (/^https?:$/.test(target.protocol) && target.origin !== origin) void shell.openExternal(url);
     return { action: "deny" };
   });
