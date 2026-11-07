@@ -7,12 +7,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // The border takes the fill, so an accent button paints the same 28 px box as the outline one beside it.
-        accent: "border-accent bg-accent text-accent-fg hover:border-accent-hover hover:bg-accent-hover data-popup-open:border-accent-hover data-popup-open:bg-accent-hover",
+        // The border takes the fill, so an accent button paints the same 28 px box as the outline one beside it. An
+        // open trigger is one whose popover or menu shows: a Hint's tooltip marks its trigger `data-popup-open` too.
+        accent: "border-accent bg-accent text-accent-fg hover:border-accent-hover hover:bg-accent-hover aria-expanded:border-accent-hover aria-expanded:bg-accent-hover",
         outline:
-          "border-border-strong bg-card hover:bg-muted hover:text-fg data-popup-open:border-accent data-popup-open:bg-selected data-popup-open:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
+          "border-border-strong bg-card hover:bg-hover hover:text-fg aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
         ghost:
-          "hover:bg-hover hover:text-fg data-popup-open:bg-hover data-popup-open:text-fg aria-pressed:bg-selected aria-pressed:text-fg",
+          "hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg aria-pressed:bg-selected aria-pressed:text-fg",
         destructive:
           "border-border-strong bg-card text-danger hover:bg-danger-subtle",
       },

@@ -616,6 +616,33 @@ try {
     await window.$$eval('[data-sidebar="trigger"], [data-history-toggle], [data-inspector-toggle]', (toggles) => toggles.map((t) => t.getAttribute("aria-pressed"))),
     ["true", "true", "true"],
   );
+  const underPointer = async (selector) => {
+    await window.hover(selector);
+    await window.waitForSelector("[data-slot=tooltip-content]");
+    const fill = await settled(() =>
+      window.$eval(selector, (el) => {
+        const token = (name) => {
+          const probe = document.body.appendChild(document.createElement("div"));
+          probe.style.background = `var(--${name})`;
+          probe.style.borderColor = `var(--${name})`;
+          const { backgroundColor } = getComputedStyle(probe);
+          probe.remove();
+          return backgroundColor;
+        };
+        const { backgroundColor, borderTopColor } = getComputedStyle(el);
+        const named = (c) => ["selected", "hover", "accent", "border-strong"].find((t) => token(t) === c) ?? c;
+        return [named(backgroundColor), named(borderTopColor)];
+      }),
+    );
+    await window.mouse.move(1, 1);
+    await window.waitForSelector("[data-slot=tooltip-content]", { state: "detached" });
+    return fill;
+  };
+  check(
+    "under the pointer, its hint open, a pressed pane toggle keeps its pressed fill, and an outline button takes the ghost's hover fill with its own edge",
+    [await underPointer('[data-sidebar="trigger"]'), await underPointer("[data-history-toggle]"), await underPointer("[data-fork-toggle]")],
+    [["selected", "rgba(0, 0, 0, 0)"], ["selected", "rgba(0, 0, 0, 0)"], ["hover", "border-strong"]],
+  );
   check("the canvas region ends where the Inspector starts", iframe.right <= inspector.left, true);
   const zoomShown = () => window.getAttribute("[data-canvas-bar] [data-canvas-zoom]", "data-canvas-zoom");
   const fit = async () => ({
