@@ -62,6 +62,7 @@ export function FeedbackPanel({
   past = false,
   pinBlocked = "There is nothing on the canvas to pin to yet",
   picking,
+  composing,
   focused,
   echoed,
   onHover,
@@ -79,6 +80,8 @@ export function FeedbackPanel({
   /** Why Pin comment is off, when it is. */
   pinBlocked?: string;
   picking: boolean;
+  /** Whether the pin composer is up, so the button reads open as every popover trigger does. */
+  composing: boolean;
   focused: FeedbackId | null;
   /** The comment whose pin is under the pointer on the canvas, tinted as if the pointer were on it. */
   echoed: FeedbackId | null;
@@ -95,7 +98,7 @@ export function FeedbackPanel({
         {feedback.length > 0 && <Count>{feedback.length}</Count>}
         {canPin ? (
           <Hint label="Pin a comment to an element. The agent sees it with your next Regenerate" side="left">
-            <Button variant="outline" className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
+            <Button variant="outline" className="ml-auto" aria-pressed={picking} aria-expanded={composing} data-pick-toggle onClick={onPickToggle}>
               <MessageSquarePlus data-icon="inline-start" aria-hidden />
               <HeldLabel active={picking} idle="Pin comment" busy="Picking…" />
             </Button>

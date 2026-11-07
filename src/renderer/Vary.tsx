@@ -19,9 +19,9 @@ const DEFAULT_COUNT = 3;
  * The Inspector's Vary row, above Feedback and its Pin comment: a pick mode of its own on the same machinery. `blocked`
  * says why it can't start: before the first iteration, in the past, or while a request is open.
  */
-export function VarySection({ picking, blocked, onPickToggle }: { picking: boolean; blocked: string | null; onPickToggle: () => void }) {
+export function VarySection({ picking, open, blocked, onPickToggle }: { picking: boolean; open: boolean; blocked: string | null; onPickToggle: () => void }) {
   const button = (
-    <Button variant="outline" className="ml-auto" aria-pressed={picking} disabled={blocked !== null} onClick={onPickToggle} data-vary-toggle>
+    <Button variant="outline" className="ml-auto" aria-pressed={picking} aria-expanded={open} disabled={blocked !== null} onClick={onPickToggle} data-vary-toggle>
       <Shuffle data-icon="inline-start" aria-hidden />
       <HeldLabel active={picking} idle="Vary element" busy="Picking…" />
     </Button>
@@ -99,7 +99,7 @@ export function VaryComposer({
         data-vary-outline
       />
       <OverlayPanel ref={ref} size="md" role="dialog" aria-labelledby="vary-title" data-vary-composer data-open="" style={{ left, top }} onKeyDown={onKey}>
-        <OverlayHeader id="vary-title" heading={`Vary ${what}`} description={`${block?.title ?? pin.blockId} · ${slotTitle}. Everything else stays.`} />
+        <OverlayHeader id="vary-title" heading={`Vary ${what}`} description={`${block?.title ?? pin.blockId} · everything else stays`} />
         <div className="grid gap-1.5">
           <FieldLabel id="vary-count-label">How many</FieldLabel>
           <div className="flex items-center gap-1" role="group" aria-labelledby="vary-count-label">

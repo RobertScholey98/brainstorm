@@ -57,7 +57,7 @@ export function ForkButton({
         </PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="end" data-fork-menu>
-        <PopoverHeader heading={`Fork iteration ${iteration.n}`} description={`${view.session.title} · a new brainstorm with the variant showing in each slot`} />
+        <PopoverHeader heading={label} description={`${view.session.title} · a new brainstorm from iteration ${iteration.n}, with the variant showing in each slot`} />
         <ForkForm view={view} iteration={iteration} blockErrors={blockErrors} fork={fork} onClose={() => setOpen(false)} />
       </PopoverContent>
     </Popover>

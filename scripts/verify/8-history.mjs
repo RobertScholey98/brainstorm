@@ -288,6 +288,7 @@ try {
 
   await window.click('[data-fork-toggle]');
   await window.waitForSelector("[data-fork-menu]");
+  check("in the past the fork popover takes the button's name", [(await window.textContent("[data-fork-toggle]")).trim(), (await window.$eval("[data-fork-menu]", (el) => [el.querySelector("[data-slot=popover-title]").textContent.trim(), el.querySelector("[data-slot=popover-description]").textContent.trim()]))[0]], ["Fork iteration 1", "Fork iteration 1"]);
   check(
     "forking from the past carries the variants picked there",
     await window.$$eval("[data-fork-menu] [data-carry-slot]", (els) => els.map((e) => [e.dataset.carrySlot, e.querySelector("dd span").textContent.trim()])),
@@ -357,6 +358,11 @@ try {
   await window.waitForSelector("[data-fork-menu]");
   check("from the latest the button reads Fork", (await window.textContent("[data-fork-toggle]")).trim(), "Fork");
   check(
+    "and its popover takes the button's name, with the iteration in its description, in the one <context> · <clause> grammar",
+    await window.$eval("[data-fork-menu]", (el) => [el.querySelector("[data-slot=popover-title]").textContent.trim(), el.querySelector("[data-slot=popover-description]").textContent.trim()]),
+    ["Fork", "Chore roulette · a new brainstorm from iteration 2, with the variant showing in each slot"],
+  );
+  check(
     "the fork popover's labels take the one overlay label, 12 px medium in the description's muted tone, and its footer marks the new thread with Fork's own glyph, not a link's",
     await window.$eval("[data-fork-menu]", (el) => {
       const muted = getComputedStyle(el.querySelector("[data-slot=popover-description]")).color;
@@ -394,6 +400,11 @@ try {
     "a long parent title gives way on that line, and the iteration it forked from reads whole",
     await window.$eval("[data-forked-line] > span:last-child", (el) => [el.textContent, el.scrollWidth <= el.clientWidth]),
     ["· iteration 2", true],
+  );
+  check(
+    "the line words the fork as the strip's stub does, from its parent, the branch glyph saying fork, so the parent's name keeps the room",
+    await window.$eval("[data-forked-line]", (el) => [el.textContent, el.querySelector("[data-cut]") === null]),
+    ["from Chore roulette· iteration 2", true],
   );
   check(
     "the fork line's glyph sits on the Thread row's mark column, and its text on the Thread title's edge",
@@ -524,6 +535,17 @@ try {
     await window.$eval("[data-vary-composer]", (el) => [el.querySelector("#vary-title").textContent.trim(), Number(el.querySelector("[data-vary-count]").dataset.varyCount), el.querySelector("[data-vary-hint]").textContent.trim()]),
     ["Vary Spin button", 3, "Variants land in The wheel"],
   );
+  check(
+    "its description names the block once and leaves the slot to the footer, in the one <context> · <clause> grammar",
+    await window.$eval("[data-vary-composer] [data-slot=popover-description]", (el) => el.textContent.trim()),
+    "Neon wheel · everything else stays",
+  );
+  check("while the vary popover is up, Vary element reads open, the accent edge every popover trigger takes", await settled(() => window.$eval("[data-vary-toggle]", (b) => {
+      const accent = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--accent)" }));
+      const open = [b.getAttribute("aria-expanded"), getComputedStyle(b).borderTopColor === getComputedStyle(accent).color];
+      accent.remove();
+      return open;
+    })), ["true", true]);
   check("nothing in the vary popover runs past its box: the direction field, its optional label and Send all sit inside", await outsideBox(window, "[data-vary-composer]"), []);
   check(
     "every control in the vary popover is the 28 px control height: the stepper, the direction field, Cancel and Send",

@@ -56,6 +56,12 @@ try {
 
   await canvas.click(HEADLINE);
   await window.waitForSelector("[data-composer]");
+  check("while the composer is up, Pin comment reads open, the accent edge every popover trigger takes", await settled(() => window.$eval("[data-pick-toggle]", (b) => {
+      const accent = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--accent)" }));
+      const open = [b.getAttribute("aria-expanded"), getComputedStyle(b).borderTopColor === getComputedStyle(accent).color];
+      accent.remove();
+      return open;
+    })), ["true", true]);
   check(
     "the composer is titled New comment and names the block, then the picked part, with Ctrl+Enter on Pin comment in its footer",
     await window.$eval("[data-composer]", (el) => [

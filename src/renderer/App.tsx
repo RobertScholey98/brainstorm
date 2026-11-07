@@ -673,7 +673,7 @@ function SessionWorkspace({
           onReset={onReset}
           onDismiss={onDismiss}
         >
-          <VarySection picking={picking === "vary"} blocked={varyBlocked} onPickToggle={() => togglePick("vary")} />
+          <VarySection picking={picking === "vary"} open={interaction.kind === "varying"} blocked={varyBlocked} onPickToggle={() => togglePick("vary")} />
           <FeedbackPanel
             feedback={feedback}
             blocks={blocks}
@@ -682,6 +682,7 @@ function SessionWorkspace({
             past={past !== null}
             pinBlocked={past !== null ? "Back to latest to pin a comment" : (unrendered ?? undefined)}
             picking={picking === "comment"}
+            composing={interaction.kind === "composing"}
             focused={focusedFeedback}
             echoed={hoveredPin}
             onHover={setHoveredFeedback}

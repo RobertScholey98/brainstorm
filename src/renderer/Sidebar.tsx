@@ -565,7 +565,7 @@ function SlotSection({
 function ForkedFrom({ title, from }: { title: string; from: string }) {
   return (
     <span className="flex min-w-0 gap-1 text-xs" data-forked-line>
-      <Truncate>{`Forked from ${title}`}</Truncate>
+      <Truncate>{`from ${title}`}</Truncate>
       <span className="shrink-0">· {from}</span>
     </span>
   );
