@@ -82,7 +82,7 @@ export function CanvasBar({
               Cancel
             </Button>
             {/* Pick mode's own controls, then the view's, as the header divides a request's actions from Regenerate. */}
-            {several && <Separator orientation="vertical" className="h-4 self-center" data-pick-divider />}
+            {several && <Separator orientation="vertical" data-pick-divider />}
           </span>
         )}
         {pct < 100 && (

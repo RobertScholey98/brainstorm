@@ -162,7 +162,7 @@ export function SessionBar({
               <>
                 <PhaseActions view={view} send={send} onDiscard={onDiscard} />
                 {/* The request's actions, then the session's. */}
-                <Separator orientation="vertical" className="h-4 self-center" data-phase-divider />
+                <Separator orientation="vertical" data-phase-divider />
               </>
             )}
             <ForkButton view={view} iteration={iteration} past={past !== null} blockErrors={blockErrors} fork={fork} />
