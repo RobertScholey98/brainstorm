@@ -72,10 +72,28 @@ const FRAME = "absolute inset-x-3 top-3 bottom-0";
 export function PreviewSkeleton() {
   return (
     <div aria-hidden className={cn("relative overflow-hidden bg-canvas", WELL)} data-preview="loading">
-      <Skeleton className={cn(FRAME, "rounded-b-none rounded-t-sm")} />
+      <FrameSkeleton className={cn(FRAME, "rounded-t-sm")} />
     </div>
   );
 }
+
+/** A frame-shaped skeleton on the card's fill, so the mat's dots don't print through its pulse. */
+function FrameSkeleton({ className }: { className: string }) {
+  return (
+    <div className={cn("overflow-hidden bg-card", className)} data-preview-skeleton>
+      <Skeleton className="size-full rounded-none" />
+    </div>
+  );
+}
+
+/**
+ * A settled card's still, opaque on the card's own fill so no dot of the mat prints through it. `still-settled` takes
+ * its colour and most of its contrast, so a dark design becomes a pale ghost in light rather than a grey slab.
+ */
+const SETTLED_STILL = "bg-card still-settled";
+
+/** A strip still's size, which its loading skeleton shares. */
+export const STILL_BOX = "h-12 w-16 shrink-0 rounded-sm";
 
 /**
  * A filmstrip still: one past iteration's slot, through the same frames, turns and cache as a home card, so stepping
@@ -83,7 +101,7 @@ export function PreviewSkeleton() {
  * 4 px in from its top and sides, so a wide frame shows whole and a tall one shows its top.
  */
 export function IterationStill({ load, revision }: { load: LoadStill; revision: number }) {
-  return <Still load={load} revision={revision} compact className="h-12 w-16 shrink-0 rounded-sm canvas-dots ring-1 ring-border" />;
+  return <Still load={load} revision={revision} compact className={cn(STILL_BOX, "canvas-dots ring-1 ring-border")} />;
 }
 
 function Still({
@@ -187,7 +205,7 @@ function Still({
           <img
             src={shown.image}
             alt=""
-            className={cn("block w-full ring-1", compact ? "rounded-t-sm ring-border" : "rounded-sm shadow-xs ring-border-strong", muted && "opacity-35 grayscale dark:opacity-50 dark:brightness-50")}
+            className={cn("block w-full ring-1", compact ? "rounded-t-sm ring-border" : "rounded-sm shadow-xs ring-border-strong", muted && SETTLED_STILL)}
             draggable={false}
             data-preview-still
           />
@@ -203,7 +221,7 @@ function Still({
             className={cn("pointer-events-none size-full border-0", !compact && "rounded-t-sm", shown.kind !== "live" && "opacity-0")}
           />
         )}
-        {shown.kind === "loading" && <Skeleton className={cn("absolute inset-0", compact ? "rounded-sm" : "rounded-b-none rounded-t-sm")} />}
+        {shown.kind === "loading" && <FrameSkeleton className={cn("absolute inset-0", compact ? "rounded-sm" : "rounded-t-sm")} />}
       </div>
       {shown.kind === "empty" && (
         <span className="flex size-full items-center justify-center gap-1.5 text-xs text-fg-muted">

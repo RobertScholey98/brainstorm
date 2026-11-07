@@ -75,10 +75,11 @@ export function TopBar({
     >
       {/* With the sidebar away, its toggle and the mark move here, so the window still says whose it is. */}
       {(state === "collapsed" || isMobile) && (
-        <>
+        // The sidebar's own gap, so the mark keeps its x whichever side of Ctrl+B it is on.
+        <div className="flex shrink-0 items-center gap-2">
           <SidebarTrigger />
           <Mark size={20} />
-        </>
+        </div>
       )}
       {children}
       {/* Its hints open left of the whole cluster and the status, over the title, so none covers a control or the status. */}

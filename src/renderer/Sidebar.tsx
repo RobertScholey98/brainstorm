@@ -26,6 +26,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { Count } from "@/components/ui/count";
 import { blockIdOf, isPendingThread, type BlockView, type ContentHash, type OpenPhase, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
+import { keyEchoesTitle } from "../core/fork";
 import type { PaneLimits } from "./hooks/use-pane-width";
 import { useRowFit } from "./headerAction";
 import { Mark } from "./Mark";
@@ -124,18 +125,30 @@ export function HomePanel({
           The list didn't load. <span className="whitespace-nowrap">Use Try again</span> on the right.
         </p>
       ) : sessions === null ? (
-        <SidebarGroup data-home-loading>
-          <div className="flex h-8 items-center px-2">
-            <Skeleton className="h-3 w-16" />
-          </div>
-          <SidebarMenu>
-            {(["w-3/4", "w-1/2", "w-2/3", "w-3/4", "w-1/2"] as const).map((width, i) => (
-              <SidebarMenuItem key={i}>
-                <SidebarMenuSkeleton width={width} />
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
+        // The list it stands for: project groups, each a head over its rows.
+        <div data-home-loading>
+          {(
+            [
+              ["w-3/4", "w-1/2"],
+              ["w-2/3"],
+              ["w-1/2", "w-3/4"],
+            ] as const
+          ).map((rows, group) => (
+            <SidebarGroup key={group} className="py-1">
+              <div className="flex h-8 items-center justify-between px-2" data-home-loading-head>
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-3 w-4" />
+              </div>
+              <SidebarMenu>
+                {rows.map((width, i) => (
+                  <SidebarMenuItem key={i}>
+                    <SidebarMenuSkeleton width={width} />
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          ))}
+        </div>
       ) : groups.length === 0 && settled.length === 0 ? (
         <p className="px-4 py-3 text-sm/relaxed text-pretty text-fg-muted">Brainstorms you start appear here.</p>
       ) : (
@@ -239,12 +252,12 @@ function SessionRow({
         {/* The branch mark trails the title, so a fork's title keeps its siblings' text edge. */}
         {s.fork !== null && (
           <span className="flex shrink-0 text-fg-muted" data-row-fork>
-            {/* After the status's words, the glyph gives way before the title cuts; the card still says Fork of. */}
+            {/* After the status's words, the glyph gives way before the title cuts; the card still names the parent. */}
             <span data-collapse={2} className="flex data-collapsed:hidden">
               <GitBranch aria-hidden />
             </span>
             <span className="sr-only">
-              Fork of {s.fork.parentTitle} · iteration {s.fork.from}
+              from {s.fork.parentTitle} · iteration {s.fork.from}
             </span>
           </span>
         )}
@@ -253,7 +266,7 @@ function SessionRow({
           {sessionPhase(s) === null || s.settlement.state === "settled" ? <span data-age={since}>{age(since, now)}</span> : <SessionStatus session={s} now={now} tone={sessionPhase(s) === "thread_lost" ? "muted" : undefined} collapsible />}
         </span>
         {/* The settle action's room, held while it shows in the age's place, so the title gives way to it rather than run under it. */}
-        <span aria-hidden data-label={label} className="content-label invisible hidden shrink-0 gap-1 px-1.5 text-xs group-focus-within/menu-item:flex group-hover/menu-item:flex">
+        <span aria-hidden data-label={label} className="content-label invisible hidden shrink-0 gap-1 pr-1 pl-1.5 text-xs group-focus-within/menu-item:flex group-hover/menu-item:flex">
           {glyph}
         </span>
       </SidebarMenuButton>
@@ -539,7 +552,7 @@ function SlotSection({
                       new
                     </span>
                   )}
-                  {/* The name Rob reads keeps its width; the raw key beside it gives way first, down to nothing. */}
+                  {/* The name Rob reads keeps its width; the raw key beside it gives way first, down to nothing, and shows only when it says more than the name. */}
                   <Truncate className="max-w-full shrink-0" data-variant-title>
                     {block?.title ?? variant}
                   </Truncate>
@@ -548,9 +561,11 @@ function SlotSection({
                       <CircleAlert aria-label="Failed to render" className="text-danger" data-variant-error />
                     </Hint>
                   )}
-                  <Truncate className="flex-1 text-right text-xs font-normal text-fg-muted" data-variant-key>
-                    {variant}
-                  </Truncate>
+                  {!keyEchoesTitle(variant, block?.title ?? variant) && (
+                    <Truncate className="flex-1 text-right text-xs font-normal text-fg-muted" data-variant-key>
+                      {variant}
+                    </Truncate>
+                  )}
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );

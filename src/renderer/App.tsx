@@ -131,7 +131,8 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
       loaded.current = true;
       setSessions(list.data);
       setListError(null);
-      setNotice(null);
+      // A refresh runs on every server event, so it clears only the notice it raised itself.
+      setNotice((n) => (n?.title === failedTitle("list") ? null : n));
     } else if (loaded.current) setNotice({ title: failedTitle("list"), detail: list.error.message });
     else setListError(list.error.message);
   }, [api]);

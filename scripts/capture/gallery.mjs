@@ -33,8 +33,8 @@ const SETTLE_MS = 10_000;
 const PHASE_MS = 20_000;
 
 const SHOTS = [
-  ["home-empty", "empty", "Home on a fresh install: no brainstorms in the sidebar, and the empty state says how to start one"],
-  ["home", "home", "Home: every active brainstorm as a card with a still of its first block, under the search and filters, beside three project groups (chores, kitchen, Other project), a lost thread, a long title that truncates, a preview that failed, and the Settled group shut at the foot"],
+  ["home-empty", "empty", "Home on a fresh install: no brainstorms in the sidebar, the subtitle saying how to start one over the query row, turned off, and the empty state below"],
+  ["home", "home", "Home: every active brainstorm as a card with a still of its first block, under the search and filters, beside three project groups (chores, kitchen, Other project), one agent at work, a lost thread, a long title that truncates, a preview that failed, and the Settled group shut at the foot"],
   ["home-collapsed-group", "home", "Home with the kitchen project group collapsed"],
   ["sidebar-collapsed", "canvas", "The Chore roulette brainstorm with the sidebar collapsed, so the toggle sits in the top bar"],
   ["state-hover-row", "home", "Home with the pointer over the Chore roulette session row"],
@@ -257,7 +257,7 @@ async function inView(page, selector) {
   });
 }
 
-async function capture(page, name, { keepFocus = false, loading = false, brief = false, each, covered } = {}) {
+async function capture(page, name, { keepFocus = false, loading = false, brief = false, each, covered, shows } = {}) {
   const shot = shotOf(name);
   const problems = [];
   for (const c of COMBOS) {
@@ -273,6 +273,11 @@ async function capture(page, name, { keepFocus = false, loading = false, brief =
       continue;
     }
     const unsettled = brief ? null : await settle(page, { keepFocus, loading });
+    if (unsettled === null && shows !== undefined && (await page.$(shows)) === null) {
+      writeFileSync(join(comboDir(c), `${shot.file}.missing.txt`), `The shot's subject was gone once it settled: ${shows}\n`);
+      problems.push(`${c.theme} ${c.width}: ${shows} gone`);
+      continue;
+    }
     if (unsettled === null) {
       await page.screenshot({ path: join(comboDir(c), `${shot.file}.png`) });
     } else {
@@ -577,6 +582,12 @@ function scenes(page, home, env, t3, sessions) {
   return {
     async home() {
       await page.waitForSelector(`[data-session="${sessions.roulette.id}"]`);
+      // One brainstorm has its agent at work, so home shows a live row and card as Rob sees them most days.
+      await open(sessions.longTitle.id, [inBlock("result/card", "card")]);
+      await regenerate("all");
+      await phase("queued");
+      t3.startRun(KITCHEN_THREAD);
+      await phase("working");
       await open(sessions.loose);
       await page.waitForSelector('[data-thread="lost"]', { timeout: PHASE_MS });
       await goHome();
@@ -908,6 +919,7 @@ function scenes(page, home, env, t3, sessions) {
 
       await page.route("**/v1/ui/sessions/*/export", (route) => route.abort());
       await capture(page, "state-export-failed", {
+        shows: "[data-slot=toast]",
         each: async (c) => {
           if ((await page.$("[data-slot=toast]")) !== null) await page.click("[data-toast-close]");
           await page.click("[data-export]");
@@ -917,8 +929,7 @@ function scenes(page, home, env, t3, sessions) {
         },
       });
       await page.unroute("**/v1/ui/sessions/*/export");
-      // The thread check every 15 s is a successful call, which may already have cleared the notice.
-      if ((await page.$("[data-slot=toast]")) !== null) await page.click("[data-toast-close]");
+      await page.click("[data-toast-close]");
       await page.waitForSelector("[data-slot=toast]", { state: "detached" });
     },
 
@@ -1010,6 +1021,10 @@ function scenes(page, home, env, t3, sessions) {
       await capture(page, "session-unattached");
 
       await open(sessions.longTitle.id, [inBlock("result/card", "card")]);
+      // Home's live request is still running here, so it is withdrawn and its run ended before this one is sent.
+      await page.click('[data-request-action="withdraw"]');
+      await phase("withdrawn");
+      t3.endRun(KITCHEN_THREAD, "completed");
       await regenerate("all");
       await phase("queued");
       await page.waitForSelector("[data-regenerate-menu]", { state: "detached" });

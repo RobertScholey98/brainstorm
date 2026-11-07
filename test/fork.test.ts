@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { bakeDefaults, carryOver, forkTitle, partLabel, settingText, varyNames } from "../src/core/fork";
+import { bakeDefaults, carryOver, forkTitle, keyEchoesTitle, partLabel, settingText, varyNames } from "../src/core/fork";
 import type { BlockId, Feedback, FeedbackId, IterationN, Override, PartName, PropName, PropsSchema, SlotId, SlotView, VariantKey } from "../src/core/types";
 import { accent, density, headline, showOdds, spin } from "./fixtures";
 
@@ -56,11 +56,11 @@ describe("carryOver", () => {
   });
 });
 
-test("settingText names a setting as its control shows it", () => {
+test("settingText names a setting as its control shows it, a word in the curly quotes the UI uses everywhere", () => {
   expect(settingText(spin, 2.5)).toBe("Spin time 2.5s");
   expect(settingText(accent, "#ff2bd6")).toBe("Accent #FF2BD6");
   expect(settingText(showOdds, false)).toBe("Show odds off");
-  expect(settingText(density, "compact")).toBe('Density "compact"');
+  expect(settingText(density, "compact")).toBe("Density “compact”");
 });
 
 test("bakeDefaults changes only the defaults it names", () => {
@@ -97,4 +97,10 @@ describe("varyNames", () => {
     expect(varyNames({ variant: "neon" as VariantKey, title: "Neon wheel" }, null, [], 1)).toEqual([{ key: "neon-a", title: "Neon wheel A" }]);
     expect(varyNames({ variant: "neon" as VariantKey, title: "Neon wheel" }, "3d" as PartName, [], 1)).toEqual([{ key: "v-3d-a", title: "3d A" }]);
   });
+});
+
+test("keyEchoesTitle tells a key that only spells its title from one that says more", () => {
+  expect(keyEchoesTitle("spin-button-a" as VariantKey, "Spin button A")).toBe(true);
+  expect(keyEchoesTitle("neon" as VariantKey, "Neon wheel")).toBe(false);
+  expect(keyEchoesTitle("reel" as VariantKey, "reel")).toBe(true);
 });

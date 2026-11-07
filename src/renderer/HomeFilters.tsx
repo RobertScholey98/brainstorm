@@ -74,7 +74,7 @@ export function HomeFilters({
   projects: readonly ProjectOption[];
   /** The projects the filter names that still have a brainstorm; empty is every project. */
   selected: ReadonlySet<ProjectId>;
-  /** While the list has failed: the row holds its place, at the disabled opacity, and takes no input. */
+  /** While the list has failed or holds nothing: the row holds its place, at the disabled opacity, and takes no input. */
   disabled?: boolean;
 }) {
   return (

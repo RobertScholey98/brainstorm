@@ -80,8 +80,8 @@ export function HomeOverview({
     setSearch("");
     onQuery({ ...query, status: DEFAULT_HOME.status, projects: [] });
   };
-  // The heading holds in every state, so loading, empty and failed home keep the page's frame. Empty drops the hint,
-  // which its own message says, and the query row, which has nothing to ask; failed keeps both, the row off. The heading and the query row stay put, and only what they find scrolls.
+  // The heading, the hint and the query row hold in every state, so loading, empty and failed home keep the page's
+  // frame. With nothing to ask yet, or nothing loaded, the row is off. Only what they find scrolls.
   return (
     <div className="flex size-full flex-col" data-home-overview>
       <ScrollPane
@@ -89,23 +89,18 @@ export function HomeOverview({
         data-home-scroll
         head={
           <div className="flex flex-col gap-5 px-6 pt-6 pb-2" data-home-head>
-            <PageHeader
-              heading="All brainstorms"
-              description={empty ? undefined : <span data-home-hint>To start a new brainstorm, {START}.</span>}
+            <PageHeader heading="All brainstorms" description={<span data-home-hint>To start a new brainstorm, {START}.</span>} />
+            <HomeFilters
+              disabled={failed || empty}
+              field={field}
+              search={search}
+              onSearch={setSearch}
+              query={query}
+              onQuery={onQuery}
+              counts={sessions === null ? null : result.counts}
+              projects={projects}
+              selected={selected}
             />
-            {!empty && (
-              <HomeFilters
-                disabled={failed}
-                field={field}
-                search={search}
-                onSearch={setSearch}
-                query={query}
-                onQuery={onQuery}
-                counts={sessions === null ? null : result.counts}
-                projects={projects}
-                selected={selected}
-              />
-            )}
           </div>
         }
       >
@@ -164,19 +159,20 @@ export function HomeOverview({
 }
 
 const STATUS_WORDS: Record<HomeStatus, string> = { active: "active", attention: "waiting on you", settled: "settled", all: "here" };
-const ONE_OF: Record<HomeStatus, string> = { active: "active brainstorm", attention: "brainstorm waiting on you", settled: "settled brainstorm", all: "brainstorm" };
 
 /**
  * Why nothing shows, naming only what is narrowing it, so the copy never blames a filter that isn't on. A search is
- * named by its words, so the line says what the title above it doesn't. `elsewhere` is whether another status holds a
- * match; if none does, the status didn't narrow anything, so isn't named.
+ * named by its words, so the line says what the title above it doesn't, and it opens "Nothing" so it never echoes the
+ * title's "No brainstorms". `elsewhere` is whether another status holds a match; if none does, the status didn't
+ * narrow anything, so isn't named.
  */
 function noMatch(shown: HomeStatus, search: string, picked: boolean, elsewhere: boolean): string {
   const status = elsewhere ? shown : "all";
   const has = `has “${search}” in its title or brief`;
-  if (search !== "" && picked) return `No ${ONE_OF[status]} in the projects you picked ${has}.`;
-  if (search !== "") return `No ${ONE_OF[status]} ${has}.`;
-  if (picked) return `There is no ${ONE_OF[status]} in the projects you picked.`;
+  const words = status === "all" ? "" : ` ${STATUS_WORDS[status]}`;
+  if (search !== "" && picked) return `Nothing${words} in the projects you picked ${has}.`;
+  if (search !== "") return `Nothing ${STATUS_WORDS[status]} ${has}.`;
+  if (picked) return `The projects you picked have nothing${words || " in them"}.`;
   return `Nothing is ${STATUS_WORDS[status]} right now.`;
 }
 
@@ -213,7 +209,7 @@ function NoneShown({ title, description, action, onAction, data }: { title: stri
  * from, else the brief, cut to fit. The title is the button that opens it, stretched over the whole card, so the
  * preview and the text are a click target without a button holding a frame. The settle control sits over the bottom
  * right corner, above the stretched button, and shows on hover or focus. A settled card is a ghost of an active one,
- * with no fill or lift and its still faded, and counts from when it was settled.
+ * with no fill or lift and its still greyed, and counts from when it was settled.
  */
 function OverviewCard({
   session: s,
@@ -290,7 +286,7 @@ function OverviewCard({
         {lone ? null : s.fork !== null ? (
           <span className="flex h-4.5 min-w-0 items-center gap-1 text-sm text-fg-muted" data-fork-of={s.fork.from}>
             <GitBranch aria-hidden className="size-3.5 shrink-0" />
-            <Truncate>{`Fork of ${s.fork.parentTitle} · iteration ${s.fork.from}`}</Truncate>
+            <Truncate>{`from ${s.fork.parentTitle} · iteration ${s.fork.from}`}</Truncate>
           </span>
         ) : (
           <Truncate className="h-4.5 text-sm text-fg-muted" data-card-brief>
@@ -308,10 +304,12 @@ function OverviewCard({
           <span>{settledAt !== null ? `Settled ${age(settledAt, now)}` : age(s.activeAt, now)}</span>
         </span>
       </div>
-      <span className="absolute right-3 bottom-3 opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100">
+      <span className="absolute right-3 bottom-3 text-fg-muted opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100">
         <Hint label={label} shortcut={SETTLE_SHORTCUT} side="top">
-          <Button variant="ghost" size="icon-xs" onClick={onSettle} aria-label={`${label} ${s.title}`} data-settle={s.id}>
+          {/* Named, as the row's action is, so the glyph never reads as the Settled status it shares. */}
+          <Button variant="ghost" size="xs" onClick={onSettle} aria-label={`${label} ${s.title}`} data-settle={s.id}>
             {settleUndoes(s) ? <Undo2 aria-hidden /> : <CircleCheck aria-hidden />}
+            {label}
           </Button>
         </Hint>
       </span>
@@ -327,7 +325,7 @@ function HomeEmpty() {
           <Lightbulb aria-hidden />
         </EmptyMedia>
         <EmptyTitle>No brainstorms yet</EmptyTitle>
-        <EmptyDescription>To start one, {START}. It appears here as soon as the agent creates it.</EmptyDescription>
+        <EmptyDescription>Your first one appears here as soon as the agent creates it.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

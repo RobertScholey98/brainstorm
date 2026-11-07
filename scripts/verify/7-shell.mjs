@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "nod
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, paneHead, root, settled, shot, workspace } from "./electron.mjs";
+import { build, checks, FOOT, inBlock, launch, openSession, paneFeet, paneHead, pixels, root, settled, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("shell");
@@ -206,6 +206,13 @@ try {
     { sameFill: true, rest: { scrolled: false, rule: false, clipGap: 0, through: 0 }, scrolled: { scrolled: true, rule: true, clipGap: 0, through: 0 }, masks: [] },
   );
   await window.$eval("[data-home-scroll]", (el) => el.scrollTo(0, 0));
+  await window.setViewportSize({ width: 1440, height: 300 });
+  await settled(() => window.$eval('[data-slot="sidebar-content"]', (el) => [el.scrollHeight, el.clientHeight]));
+  check(
+    "every vertical scroller with more below rules its foot as the Inspector does, in a tone that reads on its own surface, and drops the rule at its end",
+    await paneFeet(window),
+    { "home-scroll": FOOT, "sidebar-content": FOOT },
+  );
   await window.setViewportSize({ width: 1440, height: 900 });
   check("home shows no Regenerate or Export", [await window.$("[data-regenerate-toggle]"), await window.$("[data-export]")], [null, null]);
   await window.waitForTimeout(300);
@@ -281,6 +288,21 @@ try {
     ),
     true,
   );
+  check(
+    "the action's label ends on the ages' edge, and its fill keeps the same 4 px off the row's end as off its top",
+    await settled(() =>
+      window.evaluate((id) => {
+        const action = document.querySelector(`[data-settle="${id}"]`);
+        const box = action.getBoundingClientRect();
+        const row = document.querySelector(`[data-session="${id}"]`).getBoundingClientRect();
+        const ink = document.createRange();
+        ink.selectNodeContents(action.lastChild);
+        const ages = [...document.querySelectorAll("[data-age]")].find((a) => a.getClientRects().length > 0).getBoundingClientRect().right;
+        return { label: Math.round(ink.getBoundingClientRect().right - ages), end: Math.round(row.right - box.right), top: Math.round(box.top - row.top) };
+      }, kitchen),
+    ),
+    { label: 0, end: 4, top: 4 },
+  );
   // The first row sits beside home's search field, where an overlay off the row covered it (R5-4, R8-12).
   const first = await window.$eval("[data-sidebar-panel] [data-session]", (row) => row.dataset.session);
   await window.hover(`[data-settle="${first}"]`);
@@ -338,6 +360,18 @@ try {
     await settled(() => window.$eval("[data-overview-session]:not([data-settled]) [data-settle]", (b) => getComputedStyle(b).backgroundColor)),
     "rgba(0, 0, 0, 0)",
   );
+  check(
+    "and it names itself at the row action's size, so its glyph never reads as the Settled status that shares it",
+    await window.evaluate(() => {
+      const [card, row] = [document.querySelector("[data-overview-session]:not([data-settled]) [data-settle]"), document.querySelector("[data-sidebar-panel] [data-settle]")];
+      const look = (b) => [b.textContent.trim(), Math.round(b.getBoundingClientRect().height), getComputedStyle(b).fontSize];
+      return [look(card), look(row)];
+    }),
+    [
+      ["Settle", 24, "12px"],
+      ["Settle", 24, "12px"],
+    ],
+  );
   await window.mouse.move(0, 0);
   await window.click("[data-settled-label]");
   await window.waitForSelector(`[data-settled-group] [data-session="${kitchen}"][data-settled]`);
@@ -383,11 +417,39 @@ try {
   await window.click(`[data-settle="${roulette}"]`);
   await window.waitForFunction((id) => document.querySelector(`[data-settled-group] [data-session="${id}"]`) !== null, roulette);
   await window.waitForSelector(`[data-overview-session="${roulette}"][data-settled] [data-preview-still]`);
+  const settledStill = `[data-overview-session="${roulette}"] [data-preview-still]`;
   check(
-    "a settled card's still fades to 35% in light, so its dark ground reads as a ghost rather than a grey slab",
-    await settled(() => window.$eval(`[data-overview-session="${roulette}"] [data-preview-still]`, (img) => getComputedStyle(img).opacity)),
-    "0.35",
+    "a settled card's still is opaque on the card's fill, so no dot of the mat prints through it, and only a filter takes its colour",
+    await settled(() =>
+      window.$eval(settledStill, (img) => {
+        const s = getComputedStyle(img);
+        const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "background: var(--card)" }));
+        const card = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return [s.opacity, s.filter.startsWith("grayscale(1) contrast("), s.backgroundColor === card];
+      }),
+    ),
+    ["1", true, true],
   );
+  for (const theme of ["light", "dark"]) {
+    await window.emulateMedia({ colorScheme: theme });
+    await window.mouse.move(0, 0);
+    await window.waitForTimeout(300);
+    const clip = await window.$eval(settledStill, (img) => {
+      const r = img.getBoundingClientRect();
+      return { x: Math.ceil(r.left) + 2, y: Math.ceil(r.top) + 2, width: Math.floor(r.width) - 4, height: Math.min(80, Math.floor(r.height) - 4) };
+    });
+    const tones = (await pixels(app, window, clip)).flat();
+    const lum = tones.map(([r, g, b]) => (r + g + b) / 3);
+    const tone = { grey: tones.every(([r, g, b]) => Math.max(r, g, b) - Math.min(r, g, b) <= 6), darkest: Math.round(Math.min(...lum)), lightest: Math.round(Math.max(...lum)) };
+    console.log(`     settled still in ${theme}: ${JSON.stringify(tone)}`);
+    check(
+      `in ${theme} the settled still is grey and recedes toward the card: ${theme === "light" ? "no pixel darker than 150, so a dark design is a pale ghost, not a grey slab" : "no pixel lighter than 120, so a light design doesn't glare off the dark card"}`,
+      [tone.grey, theme === "light" ? tone.darkest >= 150 : tone.lightest <= 120],
+      [true, true],
+    );
+  }
+  await window.emulateMedia({ colorScheme: "light" });
   await window.hover(`[data-overview-session="${roulette}"]`);
   await window.click(`[data-settle="${roulette}"]`);
   await window.waitForFunction((id) => document.querySelector(`[data-project] [data-session="${id}"]`) !== null, roulette);
@@ -473,12 +535,12 @@ try {
   await window.fill("[data-home-search]", "zebra");
   await window.waitForSelector('[data-home-none="no-match"]');
   check(
-    "a search that matches nothing in any status says so by the search's own words, not the status, with one way out",
+    "a search that matches nothing in any status says so by the search's own words, not the status, opening on another word than the title's No, with one way out",
     [
       (await window.textContent('[data-home-none="no-match"] [data-slot=empty-description]'))?.trim(),
       (await window.textContent('[data-home-none="no-match"] [data-home-none-action]'))?.trim(),
     ],
-    ["No brainstorm has “zebra” in its title or brief.", "Clear search"],
+    ["Nothing here has “zebra” in its title or brief.", "Clear search"],
   );
   check(
     "and its icon sits 20 px under the query row, where the first card would, not down the page",
@@ -728,6 +790,8 @@ try {
   await shot(window, shots, "session-light");
   await canvas.waitForSelector('#canvas[data-view="stage"]');
 
+  const markAt = () => window.evaluate(() => [...document.querySelectorAll("[data-mark]")].filter((m) => m.getClientRects().length > 0 && m.getBoundingClientRect().left >= 0).map((m) => Math.round(m.getBoundingClientRect().left)));
+  const markOpen = await markAt();
   await window.click('[data-slot="sidebar"] [data-sidebar="trigger"]');
   await window.waitForSelector('[data-slot="sidebar"][data-state="collapsed"]');
   await window.waitForTimeout(400);
@@ -736,6 +800,7 @@ try {
     [(await box("[data-canvas-region]")).left < region.left, await window.isVisible('[data-topbar] [data-sidebar="trigger"]')],
     [true, true],
   );
+  check("the mark keeps its x on either side of the toggle, so Ctrl+B never nudges it", [markOpen, await markAt()], [[markOpen[0]], [markOpen[0]]]);
   await window.click('[data-topbar] [data-sidebar="trigger"]');
   await window.waitForSelector('[data-slot="sidebar"][data-state="expanded"]');
   await window.waitForTimeout(400);
@@ -945,6 +1010,11 @@ try {
     { more: await foot("top"), end: await foot("end") },
     { more: { rule: true, offEdge: 8 }, end: { rule: false, offEdge: 8 } },
   );
+  check(
+    "in a session every scroller with more below rules its foot the same way",
+    Object.entries(await paneFeet(window)).filter(([, f]) => JSON.stringify(f) !== JSON.stringify(FOOT)),
+    [],
+  );
   await window.$eval("[data-inspector-body]", (body) => (body.scrollTop = 0));
   await window.setViewportSize({ width: 1100, height: 720 });
   await window.click("[data-pick-toggle]");
@@ -1117,6 +1187,11 @@ try {
   await window.waitForSelector("[data-slot=toast]");
   await window.waitForTimeout(7000);
   check("and stays until then, however long it has been up", await window.isVisible("[data-slot=toast]"), true);
+  const refreshed = window.waitForResponse((r) => r.url().endsWith("/v1/ui/sessions") && r.ok());
+  must("re-attach Loose notes", brainstorm(env, ["session", "attach", loose, "--thread", LOOSE_THREAD, "--json"]));
+  await refreshed;
+  await window.waitForTimeout(300);
+  check("a server event's list refresh leaves the notice up", await window.isVisible("[data-slot=toast]"), true);
   await window.unroute("**/v1/ui/sessions/*/actions");
   await window.click('[data-slot-id="wheel"] [data-variant="reel"]');
   await window.waitForSelector("[data-slot=toast]", { state: "detached" });
@@ -1256,10 +1331,12 @@ try {
 
   await app.close();
   let serverDown = true;
+  let freshInstall = false;
   let answer;
   const answered = new Promise((r) => (answer = r));
   ({ app, window, errors } = await launch(home, env, {
     sessions: async (route) => {
+      if (freshInstall) return route.fulfill({ json: { ok: true, data: [] } });
       if (!serverDown) return route.continue();
       await answered;
       await route.abort();
@@ -1267,6 +1344,17 @@ try {
   }));
   await window.setViewportSize({ width: 1440, height: 900 });
   await window.waitForSelector("[data-overview-skeleton]");
+  check(
+    "while the list loads, the sidebar stands in three project heads, and each card's frame skeleton is opaque on the card's fill so no dot prints through",
+    await window.evaluate(() => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "background: var(--card)" }));
+      const card = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      const frames = [...document.querySelectorAll("[data-overview-skeleton] [data-preview-skeleton]")];
+      return [document.querySelectorAll("[data-home-loading-head]").length, frames.length > 0 && frames.every((f) => getComputedStyle(f).backgroundColor === card)];
+    }),
+    [3, true],
+  );
   check(
     "while the first list loads, each status is named with no count, since none is known yet",
     await window.$$eval("[data-home-status]", (items) => items.map((i) => i.textContent)),
@@ -1312,6 +1400,20 @@ try {
   await window.click("[data-home-retry]");
   await window.waitForSelector("[data-overview-session]");
   check("Try again loads the overview and the sidebar list", await window.isVisible(`[data-session="${loose}"]`), true);
+  // A server event refreshes the list, which now answers empty, as a fresh install's does.
+  freshInstall = true;
+  must("re-attach Kitchen rota for a refresh", brainstorm(env, ["session", "attach", kitchen, "--thread", KITCHEN_THREAD, "--json"]));
+  await window.waitForSelector("[data-home-empty]");
+  check(
+    "a fresh install keeps the subtitle and the query row where loading had them, the row off, and the message doesn't repeat how to start",
+    [
+      await window.isVisible("[data-home-hint]"),
+      await filtersTop(),
+      await window.$eval("[data-home-filters]", (f) => [f.inert, getComputedStyle(f).opacity]),
+      (await window.textContent("[data-home-empty]"))?.includes("To start"),
+    ],
+    [true, loadingTop, [true, "0.5"], false],
+  );
 
   // No viewport emulation from here: the page must track the real window, as it does for Rob.
   await app.close();

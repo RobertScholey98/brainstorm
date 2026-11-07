@@ -11,7 +11,7 @@ const RETIRED: readonly { readonly pattern: RegExp; readonly say: string }[] = [
   { pattern: /toLocale(?:Date)?String/, say: "age from time.ts, whose months are all three letters" },
   { pattern: /No iterations yet|agent's first commit/, say: "WAITING from Preview.tsx, the one name for a brainstorm with no iteration" },
   { pattern: /Restart Brainstorm, then try again/, say: "If it happens again, restart Brainstorm: the copy sits over a Try again button" },
-  { pattern: /matches the search/, say: "the search's own words: No brainstorm has “zebra” in its title or brief" },
+  { pattern: /matches the search/, say: "the search's own words: Nothing here has “zebra” in its title or brief" },
   { pattern: /heading={`Fork iteration/, say: "the Fork button's own label, so button and popover share one name in both states" },
   { pattern: /. Everything else stays./, say: "<context> · <clause>, the one grammar a popover description takes" },
   { pattern: /Try again, and if it still fails/, say: "If it happens again, restart Brainstorm: the same copy shows in a toast, which has no Try again button" },
