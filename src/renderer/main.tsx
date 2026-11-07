@@ -7,6 +7,16 @@ import "./styles.css";
 const token = new URLSearchParams(location.hash.slice(1)).get("ui");
 history.replaceState(null, "", location.pathname);
 
+// While the width changes, body carries data-window-resizing into the frame after the one that lays the new width out,
+// so the panes that follow it move with it rather than slide. Two frames: a frame asked for during the resize runs
+// before that same frame's style pass.
+let settle = 0;
+addEventListener("resize", () => {
+  document.body.dataset.windowResizing = "";
+  cancelAnimationFrame(settle);
+  settle = requestAnimationFrame(() => (settle = requestAnimationFrame(() => delete document.body.dataset.windowResizing)));
+});
+
 const root = createRoot(document.getElementById("root") as HTMLElement);
 root.render(
   token === null ? (

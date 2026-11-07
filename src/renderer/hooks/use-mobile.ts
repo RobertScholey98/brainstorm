@@ -31,25 +31,13 @@ export function useWiderThan(px: number): boolean {
   );
 }
 
-let frame = 0;
-
-/**
- * Hears window resizes. While the width changes, body carries data-window-resizing into the frame after the one that
- * lays the new width out, so the panes that follow it move with it rather than slide.
- */
-function subscribeWidth(onChange: () => void): () => void {
-  const resized = () => {
-    document.body.dataset.windowResizing = "";
-    cancelAnimationFrame(frame);
-    // Two frames: a frame asked for during the resize runs before that same frame's style pass.
-    frame = requestAnimationFrame(() => (frame = requestAnimationFrame(() => delete document.body.dataset.windowResizing)));
-    onChange();
-  };
-  addEventListener("resize", resized);
-  return () => removeEventListener("resize", resized);
-}
-
 /** The window's width in CSS pixels, following resizes. */
 export function useWindowWidth(): number {
-  return React.useSyncExternalStore(subscribeWidth, () => innerWidth);
+  return React.useSyncExternalStore(
+    (onChange) => {
+      addEventListener("resize", onChange);
+      return () => removeEventListener("resize", onChange);
+    },
+    () => innerWidth,
+  );
 }
