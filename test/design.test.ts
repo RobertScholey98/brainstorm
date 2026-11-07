@@ -10,6 +10,8 @@ const MIN_HUE_DISTANCE = 20;
 const STATUSES = ["success", "warning", "danger", "info"] as const;
 /** Two subtle fills closer than this read as one tint at a glance. */
 const MIN_SUBTLE_DISTANCE = 5;
+/** Two status fills side by side need more: light warning and danger sat at 5.3 and read as peach on pink (R6-45). */
+const MIN_STATUS_FILL_DISTANCE = 6;
 /** The smallest step a hover fill makes off the surface under it, so the pointer's row reads at a glance. */
 const MIN_HOVER_STEP = 3.5;
 /** The smallest surface step that reads without leaning on a border. */
@@ -111,7 +113,7 @@ describe("design tokens", () => {
       const close = STATUSES.flatMap((x, i) =>
         STATUSES.slice(i + 1)
           .map((y, j) => ({ pair: `${x}/${y}`, distance: deltaE2000(lab(subtle[i]!), lab(subtle[i + 1 + j]!)) }))
-          .filter((p) => p.distance < MIN_SUBTLE_DISTANCE),
+          .filter((p) => p.distance < MIN_STATUS_FILL_DISTANCE),
       );
       expect(close).toEqual([]);
     });

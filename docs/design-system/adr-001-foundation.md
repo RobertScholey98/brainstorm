@@ -37,7 +37,7 @@ Each colour has one meaning. A role is named for what it does, not for its shade
 | `inverse`, `inverse-fg` | `#1f1f1e`, `#fafaf9` | `#ecebe8`, `#1f1f1d` | The neutral solid fill of the default button, a checked checkbox and an on switch |
 | `accent`, `accent-fg`, `accent-hover` | see below | see below | Brainstorm itself: the mark, the primary action, open pins, selection |
 | `success` | `#497011` | `#9ccc5a` | Attached, confirmed, done |
-| `warning` | `#8a5300` | `#f2b860` | Needs Rob before it can continue |
+| `warning` | `#885600` | `#f2b860` | Needs Rob before it can continue |
 | `danger` | `#bb372c` | `#ff8a7f` | Failed, destructive |
 | `info` | `#2f63c4` | `#86aeff` | Neutral status, such as the agent asking a question |
 
@@ -218,4 +218,5 @@ The lint gains three rules, each tested in `test/design-lint.test.ts`.
 - **The fades.** The top fade runs over 32 px and hides its outer 24 px outright: a switch's 20 px track and its ring, so an accent switch cut there leaves no crescent (R5-21). `scroll-fades-x` is the same recipe on the inline axis, for the history strip.
 - **Tokens.** `--container-header` is gone, since the header measures its own fit (ADR 003). `--spacing-strip` (84 px) and `--spacing-still` (56 px) size the history strip and a still's card in it (ADR 005).
 - **A raw part.** The `raw-part` lint rule fails a pin's part rendered as its id. Rob reads it through `partLabel`.
+- **Warning leans yellow.** Light `warning` moved from `#8a5300` to `#885600`. Its 12% fill sat 5.3 from danger's, so a warning and a failure read as peach and pink (R6-45). `design.test` now holds every pair of status fills 6 apart in both themes.
 - **Two first edges in the card.** A bar row, the canvas bar or the window header, starts its first ink at card + 16, `ScrollPane`'s 16 px inset, so a lone label such as "No slots yet" stands where the breadcrumb does. A page, home and nothing else for now, starts at card + 24, the 24 px inset, because its heading is the `title` step and needs more room than a 13 px row (R5-11, R6-14). No third edge: a pane is a bar row or a page.

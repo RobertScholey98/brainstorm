@@ -29,7 +29,7 @@ const SOLID = {
     inverse: "#1f1f1e",
     "inverse-fg": "#fafaf9",
     success: "#497011",
-    warning: "#8a5300",
+    warning: "#885600",
     danger: "#bb372c",
     info: "#2f63c4",
     "elevation-xs": "0 1px 2px rgb(0 0 0 / 0.06)",
