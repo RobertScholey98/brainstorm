@@ -223,6 +223,21 @@ describe("design lint", () => {
     ]);
   });
 
+  it("blocked-hint: fails a hand-made focusable wrapper round a disabled control, and allows the kit and an enabled one", () => {
+    const source = [
+      `<Hint label="Off" side="left">`,
+      `  <span tabIndex={0} data-x-blocked>`,
+      `    <Button disabled>Go</Button>`,
+      `  </span>`,
+      `</Hint>`,
+      `<span tabIndex={0}><Button disabled={false}>Go</Button></span>`,
+      `<span tabIndex={0} data-lineage-folded>3 more</span><Button disabled>Later</Button>`,
+    ].join("\n");
+    expect(rules(source)).toEqual([{ rule: "blocked-hint", line: 2, text: "<span tabIndex> round <Button disabled>" }]);
+    expect(rules(source, true)).toEqual([]);
+    expect(rules(`<BlockedHint label="Off" data-x-blocked>\n  <Button disabled>Go</Button>\n</BlockedHint>`)).toEqual([{ rule: "hint-side", line: 1, text: "<Hint> without side" }]);
+  });
+
   it("passes on the renderer as it stands", async () => {
     expect(await lintRenderer()).toEqual([]);
   });

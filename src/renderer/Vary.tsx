@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { OverlayHeader, OverlayPanel, PopoverFooter } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
-import { Hint } from "@/components/ui/tooltip";
+import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import { partLabel, VARY_MAX } from "../core/fork";
 import type { BlockView, CanvasRect, Pin, SlotView } from "../core/types";
 import { HeldLabel } from "./HeldLabel";
@@ -35,11 +35,9 @@ export function VarySection({ picking, blocked, onPickToggle }: { picking: boole
             {button}
           </Hint>
         ) : (
-          <Hint label={blocked} side="left">
-            <span tabIndex={0} className="ml-auto" data-vary-blocked>
-              {button}
-            </span>
-          </Hint>
+          <BlockedHint label={blocked} side="left" className="ml-auto" data-vary-blocked>
+            {button}
+          </BlockedHint>
         )}
       </header>
     </section>

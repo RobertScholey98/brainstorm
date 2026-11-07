@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { OverlayHeader, OverlayPanel, PopoverFooter } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { Hint } from "@/components/ui/tooltip";
+import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import type { Placement } from "./CanvasHost";
 
 /** Where a pin is on the canvas. Only the frame can tell placed from detached; the rest the view knows. */
@@ -93,14 +93,12 @@ export function FeedbackPanel({
             </Button>
           </Hint>
         ) : (
-          <Hint label={pinBlocked} side="left">
-            <span tabIndex={0} className="ml-auto" data-pick-blocked>
-              <Button variant="outline" disabled data-pick-toggle>
-                <MessageSquarePlus data-icon="inline-start" aria-hidden />
-                Pin comment
-              </Button>
-            </span>
-          </Hint>
+          <BlockedHint label={pinBlocked} side="left" className="ml-auto" data-pick-blocked>
+            <Button variant="outline" disabled data-pick-toggle>
+              <MessageSquarePlus data-icon="inline-start" aria-hidden />
+              Pin comment
+            </Button>
+          </BlockedHint>
         )}
       </header>
       {feedback.length === 0 ? (

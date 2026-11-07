@@ -110,4 +110,31 @@ function Hint({
   )
 }
 
-export { Hint, HintAnchor, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+/**
+ * The hint on a control that is off, saying why. A disabled button takes no pointer or focus, so the hint opens off a
+ * focusable wrapper round it. It is a component of its own, not a `Hint` with a wrapped child, because Base UI keeps a
+ * live tooltip's hover on the trigger it mounted with: a control that turns off in place must mount a fresh tooltip,
+ * or its hint opens on focus but never on hover. `npm run lint:design` fails the wrapper written by hand.
+ */
+function BlockedHint({
+  label,
+  side,
+  className,
+  children,
+  ...data
+}: {
+  label: ReactNode
+  side: NonNullable<TooltipPrimitive.Positioner.Props["side"]>
+  className?: string
+  children: ReactElement
+} & { [attr: `data-${string}`]: unknown }) {
+  return (
+    <Hint label={label} side={side}>
+      <span tabIndex={0} className={className} {...data}>
+        {children}
+      </span>
+    </Hint>
+  )
+}
+
+export { BlockedHint, Hint, HintAnchor, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }

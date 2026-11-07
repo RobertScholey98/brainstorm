@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { Hint, HintAnchor } from "@/components/ui/tooltip";
+import { BlockedHint, Hint, HintAnchor } from "@/components/ui/tooltip";
 import type { BlockId, ContentHash, ExportResult, ForkInput, IterationN, IterationView, RobAction, SessionId, SessionView } from "../core/types";
 import { ExportButton } from "./Export";
 import { ForkButton } from "./Fork";
@@ -74,13 +74,11 @@ export function TopBar({
           {actions}
           {history !== undefined &&
             (history.blocked !== undefined ? (
-              <Hint label={history.blocked} side="left">
-                <span tabIndex={0} data-history-blocked>
-                  <Button variant="ghost" size="icon" aria-label="History" aria-pressed={false} disabled data-history-toggle>
-                    <History aria-hidden />
-                  </Button>
-                </span>
-              </Hint>
+              <BlockedHint label={history.blocked} side="left" data-history-blocked>
+                <Button variant="ghost" size="icon" aria-label="History" aria-pressed={false} disabled data-history-toggle>
+                  <History aria-hidden />
+                </Button>
+              </BlockedHint>
             ) : (
               <Hint label={history.open ? "Hide the history" : "Show the history"} side="left">
                 <Button

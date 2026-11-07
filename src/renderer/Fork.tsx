@@ -6,7 +6,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { Hint } from "@/components/ui/tooltip";
+import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import { carryOver } from "../core/fork";
 import type { ContentHash, ForkInput, IterationView, SessionView, VariantKey } from "../core/types";
 import { COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
@@ -38,14 +38,12 @@ export function ForkButton({
   const label = past && iteration !== null ? `Fork iteration ${iteration.n}` : "Fork";
   if (iteration === null) {
     return (
-      <Hint label="Fork needs a first iteration" side="left">
-        <span tabIndex={0} data-fork-blocked>
-          <Button variant="outline" disabled className={COMPACT} data-collapse={COLLAPSE.fork} data-fork-toggle>
-            <GitBranch data-icon="inline-start" aria-hidden />
-            <span className={COMPACT_LABEL}>Fork</span>
-          </Button>
-        </span>
-      </Hint>
+      <BlockedHint label="Fork needs a first iteration" side="left" data-fork-blocked>
+        <Button variant="outline" disabled className={COMPACT} data-collapse={COLLAPSE.fork} data-fork-toggle>
+          <GitBranch data-icon="inline-start" aria-hidden />
+          <span className={COMPACT_LABEL}>Fork</span>
+        </Button>
+      </BlockedHint>
     );
   }
   return (

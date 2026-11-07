@@ -183,12 +183,16 @@ try {
   check("the agent commits a wheel that breaks once it mounts", broken.code, 0);
   await run.window.waitForSelector('[data-block="wheel/neon"] [role="alert"]');
   const off = [await run.window.isDisabled("[data-vary-toggle]"), await run.window.isDisabled("[data-pick-toggle]")];
-  await run.window.focus("[data-vary-blocked]");
-  await run.window.keyboard.press("Tab");
+  const hoverHint = async (trigger) => {
+    await run.window.mouse.move(120, 600);
+    await run.window.waitForSelector('[data-slot="tooltip-content"]', { state: "detached" });
+    await run.window.hover(trigger);
+    return run.window.waitForSelector('[data-slot="tooltip-content"]', { timeout: 3000 }).then((h) => h.textContent()).then((t) => t.trim(), () => null);
+  };
   check(
-    "a block that didn't render leaves Vary element and Pin comment off, the hint saying why",
-    [...off, await run.window.waitForSelector('[data-slot="tooltip-content"]', { timeout: 3000 }).then((h) => h.textContent()).then((t) => t.trim(), () => null)],
-    [true, true, "The block didn't render, so there's nothing to pick"],
+    "a block that didn't render leaves Vary element and Pin comment off, and each hint opens under the pointer saying why",
+    [...off, await hoverHint("[data-vary-blocked]"), await hoverHint("[data-pick-blocked]")],
+    [true, true, "The block didn't render, so there's nothing to pick", "The block didn't render, so there's nothing to pick"],
   );
 } finally {
   await run.app.close();

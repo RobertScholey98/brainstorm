@@ -25,6 +25,8 @@
 //   dismiss-ghost    a Cancel or Done Button that isn't ghost, outside components/ui, so dismissing has one look
 //   overlay-kit      an overlaySurface() call outside components/ui; an overlay is the kit's PopoverContent, or
 //                    OverlayPanel for one its caller places, so it keeps the popover's column and nothing leaves its box
+//   blocked-hint     a focusable wrapper written round a disabled control, outside components/ui; the kit's BlockedHint
+//                    is that wrapper, and mounts a fresh tooltip so the hint opens on hover as well as on focus
 //   frame-sandbox    an iframe anywhere in the renderer that isn't the canvas's: its src must be /canvas or
 //                    /canvas/preview and its sandbox exactly "allow-scripts", so agent code always runs in an opaque
 //                    origin under the canvas CSP, a home preview included
@@ -111,7 +113,7 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
     });
   }
   problems.push(...chipRecipe(source, lits), ...frameSandbox(source), ...fieldFill(source));
-  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source), ...dismissGhost(source), ...rawPart(source));
+  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source), ...dismissGhost(source), ...rawPart(source), ...blockedHint(source));
   return problems.sort((a, b) => a.line - b.line);
 }
 
@@ -225,10 +227,21 @@ function overlayKit(source) {
   );
 }
 
+/** A span made focusable to carry the hint of the disabled control it wraps. */
+function blockedHint(source) {
+  const elements = jsxElements(source);
+  return elements.flatMap((el, i) => {
+    if (el.tag !== "span" || !el.attrs.some((a) => a.name === "tabIndex")) return [];
+    const child = elements[i + 1];
+    if (child === undefined || child.start > source.indexOf("</span>", el.end) || !child.attrs.some((a) => a.name === "disabled" && a.start === a.end)) return [];
+    return [{ rule: "blocked-hint", line: el.line, text: `<span tabIndex> round <${child.tag} disabled>`, message: "a disabled control's hint is the kit's BlockedHint" }];
+  });
+}
+
 /** A Hint names its side; on the window header that side is left or right, and in the sidebar it is left. */
 function hintSide(source, file) {
   return jsxElements(source)
-    .filter((el) => el.tag === "Hint")
+    .filter((el) => el.tag === "Hint" || el.tag === "BlockedHint")
     .flatMap((el) => {
       const side = el.attrs.find((a) => a.name === "side");
       if (side === undefined) return [{ rule: "hint-side", line: el.line, text: "<Hint> without side", message: "name the side, so the hint opens off the controls it serves" }];

@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger }
 import { Segmented } from "@/components/ui/segmented";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { Hint } from "@/components/ui/tooltip";
+import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import { partLabel } from "../core/fork";
 import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
 import { actionRank, COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
@@ -67,13 +67,11 @@ export function Regenerate({
   }, [gate?.ok]);
   if (gate === null || !gate.ok) {
     return (
-      <Hint label={gate === null ? `Back to latest to regenerate. You are viewing iteration ${past}.` : blockedMessage(gate.reason, view.request?.request.n)} side="left">
-        <span tabIndex={0} data-regenerate-blocked>
-          <Button variant="accent" disabled data-regenerate-toggle>
-            Regenerate
-          </Button>
-        </span>
-      </Hint>
+      <BlockedHint label={gate === null ? `Back to latest to regenerate. You are viewing iteration ${past}.` : blockedMessage(gate.reason, view.request?.request.n)} side="left" data-regenerate-blocked>
+        <Button variant="accent" disabled data-regenerate-toggle>
+          Regenerate
+        </Button>
+      </BlockedHint>
     );
   }
   return (
