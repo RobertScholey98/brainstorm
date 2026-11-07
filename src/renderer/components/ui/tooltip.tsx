@@ -35,13 +35,24 @@ function TooltipContent({
   align = "center",
   alignOffset = 0,
   anchor,
+  covers,
   children,
   ...props
 }: TooltipPrimitive.Popup.Props &
   Pick<
     TooltipPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "anchor"
-  >) {
+  > & { covers?: HintRow["text"] }) {
+  // A hint opening left over a line of text either clears it or covers it from its start, so no half-word peeks out.
+  const cover = (popup: HTMLElement | null) => {
+    if (popup === null || covers === undefined || side !== "left" || typeof anchor !== "function" || typeof sideOffset !== "number") return
+    const [text, row] = [covers(), anchor()]
+    if (text === null || row == null) return
+    const right = row.getBoundingClientRect().left - sideOffset
+    if (right - popup.offsetWidth >= text.end) return
+    popup.style.minWidth = `${right - text.start}px`
+    popup.style.justifyContent = "flex-end"
+  }
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Positioner
@@ -54,6 +65,7 @@ function TooltipContent({
         className="isolate z-tooltip"
       >
         <TooltipPrimitive.Popup
+          ref={cover}
           data-slot="tooltip-content"
           className={cn(
             overlaySurface({ tone: "inverse" }),
@@ -73,9 +85,16 @@ function TooltipContent({
 /**
  * A row of controls whose hints open off the whole row, not off their own control, so a hint never covers the
  * control beside the one it labels. The window header provides it, spanning its request status too, so a hint never
- * hides the status either; a popover resets it.
+ * hides the status either; a popover resets it. `text` is the line a hint opens over, the header's breadcrumb and
+ * badge, from its first ink to its last.
  */
-const HintAnchor = createContext<TooltipPrimitive.Positioner.Props["anchor"] | null>(null)
+type HintRow = {
+  anchor: () => Element | { getBoundingClientRect: () => DOMRect } | null
+  text: () => { start: number; end: number } | null
+}
+const HintAnchor = createContext<HintRow | null>(null)
+/** Off a row, a hint stands further out than the row's 8 px gap between buttons, so it never reads as one of them. */
+const ROW_OFFSET = 12
 
 /**
  * A styled hint on one control, with its keyboard shortcut when it has one. The renderer uses this instead of a native
@@ -102,7 +121,7 @@ function Hint({
   return (
     <Tooltip disabled={disabled}>
       <TooltipTrigger render={children} />
-      <TooltipContent side={side} anchor={row ?? undefined}>
+      <TooltipContent side={side} anchor={row?.anchor} sideOffset={row === null ? undefined : ROW_OFFSET} covers={row?.text}>
         <span>{label}</span>
         {shortcut !== undefined && <Kbd tone="inverse">{shortcut}</Kbd>}
       </TooltipContent>

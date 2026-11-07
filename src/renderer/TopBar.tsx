@@ -1,5 +1,5 @@
 import { ChevronRight, Download, GitBranch, History, PanelRight } from "lucide-react";
-import { useCallback, useRef, type ReactNode } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -41,18 +41,30 @@ export function TopBar({
   const header = useRef<HTMLElement>(null);
   const cluster = useRef<HTMLDivElement>(null);
   useHeaderFit(header);
-  // The row its hints open left of: the right cluster, and the request status before it when there is one.
-  const row = useCallback(() => {
-    const actions = cluster.current;
-    const status = header.current?.querySelector("[data-header-status]");
-    if (actions === null || status == null) return actions;
-    return {
-      getBoundingClientRect: () => {
-        const [s, a] = [status.getBoundingClientRect(), actions.getBoundingClientRect()];
-        return DOMRect.fromRect({ x: s.left, y: a.top, width: a.right - s.left, height: a.height });
+  // The row its hints open left of: the right cluster, and the request status before it when there is one. The text
+  // they open over is the breadcrumb and its badge.
+  const row = useMemo(
+    () => ({
+      anchor: () => {
+        const actions = cluster.current;
+        const status = header.current?.querySelector("[data-header-status]");
+        if (actions === null || status == null) return actions;
+        return {
+          getBoundingClientRect: () => {
+            const [s, a] = [status.getBoundingClientRect(), actions.getBoundingClientRect()];
+            return DOMRect.fromRect({ x: s.left, y: a.top, width: a.right - s.left, height: a.height });
+          },
+        };
       },
-    };
-  }, []);
+      text: () => {
+        const crumb = header.current?.querySelector("nav[aria-label=Breadcrumb]")?.getBoundingClientRect();
+        if (crumb === undefined) return null;
+        const badge = header.current?.querySelector("[data-iteration]")?.getBoundingClientRect();
+        return { start: crumb.left, end: Math.max(crumb.right, badge?.right ?? 0) };
+      },
+    }),
+    [],
+  );
   return (
     <header
       ref={header}

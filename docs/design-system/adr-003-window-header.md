@@ -65,3 +65,9 @@ The header and the sidebar's header row carry `data-drag-region`, which sets `-w
 - **Keeping the top bar inside the card, under a thin drag strip.** Two rows again, with the strip holding only the native buttons.
 - **Custom-drawn window buttons.** They would lose Windows' snap layouts and its own hover and press behaviour.
 - **A preload to send theme changes to the renderer.** `nativeTheme` and `prefers-color-scheme` already agree, and the window-security rules forbid a preload.
+
+## Amendment: round 6. Header hints stand off the row and never cut the breadcrumb
+
+Header hints still open left of the whole right cluster and its request status (R5-3), so none covers a control or the status. Round 6 found two faults with that placement. A hint stood 6 px off the row, closer than the row's own 8 px gap between buttons, so it read as one more chip beside Fork (R6-22). A long hint ended partway into the breadcrumb, leaving "cho" of the project showing (R6-23).
+
+A hint off the header row now stands 12 px out. The header also tells its hints where its breadcrumb and badge run. A hint that would end inside that text widens to cover it from the breadcrumb's first ink, with its words kept against the row. A hint that clears the text is unchanged. `verify:5` checks the blocked Regenerate's hint stands 12 px off the row and covers the breadcrumb from its start.

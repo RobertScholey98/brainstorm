@@ -295,6 +295,21 @@ try {
     await settled(() => window.$eval('[data-slot="tooltip-content"]', (h) => Math.round(h.getBoundingClientRect().height))),
     24,
   );
+  const overText = () =>
+    settled(() =>
+      window.evaluate(() => {
+        const hint = document.querySelector('[data-slot="tooltip-content"]').getBoundingClientRect();
+        const crumb = document.querySelector("[data-topbar] nav").getBoundingClientRect();
+        const end = Math.max(crumb.right, document.querySelector("[data-topbar] [data-iteration]").getBoundingClientRect().right);
+        const row = (document.querySelector("[data-header-status]") ?? document.querySelector("[data-header-actions]")).getBoundingClientRect();
+        return { gap: Math.round(row.left - hint.right), text: hint.left >= end ? "clear" : Math.abs(hint.left - crumb.left) < 1 ? "covered from its start" : "cut" };
+      }),
+    );
+  check(
+    "the blocked Regenerate's hint stands 12 px off the row, past its 8 px button gap, and covers the breadcrumb from its start, leaving no half-word",
+    await overText(),
+    { gap: 12, text: "covered from its start" },
+  );
   await window.mouse.move(120, 600);
   await window.setViewportSize({ width: 1100, height: 720 });
   check("nor at 1100", await headerHints(), [[], [], []]);
