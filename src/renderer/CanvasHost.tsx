@@ -3,6 +3,9 @@ import type { BlockId, BlockView, CanvasFrame, CanvasMode, CanvasPin, CanvasRect
 
 export type Placement = { readonly placed: ReadonlySet<FeedbackId>; readonly detached: ReadonlySet<FeedbackId> };
 
+/** A comment to bring forward, and which time this is: a pin clicked twice brings its comment forward twice. */
+export type FeedbackCue = { readonly id: FeedbackId; readonly seq: number };
+
 /**
  * The host side of the frame protocol. The frame's origin is `null`, so messages are matched by `event.source`, and
  * every `ready` resends the modules and state, which recovers a reloaded frame.
@@ -38,8 +41,7 @@ export function CanvasHost({
   focused: FeedbackId | null;
   /** The pin whose feedback row is under the pointer, echoed on the canvas. */
   hovered: FeedbackId | null;
-  /** A new `seq` pulses the pin again, even the same one. */
-  pulse: { readonly id: FeedbackId; readonly seq: number } | null;
+  pulse: FeedbackCue | null;
   onSelect: (blockId: BlockId) => void;
   onBlockError: (blockId: BlockId, message: string) => void;
   onPicked: (pin: Pin, at: { x: number; y: number }, rect: CanvasRect) => void;

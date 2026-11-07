@@ -33,8 +33,8 @@ import {
 import { applyPrefs, NO_PREFS, stripOpen, type CanvasLayout, type UiPrefs, type UiPrefsPatch } from "../core/prefs";
 import type { Api } from "./api";
 import { CanvasBar } from "./CanvasBar";
-import { CanvasHost, type Placement } from "./CanvasHost";
-import { FeedbackPanel, PinComposer, pinPlace, type FeedbackFocus } from "./Feedback";
+import { CanvasHost, type FeedbackCue, type Placement } from "./CanvasHost";
+import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { Filmstrip, FilmstripSkeleton, PastBar } from "./History";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
@@ -313,12 +313,12 @@ function SessionWorkspace({
   const [interaction, setInteraction] = useState<CanvasInteraction>({ kind: "view" });
   const [past, setPast] = useState<Past | null>(null);
   const [placement, setPlacement] = useState<Placement>(NO_PLACEMENT);
-  const [focus, setFocus] = useState<FeedbackFocus | null>(null);
+  const [focus, setFocus] = useState<FeedbackCue | null>(null);
   const focusedFeedback = focus?.id ?? null;
   const [hoveredFeedback, setHoveredFeedback] = useState<FeedbackId | null>(null);
   const [hoveredPin, setHoveredPin] = useState<FeedbackId | null>(null);
   const [zooms, setZooms] = useState<Readonly<Record<string, number>>>({});
-  const [pulse, setPulse] = useState<{ id: FeedbackId; seq: number } | null>(null);
+  const [pulse, setPulse] = useState<FeedbackCue | null>(null);
   const canvasArea = useRef<HTMLElement>(null);
 
   useEffect(() => {

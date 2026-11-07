@@ -17,10 +17,7 @@ import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { Count } from "@/components/ui/count";
 import { overflows } from "@/components/ui/ink";
-import type { Placement } from "./CanvasHost";
-
-/** The comment in focus, and which focus this is: a pin clicked twice focuses its comment twice. */
-export type FeedbackFocus = { readonly id: FeedbackId; readonly seq: number };
+import type { FeedbackCue, Placement } from "./CanvasHost";
 
 /** Where a pin is on the canvas. Only the frame can tell placed from detached; the rest the view knows. */
 export type PinPlace = "placed" | "detached" | "hidden" | "removed";
@@ -86,7 +83,7 @@ export function FeedbackPanel({
   picking: boolean;
   /** Whether the pin composer is up, so the button reads open as every popover trigger does. */
   composing: boolean;
-  focused: FeedbackFocus | null;
+  focused: FeedbackCue | null;
   /** The comment whose pin is under the pointer on the canvas, tinted as if the pointer were on it. */
   echoed: FeedbackId | null;
   /** The item under the pointer, so its pin can echo the hover on the canvas. */
