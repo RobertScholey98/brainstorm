@@ -982,6 +982,16 @@ try {
     }),
     ["Couldn't switch the variant", "500", true],
   );
+  check(
+    "its edge is the danger tone at 40%, as a danger strip's is",
+    await window.$eval("[data-slot=toast]", (t) => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: color-mix(in oklab, var(--danger) 40%, transparent)" }));
+      const edge = getComputedStyle(probe).color;
+      probe.remove();
+      return getComputedStyle(t).boxShadow.includes(`${edge} 0px 0px 0px 1px`);
+    }),
+    true,
+  );
   await window.click("[data-toast-close]");
   await window.waitForSelector("[data-slot=toast]", { state: "detached" });
   check("a notice closes from its close button", await window.$("[data-slot=toast]"), null);
