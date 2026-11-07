@@ -166,22 +166,23 @@ try {
 
   const gaveWay = (label) => results.get(label)?.collapsed;
   check(
-    "at 1440 a short title keeps every label but in asking, whose status takes its short name, and previous thread, which also gives up Export, and reads whole in every phase",
+    "at 1440 a short title keeps every label but in previous thread, whose status reads the same short or long, so Export, Fork and Withdraw give way, and reads whole in every phase",
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, [gaveWay(`light 1440 short ${p}`)?.join(), results.get(`light 1440 short ${p}`)?.titleWhole]])),
-    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [p === "asking" ? "status" : p === "previous_thread" ? "status,export" : "", true]])),
+    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [p === "previous_thread" ? "export,fork,withdraw" : "", true]])),
   );
-  check("at 1100 with a short title and a request queued, Export, Fork and Withdraw give way, Open thread keeps its name and the title reads whole", [gaveWay("light 1100 short queued"), results.get("light 1100 short queued")?.titleWhole], [["export", "fork", "withdraw"], true]);
+  check("at 1100 with a short title and a request queued, the status drops \"in T3\" and Export and Fork give way, so Withdraw and Open thread keep their names and the title reads whole", [gaveWay("light 1100 short queued"), results.get("light 1100 short queued")?.titleWhole], [["status", "export", "fork"], true]);
   check(
     "at 1100 a long title with a send failure keeps 160 px or more, and Retry, the recovery, is the last label to give way",
     [gaveWay("light 1100 long send_failed"), results.get("light 1100 long send_failed")?.titleShown >= TITLE_FLOOR],
     [["export", "fork", "withdraw", "open_thread", "retry"], true],
   );
   check(
-    "at 1440 a fork's title reads whole in every phase but the three whose remaining labels fill the bar, where it keeps 160 px",
+    "at 1440 a fork's title reads whole in every phase but four, where it keeps 160 px: queued, whose short status alone reaches the floor, and the three whose remaining labels fill the bar",
     Object.keys(PHASES)
       .filter((p) => !results.get(`light 1440 fork ${p}`)?.titleWhole)
       .map((p) => [p, results.get(`light 1440 fork ${p}`)?.titleShown >= TITLE_FLOOR]),
     [
+      ["queued", true],
       ["previous_thread", true],
       ["thread_lost", true],
       ["start_failed", true],
