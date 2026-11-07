@@ -10,7 +10,7 @@ import { POPOVER_WIDTH } from "./placement";
 import { useComposerPlace } from "./useComposerPlace";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
+import { SubmitKey } from "@/components/ui/kbd";
 import { OverlayHeader, OverlayPanel, PopoverFooter } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
@@ -359,13 +359,14 @@ export function TextEditor({
   };
   const actions = (
     <>
-      <Kbd disabled={text.trim() === "" || busy}>Ctrl+Enter</Kbd>
       <Button variant="ghost" onClick={onCancel}>
         Cancel
       </Button>
-      <Button variant="accent" disabled={text.trim() === "" || busy} onClick={() => void submit()} data-editor-submit>
-        {submitLabel}
-      </Button>
+      <SubmitKey disabled={text.trim() === "" || busy}>
+        <Button variant="accent" disabled={text.trim() === "" || busy} onClick={() => void submit()} data-editor-submit>
+          {submitLabel}
+        </Button>
+      </SubmitKey>
     </>
   );
   const field = (

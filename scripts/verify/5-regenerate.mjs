@@ -164,6 +164,16 @@ try {
     }),
     [true, true],
   );
+  check(
+    "the Ctrl+Enter key stands 4 px before Send, the button it presses, and 12 px after Cancel, so it never reads as Cancel's",
+    await window.$eval("[data-regenerate-menu] [data-slot=popover-footer]", (footer) => {
+      const box = (el) => el.getBoundingClientRect();
+      const [key, send] = [box(footer.querySelector("[data-slot=kbd]")), box(footer.querySelector("[data-send]"))];
+      const cancel = box([...footer.querySelectorAll("button")].find((b) => b.textContent.trim() === "Cancel"));
+      return [Math.round(send.left - key.right), Math.round(key.left - cancel.right)];
+    }),
+    [4, 12],
+  );
   await window.click('[data-regenerate-menu] [data-scope="described"]');
   await window.fill("[data-regenerate-menu] [data-freetext]", "");
   check("a disabled Send dims its Ctrl+Enter chip with it", await settled(sendLook), [true, "0.5", "0.5"]);

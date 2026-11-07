@@ -57,13 +57,13 @@ try {
   await canvas.click(HEADLINE);
   await window.waitForSelector("[data-composer]");
   check(
-    "the composer is titled New comment and names the block, then the picked part, with Ctrl+Enter beside Cancel in its footer",
+    "the composer is titled New comment and names the block, then the picked part, with Ctrl+Enter on Pin comment in its footer",
     await window.$eval("[data-composer]", (el) => [
       el.querySelector("h2")?.textContent,
       el.querySelector("[data-slot=popover-description]")?.textContent,
       [...el.querySelectorAll("[data-slot=popover-footer] kbd, [data-slot=popover-footer] button")].map((n) => n.textContent),
     ]),
-    ["New comment", "Assignment card · Headline", ["Ctrl+Enter", "Cancel", "Pin comment"]],
+    ["New comment", "Assignment card · Headline", ["Cancel", "Ctrl+Enter", "Pin comment"]],
   );
   const frameAt = await window.$eval("iframe[title=Canvas]", (el) => el.getBoundingClientRect().toJSON());
   const part = await canvas.$eval(HEADLINE, (el) => el.getBoundingClientRect().toJSON());
@@ -153,7 +153,7 @@ try {
     true,
   );
   check(
-    "the edit field keeps the card's fill, not the row's tint, with Ctrl+Enter beside Cancel, the field and Save 8 px off the fill's right edge",
+    "the edit field keeps the card's fill, not the row's tint, with Ctrl+Enter on Save, the field and Save 8 px off the fill's right edge",
     await window.$eval('[data-feedback="2"]', (li) => {
       const card = getComputedStyle(li.closest("aside")).backgroundColor;
       const right = li.getBoundingClientRect().right;
@@ -164,7 +164,7 @@ try {
         [li.querySelector("textarea"), save].map((el) => Math.round(right - el.getBoundingClientRect().right)),
       ];
     }),
-    [true, ["Ctrl+Enter", "Cancel", "Save"], [8, 8]],
+    [true, ["Cancel", "Ctrl+Enter", "Save"], [8, 8]],
   );
   await window.keyboard.press("Control+A");
   await window.keyboard.type("Spin button needs more contrast");

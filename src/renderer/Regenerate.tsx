@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Checkbox } from "@/components/ui/checkbox";
 import { chip } from "@/components/ui/chip";
-import { Kbd } from "@/components/ui/kbd";
+import { SubmitKey } from "@/components/ui/kbd";
 import { FieldLabel } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
@@ -188,14 +188,15 @@ function RegenerateForm({
 
       {/* A disabled Send can't show a Hint, so the footer says what it is waiting for. */}
       <PopoverFooter hint={<span data-send-hint>{missing ?? "Goes to the T3 thread"}</span>}>
-        <Kbd disabled={body === null || sending}>Ctrl+Enter</Kbd>
         <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
-        <Button variant="accent" disabled={body === null || sending} onClick={() => void submit()} data-send>
-          {sending && <Spinner data-icon="inline-start" />}
-          {sending ? "Sending…" : "Send"}
-        </Button>
+        <SubmitKey disabled={body === null || sending}>
+          <Button variant="accent" disabled={body === null || sending} onClick={() => void submit()} data-send>
+            {sending && <Spinner data-icon="inline-start" />}
+            {sending ? "Sending…" : "Send"}
+          </Button>
+        </SubmitKey>
       </PopoverFooter>
     </>
   );

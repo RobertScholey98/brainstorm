@@ -1,3 +1,4 @@
+import type { ReactElement } from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { chip } from "@/components/ui/chip"
 
@@ -23,6 +24,19 @@ function Kbd({ tone, disabled, children }: VariantProps<typeof kbdVariants> & { 
   )
 }
 
+/**
+ * A send button with its key before it: 4 px off the button it presses and 12 px after the Cancel beside it, in a row
+ * of 6 px gaps, so the key reads as the send's and never as Cancel's.
+ */
+function SubmitKey({ shortcut = "Ctrl+Enter", disabled, children }: { shortcut?: string; disabled?: boolean; children: ReactElement }) {
+  return (
+    <span className="ml-1.5 flex items-center gap-1" data-submit-key>
+      <Kbd disabled={disabled}>{shortcut}</Kbd>
+      {children}
+    </span>
+  )
+}
+
 /** A code span in running text, such as a command to type. */
 function Code({ children }: { children: string }) {
   return (
@@ -32,4 +46,4 @@ function Code({ children }: { children: string }) {
   )
 }
 
-export { Code, Kbd }
+export { Code, Kbd, SubmitKey }

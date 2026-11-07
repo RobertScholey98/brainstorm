@@ -2,7 +2,7 @@ import { GitBranch } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
-import { Kbd } from "@/components/ui/kbd";
+import { SubmitKey } from "@/components/ui/kbd";
 import { FieldLabel } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
@@ -174,14 +174,15 @@ function ForkForm({
           </span>
         }
       >
-        <Kbd disabled={instruction === "" || sending}>Ctrl+Enter</Kbd>
         <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
-        <Button variant="accent" disabled={instruction === "" || sending} onClick={() => void submit()} data-fork-send>
-          {sending && <Spinner data-icon="inline-start" />}
-          {sending ? "Forking…" : "Send"}
-        </Button>
+        <SubmitKey disabled={instruction === "" || sending}>
+          <Button variant="accent" disabled={instruction === "" || sending} onClick={() => void submit()} data-fork-send>
+            {sending && <Spinner data-icon="inline-start" />}
+            {sending ? "Forking…" : "Send"}
+          </Button>
+        </SubmitKey>
       </PopoverFooter>
     </>
   );

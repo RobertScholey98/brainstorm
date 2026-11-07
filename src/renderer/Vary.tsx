@@ -2,7 +2,7 @@ import { Minus, Plus, Shuffle } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Kbd } from "@/components/ui/kbd";
+import { SubmitKey } from "@/components/ui/kbd";
 import { FieldLabel } from "@/components/ui/label";
 import { OverlayHeader, OverlayPanel, PopoverFooter } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
@@ -119,14 +119,15 @@ export function VaryComposer({
           <Input ref={field} value={direction} onChange={(e) => setDirection(e.target.value)} placeholder="bolder, calmer, more playful…" data-vary-direction />
         </label>
         <PopoverFooter hint={<span data-vary-hint>{`Variants land in ${slotTitle}`}</span>}>
-          <Kbd disabled={busy}>Ctrl+Enter</Kbd>
           <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
-          <Button variant="accent" disabled={busy} onClick={() => void send()} data-vary-send>
-            {busy && <Spinner data-icon="inline-start" />}
-            {busy ? "Sending…" : "Send"}
-          </Button>
+          <SubmitKey disabled={busy}>
+            <Button variant="accent" disabled={busy} onClick={() => void send()} data-vary-send>
+              {busy && <Spinner data-icon="inline-start" />}
+              {busy ? "Sending…" : "Send"}
+            </Button>
+          </SubmitKey>
         </PopoverFooter>
       </OverlayPanel>
     </>
