@@ -266,32 +266,30 @@ try {
     true,
   );
   check(
-    "and opens over its own row, covering no control outside it, the home search least of all",
+    "and opens right of the control, over the main card, so it never covers the title of the brainstorm it settles",
     await settled(() =>
       window.evaluate((id) => {
         const hint = document.querySelector('[data-slot="tooltip-content"]').getBoundingClientRect();
-        const row = document.querySelector(`[data-session="${id}"]`).closest("li");
-        const over = (r) => hint.left < r.right && hint.right > r.left && hint.top < r.bottom && hint.bottom > r.top;
-        return [...document.querySelectorAll('button, a, input, [tabindex="0"]')]
-          .filter((c) => !row.contains(c) && c.getClientRects().length > 0 && over(c.getBoundingClientRect()))
-          .map((c) => c.getAttribute("aria-label") ?? c.textContent.trim());
+        const title = document.querySelector(`[data-session="${id}"] [data-row-title]`).getBoundingClientRect();
+        const control = document.querySelector(`[data-settle="${id}"]`).getBoundingClientRect();
+        const over = hint.left < title.right && hint.right > title.left && hint.top < title.bottom && hint.bottom > title.top;
+        return { overTitle: over, rightOfControl: hint.left >= control.right };
       }, kitchen),
     ),
-    [],
+    { overTitle: false, rightOfControl: true },
   );
   check(
-    "and either clears the row's title or covers it from its first letter, so it never lands on a glyph",
+    "and covers no other control, in the sidebar or on home, past the sidebar's edge handle it crosses",
     await settled(() =>
-      window.evaluate((id) => {
+      window.evaluate(() => {
         const hint = document.querySelector('[data-slot="tooltip-content"]').getBoundingClientRect();
-        const title = document.querySelector(`[data-session="${id}"] [data-row-title]`);
-        const ink = document.createRange();
-        ink.selectNodeContents(title);
-        const [start, end] = [title.getBoundingClientRect().left, Math.min(title.getBoundingClientRect().right, ink.getBoundingClientRect().right)];
-        return hint.left >= end + 4 ? "clear" : Math.abs(hint.left - start) < 1 ? "covered from its start" : "on a glyph";
-      }, kitchen),
-    ).then((at) => at !== "on a glyph"),
-    true,
+        const over = (r) => hint.left < r.right && hint.right > r.left && hint.top < r.bottom && hint.bottom > r.top;
+        return [...document.querySelectorAll('button, a, input, [tabindex="0"]')]
+          .filter((c) => c.getClientRects().length > 0 && over(c.getBoundingClientRect()) && !c.matches('[data-settle], [data-slot="resize-handle"]'))
+          .map((c) => c.getAttribute("aria-label") ?? c.textContent.trim());
+      }),
+    ),
+    [],
   );
   await shot(window, shots, "settle-action");
   await window.click(`[data-settle="${kitchen}"]`);

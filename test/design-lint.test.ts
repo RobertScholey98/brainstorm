@@ -185,11 +185,11 @@ describe("design lint", () => {
     expect(rules(source, true)).toEqual([]);
   });
 
-  it("hint-side: fails a sidebar hint that opens anywhere but left, over the main panel or the rows beside it", () => {
-    const source = [`<Hint label="a" side="right"><b /></Hint>`, `<Hint label="b" side="top"><b /></Hint>`, `<Hint label="c" side="left"><b /></Hint>`].join("\n");
+  it("hint-side: fails a sidebar hint that opens up or down over the rows beside it", () => {
+    const source = [`<Hint label="a" side="right"><b /></Hint>`, `<Hint label="b" side="top"><b /></Hint>`, `<Hint label="c" side="left"><b /></Hint>`, `<Hint label="d" side="bottom"><b /></Hint>`].join("\n");
     expect(lintSource(design, source, { file: "src/renderer/Sidebar.tsx" }).map(({ rule, line, text }) => ({ rule, line, text }))).toEqual([
-      { rule: "hint-side", line: 1, text: `<Hint side="right">` },
       { rule: "hint-side", line: 2, text: `<Hint side="top">` },
+      { rule: "hint-side", line: 4, text: `<Hint side="bottom">` },
     ]);
   });
 

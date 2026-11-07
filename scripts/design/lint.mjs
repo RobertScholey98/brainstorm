@@ -17,7 +17,7 @@
 //   chip-recipe      a code or key element that paints its own fill, kit included; chips take the recipe in
 //                    components/ui/chip.ts through Code, Kbd or Badge, so one chip reads on every surface
 //   hint-side        a Hint that doesn't name its side, a header hint that opens up or down over the card under the
-//                    header, or a sidebar hint that opens anywhere but left, over its own row, outside components/ui
+//                    header, or a sidebar hint that opens up or down over the rows beside it, outside components/ui
 //   page-title       the title step of the type scale outside components/ui; a page heading comes from PageHeader, so
 //                    every page title has one size
 //   inline-size      an inline style that sets a size to a number or a named constant, outside components/ui; a fixed
@@ -62,7 +62,7 @@ const INVERSE_FILL = /^bg-inverse(?:\/\d+)?$/;
 const PAGE_TITLE = /^text-title(?:\/|$)/;
 /** Files whose hints sit on the window header, where opening down would cover the canvas bar or the Inspector header. */
 const HEADER_FILES = /(?:^|[\\/])(?:TopBar|Regenerate|Export|Fork)\.tsx$/;
-/** Right of the sidebar is the main panel's search and filters, and above and below a row are its neighbours. */
+/** Above and below a sidebar row are its neighbours. */
 const SIDEBAR_FILES = /(?:^|[\\/])Sidebar\.tsx$/;
 const LAYOUT = /^(?:m[trblxyse]?-|w-|min-w-|max-w-|flex-1$|grow|shrink|basis-|self-|justify-self-|order-|col-|row-)/;
 
@@ -266,7 +266,7 @@ function blockedHint(source) {
   });
 }
 
-/** A Hint names its side; on the window header that side is left or right, and in the sidebar it is left. */
+/** A Hint names its side; on the window header and in the sidebar that side is left or right. */
 function hintSide(source, file) {
   return jsxElements(source)
     .filter((el) => el.tag === "Hint" || el.tag === "BlockedHint")
@@ -277,8 +277,8 @@ function hintSide(source, file) {
       if (HEADER_FILES.test(file) && /^(?:top|bottom)$/.test(value)) {
         return [{ rule: "hint-side", line: side.line, text: `<Hint side="${value}">`, message: "a header hint opens left or right, off the canvas bar and the Inspector header" }];
       }
-      if (SIDEBAR_FILES.test(file) && value !== "left") {
-        return [{ rule: "hint-side", line: side.line, text: `<Hint side="${value}">`, message: "a sidebar hint opens left, over its own row, off the main panel and the rows beside it" }];
+      if (SIDEBAR_FILES.test(file) && /^(?:top|bottom)$/.test(value)) {
+        return [{ rule: "hint-side", line: side.line, text: `<Hint side="${value}">`, message: "a sidebar hint opens left or right, off the rows beside it" }];
       }
       return [];
     });

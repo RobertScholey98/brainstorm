@@ -22,7 +22,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Hint, HintAnchor, type HintRow } from "@/components/ui/tooltip";
+import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { Count } from "@/components/ui/count";
 import { blockIdOf, isPendingThread, type BlockView, type ContentHash, type OpenPhase, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
@@ -221,21 +221,6 @@ function SessionRow({
   const label = settleLabel(s);
   const row = useRef<HTMLButtonElement>(null);
   useRowFit(row);
-  // The settle hint opens left over the row's own text, so it either clears the title or covers it from its start.
-  const settleRow = useMemo<HintRow>(
-    () => ({
-      anchor: () => row.current?.parentElement?.querySelector("[data-settle]") ?? null,
-      text: () => {
-        const title = row.current?.querySelector("[data-row-title]");
-        if (title == null) return null;
-        const ink = document.createRange();
-        ink.selectNodeContents(title);
-        const fork = row.current?.querySelector("[data-row-fork]")?.getBoundingClientRect().right ?? 0;
-        return { start: title.getBoundingClientRect().left, end: Math.max(fork, Math.min(title.getBoundingClientRect().right, ink.getBoundingClientRect().right)) };
-      },
-    }),
-    [],
-  );
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
@@ -264,13 +249,12 @@ function SessionRow({
           {sessionPhase(s) === null || s.settlement.state === "settled" ? <span data-age={since}>{age(since, now)}</span> : <SessionStatus session={s} now={now} collapsible />}
         </span>
       </SidebarMenuButton>
-      <HintAnchor.Provider value={settleRow}>
-        <Hint label={label} shortcut={SETTLE_SHORTCUT} side="left">
-          <SidebarMenuAction showOnHover className="text-fg-muted" onClick={onSettle} aria-label={`${label} ${s.title}`} data-settle={s.id}>
-            {settleUndoes(s) ? <Undo2 aria-hidden /> : <CircleCheck aria-hidden />}
-          </SidebarMenuAction>
-        </Hint>
-      </HintAnchor.Provider>
+      {/* Right, over the main card: over its own row the hint would cover the title of the brainstorm it settles. */}
+      <Hint label={label} shortcut={SETTLE_SHORTCUT} side="right">
+        <SidebarMenuAction showOnHover className="text-fg-muted" onClick={onSettle} aria-label={`${label} ${s.title}`} data-settle={s.id}>
+          {settleUndoes(s) ? <Undo2 aria-hidden /> : <CircleCheck aria-hidden />}
+        </SidebarMenuAction>
+      </Hint>
     </SidebarMenuItem>
   );
 }
