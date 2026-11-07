@@ -223,6 +223,17 @@ try {
   await canvas.click(PIN);
   await window.waitForSelector('[data-feedback="1"][data-focused]');
   check("clicking the pin focuses its comment in the list", await window.isVisible('[data-feedback="1"][data-focused]'), true);
+  check(
+    "a focused pin rings its card border in the accent, 2 px, with no band of card between",
+    await canvas.$eval(`${PIN}[data-focused]`, (pin) => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--bs-accent)" }));
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      // A ring is a shadow with no offset and no blur: its colour, then 0px 0px 0px and its spread.
+      return [...getComputedStyle(pin).boxShadow.matchAll(/(rgba?\([^)]*\)) 0px 0px 0px (\d+)px/g)].map(([, colour, spread]) => [colour === accent, spread]);
+    }),
+    [[true, "2"]],
+  );
   // The thumb stands 2 px in from the 10 px bar's far edge, so it starts 8 px in from the pane's edge.
   const fillAir = () =>
     settled(() =>

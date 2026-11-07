@@ -699,7 +699,8 @@ body {
 }
 /* Hovered here, or through its feedback item in the Inspector. */
 .bs-pin:hover, .bs-pin[data-hovered] { scale: 1.15; box-shadow: var(--bs-elevation-md); }
-.bs-pin[data-focused] { box-shadow: 0 0 0 2px var(--bs-card), 0 0 0 4px var(--bs-accent), var(--bs-elevation-sm); }
+/* The ring sits on the card border with no band of card between: a 4 px band read as a second ring, the addressed form, on a dark block. */
+.bs-pin[data-focused] { box-shadow: 0 0 0 2px var(--bs-accent), var(--bs-elevation-sm); }
 .bs-pin.bs-pulse { animation: bs-pulse 650ms ease-out 2; }
 @keyframes bs-pulse {
   0% { box-shadow: var(--bs-elevation-sm), 0 0 0 0 color-mix(in oklab, var(--bs-accent) 60%, transparent); scale: 1.25; }
