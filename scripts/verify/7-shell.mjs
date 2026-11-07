@@ -721,7 +721,9 @@ try {
     await window.$$eval('[data-sidebar="trigger"], [data-history-toggle], [data-inspector-toggle]', (toggles) => toggles.map((t) => t.getAttribute("aria-pressed"))),
     ["true", "true", "true"],
   );
+  // A hover onto the spot the pointer already holds moves nothing, and opens no hint.
   const underPointer = async (selector) => {
+    await window.mouse.move(1, 1);
     await window.hover(selector);
     await window.waitForSelector("[data-slot=tooltip-content]");
     const fill = await settled(() =>
