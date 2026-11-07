@@ -206,9 +206,10 @@ body[data-resizing] [data-slot="sidebar-container"] {
 }
 
 /*
- * A scroller's edges fade only while there is more that way: the top over a control row's 28 px once scrolled, the
- * bottom over the sidebar's 32 px short of the end. Each fade hides its outer half outright, so a control cut at
- * either edge leaves no sliver of its border. A scroll timeline drives both, so neither needs a script.
+ * A scroller's edges fade only while there is more that way: the top over 32 px once scrolled, the bottom over the
+ * sidebar's 32 px short of the end. The top hides its outer 24 px outright, a switch's 20 px track and its ring, so an
+ * accent control cut there leaves no crescent; the bottom hides its outer half. A scroll timeline drives both, so
+ * neither needs a script.
  */
 @property --fade-top {
   syntax: "<length>";
@@ -222,7 +223,7 @@ body[data-resizing] [data-slot="sidebar-container"] {
 }
 @keyframes scroll-fade-top {
   to {
-    --fade-top: 28px;
+    --fade-top: 32px;
   }
 }
 @keyframes scroll-fade-bottom {
@@ -243,14 +244,51 @@ body[data-resizing] [data-slot="sidebar-container"] {
 @utility scroll-fades {
   mask-image: linear-gradient(
     to bottom,
-    transparent calc(var(--fade-top) * 0.5),
+    transparent calc(var(--fade-top) * 0.75),
     black var(--fade-top),
     black calc(100% - var(--fade-bottom)),
     transparent calc(100% - var(--fade-bottom) * 0.5)
   );
   animation: scroll-fade-top linear both, scroll-fade-bottom linear both;
   animation-timeline: scroll(self), scroll(self);
-  animation-range: 0 28px, calc(100% - 32px) 100%;
+  animation-range: 0 32px, calc(100% - 32px) 100%;
+}
+
+/*
+ * The same fades on the inline axis, for a strip that scrolls sideways: each end fades over 32 px while there is more
+ * that way, hiding its outer half outright, so a still cut at the edge reads as more to come, not as a clipped card.
+ */
+@property --fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes scroll-fade-start {
+  to {
+    --fade-start: 32px;
+  }
+}
+@keyframes scroll-fade-end {
+  from {
+    --fade-end: 32px;
+  }
+}
+@utility scroll-fades-x {
+  mask-image: linear-gradient(
+    to right,
+    transparent calc(var(--fade-start) * 0.5),
+    black var(--fade-start),
+    black calc(100% - var(--fade-end)),
+    transparent calc(100% - var(--fade-end) * 0.5)
+  );
+  animation: scroll-fade-start linear both, scroll-fade-end linear both;
+  animation-timeline: scroll(self inline), scroll(self inline);
+  animation-range: 0 32px, calc(100% - 32px) 100%;
 }
 
 /*

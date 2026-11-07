@@ -67,10 +67,12 @@ describe("design tokens", () => {
     expect(layers.some((l) => l.blur >= 20 && l.alpha >= 0.12 && l.y >= 6)).toBe(true);
   });
 
-  it("hides the outer half of each scroll fade outright, so a control cut at either edge leaves no sliver", () => {
-    const fades = /@utility scroll-fades \{[^}]*\}/.exec(readFileSync("src/renderer/styles.css", "utf8"))?.[0] ?? "";
-    const hidden = [...fades.matchAll(/transparent calc\((?:100% - )?var\(--fade-(top|bottom)\) \* ([\d.]+)\)/g)].map(([, end, share]) => [end, Number(share) >= 0.5]);
-    expect(hidden).toEqual([["top", true], ["bottom", true]]);
+  it("hides the top fade's outer 24 px and the bottom's 16 px outright, so a cut switch, accent or not, leaves no sliver", () => {
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+    const fades = /@utility scroll-fades \{[^}]*\}/.exec(css)?.[0] ?? "";
+    const size = (end: string) => Number(new RegExp(`--fade-${end}: (\\d+)px`).exec(css)?.[1]);
+    const hidden = [...fades.matchAll(/transparent calc\((?:100% - )?var\(--fade-(top|bottom)\) \* ([\d.]+)\)/g)].map(([, end, share]) => [end, size(end!) * Number(share)]);
+    expect(hidden).toEqual([["top", 24], ["bottom", 16]]);
   });
 
   it("prefixes every variable for the canvas, so block code can't pick one up by accident", () => {
