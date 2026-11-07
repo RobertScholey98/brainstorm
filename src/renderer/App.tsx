@@ -35,7 +35,7 @@ import type { Api } from "./api";
 import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
-import { Filmstrip, PastBar } from "./History";
+import { Filmstrip, FilmstripSkeleton, PastBar } from "./History";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
 import { fitPanes, usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
@@ -552,7 +552,12 @@ function SessionWorkspace({
           fork={fork}
           exportHtml={exportHtml}
           panel={{ open: !inspector.rail, onToggle: () => inspector.onRail(!inspector.rail) }}
-          history={history}
+          // Pressed only while a strip shows: the loading strip, or the real one once there is an iteration to show.
+          history={
+            view !== null && view.history.iterations.length === 0
+              ? { ...history, open: false, blocked: WAITING }
+              : history
+          }
           onDiscard={() => void discard()}
           onOpen={onOpen}
         />
@@ -631,6 +636,7 @@ function SessionWorkspace({
         )}
         {toast}
         </section>
+        {view === null && history.open && <FilmstripSkeleton />}
         {strip && (
           <Filmstrip
             view={view}
@@ -712,7 +718,7 @@ function WaitingEmpty({ loading }: { loading: boolean }) {
   return (
     <div className="flex size-full flex-col bg-canvas">
       {/* The bar keeps the card's top rule, so the Inspector's header still meets it across the seam, and says why it is bare. */}
-      <div className="flex h-10 shrink-0 items-center border-b bg-card px-3 text-sm text-fg-muted" data-canvas-bar>
+      <div className="flex h-10 shrink-0 items-center border-b bg-card px-4 text-sm text-fg-muted" data-canvas-bar>
         No slots yet
       </div>
       <Empty className="rounded-none">

@@ -33,6 +33,7 @@ function replaceIn(path, from, to) {
 }
 
 const context = (session) => must("context", brainstorm(env, ["context", session, "--json"]));
+const stripHeight = (window) => window.$eval("[data-history]", (el) => Math.round(el.getBoundingClientRect().height));
 const strip = (window) =>
   window.$$eval("[data-history-list] [data-history-n]", (els) =>
     els.map((e) => ({ n: Number(e.dataset.historyN), selected: e.getAttribute("aria-selected") === "true", origin: e.querySelector("[data-history-origin]").textContent.trim() })),
@@ -70,6 +71,19 @@ try {
 
   // History.
   check("the history toggle starts pressed, with the strip open", [await window.getAttribute("[data-history-toggle]", "aria-pressed"), (await window.$("[data-history]")) !== null], ["true", true]);
+  check(
+    "the strip is 84 px tall, its stills landscape cards 56 px tall, and it fades its scrolling edge",
+    await window.evaluate(() => {
+      const card = document.querySelector("[data-history-n] [data-preview]").getBoundingClientRect();
+      return [
+        Math.round(document.querySelector("[data-history]").getBoundingClientRect().height),
+        Math.round(card.height),
+        card.width > card.height,
+        getComputedStyle(document.querySelector("[data-history-scroll]")).maskImage.startsWith("linear-gradient"),
+      ];
+    }),
+    [84, 48, true, true],
+  );
   check(
     "the strip has a still per iteration, oldest first, each saying what made it, with the latest selected",
     await strip(window),
@@ -227,10 +241,20 @@ try {
   );
   check("its strip starts with a stub back to the parent", await window.getAttribute("[data-fork-stub]", "data-fork-stub"), session);
   check("and its first still says where it came from", (await strip(window)).map((s) => s.origin), ["Your picks from iteration 2"]);
+  check("its strip, stub and all, is the same 84 px", await stripHeight(window), 84);
   await shot(window, shots, "6-fork-page");
 
+  // The parent's view is held back a moment, so the loading strip can be measured before it lands.
+  await app.context().route(`**/v1/ui/sessions/${session}`, async (route) => {
+    if (route.request().method() === "GET") await new Promise((r) => setTimeout(r, 800));
+    await route.continue();
+  });
   await window.click("[data-fork-stub]");
+  await window.waitForSelector("[data-history-loading]");
+  check("while the parent loads, the strip's place is held at the same 84 px", await window.$eval("[data-history-loading]", (el) => Math.round(el.getBoundingClientRect().height)), 84);
   await window.waitForSelector(`[data-history-fork="${forkId}"]`);
+  await app.context().unroute(`**/v1/ui/sessions/${session}`);
+  check("and with a fork hanging off a still it is still 84 px", await stripHeight(window), 84);
   check("the parent's strip hangs the fork off iteration 2", await window.$eval(`[data-history-fork="${forkId}"]`, (el) => el.closest("[data-history-list] > div").querySelector("[data-history-n]").dataset.historyN), "2");
 
   await window.click("[data-back]");

@@ -13,7 +13,12 @@ import { Mark } from "./Mark";
 import { PhaseActions, phaseActions, Regenerate, RequestStatus } from "./Regenerate";
 
 /** The right panel's toggle, as T3 Code has it: pressed while the panel shows. */
-export type PanelToggle = { readonly open: boolean; readonly onToggle: () => void };
+export type PanelToggle = {
+  readonly open: boolean;
+  readonly onToggle: () => void;
+  /** Why the toggle is off, when its pane has nothing to show yet. */
+  readonly blocked?: string;
+};
 
 /**
  * The window header: the native title bar is gone, so this row moves the window, and the native buttons overlay its
@@ -67,20 +72,29 @@ export function TopBar({
       <div ref={cluster} className="ml-auto flex shrink-0 items-center gap-2" data-header-actions>
         <HintAnchor.Provider value={row}>
           {actions}
-          {history !== undefined && (
-            <Hint label={history.open ? "Hide the history" : "Show the history"} side="left">
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="History"
-                aria-pressed={history.open}
-                onClick={history.onToggle}
-                data-history-toggle
-              >
-                <History aria-hidden />
-              </Button>
-            </Hint>
-          )}
+          {history !== undefined &&
+            (history.blocked !== undefined ? (
+              <Hint label={history.blocked} side="left">
+                <span tabIndex={0} data-history-blocked>
+                  <Button variant="ghost" size="icon" aria-label="History" aria-pressed={false} disabled data-history-toggle>
+                    <History aria-hidden />
+                  </Button>
+                </span>
+              </Hint>
+            ) : (
+              <Hint label={history.open ? "Hide the history" : "Show the history"} side="left">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="History"
+                  aria-pressed={history.open}
+                  onClick={history.onToggle}
+                  data-history-toggle
+                >
+                  <History aria-hidden />
+                </Button>
+              </Hint>
+            ))}
           {panel !== undefined && (
             <Hint label={panel.open ? "Collapse the Inspector" : "Show the Inspector"} side="left">
               <Button

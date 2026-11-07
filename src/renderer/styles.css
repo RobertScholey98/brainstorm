@@ -53,8 +53,9 @@
   --spacing-frame: 390px;
   /* A home card's preview band. */
   --spacing-preview: 160px;
-  /* Below this the window header's session actions show as icons, so a title keeps its room at 1100 with a request open. */
-  --container-header: 60rem;
+  /* The history strip, one height whatever it holds, and a still's card in it. */
+  --spacing-strip: 84px;
+  --spacing-still: 56px;
   --container-xs: 20rem;
   --container-sm: 24rem;
   --container-md: 28rem;

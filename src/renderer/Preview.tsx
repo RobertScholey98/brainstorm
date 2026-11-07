@@ -78,10 +78,11 @@ export function PreviewSkeleton() {
 
 /**
  * A filmstrip still: one past iteration's slot, through the same frames, turns and cache as a home card, so stepping
- * back through history costs no more than scrolling home.
+ * back through history costs no more than scrolling home. It is a home well in small: a landscape mat with the frame
+ * 4 px in from its top and sides, so a wide frame shows whole and a tall one shows its top.
  */
 export function IterationStill({ load, revision }: { load: LoadStill; revision: number }) {
-  return <Still load={load} revision={revision} compact className="h-16 w-12 shrink-0 rounded-sm ring-1 ring-border" />;
+  return <Still load={load} revision={revision} compact className="h-12 w-16 shrink-0 rounded-sm canvas-dots ring-1 ring-border" />;
 }
 
 function Still({
@@ -180,12 +181,12 @@ function Still({
       className={cn("relative overflow-hidden bg-canvas", className)}
       data-preview={shown.kind}
     >
-      <div className={compact ? "absolute inset-0" : FRAME}>
+      <div className={compact ? "absolute inset-x-1 top-1 bottom-0" : FRAME}>
         {shown.kind === "still" && (
           <img
             src={shown.image}
             alt=""
-            className={cn("block w-full", !compact && "rounded-sm shadow-xs ring-1 ring-border-strong", muted && "opacity-50 grayscale")}
+            className={cn("block w-full ring-1", compact ? "rounded-t-sm ring-border" : "rounded-sm shadow-xs ring-border-strong", muted && "opacity-50 grayscale dark:brightness-50")}
             draggable={false}
             data-preview-still
           />

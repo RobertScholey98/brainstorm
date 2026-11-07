@@ -115,6 +115,18 @@ try {
   await window.setViewportSize({ width: 1440, height: 900 });
   await window.waitForSelector(`[data-session="${session}"]`);
 
+  await window.click(`[data-session="${spare}"]`);
+  await window.waitForSelector('[data-sidebar-panel="session"]');
+  check(
+    "a brainstorm with no iteration yet shows no strip, and its history toggle is off and never reads pressed",
+    await window.evaluate(() => {
+      const toggle = document.querySelector("[data-history-toggle]");
+      return [document.querySelector("[data-history], [data-history-loading]") !== null, toggle.getAttribute("aria-pressed"), toggle.disabled];
+    }),
+    [false, "false", true],
+  );
+  await window.click("[data-back]");
+
   const results = new Map();
   for (const theme of ["light", "dark"]) {
     await window.emulateMedia({ colorScheme: theme });
