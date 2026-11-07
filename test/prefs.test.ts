@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { applyPrefs, readPrefs } from "../src/core/prefs";
+import { applyPrefs, readPrefs, stripOpen } from "../src/core/prefs";
 import type { SessionId } from "../src/core/types";
 import { startServer } from "../src/server/index";
 import { FakeBridge } from "./fakeBridge";
@@ -27,12 +27,13 @@ describe("UI prefs", () => {
   test("pane widths, the Inspector rail, the history strip, a brainstorm's canvas view and home's filters survive a restart", async () => {
     const home = mkdtempSync(join(tmpdir(), "bs-prefs-"));
     await withServer(home, async (call) => {
-      expect((await call("GET")).body).toEqual({ ok: true, data: { panes: { sidebar: null, inspector: null }, inspectorRail: false, historyStrip: true, canvas: {}, home: { status: "active", projects: [], sort: "recent" } } });
+      expect((await call("GET")).body).toEqual({ ok: true, data: { panes: { sidebar: null, inspector: null }, inspectorRail: false, historyStrip: {}, canvas: {}, home: { status: "active", projects: [], sort: "recent" } } });
       await call("POST", { panes: { sidebar: 312 } });
       await call("POST", { panes: { inspector: 344 }, inspectorRail: true });
       await call("POST", { canvas: { session: "s_abcdefgh", layout: { view: "board", slot: "wheel" } } });
       await call("POST", { home: { status: "settled", projects: ["proj-a"], sort: "title" } });
-      await call("POST", { historyStrip: false });
+      await call("POST", { historyStrip: { session: "s_abcdefgh", open: false } });
+      await call("POST", { historyStrip: { session: "s_zzzzzzzz", open: true } });
     });
     await withServer(home, async (call) => {
       expect((await call("GET")).body).toEqual({
@@ -40,7 +41,7 @@ describe("UI prefs", () => {
         data: {
           panes: { sidebar: 312, inspector: 344 },
           inspectorRail: true,
-          historyStrip: false,
+          historyStrip: { s_abcdefgh: false, s_zzzzzzzz: true },
           canvas: { s_abcdefgh: { view: "board", slot: "wheel" } },
           home: { status: "settled", projects: ["proj-a"], sort: "title" },
         },
@@ -56,8 +57,10 @@ describe("UI prefs", () => {
         { canvas: { session: "s_abcdefgh", layout: { view: "grid", slot: null } } },
         { home: { status: "archived", projects: [], sort: "recent" } },
         { home: { status: "active", projects: [], sort: "recent", search: "wheel" } },
+        { historyStrip: false },
+        { historyStrip: { session: "wheel", open: true } },
       ];
-      expect(await Promise.all(bad.map(async (b) => (await call("POST", b)).status)), "the search text is never stored").toEqual([400, 400, 400, 400, 400]);
+      expect(await Promise.all(bad.map(async (b) => (await call("POST", b)).status)), "the search text is never stored").toEqual([400, 400, 400, 400, 400, 400, 400]);
       expect((await call("GET")).body.data.panes).toEqual({ sidebar: null, inspector: null });
     });
   });
@@ -70,8 +73,11 @@ describe("UI prefs", () => {
       { key: "canvas.s_abcdefgh", json: '{"view":"stage","slot":null}' },
       { key: "canvas.s_zzzzzzzz", json: '{"view":"zoom"}' },
       { key: "home.query", json: '{"status":"snoozed","projects":[],"sort":"recent"}' },
+      { key: "history.strip", json: "false" },
+      { key: "strip.s_abcdefgh", json: "true" },
+      { key: "strip.s_zzzzzzzz", json: '"open"' },
     ];
-    expect(readPrefs(rows)).toEqual({ panes: { sidebar: 264, inspector: null }, inspectorRail: false, historyStrip: true, canvas: { s_abcdefgh: { view: "stage", slot: null } }, home: { status: "active", projects: [], sort: "recent" } });
+    expect(readPrefs(rows)).toEqual({ panes: { sidebar: 264, inspector: null }, inspectorRail: false, historyStrip: { s_abcdefgh: true }, canvas: { s_abcdefgh: { view: "stage", slot: null } }, home: { status: "active", projects: [], sort: "recent" } });
   });
 });
 
@@ -80,14 +86,26 @@ describe("applyPrefs", () => {
     const before = readPrefs([
       { key: "pane.sidebar", json: "264" },
       { key: "canvas.s_abcdefgh", json: '{"view":"stage","slot":"wheel"}' },
+      { key: "strip.s_abcdefgh", json: "true" },
     ]);
-    const patch = { panes: { inspector: 320 }, canvas: { session: "s_zzzzzzzz" as SessionId, layout: { view: "board" as const, slot: null } } };
+    const patch = {
+      panes: { inspector: 320 },
+      historyStrip: { session: "s_zzzzzzzz" as SessionId, open: false },
+      canvas: { session: "s_zzzzzzzz" as SessionId, layout: { view: "board" as const, slot: null } },
+    };
     expect(applyPrefs(before, patch)).toEqual({
       panes: { sidebar: 264, inspector: 320 },
       inspectorRail: false,
-      historyStrip: true,
+      historyStrip: { s_abcdefgh: true, s_zzzzzzzz: false },
       canvas: { s_abcdefgh: { view: "stage", slot: "wheel" }, s_zzzzzzzz: { view: "board", slot: null } },
       home: { status: "active", projects: [], sort: "recent" },
     });
+  });
+});
+
+describe("stripOpen", () => {
+  test("a strip Rob hasn't set is shut with one iteration and open from the second, and his own choice wins either way", () => {
+    expect([stripOpen(undefined, 0), stripOpen(undefined, 1), stripOpen(undefined, 2), stripOpen(undefined, 7)]).toEqual([false, false, true, true]);
+    expect([stripOpen(true, 1), stripOpen(false, 2), stripOpen(false, 1), stripOpen(true, 5)]).toEqual([true, false, false, true]);
   });
 });

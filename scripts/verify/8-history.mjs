@@ -224,6 +224,11 @@ try {
   await showBoard(window, canvas);
   await canvas.waitForSelector(inBlock("wheel/neon", "pool"));
   await canvas.waitForSelector(inBlock("result/card", "card"));
+  check(
+    "with one iteration there is nothing to compare, so the strip starts shut and its toggle reads unpressed",
+    [await window.getAttribute("[data-history-toggle]", "aria-pressed"), (await window.$("[data-history], [data-history-loading]")) !== null],
+    ["false", false],
+  );
 
   // Rob's own state before the agent's second iteration: a setting, and an open pin on the card.
   await canvas.click(inBlock("result/card", "chore"));
@@ -243,7 +248,8 @@ try {
   await canvas.waitForFunction((sel) => document.querySelector(sel)?.textContent?.includes("weighted by chores"), inBlock("wheel/neon", "pool"));
 
   // History.
-  check("the history toggle starts pressed, with the strip open", [await window.getAttribute("[data-history-toggle]", "aria-pressed"), (await window.$("[data-history]")) !== null], ["true", true]);
+  await window.waitForSelector("[data-history]");
+  check("once a second iteration lands, the strip opens on its own and its toggle reads pressed", [await window.getAttribute("[data-history-toggle]", "aria-pressed"), (await window.$("[data-history]")) !== null], ["true", true]);
   check(
     "the strip is 84 px tall, its stills landscape cards 48 px tall, and it fades its scrolling edge",
     await window.evaluate(() => {
@@ -429,7 +435,7 @@ try {
   await window.setViewportSize({ width: 1440, height: 900 });
   canvas = await openSession(window, session);
   await canvas.waitForSelector(inBlock("wheel/neon", "pool"), { state: "attached" });
-  check("after a restart the strip stays closed, as Rob left it", [await window.getAttribute("[data-history-toggle]", "aria-pressed"), (await window.$("[data-history]")) !== null], ["false", false]);
+  check("after a restart the strip stays shut as Rob left it in this brainstorm, though its two iterations would open it", [await window.getAttribute("[data-history-toggle]", "aria-pressed"), (await window.$("[data-history]")) !== null], ["false", false]);
   await shot(window, shots, "4-strip-closed");
   await window.click("[data-history-toggle]");
   await window.waitForSelector("[data-history]");
@@ -561,7 +567,14 @@ try {
     (await window.textContent("[data-lineage]")).replace(/\s+/g, " ").trim().includes("Chore roulette"),
     true,
   );
-  check("its strip starts with a stub back to the parent", await window.getAttribute("[data-fork-stub]", "data-fork-stub"), session);
+  check(
+    "a fork opens on one iteration, so its strip starts shut whatever Rob chose in the parent",
+    [await window.getAttribute("[data-history-toggle]", "aria-pressed"), (await window.$("[data-history]")) !== null],
+    ["false", false],
+  );
+  await window.click("[data-history-toggle]");
+  await window.waitForSelector("[data-history]");
+  check("its strip starts with a stub back to the parent",await window.getAttribute("[data-fork-stub]", "data-fork-stub"), session);
   check("and its first still says where it came from", (await strip(window)).map((s) => s.origin), ["Your picks from iteration 2"]);
   check("its strip, stub and all, is the same 84 px", await stripHeight(window), 84);
   check("the stub's dashed edge takes the entries' strong edge", await stripEdges(window), [

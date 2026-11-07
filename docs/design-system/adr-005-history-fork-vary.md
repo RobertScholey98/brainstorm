@@ -168,3 +168,13 @@ Seven reviewers found the strip cutting its lines while room sat idle beside the
 - **One wording for a fork's lineage.** The parent's tile read "Fork of iteration 3" (R10-3). It now reads "from iteration 3" under the fork's title, as the card, the row and the stub say it. `vocabulary.test` retires "Fork of".
 - **The sidebar's lineage line is one phrase.** "from Rota hando…" sat 10 px off "· iteration 3", which was pinned to the row's end, so the line read as two columns. The line is now one cut text whose tail, "· iteration N", never cuts and follows the cut directly. `verify:8` checks it is one run on one line and that a narrowed line keeps the tail after its ellipsis.
 - **The entries' edge is drawn inside them.** The strip clips at its entries' own top and bottom, so the loading entry's outer ring lost its top and bottom edges and read as brackets (R10-8). Every entry's edge, and its focus ring, is now an inset ring. The loading entry's first line also drops the bar where " · " sits (R10-14). `verify:8` checks that no entry, link, stub or loading entry has an edge outside the strip's clip.
+
+## Amendment: Rob's ruling on round 6. The strip waits for a second iteration
+
+With one iteration the open strip was an 84 px band holding one still beside an empty card, and it cut the stage's frame with nothing to compare (R6-62). Rob ruled on 2026-11-07 that the strip starts shut while a brainstorm has one iteration and opens once a second lands.
+
+- **The rule.** `stripOpen` in `src/core/prefs.ts` decides. A brainstorm where Rob has used the toggle keeps what he chose, whatever its iteration count. Otherwise the strip is shut at one iteration and open from two. A fork opens on one iteration, so its strip starts shut too, and its lineage still shows in the breadcrumb and under its thread.
+- **One choice per brainstorm.** The toggle used to be one `history.strip` row for every brainstorm. A choice that applies everywhere would open the strip on every new brainstorm once Rob opened it in one, so each brainstorm now keeps its own row, `strip.<session>`. The old row is no longer read. A brainstorm with no row follows the rule above.
+- **While the view loads.** The skeleton strip shows only if the strip will. The listing's latest iteration number gives the count before the view arrives, since iterations are numbered from 1 with no gaps.
+
+`test/prefs.test.ts` holds the rule and the stored rows. `verify:8` checks that a brainstorm with one iteration shows no strip and an unpressed toggle, that the strip opens once a second iteration lands, that Rob's shut strip stays shut over a restart, and that a fork opens with its strip shut while its parent's is open.

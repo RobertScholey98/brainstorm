@@ -30,7 +30,7 @@ import {
   type SlotId,
   type VariantKey,
 } from "../core/types";
-import { applyPrefs, NO_PREFS, type CanvasLayout, type UiPrefs, type UiPrefsPatch } from "../core/prefs";
+import { applyPrefs, NO_PREFS, stripOpen, type CanvasLayout, type UiPrefs, type UiPrefsPatch } from "../core/prefs";
 import type { Api } from "./api";
 import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type Placement } from "./CanvasHost";
@@ -230,7 +230,11 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
             layout={prefs.canvas[nav.id]}
             onLayout={(layout) => savePrefs({ canvas: { session: nav.id, layout } })}
             inspector={{ width: fitted.inspector, onWidth: setInspectorWidth, rail, onRail: (inspectorRail) => savePrefs({ inspectorRail }) }}
-            history={{ open: prefs.historyStrip, onToggle: () => savePrefs({ historyStrip: !prefs.historyStrip }) }}
+            history={{
+              choice: prefs.historyStrip[nav.id],
+              latest: listing?.latest ?? null,
+              onChoose: (open) => savePrefs({ historyStrip: { session: nav.id, open } }),
+            }}
             sidebar={sidebar}
             homePanel={nav.panel === "home" ? homePanel : null}
             onHome={() => setNav({ kind: "brainstorm", id: nav.id, panel: "home" })}
@@ -286,8 +290,11 @@ function SessionWorkspace({
   layout: CanvasLayout | undefined;
   onLayout: (layout: CanvasLayout) => void;
   inspector: { width: number; onWidth: (width: number) => void; rail: boolean; onRail: (rail: boolean) => void };
-  /** Whether the history filmstrip shows, one choice for every brainstorm, kept in `ui_pref`. */
-  history: { open: boolean; onToggle: () => void };
+  /**
+   * Whether Rob last opened or shut this brainstorm's history strip, kept in `ui_pref`. `latest` is the listing's newest
+   * iteration, which counts its iterations while the view loads.
+   */
+  history: { choice: boolean | undefined; latest: IterationN | null; onChoose: (open: boolean) => void };
   sidebar: (panel: ReactNode) => ReactNode;
   /** Shown in place of the session panel while Rob looks for another brainstorm. */
   homePanel: ReactNode | null;
@@ -525,7 +532,9 @@ function SessionWorkspace({
     [api, sessionId],
   );
   const showing = past?.n ?? latest?.n ?? null;
-  const strip = history.open && view !== null && showing !== null && view.history.iterations.length > 0;
+  const stripShown = stripOpen(history.choice, view?.history.iterations.length ?? history.latest ?? 0);
+  const historyToggle = { open: stripShown, onToggle: () => history.onChoose(!stripShown) };
+  const strip = stripShown && view !== null && showing !== null && view.history.iterations.length > 0;
   const picking = interaction.kind === "picking" ? interaction.for : null;
 
   return (
@@ -561,8 +570,8 @@ function SessionWorkspace({
           // Pressed only while a strip shows: the loading strip, or the real one once there is an iteration to show.
           history={
             view !== null && view.history.iterations.length === 0
-              ? { ...history, open: false, blocked: WAITING }
-              : history
+              ? { ...historyToggle, open: false, blocked: WAITING }
+              : historyToggle
           }
           onDiscard={() => void discard()}
           onOpen={onOpen}
@@ -643,7 +652,7 @@ function SessionWorkspace({
         )}
         {toast}
         </section>
-        {view === null && history.open && <FilmstripSkeleton />}
+        {view === null && stripShown && <FilmstripSkeleton />}
         {strip && (
           <Filmstrip
             view={view}

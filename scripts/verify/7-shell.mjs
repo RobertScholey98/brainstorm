@@ -716,11 +716,15 @@ try {
     [{ height: 28, filled: true }, 28],
   );
   check("the Inspector toggle sits in the header, pressed while the Inspector shows", await window.getAttribute("[data-topbar] [data-inspector-toggle]", "aria-pressed"), "true");
+  const paneToggles = () => window.$$eval('[data-sidebar="trigger"], [data-history-toggle], [data-inspector-toggle]', (toggles) => toggles.map((t) => t.getAttribute("aria-pressed")));
   check(
-    "every pane toggle follows one rule, pressed while its pane shows: the sidebar's, the history's and the Inspector's",
-    await window.$$eval('[data-sidebar="trigger"], [data-history-toggle], [data-inspector-toggle]', (toggles) => toggles.map((t) => t.getAttribute("aria-pressed"))),
-    ["true", "true", "true"],
+    "every pane toggle follows one rule, pressed while its pane shows: the sidebar's and the Inspector's, and not the history's while one iteration keeps its strip shut",
+    [await paneToggles(), (await window.$("[data-history]")) !== null],
+    [["true", "false", "true"], false],
   );
+  await window.click("[data-history-toggle]");
+  await window.waitForSelector("[data-history]");
+  check("Rob can open the strip on one iteration, and its toggle then reads pressed", await paneToggles(), ["true", "true", "true"]);
   // A hover onto the spot the pointer already holds moves nothing, and opens no hint.
   const underPointer = async (selector) => {
     await window.mouse.move(1, 1);
