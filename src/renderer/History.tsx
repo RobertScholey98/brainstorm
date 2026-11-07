@@ -60,9 +60,23 @@ export function Filmstrip({
   ];
   const shownAt = items.findIndex((i) => i.kind === "iteration" && i.entry.n === showing);
 
-  const [fit, setFit] = useState<StripFit>(() => stripFit(0, items.map(() => ({ need: 0, floor: 0 }))));
+  const [fit, setFit] = useState<StripFit>(() => stripFit(0, items.map(() => ({ need: 0, floor: 0 })), shownAt));
   const overflows = fit.pages !== null;
   const [ends, setEnds] = useState({ start: true, end: true });
+  // A step changes an entry's tier, not its need, so it refits from the last measure.
+  const measured = useRef<Measured | null>(null);
+  const shown = useRef(shownAt);
+  const refit = useCallback(() => {
+    const m = measured.current;
+    if (m === null) return;
+    const loose = stripFit(m.plain, m.lines, shown.current);
+    const next = loose.pages === null ? loose : stripFit(m.stepped, m.lines, shown.current);
+    setFit((prev) => (String(prev.pages) === String(next.pages) && prev.widths.join() === next.widths.join() ? prev : next));
+  }, []);
+  useLayoutEffect(() => {
+    shown.current = shownAt;
+    refit();
+  }, [shownAt, refit]);
   useLayoutEffect(() => {
     const [strip, top, arrows, entries] = [section.current, head.current, steps.current, list.current];
     if (strip === null || top === null || arrows === null || entries === null) return;
@@ -70,28 +84,27 @@ export function Filmstrip({
     // them overflow with them too, and the strip never flips between the two.
     const measure = () => {
       const lines = needs(entries);
-      const shown = arrows.style.display;
+      const display = arrows.style.display;
       arrows.style.display = "none";
       const plain = top.getBoundingClientRect().width;
       arrows.style.removeProperty("display");
       const stepped = top.getBoundingClientRect().width;
-      arrows.style.display = shown;
-      const loose = stripFit(strip.clientWidth - plain, lines);
-      const next = loose.pages === null ? loose : stripFit(strip.clientWidth - stepped, lines);
-      setFit((prev) => (String(prev.pages) === String(next.pages) && prev.widths.join() === next.widths.join() ? prev : next));
+      arrows.style.display = display;
+      measured.current = { lines, plain: strip.clientWidth - plain, stepped: strip.clientWidth - stepped };
+      refit();
     };
     measure();
     const sizes = new ResizeObserver(measure);
     sizes.observe(strip);
-    // An entry's lines change as its age ticks and as an origin lands, and the shown one takes its room first.
+    // An entry's lines change as its age ticks and as an origin lands.
     const lines = new MutationObserver(measure);
-    lines.observe(entries, { subtree: true, childList: true, characterData: true, attributeFilter: ["aria-selected"] });
+    lines.observe(entries, { subtree: true, childList: true, characterData: true });
     void document.fonts.ready.then(measure);
     return () => {
       sizes.disconnect();
       lines.disconnect();
     };
-  }, [items.length]);
+  }, [items.length, refit]);
 
   // At rest the strip shows only whole entries. Past the oldest page, the next page's first entry can sit cut at the
   // end, so it stays out of sight until the strip moves.
@@ -235,27 +248,22 @@ const SNAP = "snap-start";
  */
 const ENTRY_BOX = "flex items-center gap-2 rounded-lg p-1 inset-ring";
 
+type Measured = { readonly lines: readonly EntryNeed[]; readonly plain: number; readonly stepped: number };
+
 /**
  * What each entry needs: its width at max-content for every line to read whole, and its width with only the words
  * that never give way: an iteration's number, its age and "latest", and a fork's link line.
  */
 function needs(list: HTMLElement): EntryNeed[] {
-  return [...list.children].map((entry) => {
-    if (!(entry instanceof HTMLElement)) return { need: 0, floor: 0 };
-    const link = entry.dataset.historyN === undefined;
-    const shown = entry.getAttribute("aria-selected") === "true";
-    entry.style.width = "max-content";
-    const need = entry.getBoundingClientRect().width;
-    const optional = [...entry.querySelectorAll<HTMLElement>("[data-history-origin], [data-history-link-name]")];
-    let floor = 0;
-    if (optional.length > 0) {
-      for (const el of optional) el.style.display = "none";
-      floor = entry.getBoundingClientRect().width;
-      for (const el of optional) el.style.removeProperty("display");
-    }
-    entry.style.removeProperty("width");
-    return { need, floor, link, shown };
-  });
+  const entries = [...list.children].filter((entry) => entry instanceof HTMLElement);
+  const optional = entries.map((entry) => [...entry.querySelectorAll<HTMLElement>("[data-history-origin], [data-history-link-name]")]);
+  for (const entry of entries) entry.style.width = "max-content";
+  const need = entries.map((entry) => entry.getBoundingClientRect().width);
+  for (const el of optional.flat()) el.style.display = "none";
+  const floor = entries.map((entry, i) => (optional[i]!.length > 0 ? entry.getBoundingClientRect().width : 0));
+  for (const el of optional.flat()) el.style.removeProperty("display");
+  for (const entry of entries) entry.style.removeProperty("width");
+  return entries.map((entry, i) => ({ need: need[i]!, floor: floor[i]!, link: entry.dataset.historyN === undefined }));
 }
 
 /**

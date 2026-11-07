@@ -5,23 +5,17 @@ export const STRIP_GAP = 16;
 const ENTRY_MIN = 180;
 const ENTRY_MAX = 380;
 
-/**
- * What an entry's lines take: `need` for every line whole, `floor` for the lines that never cut. A `link`, a fork's
- * tile or stub, keeps its own floor rather than an entry's and gives up its room first; the `shown` iteration takes
- * its room first.
- */
-export type EntryNeed = { readonly need: number; readonly floor: number; readonly link?: boolean; readonly shown?: boolean };
+/** What an entry's lines take: `need` for every line whole, `floor` for the lines that never cut. A `link` is a fork's tile or stub. */
+export type EntryNeed = { readonly need: number; readonly floor: number; readonly link?: boolean };
 
-/** Who takes room first when an entry's lines can't all read whole: the shown iteration, the other iterations, then links. */
-const tierOf = (e: EntryNeed): number => (e.shown === true ? 0 : e.link === true ? 2 : 1);
+/** Who takes room first when an entry's lines can't all read whole, in order. */
+const TIER = ["shown", "iteration", "link"] as const;
+type Slot = { readonly want: number; readonly floor: number; readonly tier: (typeof TIER)[number] };
 
 export type StripFit = {
   /** Each entry's width, in order. */
   readonly widths: readonly number[];
-  /**
-   * Null while the entries fit. Once they overflow, the index each page starts at, oldest first. A page is the entries
-   * the strip shows whole at one rest, and it fills the strip exactly, so the strip rests only on a page's start.
-   */
+  /** Null while the entries fit. Once they overflow, the index each page starts at, oldest first. The strip rests only on a page's start. */
   readonly pages: readonly number[] | null;
 };
 
@@ -34,24 +28,20 @@ const sum = (ws: readonly number[]) => ws.reduce((total, w) => total + w, 0);
 const snap = (w: number) => Math.floor(w * 64 + 1e-6) / 64;
 
 /**
- * How the strip lays out `entries` in `room`, its scroller's width. Each entry takes what its lines need and no more;
- * short of room, the shown iteration takes what it needs first, then the other iterations share by need, then links,
- * none below its floor. While the floors fit, every entry shows and the rest of the strip stays empty.
- *
- * Once they don't, the entries split into pages from the newest back, each holding only as many as read whole, a link
- * counted at its floor since it gives way first, and never on a page alone. A page whose entries need less than the
- * strip grows its iterations evenly from the narrowest, so it still ends where the strip does. Only the oldest page
- * keeps its entries at their need: at its rest the next page starts in the room it leaves, and the strip hides
- * whichever entry it can't show whole.
+ * How the strip lays out `entries` in `room`, its scroller's width, with entry `shown` on the canvas. Each entry takes
+ * what its lines need, by tier, none below its floor. Once the floors overflow, the entries split into pages from the
+ * newest back, each holding only as many as read whole, and every page but the oldest fills the strip.
  */
-export function stripFit(room: number, entries: readonly EntryNeed[]): StripFit {
+export function stripFit(room: number, entries: readonly EntryNeed[], shown?: number): StripFit {
   const count = entries.length;
   const inner = room - 2 * STRIP_INSET;
-  const floors = entries.map((e) => Math.min(ENTRY_MAX, e.link === true ? e.floor : Math.max(ENTRY_MIN, e.floor)));
-  const wants = entries.map((e, i) => Math.min(ENTRY_MAX, Math.max(floors[i]!, e.need)));
-  const tiers = entries.map(tierOf);
-  if (sum(floors) + (count - 1) * STRIP_GAP <= inner) return { widths: share(inner - (count - 1) * STRIP_GAP, wants, floors, tiers), pages: null };
-  const cost = (i: number) => (tiers[i] === 2 ? floors[i]! : wants[i]!);
+  const slots = entries.map((e, i): Slot => {
+    const floor = Math.min(ENTRY_MAX, e.link === true ? e.floor : Math.max(ENTRY_MIN, e.floor));
+    return { floor, want: Math.min(ENTRY_MAX, Math.max(floor, e.need)), tier: i === shown ? "shown" : e.link === true ? "link" : "iteration" };
+  });
+  if (sum(slots.map((s) => s.floor)) + (count - 1) * STRIP_GAP <= inner) return { widths: share(inner - (count - 1) * STRIP_GAP, slots), pages: null };
+  // A link counts at its floor, since it gives way first.
+  const cost = (i: number) => (slots[i]!.tier === "link" ? slots[i]!.floor : slots[i]!.want);
   const widths: number[] = [];
   const pages: number[] = [];
   for (let end = count; end > 0; ) {
@@ -59,48 +49,44 @@ export function stripFit(room: number, entries: readonly EntryNeed[]): StripFit 
     let used = cost(start);
     while (start > 0 && used + STRIP_GAP + cost(start - 1) <= inner) used += STRIP_GAP + cost(--start);
     // A fork's tile never takes a page alone, where it would grow to an entry's width: it joins the iteration it hangs off.
-    if (end - start === 1 && tiers[start] === 2 && start > 0) start -= 1;
+    if (end - start === 1 && slots[start]!.tier === "link" && start > 0) start -= 1;
     const free = inner - (end - start - 1) * STRIP_GAP;
-    const page = share(free, wants.slice(start, end), floors.slice(start, end), tiers.slice(start, end)).map((w) => Math.min(w, free));
-    widths.unshift(...(start === 0 ? page : grow(free, page, tiers.slice(start, end))));
+    const page = slots.slice(start, end);
+    const shared = share(free, page).map((w) => Math.min(w, free));
+    // The oldest page keeps its need, so at its rest the next page starts in the room it leaves.
+    widths.unshift(...(start === 0 ? shared : grow(free, shared, page)));
     pages.unshift(start);
     end = start;
   }
   return { widths, pages };
 }
 
-/**
- * Shares `room` among entries that want `wants`, none below its floor. With room for every want, each gets its want.
- * Short of room, each tier in turn takes what it wants from what is left; in the tier that runs out, the ones wanting
- * more than a level are cut to it, and the bisection finds the level that fills the room.
- */
-function share(room: number, wants: readonly number[], floors: readonly number[], tiers: readonly number[]): number[] {
-  if (sum(wants) <= room) return [...wants];
-  const widths = [...floors];
-  let left = room - sum(floors);
-  for (const tier of [0, 1, 2]) {
-    const members = tiers.flatMap((t, i) => (t === tier ? [i] : []));
+/** Shares `room` among `slots`, each tier in turn taking what it wants from what is left, none below its floor. */
+function share(room: number, slots: readonly Slot[]): number[] {
+  const wants = slots.map((s) => s.want);
+  if (sum(wants) <= room) return wants;
+  const widths = slots.map((s) => s.floor);
+  let left = room - sum(widths);
+  for (const tier of TIER) {
+    const members = slots.flatMap((s, i) => (s.tier === tier ? [i] : []));
     const more = sum(members.map((i) => wants[i]! - widths[i]!));
     if (more <= left) {
       for (const i of members) widths[i] = wants[i]!;
       left -= more;
       continue;
     }
-    const at = (l: number) => members.map((i) => Math.max(floors[i]!, Math.min(wants[i]!, l)));
-    const raised = at(level(sum(members.map((i) => floors[i]!)) + left, at));
+    const at = (l: number) => members.map((i) => Math.max(slots[i]!.floor, Math.min(wants[i]!, l)));
+    const raised = at(level(sum(members.map((i) => slots[i]!.floor)) + left, at));
     members.forEach((i, k) => (widths[i] = raised[k]!));
     break;
   }
   return widths.map(snap);
 }
 
-/**
- * Widens `widths` to fill `room`, the narrowest first, by raising every width under a level to it. A link keeps its
- * width, so a fork's tile never grows to an entry's.
- */
-function grow(room: number, widths: readonly number[], tiers: readonly number[]): number[] {
+/** Widens `widths` to fill `room`, the narrowest first. A link keeps its width, so a fork's tile never grows to an entry's. */
+function grow(room: number, widths: readonly number[], slots: readonly Slot[]): number[] {
   if (sum(widths) >= room) return [...widths];
-  const raise = (l: number) => widths.map((w, i) => (tiers[i] === 2 ? w : Math.max(w, l)));
+  const raise = (l: number) => widths.map((w, i) => (slots[i]!.tier === "link" ? w : Math.max(w, l)));
   return raise(level(room, raise)).map(snap);
 }
 

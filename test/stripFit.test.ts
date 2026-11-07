@@ -32,11 +32,11 @@ describe("the history strip's fit", () => {
   });
 
   it("lets the shown iteration take what its lines need first, and the others share what is left", () => {
-    expect(stripFit(760, [{ need: 400, floor: 0 }, { need: 400, floor: 0 }, { need: 300, floor: 0, shown: true }])).toEqual({ widths: [198, 198, 300], pages: null });
+    expect(stripFit(760, [{ need: 400, floor: 0 }, { need: 400, floor: 0 }, { need: 300, floor: 0 }], 2)).toEqual({ widths: [198, 198, 300], pages: null });
   });
 
   it("gives a fork's tile its own floor, not an entry's, and its room last", () => {
-    expect(stripFit(760, [{ need: 300, floor: 0 }, { need: 260, floor: 120, link: true }, { need: 300, floor: 0, shown: true }])).toEqual({ widths: [276, 120, 300], pages: null });
+    expect(stripFit(760, [{ need: 300, floor: 0 }, { need: 260, floor: 120, link: true }, { need: 300, floor: 0 }], 2)).toEqual({ widths: [276, 120, 300], pages: null });
   });
 
   it("once they overflow, pages the entries from the newest back, each page holding only entries that read whole", () => {
@@ -45,13 +45,13 @@ describe("the history strip's fit", () => {
   });
 
   it("packs a fork's tile at its floor, so a forked and varied brainstorm at 1440 shows two whole entries a page, the tile no wider than its words", () => {
-    const tree = [{ need: 210, floor: 150 }, { need: 240, floor: 150 }, { need: 280, floor: 150 }, { need: 250, floor: 130, link: true }, { need: 300, floor: 210, shown: true }];
-    expect(stripFit(733, tree)).toEqual({ widths: [210, 342.5, 342.5, 250, 435], pages: [0, 1, 3] });
+    const tree = [{ need: 210, floor: 150 }, { need: 240, floor: 150 }, { need: 280, floor: 150 }, { need: 250, floor: 130, link: true }, { need: 300, floor: 210 }];
+    expect(stripFit(733, tree, 4)).toEqual({ widths: [210, 342.5, 342.5, 250, 435], pages: [0, 1, 3] });
   });
 
   it("never leaves a fork's tile on a page alone, where it would take an entry's width: it joins the iteration it hangs off", () => {
-    const tree = [{ need: 210, floor: 150 }, { need: 240, floor: 150 }, { need: 280, floor: 150 }, { need: 250, floor: 130, link: true }, { need: 300, floor: 210, shown: true }];
-    expect(stripFit(440, tree)).toEqual({ widths: [210, 408, 262, 130, 408], pages: [0, 1, 2, 4] });
+    const tree = [{ need: 210, floor: 150 }, { need: 240, floor: 150 }, { need: 280, floor: 150 }, { need: 250, floor: 130, link: true }, { need: 300, floor: 210 }];
+    expect(stripFit(440, tree, 4)).toEqual({ widths: [210, 408, 262, 130, 408], pages: [0, 1, 2, 4] });
   });
 
   it("grows a later page that needs less than the strip from its narrowest entry, so it ends where the strip does", () => {
