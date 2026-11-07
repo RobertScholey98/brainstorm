@@ -189,6 +189,17 @@ try {
   await window.waitForSelector("[data-fork-menu]");
   check("from the latest the button reads Fork", (await window.textContent("[data-fork-toggle]")).trim(), "Fork");
   check(
+    "the fork popover's labels take the one overlay label, 12 px medium in the description's muted tone, and its footer marks the new thread with Fork's own glyph, not a link's",
+    await window.$eval("[data-fork-menu]", (el) => {
+      const muted = getComputedStyle(el.querySelector("[data-slot=popover-description]")).color;
+      return {
+        labels: [...el.querySelectorAll("[data-slot=field-label]")].map((l) => [l.textContent.trim(), getComputedStyle(l).fontSize, getComputedStyle(l).fontWeight, getComputedStyle(l).color === muted]),
+        glyph: el.querySelector("[data-fork-hint] svg").getAttribute("class"),
+      };
+    }),
+    { labels: [["Instruction", "12px", "500", true], ["Carries over", "12px", "500", true]], glyph: "lucide lucide-git-branch size-3.5" },
+  );
+  check(
     "the popover lists what carries over: a variant per slot, one setting, one open pin",
     await window.$eval("[data-fork-menu]", (el) => ({
       slots: [...el.querySelectorAll("[data-carry-slot]")].map((e) => e.dataset.carrySlot),
@@ -287,6 +298,11 @@ try {
     ["Vary Spin button", 3, "Variants land in The wheel"],
   );
   check("nothing in the vary popover runs past its box: the direction field, its optional label and Send all sit inside", await outsideBox(window, "[data-vary-composer]"), []);
+  check(
+    "every control in the vary popover is the 28 px control height: the stepper, the direction field, Cancel and Send",
+    await window.$$eval("[data-vary-composer] button, [data-vary-composer] input", (els) => els.map((el) => [el.textContent.trim() || el.getAttribute("aria-label") || el.tagName, el.getBoundingClientRect().height])),
+    [["Fewer", 28], ["More", 28], ["INPUT", 28], ["Cancel", 28], ["Send", 28]],
+  );
   check(
     "and it opens clear of the element it varies",
     await settled(async () => {

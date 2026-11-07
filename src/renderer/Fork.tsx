@@ -1,8 +1,9 @@
-import { ExternalLink, GitBranch } from "lucide-react";
+import { GitBranch } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Kbd } from "@/components/ui/kbd";
+import { FieldLabel } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,7 +57,7 @@ export function ForkButton({
         </PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="end" data-fork-menu>
-        <PopoverHeader heading={`Fork iteration ${iteration.n}`} description={`${view.session.title} · a new brainstorm with one variant per slot`} />
+        <PopoverHeader heading={`Fork iteration ${iteration.n}`} description={`${view.session.title} · a new brainstorm with the variant showing in each slot`} />
         <ForkForm view={view} iteration={iteration} blockErrors={blockErrors} fork={fork} onClose={() => setOpen(false)} />
       </PopoverContent>
     </Popover>
@@ -105,7 +106,7 @@ function ForkForm({
   return (
     <>
       <label className="grid gap-1.5">
-        <span className="text-xs font-medium">Instruction</span>
+        <FieldLabel>Instruction</FieldLabel>
         <Textarea
           rows={3}
           autoFocus
@@ -118,16 +119,16 @@ function ForkForm({
         />
       </label>
       <div className="grid gap-1.5" data-fork-carries>
-        <h3 className="text-xs font-medium">Carries over</h3>
-        <dl className="grid-carry grid gap-x-3 gap-y-2 rounded-lg bg-muted p-3 text-sm/snug">
+        <FieldLabel as="h3">Carries over</FieldLabel>
+        {/* Its edge separates it from the popover in dark, where muted sits one small step off the raised surface. */}
+        <dl className="grid-carry grid gap-x-3 gap-y-2 rounded-lg border bg-muted p-3 text-sm/snug">
           {carried.slots.map(({ slot, title }) => (
             <div key={slot.id} className="contents" data-carry-slot={slot.id}>
               <dt className="flex min-w-0 text-xs text-fg-muted">
                 <Truncate>{slot.title}</Truncate>
               </dt>
-              <dd className="grid min-w-0 gap-0.5">
+              <dd className="flex min-w-0">
                 <Truncate>{title}</Truncate>
-                <span className="text-xs text-fg-muted">{slot.variants.length === 1 ? "its only variant" : "the variant showing"}</span>
               </dd>
             </div>
           ))}
@@ -168,7 +169,7 @@ function ForkForm({
       <PopoverFooter
         hint={
           <span className="flex items-center gap-1.5" data-fork-hint>
-            <ExternalLink aria-hidden className="size-3.5" />
+            <GitBranch aria-hidden className="size-3.5" />
             {instruction === "" ? "Say what the fork should try" : "Starts a new T3 thread"}
           </span>
         }

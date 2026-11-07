@@ -7,6 +7,7 @@ import { Callout } from "@/components/ui/callout";
 import { Checkbox } from "@/components/ui/checkbox";
 import { chip } from "@/components/ui/chip";
 import { Kbd } from "@/components/ui/kbd";
+import { FieldLabel } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
 import { Spinner } from "@/components/ui/spinner";
@@ -133,22 +134,24 @@ function RegenerateForm({
     <>
       <Segmented value={kind} onValueChange={setKind} options={SCOPES} itemData="scope" aria-label="Scope" />
       {/* The field sits right under the scope, so neither moves when a scope adds its block list below. */}
-      <Textarea
-        rows={3}
-        value={text}
-        aria-label="Free text"
-        data-freetext
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && void submit()}
-        placeholder={kind === "described" ? "What should change?" : "Anything to add? (optional)"}
-        className="resize-none"
-      />
+      <label className="grid gap-1.5">
+        <FieldLabel aside={kind === "described" ? undefined : "optional"}>Instruction</FieldLabel>
+        <Textarea
+          rows={3}
+          value={text}
+          data-freetext
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && void submit()}
+          placeholder={kind === "described" ? "What should change?" : "Anything to add?"}
+          className="resize-none"
+        />
+      </label>
 
       {kind === "blocks" && (
         <div className="grid gap-2" data-block-choices>
           {slots.map((slot) => (
             <fieldset key={slot.id} className="grid gap-0.5">
-              <legend className="pb-0.5 text-xs font-medium text-fg-muted">{slot.title}</legend>
+              <FieldLabel as="legend">{slot.title}</FieldLabel>
               {blocks
                 .filter((b) => b.slot === slot.id)
                 .map((b) => (
@@ -162,7 +165,7 @@ function RegenerateForm({
       {kind === "described" && <p className="text-fg-muted">The agent picks the blocks from what you write.</p>}
 
       <div className="grid min-w-0 gap-1" data-attached-feedback>
-        <h3 className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
+        <FieldLabel as="h3">
           {attached.length === 0 ? (
             "No open feedback in scope"
           ) : (
@@ -171,7 +174,7 @@ function RegenerateForm({
               <Badge>{attached.length}</Badge>
             </>
           )}
-        </h3>
+        </FieldLabel>
         {attached.map((f) => (
           <p key={f.id} className="flex min-w-0 gap-1.5 text-sm/snug" data-attached={f.id}>
             <PinNumber n={f.id} state="open" />

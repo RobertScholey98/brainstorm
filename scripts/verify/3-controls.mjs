@@ -164,6 +164,11 @@ try {
     ],
     ["Accent: #00F0FF The block no longer has this setting. Dismiss", "400"],
   );
+  check(
+    "the banner's Dismiss is the 28 px control height of every button beside it",
+    await run.window.$eval('[data-override="wheel/neon:accent"] button', (b) => b.getBoundingClientRect().height),
+    28,
+  );
   check("the slider's value still applies", await run.window.getAttribute(slider, "aria-valuenow"), "3.4");
   check("the panel no longer has an accent control", await run.window.isVisible(hex), false);
   await shot(run.window, shots, "4-dropped");

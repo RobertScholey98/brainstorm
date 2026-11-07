@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
+import { FieldLabel } from "@/components/ui/label";
 import { OverlayHeader, OverlayPanel, PopoverFooter } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
@@ -100,9 +101,7 @@ export function VaryComposer({
       <OverlayPanel ref={ref} size="md" role="dialog" aria-labelledby="vary-title" data-vary-composer data-open="" style={{ left, top }} onKeyDown={onKey}>
         <OverlayHeader id="vary-title" heading={`Vary ${what}`} description={`${block?.title ?? pin.blockId} · ${slotTitle}. Everything else stays.`} />
         <div className="grid gap-1.5">
-          <span className="text-xs font-medium" id="vary-count-label">
-            How many
-          </span>
+          <FieldLabel id="vary-count-label">How many</FieldLabel>
           <div className="flex items-center gap-1" role="group" aria-labelledby="vary-count-label">
             <Button variant="outline" size="icon" aria-label="Fewer" disabled={count <= 1} onClick={() => setCount((c) => c - 1)} data-vary-fewer>
               <Minus aria-hidden />
@@ -116,10 +115,7 @@ export function VaryComposer({
           </div>
         </div>
         <label className="grid gap-1.5">
-          <span className="flex items-center text-xs font-medium">
-            Direction
-            <span className="ml-auto font-normal text-fg-muted">optional</span>
-          </span>
+          <FieldLabel aside="optional">Direction</FieldLabel>
           <Input ref={field} value={direction} onChange={(e) => setDirection(e.target.value)} placeholder="bolder, calmer, more playful…" data-vary-direction />
         </label>
         <PopoverFooter hint={<span data-vary-hint>{`Variants land in ${slotTitle}`}</span>}>
