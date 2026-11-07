@@ -29,6 +29,8 @@
 //                    is that wrapper, and mounts a fresh tooltip so the hint opens on hover as well as on focus
 //   truncate-text    a title or brief cut by the bare truncate class, outside components/ui; the kit's Truncate cuts it
 //                    after a letter, never after a space or a comma
+//   count-badge      a count in a Badge, outside components/ui; a count is the kit's Count, a muted numeral after its
+//                    label, and a Badge is a label such as the iteration
 //   frame-sandbox    an iframe anywhere in the renderer that isn't the canvas's: its src must be /canvas or
 //                    /canvas/preview and its sandbox exactly "allow-scripts", so agent code always runs in an opaque
 //                    origin under the canvas CSP, a home preview included
@@ -115,7 +117,7 @@ export function lintSource(design, source, { kit = false, file = "" } = {}) {
     });
   }
   problems.push(...chipRecipe(source, lits), ...frameSandbox(source), ...fieldFill(source));
-  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source), ...dismissGhost(source), ...rawPart(source), ...blockedHint(source), ...truncateText(source, lits));
+  if (!kit) problems.push(...elementRules(source, lits), ...hintSide(source, file), ...inlineSize(source), ...overlayKit(source), ...dismissGhost(source), ...rawPart(source), ...blockedHint(source), ...truncateText(source, lits), ...countBadge(source));
   return problems.sort((a, b) => a.line - b.line);
 }
 
@@ -227,6 +229,17 @@ function overlayKit(source) {
       ? [{ rule: "overlay-kit", line: i + 1, text: "overlaySurface()", message: "an overlay is the kit's PopoverContent, or OverlayPanel for one placed by hand" }]
       : [],
   );
+}
+
+/** A Badge holding only a number: a length, a count, or a numeral. */
+function countBadge(source) {
+  return jsxElements(source)
+    .filter((el) => el.tag === "Badge" && source[el.end] === ">")
+    .flatMap((el) => {
+      const child = source.slice(el.end + 1, source.indexOf("</Badge>", el.end)).trim();
+      if (!/^(?:\{[^{}]*(?:\.length|[cC]ount)\}|\d+)$/.test(child)) return [];
+      return [{ rule: "count-badge", line: el.line, text: `<Badge> ${child}`, message: "a count is the kit's Count, a muted numeral after its label" }];
+    });
 }
 
 /** An element cut by the truncate class whose only child is a title or a brief. */

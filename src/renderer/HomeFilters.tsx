@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger }
 import { Segmented } from "@/components/ui/segmented";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Hint } from "@/components/ui/tooltip";
+import { Count } from "@/components/ui/count";
 import type { HomeQuery, HomeSort, HomeStatus } from "../core/prefs";
 import type { ProjectId } from "../core/types";
 import type { ProjectOption } from "./homeQuery";
@@ -138,9 +139,9 @@ function StatusLabel({ label, count }: { label: string; count: number | null }):
     <span className="flex items-center justify-center gap-1.5">
       {label}
       {/* Two digits' room whether or not the count is in, so the row holds still when the first list lands. */}
-      <span className="min-w-4 text-left font-normal text-fg-muted tabular-nums" data-status-count={count === null ? undefined : true}>
+      <Count className="min-w-4 text-left" data-status-count={count === null ? undefined : true}>
         {count}
-      </span>
+      </Count>
     </span>
   );
 }
@@ -173,7 +174,7 @@ function ProjectFilter({
             <label key={p.id} className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-hover" data-project-option={p.id}>
               <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggle(p.id)} />
               <span className="min-w-0 truncate">{p.label}</span>
-              <span className="ml-auto shrink-0 text-xs text-fg-muted tabular-nums">{p.count}</span>
+              <Count className="ml-auto text-xs">{p.count}</Count>
             </label>
           ))}
         </div>

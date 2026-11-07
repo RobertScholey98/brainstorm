@@ -1,7 +1,6 @@
 import { AlertTriangle, Check, CircleAlert, CircleHelp, CircleSlash, Clock, ExternalLink, Info, RotateCw, Send, Trash2, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "cn";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,6 +13,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import { Count } from "@/components/ui/count";
 import { partLabel } from "../core/fork";
 import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
 import { actionRank, COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
@@ -171,7 +171,7 @@ function RegenerateForm({
           ) : (
             <>
               Open feedback sent with it
-              <Badge>{attached.length}</Badge>
+              <Count>{attached.length}</Count>
             </>
           )}
         </FieldLabel>

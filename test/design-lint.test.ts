@@ -252,6 +252,22 @@ describe("design lint", () => {
     expect(rules(source, true)).toEqual([]);
   });
 
+  it("count-badge: fails a count in a Badge, and allows a label in one and the kit's Count", () => {
+    const source = [
+      `<Badge>{feedback.length}</Badge>`,
+      `<Badge data-settled-count>{settledCount}</Badge>`,
+      `<Badge>3</Badge>`,
+      `<Badge data-iteration={n}>Iteration {n}</Badge>`,
+      `<Count>{feedback.length}</Count>`,
+    ].join("\n");
+    expect(rules(source)).toEqual([
+      { rule: "count-badge", line: 1, text: "<Badge> {feedback.length}" },
+      { rule: "count-badge", line: 2, text: "<Badge> {settledCount}" },
+      { rule: "count-badge", line: 3, text: "<Badge> 3" },
+    ]);
+    expect(rules(source, true)).toEqual([]);
+  });
+
   it("passes on the renderer as it stands", async () => {
     expect(await lintRenderer()).toEqual([]);
   });

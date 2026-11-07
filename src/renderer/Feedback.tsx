@@ -8,12 +8,12 @@ import { PinNumber } from "./PinNumber";
 import { POPOVER_WIDTH } from "./placement";
 import { useComposerPlace } from "./useComposerPlace";
 import { cn } from "cn";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { OverlayHeader, OverlayPanel, PopoverFooter } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
+import { Count } from "@/components/ui/count";
 import type { Placement } from "./CanvasHost";
 
 /** Where a pin is on the canvas. Only the frame can tell placed from detached; the rest the view knows. */
@@ -84,7 +84,7 @@ export function FeedbackPanel({
     <section className="border-t" aria-label="Feedback" data-feedback-panel>
       <header className="flex items-center gap-2 pt-3 pb-2">
         <h2 className="text-base font-semibold">Feedback</h2>
-        {feedback.length > 0 && <Badge>{feedback.length}</Badge>}
+        {feedback.length > 0 && <Count>{feedback.length}</Count>}
         {canPin ? (
           <Hint label="Pin a comment to an element. The agent sees it with your next Regenerate" side="left">
             <Button variant="outline" className="ml-auto" aria-pressed={picking} data-pick-toggle onClick={onPickToggle}>
@@ -113,7 +113,7 @@ export function FeedbackPanel({
             <div key={state} className="pb-2" data-group={state}>
               <h3 className="flex items-center gap-1.5 pt-1 pb-1 text-xs font-medium">
                 {title}
-                <Badge>{items.length}</Badge>
+                <Count>{items.length}</Count>
               </h3>
               <ul>
                 {items.map((f) => (

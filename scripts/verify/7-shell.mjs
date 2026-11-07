@@ -200,7 +200,7 @@ try {
   await window.waitForSelector(`[data-session="${kitchen}"]`, { state: "detached" });
   check("a project group collapses", await window.isVisible('[data-project="kitchen-proj"] [data-project-label]'), true);
   check(
-    "a collapsed group counts what it hides in a chip, an open one doesn't, its label starts where its rows' titles do, and every chevron ends its row at one x",
+    "a collapsed group counts what it hides as a muted count, an open one doesn't, its label starts where its rows' titles do, and every chevron ends its row at one x",
     await window.evaluate(() => {
       const labels = [...document.querySelectorAll("[data-project-label]")];
       const shown = (el) => el.checkVisibility();
@@ -211,7 +211,7 @@ try {
         edge: labels.every((l) => Math.round(l.querySelector("span").getBoundingClientRect().left) === titleX),
       };
     }),
-    { counts: [["1", "badge"]], chevrons: 1, edge: true },
+    { counts: [["1", "count"]], chevrons: 1, edge: true },
   );
   await window.click('[data-project="kitchen-proj"] [data-project-label]');
   await window.waitForSelector(`[data-session="${kitchen}"]`);
@@ -856,7 +856,7 @@ try {
     [40, "1", "badge"],
   );
   check(
-    "the rail's head carries the canvas bar's rule, its button centred on the bar's line with the count on its corner",
+    "the rail's head carries the canvas bar's rule, its button centred on the bar's line with the count on its lower corner, 4 px in from the card's edge and clear of its 12 px radius",
     await settled(() =>
       window.evaluate(() => {
         const box = (sel) => document.querySelector(sel).getBoundingClientRect();
@@ -864,11 +864,11 @@ try {
         return {
           rule: Math.round(head.bottom) === Math.round(bar.bottom) && parseFloat(getComputedStyle(document.querySelector("[data-rail-head]")).borderBottomWidth) > 0,
           centred: Math.round(button.top + button.height / 2) === Math.round(bar.top + bar.height / 2),
-          corner: count.left > button.left + button.width / 2 && count.bottom < button.top + button.height / 2 && count.right <= head.right,
+          corner: [Math.round(head.right - count.right), Math.round(count.top - head.top), Math.round(count.bottom - button.bottom)],
         };
       }),
     ),
-    { rule: true, centred: true, corner: true },
+    { rule: true, centred: true, corner: [4, 20, 2] },
   );
   await window.click("[data-rail-feedback]");
   await window.waitForSelector("[data-feedback-panel]");

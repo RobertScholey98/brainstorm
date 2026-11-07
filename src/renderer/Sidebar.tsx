@@ -1,7 +1,6 @@
 import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ExternalLink, GitBranch, LayoutGrid, Undo2 } from "lucide-react";
 import { useMemo, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
-import { Badge } from "@/components/ui/badge";
 import { Callout } from "@/components/ui/callout";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ResizeHandle } from "@/components/ui/resize-handle";
@@ -25,6 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import { Count } from "@/components/ui/count";
 import { blockIdOf, isPendingThread, type BlockView, type ContentHash, type OpenPhase, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
 import type { PaneLimits } from "./hooks/use-pane-width";
 import { Mark } from "./Mark";
@@ -152,7 +152,7 @@ export function HomePanel({
               <Truncate>{group.label}</Truncate>
               <span className="ml-auto flex shrink-0 items-center gap-1.5">
                 <span className="flex group-data-[panel-open]/label:hidden">
-                  <Badge data-project-count>{group.sessions.length}</Badge>
+                  <Count data-project-count>{group.sessions.length}</Count>
                 </span>
                 <ChevronRight aria-hidden className={GROUP_CHEVRON} />
               </span>
@@ -180,7 +180,7 @@ export function HomePanel({
           <SidebarGroupLabel render={<CollapsibleTrigger />} className="group/label w-full cursor-pointer gap-1 hover:bg-hover hover:text-fg" data-settled-label>
             <span className="truncate">Settled</span>
             <span className="ml-auto flex shrink-0 items-center gap-1.5">
-              <Badge data-settled-count>{settled.length}</Badge>
+              <Count data-settled-count>{settled.length}</Count>
               <ChevronRight aria-hidden className={GROUP_CHEVRON} />
             </span>
           </SidebarGroupLabel>
@@ -485,9 +485,9 @@ function SlotSection({
           className="w-full cursor-pointer gap-2 hover:bg-hover hover:text-fg"
         >
           <Truncate>{slot.title}</Truncate>
-          <span className="ml-auto shrink-0 font-normal text-fg-muted tabular-nums" data-slot-count>
+          <Count className="ml-auto" data-slot-count>
             {slot.variants.length} {slot.variants.length === 1 ? "variant" : "variants"}
-          </span>
+          </Count>
         </SidebarGroupLabel>
         <SidebarMenu
           role="radiogroup"

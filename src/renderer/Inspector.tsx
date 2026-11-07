@@ -69,8 +69,9 @@ export function InspectorRail({ open, onExpand }: { open: number; onExpand: () =
               <MessageSquare aria-hidden />
             </Button>
           </Hint>
+          {/* Below the bar's line, clear of the card's 12 px corner radius. */}
           {open > 0 && (
-            <span className="pointer-events-none absolute -top-1 -right-1 flex">
+            <span className="pointer-events-none absolute -right-0.5 -bottom-0.5 flex">
               <Badge size="corner" data-rail-count>
                 {open}
               </Badge>

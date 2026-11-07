@@ -1,7 +1,6 @@
 import { CircleCheck, CloudOff, GitBranch, Lightbulb, SearchX, Undo2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { cn } from "cn";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Code } from "@/components/ui/kbd";
@@ -10,6 +9,7 @@ import { ScrollPane } from "@/components/ui/scroll-pane";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import { Count } from "@/components/ui/count";
 import { DEFAULT_HOME, type HomeQuery, type HomeStatus } from "../core/prefs";
 import type { SessionId, SessionListing } from "../core/types";
 import { HomeFilters, useSearchShortcut } from "./HomeFilters";
@@ -146,7 +146,7 @@ export function HomeOverview({
             <section className="flex flex-col gap-3" aria-labelledby="settled-heading" data-overview-settled>
               <h2 id="settled-heading" className="flex items-center gap-2 text-sm font-medium text-fg-muted">
                 Settled
-                <Badge>{result.settled.length}</Badge>
+                <Count>{result.settled.length}</Count>
               </h2>
               <ul className="grid-overview grid gap-3">{result.settled.map(card)}</ul>
             </section>
