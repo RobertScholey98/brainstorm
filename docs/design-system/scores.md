@@ -193,3 +193,37 @@ These findings recur across members:
 - the Regenerate attached row shows a raw part id (R5-47)
 - vertical dividers sit off centre (the kit separator's `self-stretch`)
 - a Windows toast covers shot 56 (T23)
+
+## Round 7 (captures round-7, after the two round 6 fix passes: the measured header fit, the 84 px strip, one phase table, `Truncate`, `BlockedHint`, `Count`)
+
+The slices match round 6. Shot 56 was refused because the screen was locked, so each slice that held it has one image fewer. GPT Sol reviewed all 308 shots and the four sheets. No read failed. Each Claude score is the member's lowest across its slices.
+
+| Area | Claude Opus 5.5 | GPT-6.1 Sol | Claude Sonnet 5.5 |
+| --- | --- | --- | --- |
+| Shell | 8.5 | 9.5 | 8.0 |
+| Navigation and lists | 7.5 | 9.0 | 8.0 |
+| Canvas chrome | 7.0 | 9.5 | 7.0 |
+| Inspector and controls | 8.0 | 9.0 | 8.0 |
+| Overlays | 8.5 | 9.5 | 8.0 |
+| Feedback | 8.0 | 9.5 | 8.0 |
+| States and request phases | 8.5 | 9.5 | 8.0 |
+| Dark mode | 8.5 | 9.5 | 9.0 |
+| Self-consistency | 7.5 | 9.0 | 8.0 |
+| Fitness for all-day use | 8.0 | 9.0 | 8.0 |
+| Completely happy | no | no | no |
+| Blocker / major / minor / nit (all slices) | 0 / 1 / 28 / 23 | 0 / 0 / 2 / 0 | 0 / 1 / 14 / 34 |
+| Comparison sheets won | 4 of 4, ahead in every area (slice A); both T3 sheets in every area but a states tie (slice B) | 4 of 4 named | 3 of 4 in slice A (T3 took vs-t3-session-dark narrowly); slice B named Brainstorm on both T3 sheets with T3 ahead on navigation on the session sheet |
+
+Eight of the ten Claude slices scored 9.0 or higher in every area. Opus A, Opus B, Opus D and Sonnet B reached 9.2 to 9.6. The minimums come from the 1440 shots 41 to 80: Opus E (7.0 to 8.5) and Sonnet C (7.0 to 8.0).
+
+The two majors:
+- **Opus E:** the history strip cuts entries at its edges. The still on screen is cut mid-word after a restart (64), a fork link shows as a bare icon (78), and fragments sit at the edge (79, 80). With three iterations it rests about 10 px scrolled, so the left fade never clears.
+- **Sonnet D:** at 1100 a fork row with a live request shows "Try a ca…", because the row's status and branch mark don't shrink and its title has no floor.
+
+These findings recur across members:
+- the Inspector's top fade still shows a slider thumb or a cut control (R6-9)
+- home's top fade leaves half-cut titles in 69 (R6-57)
+- the strip's lines use bare `truncate`, not `Truncate` (`History.tsx:195`)
+- the frame label is cut by the canvas bar after a pin, pick or vary reveal
+- the past view leaves feedback Edit and Delete live
+- a new variant's dot differs from "showing" only by colour
