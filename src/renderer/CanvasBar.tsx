@@ -5,6 +5,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Segmented } from "@/components/ui/segmented";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
+import { Truncate } from "@/components/ui/truncate";
 import { Hint } from "@/components/ui/tooltip";
 import type { CanvasLayout } from "../core/prefs";
 import type { SlotId, SlotView } from "../core/types";
@@ -76,7 +77,7 @@ export function CanvasBar({
       <div className="flex flex-1 items-center justify-end gap-2 pl-2">
         {picking !== null && (
           <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-fg-muted" role="status" data-pick-hint>
-            <span className="w-0 flex-1 truncate text-right">{picking === "vary" ? "Click an element to vary" : "Click an element to pin a comment"}</span>
+            <Truncate className="w-0 flex-1 text-right">{picking === "vary" ? "Click an element to vary" : "Click an element to pin a comment"}</Truncate>
             <Kbd>Esc</Kbd>
             <Button variant="ghost" onClick={onCancelPick}>
               Cancel

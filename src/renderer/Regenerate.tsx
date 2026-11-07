@@ -179,7 +179,7 @@ function RegenerateForm({
           <p key={f.id} className="flex min-w-0 gap-1.5 text-sm/snug" data-attached={f.id}>
             <PinNumber n={f.id} state="open" />
             <Hint label={f.text} side="left">
-              <span className="min-w-0 truncate">{f.text}</span>
+              <Truncate>{f.text}</Truncate>
             </Hint>
             <span className="ml-auto shrink-0 text-fg-muted">{f.pin.part === null ? "whole block" : partLabel(f.pin.part)}</span>
           </p>
@@ -316,14 +316,17 @@ export function RequestStatus({ view }: { view: SessionView }) {
       data-collapse={short === long ? undefined : COLLAPSE.status}
     >
       <PhaseIcon phase={phase} />
-      <span className={cn("truncate", detail !== undefined && "font-medium", short !== long && "in-data-collapsed:hidden")} data-request-message={detail === undefined || undefined}
-        data-request-label={detail !== undefined || undefined}>
+      <Truncate
+        className={cn(detail !== undefined && "font-medium", short !== long && "in-data-collapsed:hidden")}
+        data-request-message={detail === undefined || undefined}
+        data-request-label={detail !== undefined || undefined}
+      >
         {long}
-      </span>
+      </Truncate>
       {short !== long && (
-        <span className={cn("hidden truncate in-data-collapsed:inline", detail !== undefined && "font-medium")} data-request-short>
+        <Truncate className={cn("hidden in-data-collapsed:block", detail !== undefined && "font-medium")} data-request-short>
           {short}
-        </span>
+        </Truncate>
       )}
     </div>
   );

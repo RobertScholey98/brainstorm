@@ -238,16 +238,21 @@ describe("design lint", () => {
     expect(rules(`<BlockedHint label="Off" data-x-blocked>\n  <Button disabled>Go</Button>\n</BlockedHint>`)).toEqual([{ rule: "hint-side", line: 1, text: "<Hint> without side" }]);
   });
 
-  it("truncate-text: fails a title or brief cut by the bare class, and allows the kit and other text", () => {
+  it("truncate-text: fails any text cut by the bare class, and allows the kit, uncut text and a cut row of elements", () => {
     const source = [
       `<span className="min-w-0 truncate">{s.title}</span>`,
       `<span className="h-4.5 truncate text-sm" data-card-brief>\n  {brief}\n</span>`,
-      `<span className="truncate">{f.text}</span>`,
+      `<span className="truncate text-xs" data-history-origin>{origin}</span>`,
+      `<h2 className="min-w-0 truncate">Settings</h2>`,
       `<span className="text-sm">{s.title}</span>`,
+      `<span className="truncate">from <b>{parent}</b></span>`,
+      `<Truncate className="text-xs">{origin}</Truncate>`,
     ].join("\n");
     expect(rules(source)).toEqual([
       { rule: "truncate-text", line: 1, text: "<span truncate> {s.title}" },
       { rule: "truncate-text", line: 2, text: "<span truncate> {brief}" },
+      { rule: "truncate-text", line: 5, text: "<span truncate> {origin}" },
+      { rule: "truncate-text", line: 6, text: "<h2 truncate> Settings" },
     ]);
     expect(rules(source, true)).toEqual([]);
   });

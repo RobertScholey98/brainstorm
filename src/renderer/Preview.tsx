@@ -2,6 +2,7 @@ import { CircleAlert, Hourglass } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "cn";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Truncate } from "@/components/ui/truncate";
 import type { FrameToHost, HostToFrame, Result, SessionId, SessionPreview } from "../core/types";
 import { PREVIEW_FRAMES, PreviewTurns, StillCache, stillKey } from "./previewQueue";
 
@@ -213,7 +214,7 @@ function Still({
       {shown.kind === "failed" && (
         <span className={cn("flex size-full items-center justify-center gap-1.5 text-xs text-fg-muted", !compact && "px-4")} data-preview-error={shown.message}>
           <CircleAlert aria-hidden className="size-3.5 shrink-0 text-danger" />
-          {!compact && <span className="truncate">The preview failed to render</span>}
+          {!compact && <Truncate>The preview failed to render</Truncate>}
         </span>
       )}
     </div>

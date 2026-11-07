@@ -7,6 +7,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Truncate } from "@/components/ui/truncate";
 import { Hint } from "@/components/ui/tooltip";
 import { Count } from "@/components/ui/count";
 import { cn } from "cn";
@@ -167,14 +168,14 @@ function ProjectFilter({
   onChange: (projects: ProjectId[]) => void;
 }) {
   const names = projects.filter((p) => selected.has(p.id)).map((p) => p.label);
-  const label = names.length === 0 ? "All projects" : names.length === 1 ? names[0] : `${names.length} projects`;
+  const label = names.length === 0 ? "All projects" : names.length === 1 ? (names[0] ?? "") : `${names.length} projects`;
   const toggle = (id: ProjectId) => onChange(selected.has(id) ? [...selected].filter((p) => p !== id) : [...selected, id]);
   return (
     <Popover>
       <PopoverTrigger render={<Button variant="outline" aria-pressed={names.length > 0} data-project-filter />}>
         <Folder aria-hidden data-icon="inline-start" />
         {/* Regular, as the sort and the status segments beside it are, so the row holds one weight. */}
-        <span className="max-w-picker truncate font-normal">{label}</span>
+        <Truncate className="max-w-picker font-normal">{label}</Truncate>
         <ChevronDown aria-hidden data-icon="inline-end" className="text-fg-muted" />
       </PopoverTrigger>
       <PopoverContent align="start" data-project-menu>
@@ -183,7 +184,7 @@ function ProjectFilter({
           {projects.map((p) => (
             <label key={p.id} className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-hover" data-project-option={p.id}>
               <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggle(p.id)} />
-              <span className="min-w-0 truncate">{p.label}</span>
+              <Truncate>{p.label}</Truncate>
               <Count className="ml-auto text-xs">{p.count}</Count>
             </label>
           ))}

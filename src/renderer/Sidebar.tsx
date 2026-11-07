@@ -178,7 +178,7 @@ export function HomePanel({
         // As in T3 Code: below every project, shut until Rob opens it, its count always showing.
         <Collapsible render={<SidebarGroup className="py-1" data-settled-group />}>
           <SidebarGroupLabel render={<CollapsibleTrigger />} className="group/label w-full cursor-pointer gap-1 hover:bg-hover hover:text-fg" data-settled-label>
-            <span className="truncate">Settled</span>
+            <Truncate>Settled</Truncate>
             <span className="ml-auto flex shrink-0 items-center gap-1.5">
               <Count data-settled-count>{settled.length}</Count>
               <ChevronRight aria-hidden className={GROUP_CHEVRON} />
@@ -531,9 +531,9 @@ function SlotSection({
                       <CircleAlert aria-label="Failed to render" className="text-danger" data-variant-error />
                     </Hint>
                   )}
-                  <span className="min-w-0 flex-1 truncate text-right text-xs font-normal text-fg-muted" data-variant-key>
+                  <Truncate className="flex-1 text-right text-xs font-normal text-fg-muted" data-variant-key>
                     {variant}
-                  </span>
+                  </Truncate>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );

@@ -151,7 +151,7 @@ function ForkForm({
               carried.pins.map((f) => (
                 <span key={f.id} className="flex min-w-0 items-start gap-1.5">
                   <PinNumber n={f.id} state="open" />
-                  <span className="min-w-0 truncate">{f.text}</span>
+                  <Truncate>{f.text}</Truncate>
                 </span>
               ))
             )}

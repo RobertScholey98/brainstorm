@@ -27,8 +27,8 @@
 //                    OverlayPanel for one its caller places, so it keeps the popover's column and nothing leaves its box
 //   blocked-hint     a focusable wrapper written round a disabled control, outside components/ui; the kit's BlockedHint
 //                    is that wrapper, and mounts a fresh tooltip so the hint opens on hover as well as on focus
-//   truncate-text    a title or brief cut by the bare truncate class, outside components/ui; the kit's Truncate cuts it
-//                    after a letter, never after a space or a comma
+//   truncate-text    text cut by the bare truncate class, outside components/ui; the kit's Truncate cuts it after a
+//                    letter, never after a space or a comma
 //   count-badge      a count in a Badge, outside components/ui; a count is the kit's Count, a muted numeral after its
 //                    label, and a Badge is a label such as the iteration
 //   frame-sandbox    an iframe anywhere in the renderer that isn't the canvas's: its src must be /canvas or
@@ -242,15 +242,16 @@ function countBadge(source) {
     });
 }
 
-/** An element cut by the truncate class whose only child is a title or a brief. */
+/** An element cut by the truncate class whose children are only text, which the kit's Truncate would cut on a letter. */
 function truncateText(source, lits) {
   return jsxElements(source).flatMap((el) => {
     const cls = el.attrs.find((a) => a.name === "className");
     if (cls === undefined || source[el.end] !== ">") return [];
     const cut = lits.some((l) => l.start >= cls.start && l.end <= cls.end && l.text.split(/\s+/).includes("truncate"));
-    const child = source.slice(el.end + 1, source.indexOf("<", el.end)).trim();
-    if (!cut || !/^\{[^{}]*\b(?:title|brief)\b[^{}]*\}$/.test(child)) return [];
-    return [{ rule: "truncate-text", line: el.line, text: `<${el.tag} truncate> ${child}`, message: "cut a title or brief with the kit's Truncate, which never ends on a space or a comma" }];
+    const next = source.indexOf("<", el.end);
+    const child = source.slice(el.end + 1, next).trim();
+    if (!cut || child === "" || !source.startsWith(`</${el.tag}>`, next)) return [];
+    return [{ rule: "truncate-text", line: el.line, text: `<${el.tag} truncate> ${child.replace(/\s+/g, " ")}`, message: "cut text with the kit's Truncate, which never ends on a space or a comma" }];
   });
 }
 

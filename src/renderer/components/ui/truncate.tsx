@@ -22,8 +22,14 @@ function measureCut(el: HTMLElement, text: string): string | null {
  * only while the text overflows. The full text stays in the element for copy, search and the accessible name; the cut
  * paints over it from `data-cut` (styles.css).
  */
-function Truncate({ children, className, ...props }: Omit<ComponentProps<"span">, "children"> & { children: string }) {
+function Truncate({ children, className, ref: outer, ...props }: Omit<ComponentProps<"span">, "children"> & { children: string }) {
   const ref = useRef<HTMLSpanElement>(null)
+  // A Hint hands its trigger a ref; the cut still needs its own.
+  const setRef = (el: HTMLSpanElement | null) => {
+    ref.current = el
+    if (typeof outer === "function") outer(el)
+    else if (outer) outer.current = el
+  }
   useLayoutEffect(() => {
     const el = ref.current
     if (el === null) return
@@ -39,7 +45,7 @@ function Truncate({ children, className, ...props }: Omit<ComponentProps<"span">
     return () => sizes.disconnect()
   }, [children])
   return (
-    <span ref={ref} data-slot="truncate" className={cn("block min-w-0 truncate", className)} {...props}>
+    <span ref={setRef} data-slot="truncate" className={cn("block min-w-0 truncate", className)} {...props}>
       {children}
     </span>
   )

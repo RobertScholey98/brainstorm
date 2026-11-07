@@ -14,6 +14,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { OverlayHeader, OverlayPanel, PopoverFooter } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { Count } from "@/components/ui/count";
 import type { Placement } from "./CanvasHost";
 
@@ -213,14 +214,14 @@ function FeedbackItem({
             <>
               {/* Out into the canvas, off the item's status and actions, and only when the line is cut. While Delete asks, the line asks the question, so it reads before its answers. */}
               <Hint label={where} side="left" disabled={!metaCut || confirming}>
-                <p
-                  className={cn("truncate pt-1 text-xs/snug", confirming ? "text-fg" : "text-fg-muted")}
+                <Truncate
+                  className={cn("pt-1 text-xs/snug", confirming ? "text-fg" : "text-fg-muted")}
                   onPointerEnter={(e) => setMetaCut(e.currentTarget.scrollWidth > e.currentTarget.clientWidth)}
                   data-feedback-meta
                   data-feedback-question={confirming || undefined}
                 >
                   {confirming ? "Delete this comment?" : where}
-                </p>
+                </Truncate>
               </Hint>
               {line !== null && (
                 <p className="text-xs/snug text-fg-muted" data-feedback-status>

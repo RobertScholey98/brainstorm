@@ -9,6 +9,7 @@ import { Slider as SliderBar } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Segmented as SegmentedControl } from "@/components/ui/segmented";
+import { Truncate } from "@/components/ui/truncate";
 import { Hint } from "@/components/ui/tooltip";
 import { cn } from "cn";
 import { controlCatalog } from "../core/controls";
@@ -75,7 +76,7 @@ function Row({
       <div className="relative flex h-6 items-center gap-1.5">
         {/* In the gutter, 6 px off the pane edge and 4 px before the label, so an overridden label keeps its edge. */}
         {overridden && <span aria-hidden className="absolute top-1/2 -left-2.5 size-1.5 -translate-y-1/2 rounded-full bg-fg" data-overridden-mark />}
-        <span className="truncate text-sm" data-control-label>{label}</span>
+        <Truncate className="text-sm" data-control-label>{label}</Truncate>
         <span className="ml-auto flex items-center gap-1">
           {overridden && reset !== null && (
             <Hint label="Reset to the agent's value" side="left">

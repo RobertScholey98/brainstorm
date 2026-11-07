@@ -163,7 +163,9 @@ export function Inspector({
         ) : (
           // With no block to name, the header row still holds, so the column keeps its top rule and its text's place.
           <Header>
-            <h2 className="min-w-0 truncate text-base font-semibold text-fg-muted">Settings</h2>
+            <h2 className="min-w-0 text-base font-semibold text-fg-muted">
+              <Truncate>Settings</Truncate>
+            </h2>
           </Header>
         )
       }
