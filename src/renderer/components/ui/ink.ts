@@ -1,14 +1,13 @@
 /** Layout lands on 1/64 px, so anything past this is a real overflow and anything under it is rounding. */
-const SLACK = 0.01
+export const SLACK = 0.01
 
 /**
  * An element's text and the room its box gives it, in fractional px. `scrollWidth` and `clientWidth` both round, so
  * a line 0.6 px too long reads as fitting while the browser's own ellipsis cuts it.
  */
-export function inkAndRoom(el: Element): { ink: number; room: number } {
+export function inkAndRoom(el: Element, s: CSSStyleDeclaration = getComputedStyle(el)): { ink: number; room: number } {
   const range = document.createRange()
   range.selectNodeContents(el)
-  const s = getComputedStyle(el)
   const edges = parseFloat(s.paddingLeft) + parseFloat(s.paddingRight) + parseFloat(s.borderLeftWidth) + parseFloat(s.borderRightWidth)
   return { ink: range.getBoundingClientRect().width, room: el.getBoundingClientRect().width - edges }
 }

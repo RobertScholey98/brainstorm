@@ -2,14 +2,14 @@ import { useLayoutEffect, useRef, type ComponentProps } from "react"
 import { cn } from "cn"
 
 import { cutText } from "@/components/ui/cut-text"
-import { inkAndRoom } from "@/components/ui/ink"
+import { inkAndRoom, SLACK } from "@/components/ui/ink"
 
 let ruler: CanvasRenderingContext2D | null = null
 
 function measureCut(el: HTMLElement, text: string, tail: string): string | null {
-  const { ink, room } = inkAndRoom(el)
-  if (ink <= room + 0.01) return null
   const style = getComputedStyle(el)
+  const { ink, room } = inkAndRoom(el, style)
+  if (ink <= room + SLACK) return null
   ruler ??= document.createElement("canvas").getContext("2d")
   if (ruler === null) return null
   ruler.font = style.font
