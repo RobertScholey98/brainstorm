@@ -447,16 +447,16 @@ try {
   await window.fill("[data-home-search]", "zebra");
   await window.waitForSelector('[data-home-none="no-match"]');
   check(
-    "a search with no match says so, naming only the search, with one way out",
+    "a search that matches nothing in any status says so, naming only the search and not the status, with one way out",
     [
       (await window.textContent('[data-home-none="no-match"] [data-slot=empty-description]'))?.trim(),
       (await window.textContent('[data-home-none="no-match"] [data-home-none-action]'))?.trim(),
     ],
-    ["No active brainstorm matches the search.", "Clear search"],
+    ["No brainstorm matches the search.", "Clear search"],
   );
   check(
-    "and sits under the query row, not down the page",
-    await window.evaluate(() => Math.round(document.querySelector("[data-home-none]").getBoundingClientRect().top - document.querySelector("[data-home-filters]").getBoundingClientRect().bottom)),
+    "and its icon sits 20 px under the query row, where the first card would, not down the page",
+    await window.evaluate(() => Math.round(document.querySelector('[data-home-none] [data-slot="empty-icon"]').getBoundingClientRect().top - document.querySelector("[data-home-filters]").getBoundingClientRect().bottom)),
     20,
   );
   check(
@@ -1200,10 +1200,15 @@ try {
     [await window.isVisible("[data-home-retry]"), await window.isVisible("[data-home-loading]"), (await window.textContent('[data-sidebar-panel="home"]'))?.includes("The list didn't load. Use Try again on the right.")],
     [true, false, true],
   );
+  check(
+    "the sidebar's note keeps the button's name Try again on one line",
+    await window.$eval("[data-home-failed-note] span", (name) => name.getClientRects().length),
+    1,
+  );
   check("a failed home keeps its page heading over the error", (await window.textContent("[data-home-overview] h1"))?.trim(), "All brainstorms");
   check(
-    "and its message sits under the query row as a no-match does, not down the page",
-    await window.evaluate(() => Math.round(document.querySelector("[data-home-error]").getBoundingClientRect().top - document.querySelector("[data-home-filters]").getBoundingClientRect().bottom)),
+    "and its icon sits 20 px under the query row, where the first card would, as a no-match's does",
+    await window.evaluate(() => Math.round(document.querySelector('[data-home-error] [data-slot="empty-icon"]').getBoundingClientRect().top - document.querySelector("[data-home-filters]").getBoundingClientRect().bottom)),
     20,
   );
   check(

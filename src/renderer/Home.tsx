@@ -120,7 +120,7 @@ export function HomeOverview({
           ) : nothing ? (
             <NoneShown
               title="No brainstorms match"
-              description={noMatch(query.status, search.trim() !== "", selected.size > 0)}
+              description={noMatch(query.status, search.trim() !== "", selected.size > 0, result.counts.all > 0)}
               action={clearLabel(search.trim() !== "", selected.size > 0 || query.status !== DEFAULT_HOME.status)}
               onAction={clear}
               data="no-match"
@@ -162,7 +162,9 @@ const STATUS_WORDS: Record<HomeStatus, string> = { active: "active", attention: 
 const ONE_OF: Record<HomeStatus, string> = { active: "active brainstorm", attention: "brainstorm waiting on you", settled: "settled brainstorm", all: "brainstorm" };
 
 /** Why nothing shows, naming only what is narrowing it, so the copy never blames a filter that isn't on. */
-function noMatch(status: HomeStatus, searched: boolean, picked: boolean): string {
+/** `elsewhere` is whether another status holds a match; if none does, the status didn't narrow anything, so isn't named. */
+function noMatch(shown: HomeStatus, searched: boolean, picked: boolean, elsewhere: boolean): string {
+  const status = elsewhere ? shown : "all";
   if (searched && picked) return `No ${ONE_OF[status]} in the projects you picked matches the search.`;
   if (searched) return `No ${ONE_OF[status]} matches the search.`;
   if (picked) return `There is no ${ONE_OF[status]} in the projects you picked.`;
@@ -173,8 +175,8 @@ const clearLabel = (searched: boolean, filtered: boolean) =>
   searched && filtered ? "Clear search and filters" : searched ? "Clear search" : "Clear filters";
 
 /** Home with cards to show but none the search and filters let through, and the one step that shows some again. */
-/** Every message home shows in place of cards sits just under what is above it, so the page top never moves. */
-const MESSAGE = "flex-none rounded-none py-12";
+/** Every message home shows in place of cards starts where the first card would, so the page top never moves. */
+const MESSAGE = "flex-none rounded-none pt-0 pb-12";
 
 function NoneShown({ title, description, action, onAction, data }: { title: string; description: string; action: string; onAction: () => void; data: string }) {
   return (

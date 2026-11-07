@@ -10,7 +10,8 @@ const RETIRED: readonly { readonly pattern: RegExp; readonly say: string }[] = [
   { pattern: /\b(?:min|days?|hours?|h) ago\b|\byesterday\b/i, say: "an age from time.ts, which every surface writes one way: 5m, 3h, 2d" },
   { pattern: /toLocale(?:Date)?String/, say: "age from time.ts, whose months are all three letters" },
   { pattern: /No iterations yet|agent's first commit/, say: "WAITING from Preview.tsx, the one name for a brainstorm with no iteration" },
-  { pattern: /Restart Brainstorm, then try again/, say: "Try again, and if it still fails, restart Brainstorm: the copy sits over a Try again button" },
+  { pattern: /Restart Brainstorm, then try again/, say: "If it happens again, restart Brainstorm: the copy sits over a Try again button" },
+  { pattern: /Try again, and if it still fails/, say: "If it happens again, restart Brainstorm: the same copy shows in a toast, which has no Try again button" },
 ];
 
 const sources = (dir: string): string[] =>
