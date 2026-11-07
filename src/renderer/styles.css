@@ -161,7 +161,10 @@
   }
 }
 
-/* While a pane is dragged, the canvas iframe would swallow the pointer and the sidebar's width transition would lag it. */
+/*
+ * While a pane is dragged, the canvas iframe would swallow the pointer and the sidebar's width transition would lag it.
+ * A window resize moves the sidebar's width too, and a lagging sidebar re-zoomed the canvas at every step of its slide.
+ */
 body[data-resizing] {
   cursor: col-resize;
   user-select: none;
@@ -169,8 +172,8 @@ body[data-resizing] {
 body[data-resizing] iframe {
   pointer-events: none;
 }
-body[data-resizing] [data-slot="sidebar-gap"],
-body[data-resizing] [data-slot="sidebar-container"] {
+body:is([data-resizing], [data-window-resizing]) [data-slot="sidebar-gap"],
+body:is([data-resizing], [data-window-resizing]) [data-slot="sidebar-container"] {
   transition: none;
 }
 

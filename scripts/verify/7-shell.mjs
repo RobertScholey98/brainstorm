@@ -769,11 +769,19 @@ try {
       }),
     );
   check("a stage frame that doesn't scroll sits centred, 24 px off each side of the canvas", await centring(), { scrolls: false, sides: [24, 24] });
-  await window.setViewportSize({ width: 1100, height: 720 });
   const applied = () => canvas.$eval(".bs-frame:not([data-offstage]) .bs-frame-body", (b) => getComputedStyle(b).zoom);
   const at1100 = [];
+  const between = [];
+  const gap = () => window.$eval('[data-slot="sidebar-gap"]', (el) => el.getBoundingClientRect().width);
   for (let i = 0; i < 3; i++) {
+    const from = await gap();
     await window.setViewportSize({ width: 1100, height: 720 });
+    // The sidebar's width follows the window's. Sliding there over 200 ms, it zoomed the canvas through 49, 50, 51 and
+    // 52 on the way to 53, and a read that landed mid-slide flaked the check below (R10-12).
+    const seen = new Set();
+    for (const t0 = Date.now(); Date.now() - t0 < 800; ) seen.add(await gap());
+    const to = await gap();
+    between.push([...seen].filter((w) => w !== from && w !== to));
     await settled(zoomShown);
     at1100.push({ ...(await fit()), applied: await applied() });
     await window.setViewportSize({ width: 1440, height: 900 });
@@ -784,6 +792,8 @@ try {
     at1100,
     Array(3).fill({ sideways: false, zoom: "53", fits: true, applied: "0.534694" }),
   );
+  check("a window resize moves the sidebar to its new width at once, never through the widths of a slide", between, [[], [], []]);
+  check("and the resize leaves no mark on the window once it rests", await window.evaluate(() => document.body.hasAttribute("data-window-resizing")), false);
   check(
     "the page never scrolls sideways",
     await window.evaluate(() => [document.documentElement.scrollWidth <= innerWidth, document.body.scrollWidth <= innerWidth, scrollX]),
@@ -1329,6 +1339,20 @@ try {
     }, loose),
     { row: true, card: true },
   );
+  const looseGroup = await window.$eval(`[data-session="${loose}"]`, (row) => row.closest("[data-project]").dataset.project);
+  await window.click(`[data-project="${looseGroup}"] [data-project-label]`);
+  await window.waitForSelector(`[data-session="${loose}"]`, { state: "detached" });
+  check(
+    "folding the group keeps its lost thread in sight: the head shows that phase's dot before its count",
+    await window.$eval(`[data-project="${looseGroup}"] [data-project-label]`, (label) => {
+      const dot = label.querySelector("[data-group-phase]");
+      const count = label.querySelector("[data-project-count]");
+      return [dot?.dataset.groupPhase, dot !== null && dot.checkVisibility() && dot.getBoundingClientRect().right <= count.getBoundingClientRect().left];
+    }),
+    ["thread_lost", true],
+  );
+  await window.click(`[data-project="${looseGroup}"] [data-project-label]`);
+  await window.waitForSelector(`[data-session="${loose}"]`);
   await window.click(`[data-home-status="${shownStatus}"]`);
   check("the window logged no errors or warnings after the restart", errors, []);
 
@@ -1378,11 +1402,34 @@ try {
     [true, false, true],
   );
   check(
-    "the sidebar's note keeps the button's name Try again on one line",
-    await window.$eval("[data-home-failed-note] span", (name) => name.getClientRects().length),
-    1,
+    "the sidebar's note keeps the button's name Try again on one line, and each sentence on a line of its own",
+    await window.$eval("[data-home-failed-note]", (note) => {
+      const lines = (el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
+      };
+      return [note.querySelector("[data-home-retry-name]").getClientRects().length, [...note.querySelectorAll(":scope > span")].map(lines)];
+    }),
+    [1, [1, 1]],
   );
   check("a failed home keeps its page heading over the error", (await window.textContent("[data-home-overview] h1"))?.trim(), "All brainstorms");
+  check(
+    "it states the failure as every failure does: a danger title over its reason in fg",
+    await window.$eval("[data-home-error]", (error) => {
+      const tone = (name) => {
+        const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: `color: var(--${name})` }));
+        const colour = getComputedStyle(probe).color;
+        probe.remove();
+        return colour;
+      };
+      return [
+        getComputedStyle(error.querySelector("[data-slot=empty-title]")).color === tone("danger"),
+        getComputedStyle(error.querySelector("[data-slot=empty-description]")).color === tone("fg"),
+      ];
+    }),
+    [true, true],
+  );
   check(
     "and its icon sits 20 px under the query row, where the first card would, as a no-match's does",
     await window.evaluate(() => Math.round(document.querySelector('[data-home-error] [data-slot="empty-icon"]').getBoundingClientRect().top - document.querySelector("[data-home-filters]").getBoundingClientRect().bottom)),
@@ -1417,6 +1464,20 @@ try {
     ],
     [true, loadingTop, [true, "0.5"], false],
   );
+  for (const theme of ["light", "dark"]) {
+    await window.emulateMedia({ colorScheme: theme });
+    check(
+      `in ${theme}, the off row's status switch draws no raised chip, so it shows no choice as made`,
+      await settled(() =>
+        window.$eval("[data-home-filters] [data-slot=segmented] [data-pressed]", (chip) => {
+          const style = getComputedStyle(chip);
+          return [style.backgroundColor, /[1-9]/.test(style.boxShadow.replace(/rgba?([^)]*)/g, ""))];
+        }),
+      ),
+      ["rgba(0, 0, 0, 0)", false],
+    );
+  }
+  await window.emulateMedia({ colorScheme: "light" });
 
   // No viewport emulation from here: the page must track the real window, as it does for Rob.
   await app.close();
