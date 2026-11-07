@@ -420,7 +420,7 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
           <SidebarMenuItem>
             {fork.parent.state === "gone" ? (
               <div className="flex h-8 items-center gap-2 px-2 text-xs text-fg-muted" data-forked-from="gone">
-                <GitBranch aria-hidden className="size-3.5 shrink-0" />
+                <GitBranch aria-hidden className="size-4 shrink-0" />
                 <ForkedFrom title={fork.parent.title} from={`iteration ${fork.from}, since discarded`} />
               </div>
             ) : (

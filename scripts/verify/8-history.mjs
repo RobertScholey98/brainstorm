@@ -295,6 +295,21 @@ try {
     ["· iteration 2", true],
   );
   check(
+    "the fork line's glyph sits on the Thread row's mark column, and its text on the Thread title's edge",
+    await window.evaluate(() => {
+      const centre = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.left + r.width / 2;
+      };
+      const dot = document.querySelector("[data-thread-link] span.size-1\\.5");
+      const glyph = document.querySelector("[data-forked-from] svg");
+      const title = document.querySelector("[data-thread-link] [data-slot='truncate'], [data-thread-link] [data-thread]");
+      const line = document.querySelector("[data-forked-line]");
+      return [Math.round(centre(glyph) - centre(dot)), Math.round(line.getBoundingClientRect().left - title.getBoundingClientRect().left)];
+    }),
+    [0, 0],
+  );
+  check(
     "its first message is the [brainstorm] marker for the fork's request 1, telling the new thread to attach",
     started[0]?.message.split("\n").slice(0, 2),
     [
