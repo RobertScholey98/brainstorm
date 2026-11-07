@@ -218,7 +218,22 @@ async function setCombo(page, c) {
  * Shoots the current state in every theme and width. `each` re-enters anything a resize or a parked pointer undoes. A
  * `brief` state reverts on a timer shorter than settling takes, so it is shot as soon as `each` has entered it.
  */
-async function capture(page, name, { keepFocus = false, loading = false, brief = false, each } = {}) {
+/**
+ * Scrolls `selector` to the middle of its scroller, then says what covers any of its corners, or null when all four
+ * are its own. A shot of a hover must show the element whole, not under a sticky row.
+ */
+async function inView(page, selector) {
+  return page.$eval(selector, async (el) => {
+    el.scrollIntoView({ block: "center", inline: "nearest" });
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const r = el.getBoundingClientRect();
+    const corners = [[r.left + 4, r.top + 4], [r.right - 4, r.top + 4], [r.left + 4, r.bottom - 4], [r.right - 4, r.bottom - 4]];
+    const over = corners.map(([x, y]) => document.elementFromPoint(x, y)).filter((hit) => hit === null || !el.contains(hit));
+    return over.length === 0 ? null : over.map((hit) => hit?.closest("[data-slot], [class]")?.getAttribute("data-slot") ?? hit?.tagName ?? "outside the window").join(", ");
+  });
+}
+
+async function capture(page, name, { keepFocus = false, loading = false, brief = false, each, covered } = {}) {
   const shot = shotOf(name);
   const problems = [];
   for (const c of COMBOS) {
@@ -227,6 +242,13 @@ async function capture(page, name, { keepFocus = false, loading = false, brief =
     // A hover or click aimed while the layout is still moving lands on where an element was.
     await untilStill(page);
     if (each !== undefined) await each(c);
+    const cover = covered === undefined ? null : await covered(c);
+    if (cover !== null) {
+      writeFileSync(join(comboDir(c), `${shot.file}.missing.txt`), `The element the shot is about is covered: ${cover}
+`);
+      problems.push(`${c.theme} ${c.width}: covered by ${cover}`);
+      continue;
+    }
     const unsettled = brief ? null : await settle(page, { keepFocus, loading });
     if (unsettled === null) {
       await page.screenshot({ path: join(comboDir(c), `${shot.file}.png`) });
@@ -595,7 +617,15 @@ function scenes(page, home, env, t3, sessions) {
           await page.waitForSelector("[data-slot=tooltip-content]");
         },
       });
-      await capture(page, "state-hover-card", { each: () => page.hover(`[data-overview-session="${sessions.roulette.id}"] [data-card-open]`) });
+      const card = `[data-overview-session="${sessions.roulette.id}"]`;
+      let cardCover = null;
+      await capture(page, "state-hover-card", {
+        each: async () => {
+          cardCover = await inView(page, card);
+          await page.hover(`${card} [data-card-open]`);
+        },
+        covered: () => cardCover,
+      });
     },
 
     async views() {
@@ -1129,6 +1159,8 @@ public static class Above {
   [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int a, out int v, int s);
   public static string Over(long own, int x, int y, int w, int h) {
     var hits = new StringBuilder();
+    int hidden;
+    if (DwmGetWindowAttribute(new IntPtr(own), 14, out hidden, 4) == 0 && hidden != 0) hits.Append("(the window itself is cloaked, on another virtual desktop) ");
     for (var p = GetWindow(new IntPtr(own), 3); p != IntPtr.Zero; p = GetWindow(p, 3)) {
       int cloaked;
       if (!IsWindowVisible(p) || (DwmGetWindowAttribute(p, 14, out cloaked, 4) == 0 && cloaked != 0)) continue;
@@ -1145,10 +1177,41 @@ public static class Above {
 `;
 
 /**
- * Copies a physical-pixel rectangle of the screen to a PNG, as a DPI-aware process so the rectangle isn't rescaled.
- * Returns the classes of any windows over the rectangle before or after the copy, empty when the shot is clean.
+ * The share of a screen grab that differs from the page's own render of the same moment, sampled every 2 px with the
+ * native buttons' corner left out. A Windows toast sits in a z-band above every app window, so walking the windows
+ * above ours never finds it; comparing what the screen shows with what the page drew does. Both are physical pixels,
+ * so they compare pixel for pixel over the area they share, and even a pale toast on a pale page differs by more
+ * than the 6 levels a clean grab never reaches.
  */
-function screenGrab(hwnd, { x, y, width, height }, path) {
+const DIFFER = String.raw`
+using System; using System.Drawing;
+public static class Differ {
+  public static double Share(string grabPath, string pagePath, int buttonsWidth, int buttonsHeight) {
+    using (var grab = new Bitmap(grabPath)) using (var page = new Bitmap(pagePath)) {
+      int w = Math.Min(grab.Width, page.Width), h = Math.Min(grab.Height, page.Height);
+      int seen = 0, off = 0;
+      for (int y = 0; y < h; y += 2) for (int x = 0; x < w; x += 2) {
+        if (x >= w - buttonsWidth && y < buttonsHeight) continue;
+        Color a = grab.GetPixel(x, y), b = page.GetPixel(x, y);
+        seen++;
+        if (Math.Max(Math.Abs(a.R - b.R), Math.Max(Math.Abs(a.G - b.G), Math.Abs(a.B - b.B))) > 6) off++;
+      }
+      return seen == 0 ? 0 : (double)off / seen;
+    }
+  }
+}
+`;
+/** Above this share the grab shows something the page didn't draw: a toast covers about 3% of a 1440 window. */
+const COVERED_SHARE = 0.002;
+/** The native caption buttons' corner, in DIP, which the screen shows and the page's own render doesn't. */
+const CAPTION_BUTTONS = { width: 160, height: 48 };
+
+/**
+ * Copies a physical-pixel rectangle of the screen to a PNG, as a DPI-aware process so the rectangle isn't rescaled.
+ * Returns what covers the rectangle, empty when the shot is clean: the classes of any windows stacked over it before or
+ * after the copy, and whether the grab shows something the page's own render at `pagePath` doesn't.
+ */
+function screenGrab(hwnd, { x, y, width, height }, path, pagePath, scale) {
   const script = join(temp, "bs-capture-grab.ps1");
   writeFileSync(
     script,
@@ -1162,7 +1225,11 @@ function screenGrab(hwnd, { x, y, width, height }, path) {
       `$g.CopyFromScreen(${x}, ${y}, 0, 0, $b.Size)`,
       `$b.Save('${path.replace(/'/g, "''")}', [System.Drawing.Imaging.ImageFormat]::Png)`,
       `$after = [Above]::Over(${hwnd}, ${x}, ${y}, ${width}, ${height})`,
-      "Write-Output (($before, $after) -join ' ').Trim()",
+      "$g.Dispose(); $b.Dispose()",
+      `Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'\n${DIFFER}\n'@`,
+      `$share = [Differ]::Share('${path.replace(/'/g, "''")}', '${pagePath.replace(/'/g, "''")}', ${Math.ceil(CAPTION_BUTTONS.width * scale)}, ${Math.ceil(CAPTION_BUTTONS.height * scale)})`,
+      `$drawn = if ($share -gt ${COVERED_SHARE}) { 'something the page did not draw, over ' + [math]::Round($share * 100, 1) + '% of it' } else { '' }`,
+      "Write-Output (($before, $after, $drawn) -join ' ').Trim()",
     ].join("\n"),
   );
   return execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script], { encoding: "utf8" }).trim();
@@ -1264,15 +1331,23 @@ try {
       await sleep(800);
       // A notification from another app can land over the window mid-run; it clears in seconds, so the shot waits it out.
       const png = join(comboDir(c), `${shot.file}.png`);
-      let over = screenGrab(hwnd, rect, png);
+      const drawn = join(temp, "bs-capture-page.png");
+      const grab = async () => {
+        const page = await run.app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString("base64"));
+        writeFileSync(drawn, Buffer.from(page, "base64"));
+        return screenGrab(hwnd, rect, png, drawn, rect.width / size[0]);
+      };
+      let over = await grab();
       for (let tries = 0; over !== "" && tries < 10; tries++) {
+        console.log(`waiting ${shot.file} ${c.theme} ${c.width}: ${over}`);
         await sleep(3000);
-        over = screenGrab(hwnd, rect, png);
+        over = await grab();
       }
       if (over !== "") {
         rmSync(png);
-        writeFileSync(join(comboDir(c), `${shot.file}.missing.txt`), `Another window stayed over this one: ${over}\n`);
+        writeFileSync(join(comboDir(c), `${shot.file}.missing.txt`), `Something stayed over the window: ${over}\n`);
         problems.push(`${c.theme} ${c.width}: covered by ${over}`);
+        console.log(`COVERED ${shot.file} ${c.theme} ${c.width}: ${over}. The shot is left out rather than shipped covered.`);
       }
     }
     await run.app.evaluate(({ nativeTheme }) => (nativeTheme.themeSource = "system"));
