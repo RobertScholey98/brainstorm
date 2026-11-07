@@ -128,3 +128,15 @@ The past view says "read-only" once, in the Inspector. Its comments, which belon
 ## Amendment: round 8. Entries share the strip by what their lines need
 
 Every entry took one even share, so in round 8's shot 71 "Explain the weighting" sat in room it didn't use while the lines beside it were cut. While the entries fit, an entry whose lines need less than an even share now keeps only that, and the rest share what is left. With room past every need, the narrow ones grow first. Each stays between 180 and 380 px. Once the entries overflow they keep one width, so the arrows step by it and the strip still rests on whole entries. `stripFit` takes each entry's need, measured at max-content, and lays the entries out as grid columns. `verify:8` checks that with room for two entries their lines read whole, and that with a fork beside them no entry holds room a cut line could use. That check fails on the even share.
+
+## Amendment: round 8 fix pass. The head is as wide as its words, and an entry as wide as its lines
+
+Seven reviewers found the strip cutting its lines while room sat idle beside them (R8-7 to R8-11). The head held a fixed 144 px for about 80 px of words, reserving room for arrows that weren't showing. A lone entry grew to 380 px of empty selected fill. At the 180 px floor the newest entry cut "latest" mid-word and lost its age.
+
+- **The head.** It is as wide as its words. The arrows show only while the entries overflow, on the heading's line, which always has their height, so the heading keeps one place either way. The fit judges the room with the head at its words first. Arrows only take room, so entries that overflow without them overflow with them, and the strip never flips between the two.
+- **An entry's width.** While the entries fit, each takes what its lines need and no more, between 180 and 380 px, and the rest of the strip stays empty. Short of room they share it as before, but none below its floor. The floor is the entry's number and age, measured, so the age never cuts. "latest" follows the age and wraps out of sight whole when it can't fit, so it reads whole or not at all. The entry's hint names the iteration, its age and what made it.
+- **The origin.** The kit's cut never leaves fewer than three characters after a middle dot. "Vary Spin button ×3 · b…" now ends "Vary Spin button ×3…".
+- **The skeleton.** Its entry is a first iteration's entry with the words hidden in the bars, so it is as wide as the entry that lands.
+- **Edges.** An unselected entry's edge is `border-strong`, about 1.1:1 before. An end with entries hidden past it shows a 12 px shadow over the inset, which at rest holds no entry. The sideways fade stays for an entry passing that edge mid-scroll.
+
+`test/stripFit.test.ts` holds the fit's cases. `verify:8` checks the head's spare width with and without arrows, the heading's place, the entries' edges, the hint's age, no entry wider than its lines, every age whole and "latest" never cut at 1100 and 1440, the edge cues at the end and the middle, and the skeleton against the landed entry. Each of those fails on the round 8 strip.

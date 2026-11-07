@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, GitBranch, History as HistoryIcon } from "lucide-react";
-import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -9,7 +9,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { originText } from "../core/machines";
 import type { ForkBranch, HistoryEntry, IterationN, Result, SessionId, SessionPreview, SessionView, SlotId } from "../core/types";
 import { IterationStill } from "./Preview";
-import { STRIP_GAP, stripFit, stripRest, type StripFit } from "./stripFit";
+import { STRIP_GAP, stripFit, stripRest, type EntryNeed, type StripFit } from "./stripFit";
 import { age, useNow } from "./time";
 
 export type LoadIterationStill = (at: { readonly n: IterationN; readonly slot: SlotId | null }) => Promise<Result<SessionPreview | null>>;
@@ -48,6 +48,9 @@ export function Filmstrip({
 }) {
   const now = useNow();
   const { iterations, forks } = view.history;
+  const section = useRef<HTMLElement>(null);
+  const head = useRef<HTMLDivElement>(null);
+  const steps = useRef<HTMLSpanElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const latest = iterations.at(-1)?.n;
@@ -57,18 +60,28 @@ export function Filmstrip({
   ];
   const shownAt = items.findIndex((i) => i.kind === "iteration" && i.entry.n === showing);
 
-  const [fit, setFit] = useState<StripFit>(() => stripFit(0, items.map(() => 0)));
+  const [fit, setFit] = useState<StripFit>(() => stripFit(0, items.map(() => ({ need: 0, floor: 0 }))));
   const [ends, setEnds] = useState({ start: true, end: true });
   useLayoutEffect(() => {
-    const [box, entries] = [scroller.current, list.current];
-    if (box === null || entries === null) return;
+    const [strip, top, arrows, entries] = [section.current, head.current, steps.current, list.current];
+    if (strip === null || top === null || arrows === null || entries === null) return;
+    // The room is judged with the head at its words first. Arrows only take room, so entries that overflow without
+    // them overflow with them too, and the strip never flips between the two.
     const measure = () => {
-      const next = stripFit(box.clientWidth, needs(entries));
+      const lines = needs(entries);
+      const shown = arrows.style.display;
+      arrows.style.display = "none";
+      const plain = top.getBoundingClientRect().width;
+      arrows.style.removeProperty("display");
+      const stepped = top.getBoundingClientRect().width;
+      arrows.style.display = shown;
+      const loose = stripFit(strip.clientWidth - plain, lines);
+      const next = loose.step === null ? loose : stripFit(strip.clientWidth - stepped, lines);
       setFit((prev) => (prev.shown === next.shown && prev.step === next.step && prev.widths.join() === next.widths.join() ? prev : next));
     };
     measure();
     const sizes = new ResizeObserver(measure);
-    sizes.observe(box);
+    sizes.observe(strip);
     // An entry's lines change as its age ticks and as an origin lands.
     const lines = new MutationObserver(measure);
     lines.observe(entries, { subtree: true, childList: true, characterData: true });
@@ -115,22 +128,24 @@ export function Filmstrip({
   };
 
   return (
-    <section className={STRIP} aria-label="History" data-history data-history-overflows={fit.step !== null || undefined}>
+    <section ref={section} className={STRIP} aria-label="History" data-history data-history-overflows={fit.step !== null || undefined}>
       <StripHead
+        ref={head}
         steps={
-          fit.step !== null && (
-            <>
-              <StripStep side="start" disabled={ends.start} onClick={() => page(-1)} />
-              <StripStep side="end" disabled={ends.end} onClick={() => page(1)} />
-            </>
-          )
+          <span ref={steps} className="flex gap-0.5" style={fit.step === null ? { display: "none" } : undefined} data-history-steps>
+            <StripStep side="start" disabled={ends.start} onClick={() => page(-1)} />
+            <StripStep side="end" disabled={ends.end} onClick={() => page(1)} />
+          </span>
         }
       >
-        <Truncate data-history-count>
+        <span className="whitespace-nowrap" data-history-count>
           {`${iterations.length} ${iterations.length === 1 ? "iteration" : "iterations"}${forks.length > 0 ? ` · ${forks.length} ${forks.length === 1 ? "fork" : "forks"}` : ""}`}
-        </Truncate>
+        </span>
       </StripHead>
-      <div ref={scroller} className={STRIP_SCROLL} onScrollEnd={onScrollEnd} data-history-scroll>
+      <div className="relative flex min-w-0 flex-1">
+        <EdgeCue side="start" shown={fit.step !== null && !ends.start} />
+        <EdgeCue side="end" shown={fit.step !== null && !ends.end} />
+        <div ref={scroller} className={STRIP_SCROLL} onScrollEnd={onScrollEnd} data-history-scroll>
         <div
           ref={list}
           role="listbox"
@@ -160,9 +175,29 @@ export function Filmstrip({
               />
             ),
           )}
+          </div>
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * A shadow at an end with more that way. It stands over the inset, which at rest holds no entry, so it says more is
+ * hidden there without the entry beside it reading as cut.
+ */
+function EdgeCue({ side, shown }: { side: "start" | "end"; shown: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-y-0 z-raised w-3 from-fg/12 to-transparent transition-opacity",
+        side === "start" ? "left-0 bg-linear-to-r" : "right-0 bg-linear-to-l",
+        shown ? "opacity-100" : "opacity-0",
+      )}
+      data-history-cue={side}
+      data-shown={shown || undefined}
+    />
   );
 }
 
@@ -173,31 +208,46 @@ const STRIP_SCROLL = "scroll-fades-x scrollbar-none flex min-w-0 flex-1 snap-x s
 const STRIP_LIST = "grid w-max grid-flow-col grid-cols-strip items-center gap-4 px-4";
 /** Every entry in the strip takes the width the fit gives it, its column's. */
 const ENTRY = "min-w-0 snap-start";
+/** An iteration's entry: its still, then its lines, inside a 1 px edge that holds on the card in both themes. */
+const ENTRY_BOX = "flex items-center gap-2 rounded-lg p-1 ring-1";
 
-/** What each entry needs for its lines to read whole: its width at max-content. */
-function needs(list: HTMLElement): number[] {
+/**
+ * What each entry needs: its width at max-content for every line to read whole, and its width with only its number
+ * and its age, the words that never give way.
+ */
+function needs(list: HTMLElement): EntryNeed[] {
   return [...list.children].map((entry) => {
-    if (!(entry instanceof HTMLElement)) return 0;
+    if (!(entry instanceof HTMLElement)) return { need: 0, floor: 0 };
     entry.style.width = "max-content";
     const need = entry.getBoundingClientRect().width;
+    const optional = [...entry.querySelectorAll<HTMLElement>("[data-history-origin], [data-history-latest]")];
+    let floor = 0;
+    if (optional.length > 0) {
+      for (const el of optional) el.style.display = "none";
+      floor = entry.getBoundingClientRect().width;
+      for (const el of optional) el.style.removeProperty("display");
+    }
     entry.style.removeProperty("width");
-    return need;
+    return { need, floor };
   });
 }
 
 /**
- * The strip's head, one width whatever the count says, so the first entry never moves as iterations land. While the
- * entries overflow, its arrows say so and step through them, which is why the strip draws no scrollbar.
+ * The strip's head, as wide as its words. While the entries overflow, its arrows follow the heading on its first line,
+ * which always has their height, so the heading keeps one place whether or not they show. They step through the
+ * entries, which is why the strip draws no scrollbar.
  */
-function StripHead({ children, steps }: { children: ReactNode; steps?: ReactNode }) {
+function StripHead({ children, steps, ref }: { children: ReactNode; steps?: ReactNode; ref?: Ref<HTMLDivElement> }) {
   return (
-    <div className="flex w-menu shrink-0 flex-col justify-center gap-0.5 pl-4 text-xs text-fg-muted">
-      <h2 className="flex items-center gap-1.5 font-medium text-fg">
-        <HistoryIcon aria-hidden className="size-3.5" />
-        History
-      </h2>
+    <div ref={ref} className="flex w-max shrink-0 flex-col justify-center gap-0.5 pl-4 text-xs text-fg-muted" data-history-head>
+      <span className="flex h-6 items-center gap-2">
+        <h2 className="flex items-center gap-1.5 font-medium text-fg">
+          <HistoryIcon aria-hidden className="size-3.5" />
+          History
+        </h2>
+        {steps}
+      </span>
       {children}
-      {steps && <span className="-ml-1 mt-1 flex gap-1">{steps}</span>}
     </div>
   );
 }
@@ -222,7 +272,17 @@ export function FilmstripSkeleton() {
       </StripHead>
       <div className={STRIP_SCROLL}>
         <div className={STRIP_LIST}>
-          <Skeleton className="h-still w-picker rounded-lg" />
+          {/* A first iteration's entry, its words hidden in the bars, so it is as wide as the entry that lands. */}
+          <div className={cn(ENTRY_BOX, "ring-border")} data-history-skeleton-entry>
+            <Skeleton className="h-still w-16 rounded-md" />
+            <span className="grid gap-0.5 pr-1">
+              <span className="flex items-baseline gap-1.5 text-sm">
+                <Skeleton className="font-medium text-transparent">Iteration 1</Skeleton>
+                <Skeleton className="text-xs text-transparent">now · latest</Skeleton>
+              </span>
+              <Skeleton className="text-xs text-transparent">{originText({ kind: "brief" })}</Skeleton>
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -250,28 +310,33 @@ function StillOption({
 }) {
   const load = useCallback(() => loadStill({ n: entry.n, slot }), [loadStill, entry.n, slot]);
   const origin = originText(entry.origin);
+  const when = `${age(entry.createdAt, now)}${latest ? " · latest" : ""}`;
   return (
-    <Hint label={origin} side="top">
+    <Hint name={`Iteration ${entry.n}`} label={`${when} · ${origin}`} side="top">
       <div
         role="option"
         aria-selected={selected}
-        aria-label={`Iteration ${entry.n}${latest ? ", latest" : ""}: ${origin}`}
+        aria-label={`Iteration ${entry.n}, ${when.replace(" · ", ", ")}: ${origin}`}
         tabIndex={selected ? 0 : -1}
         onClick={onShow}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onShow())}
-        className={cn(
-          ENTRY,
-          "flex cursor-pointer items-center gap-2 rounded-lg p-1 outline-none ring-1 ring-border hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring",
-          selected && "bg-selected ring-border-strong",
-        )}
+        className={cn(ENTRY, ENTRY_BOX, "cursor-pointer outline-none ring-border-strong hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring", selected && "bg-selected")}
         data-history-n={entry.n}
         data-selected={selected || undefined}
       >
         <IterationStill load={load} revision={revision} />
         <span className="grid min-w-0 flex-1 gap-0.5 pr-1">
-          <span className="flex min-w-0 items-baseline gap-1.5 text-sm">
-            <span className="shrink-0 font-medium">Iteration {entry.n}</span>
-            <Truncate className="text-xs text-fg-muted tabular-nums">{`${latest ? "latest · " : ""}${age(entry.createdAt, now)}`}</Truncate>
+          {/* One line that never cuts: "latest" comes last and wraps out of sight, whole, when it doesn't fit. */}
+          <span className="flex h-4.5 min-w-0 flex-wrap items-baseline gap-x-1.5 overflow-hidden text-sm">
+            <span className="font-medium">Iteration {entry.n}</span>
+            <span className="text-xs text-fg-muted tabular-nums" data-history-age>
+              {age(entry.createdAt, now)}
+            </span>
+            {latest && (
+              <span className="text-xs text-fg-muted" data-history-latest>
+                · latest
+              </span>
+            )}
           </span>
           <Truncate className="text-xs" data-history-origin>
             {origin}

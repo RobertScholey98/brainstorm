@@ -57,9 +57,51 @@ const stripRest = (window) =>
       shown: inView.some((el) => el.getAttribute("aria-selected") === "true"),
       insets: [Math.round(first.left - box.left), Math.round(box.right - last.right)],
       scrolled: Math.round(scroller.scrollLeft),
-      arrows: document.querySelectorAll("[data-history-step]").length,
+      arrows: [...document.querySelectorAll("[data-history-step]")].filter((el) => el.getClientRects().length > 0).length,
     };
   });
+/**
+ * The strip's head: how much wider it is than its widest line, and where its heading sits below the strip's top edge,
+ * which should be one place whether or not the arrows show.
+ */
+const stripHead = (window) =>
+  window.evaluate(() => {
+    const head = document.querySelector("[data-history-head]");
+    const inner = head.getBoundingClientRect().width - parseFloat(getComputedStyle(head).paddingLeft) - parseFloat(getComputedStyle(head).paddingRight);
+    const ink = (line) => {
+      const range = document.createRange();
+      range.selectNodeContents(line);
+      return range.getBoundingClientRect().width;
+    };
+    return {
+      spare: Math.round(inner - Math.max(...[...head.children].map(ink))),
+      heading: Math.round(head.querySelector("h2").getBoundingClientRect().top - document.querySelector("[data-history]").getBoundingClientRect().top),
+    };
+  });
+/**
+ * Each iteration entry in view, by number: whether its age reads whole, cut or gone, and whether "latest" reads whole,
+ * cut or gone. Gone means wrapped out of its line, whole, as the line gives way.
+ */
+const firstLines = (window) =>
+  window.evaluate(() => {
+    const box = document.querySelector("[data-history-scroll]").getBoundingClientRect();
+    const read = (el, line, entry) => {
+      if (el === null) return null;
+      const r = el.getBoundingClientRect();
+      if (r.top >= line.bottom - 0.5) return "gone";
+      return r.right <= entry.right + 0.5 && r.right <= line.right + 0.5 ? "whole" : "cut";
+    };
+    return [...document.querySelectorAll("[data-history-list] [data-history-n]")]
+      .filter((el) => el.getBoundingClientRect().right > box.left + 1 && el.getBoundingClientRect().left < box.right - 1)
+      .map((el) => {
+        const line = el.querySelector("[data-history-age]").parentElement.getBoundingClientRect();
+        const entry = el.getBoundingClientRect();
+        return [Number(el.dataset.historyN), read(el.querySelector("[data-history-age]"), line, entry), read(el.querySelector("[data-history-latest]"), line, entry)];
+      });
+  });
+/** Which ends of the strip show their cue that more waits that way, once the cues have faded in or out. */
+const edgeCues = (window) =>
+  settled(() => window.$$eval("[data-history-cue]", (els) => els.filter((el) => getComputedStyle(el).opacity === "1").map((el) => el.dataset.historyCue)));
 /**
  * The strip's entries with a line cut, and, while any is, the ones wider than their lines need, which hold room a cut
  * line could use.
@@ -75,7 +117,7 @@ const stripLines = (window) =>
       el.style.removeProperty("width");
       return width > Math.max(180, need) + 1;
     });
-    return { cut: cut.map(name), spare: cut.length === 0 ? [] : spare.map(name) };
+    return { cut: cut.map(name), spare: cut.length === 0 ? [] : spare.map(name), wide: spare.map(name) };
   });
 /** Runs `act`, then waits for the strip's `scrollend`, so a read never lands while the strip is still moving. */
 async function stripScroll(window, act) {
@@ -133,11 +175,32 @@ try {
     [84, 48, true, true],
   );
   check(
-    "two iterations fit at 1440, so the strip rests at its start with no arrows, every entry whole and 16 px off both ends",
-    await settled(() => stripRest(window)),
-    { inView: ["iteration 1", "iteration 2"], cut: [], shown: true, insets: [16, 16], scrolled: 0, arrows: 0 },
+    "two iterations fit at 1440, so the strip rests at its start with no arrows, every entry whole, 16 px in from the start and the rest of the strip left empty",
+    await settled(async () => ({ ...(await stripRest(window)), insets: (await stripRest(window)).insets.map((inset, i) => (i === 0 ? inset : inset >= 16)) })),
+    { inView: ["iteration 1", "iteration 2"], cut: [], shown: true, insets: [16, true], scrolled: 0, arrows: 0 },
   );
-  check("with room for both, each entry's lines read whole", await settled(() => stripLines(window)), { cut: [], spare: [] });
+  check("with room for both, each entry's lines read whole, and neither holds room its lines don't use", await settled(() => stripLines(window)), { cut: [], spare: [], wide: [] });
+  const restHead = await settled(() => stripHead(window));
+  check("with no arrows showing, the strip's head is as wide as its words", restHead.spare, 0);
+  check(
+    "the entries' edges take the strong edge, so an unselected one holds its shape on the card",
+    await window.evaluate(() => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("div"), { className: "ring-1 ring-border-strong" }));
+      const strong = getComputedStyle(probe).boxShadow;
+      probe.remove();
+      return [...document.querySelectorAll("[data-history-n]")].map((el) => getComputedStyle(el).boxShadow === strong);
+    }),
+    [true, true],
+  );
+  await window.hover('[data-history-n="2"]');
+  check(
+    "an entry's hint names it, then its age, then what made it",
+    await window
+      .waitForSelector('[data-slot="tooltip-content"]', { state: "visible" })
+      .then((h) => h.evaluate((el) => /^Iteration 2·(now|\d+m) · latest · Explain the weighting$/.test(el.textContent.trim()))),
+    true,
+  );
+  await window.mouse.move(1, 1);
   check(
     "and with nothing to scroll neither end fades",
     await window.$eval("[data-history-scroll]", (el) => [getComputedStyle(el).getPropertyValue("--fade-start"), getComputedStyle(el).getPropertyValue("--fade-end")]),
@@ -394,8 +457,19 @@ try {
   await window.click("[data-fork-stub]");
   await window.waitForSelector("[data-history-loading]");
   check("while the parent loads, the strip's place is held at the same 84 px", await window.$eval("[data-history-loading]", (el) => Math.round(el.getBoundingClientRect().height)), 84);
+  const skeletonEntry = await window.$eval("[data-history-skeleton-entry]", (el) => el.getBoundingClientRect().width).catch(() => null);
   await window.waitForSelector(`[data-history-fork="${forkId}"]`);
   await app.context().unroute(`**/v1/ui/sessions/${session}`);
+  check(
+    "the loading strip's entry is as wide as the first iteration's lines, so nothing jumps when it lands",
+    await window.$eval('[data-history-n="1"]', (el, skeleton) => {
+      el.style.width = "max-content";
+      const need = el.getBoundingClientRect().width;
+      el.style.removeProperty("width");
+      return Math.abs(need - skeleton) <= 2;
+    }, skeletonEntry),
+    true,
+  );
   check("and with a fork hanging off a still it is still 84 px", await stripHeight(window), 84);
   check(
     "the parent's strip hangs the fork off iteration 2, the entry after its still, saying where it came from",
@@ -404,8 +478,8 @@ try {
   );
   check(
     "two iterations and a fork still fit at 1440: the strip rests at its start, nothing cut",
-    await settled(() => stripRest(window)),
-    { inView: ["iteration 1", "iteration 2", "fork"], cut: [], shown: true, insets: [16, 16], scrolled: 0, arrows: 0 },
+    await settled(async () => ({ ...(await stripRest(window)), insets: (await stripRest(window)).insets.map((inset, i) => (i === 0 ? inset : inset >= 16)) })),
+    { inView: ["iteration 1", "iteration 2", "fork"], cut: [], shown: true, insets: [16, true], scrolled: 0, arrows: 0 },
   );
   const lines = await settled(() => stripLines(window));
   console.log(`  strip lines cut at 1440 with a fork: ${lines.cut.join(", ") || "none"}`);
@@ -571,6 +645,15 @@ try {
     [["fork", "iteration 3"], [], true, [16, 16], 2],
   );
   check("the later arrow is off at the end, the earlier one on", [await window.isDisabled('[data-history-step="end"]'), await window.isDisabled('[data-history-step="start"]')], [true, false]);
+  check("only the start, where entries hide, shows its cue that more waits that way", await edgeCues(window), ["start"]);
+  const uncut = async () => (await settled(() => firstLines(window))).map(([n, age, latest]) => [n, age, latest === "cut" ? "cut" : "uncut"]);
+  check("at 1100 the latest entry's age reads whole, and latest whole or not at all", await uncut(), [[3, "whole", "uncut"]]);
+  const overflowHead = await settled(() => stripHead(window));
+  check(
+    "with its arrows on the heading's line the head is still only as wide as its words, and the heading keeps its place",
+    [overflowHead.spare, overflowHead.heading],
+    [0, restHead.heading],
+  );
   await stripScroll(window, () => window.click('[data-history-step="start"]'));
   check(
     "the earlier arrow steps back one entry and rests on an edge, nothing cut",
@@ -580,6 +663,7 @@ try {
     }),
     [["iteration 2", "fork"], [], [16, 16]],
   );
+  check("in the middle both ends show their cue", await edgeCues(window), ["start", "end"]);
   // Focusing the latest scrolls it into view, so the wait spans the focus as well as End.
   await stripScroll(window, async () => {
     await window.focus('[data-history-n="3"]');
@@ -602,6 +686,10 @@ try {
     }),
     [["iteration 2", "fork", "iteration 3"], [], true, [16, 16], 2],
   );
+  check("and both iterations in view read their age whole, and latest whole or not at all", await uncut(), [
+    [2, "whole", "uncut"],
+    [3, "whole", "uncut"],
+  ]);
   await window.click('[data-slot-id="wheel"] [data-variant="spin-button-a"]');
   await window.waitForSelector('[data-variant="spin-button-a"] [data-variant-new]', { state: "detached", timeout: PHASE_MS });
   check(
