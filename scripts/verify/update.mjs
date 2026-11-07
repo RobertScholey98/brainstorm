@@ -115,11 +115,18 @@ try {
   check("the sidebar offers the downloaded update", await button.textContent(), "Restart to update");
   await window.screenshot({ path: join(shots, `ready-${process.platform}.png`) });
 
+  const logFrom = existsSync(macLog) ? readFileSync(macLog, "utf8").length : 0;
   const closed = new Promise((r) => app.once("close", r));
   await button.click();
   await closed;
   app = null;
   check("the update puts version A+1 in place", await until(() => (installedVersion() === next ? next : null), 120_000), next);
+  if (mac) {
+    // The Mac swap runs in a script after the app quits, which logs installed once the new bundle is in place.
+    const log = () => (existsSync(macLog) ? readFileSync(macLog, "utf8").slice(logFrom) : "");
+    check("the update script says installed", await until(() => (/^installed$/m.test(log()) ? true : null), 60_000), true);
+    console.log(`update.log:\n${log()}`);
+  }
 
   app = await open();
   await app.firstWindow();
@@ -127,7 +134,6 @@ try {
 } finally {
   feed.close();
   await app?.close().catch(() => {});
-  if (mac && existsSync(macLog)) console.log(`update.log:\n${readFileSync(macLog, "utf8")}`);
   await new Promise((r) => setTimeout(r, 2000));
   uninstall();
   await new Promise((r) => setTimeout(r, 3000));

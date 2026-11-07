@@ -27,11 +27,13 @@ new="$stage/new/$(basename "$app")"
 if ! ditto -x -k "$zip" "$stage/new" || [ ! -d "$new" ]; then
   echo "the zip holds no $(basename "$app")"
 else
+  # The copy lands beside the app first, so the swap is two renames and the app is never half there.
   cat >"$stage/swap.sh" <<'SWAP'
-app=$1 new=$2 old="$1.replaced"
-rm -rf "$old"
-mv "$app" "$old" || exit 1
-if ditto "$new" "$app"; then rm -rf "$old"; else rm -rf "$app"; mv "$old" "$app"; exit 1; fi
+app=$1 new=$2 old="$1.replaced" incoming="$1.incoming"
+rm -rf "$old" "$incoming"
+ditto "$new" "$incoming" || { rm -rf "$incoming"; exit 1; }
+mv "$app" "$old" || { rm -rf "$incoming"; exit 1; }
+if mv "$incoming" "$app"; then rm -rf "$old"; else mv "$old" "$app"; rm -rf "$incoming"; exit 1; fi
 xattr -dr com.apple.quarantine "$app" 2>/dev/null
 exit 0
 SWAP
