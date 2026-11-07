@@ -201,9 +201,9 @@ try {
   );
   await window.$eval("[data-home-scroll]", (el) => el.scrollTo(0, 0));
   check(
-    "home's head and query row fill with the card's surface, rule off only once the cards scroll, and the cards clip at the head's foot with no fade",
+    "home's head and query row show the canvas the cards sit on, one surface at rest, rule off only once the cards scroll, and the cards clip at the head's foot with no fade",
     await paneHead(window, '[data-home-overview] > [data-slot="pane-head"]', "[data-home-scroll]"),
-    { opaque: true, rest: { scrolled: false, rule: false, clipGap: 0, through: 0 }, scrolled: { scrolled: true, rule: true, clipGap: 0, through: 0 }, masks: [] },
+    { sameFill: true, rest: { scrolled: false, rule: false, clipGap: 0, through: 0 }, scrolled: { scrolled: true, rule: true, clipGap: 0, through: 0 }, masks: [] },
   );
   await window.$eval("[data-home-scroll]", (el) => el.scrollTo(0, 0));
   await window.setViewportSize({ width: 1440, height: 900 });
@@ -884,9 +884,9 @@ try {
   await window.setViewportSize({ width: 1100, height: 520 });
   await settled(() => window.$eval("[data-inspector-body]", (el) => [el.scrollHeight, el.clientHeight]));
   check(
-    "the Inspector's header fills with the card's surface, keeps the canvas bar's rule at rest and scrolled, and its controls clip at the header's foot with no fade",
+    "the Inspector's header shows its body's surface, keeps the canvas bar's rule at rest and scrolled, and its controls clip at the header's foot with no fade",
     await paneHead(window, "[data-inspector-header]", "[data-inspector-body]", { by: 60 }),
-    { opaque: true, rest: { scrolled: false, rule: true, clipGap: 0, through: 0 }, scrolled: { scrolled: true, rule: true, clipGap: 0, through: 0 }, masks: [] },
+    { sameFill: true, rest: { scrolled: false, rule: true, clipGap: 0, through: 0 }, scrolled: { scrolled: true, rule: true, clipGap: 0, through: 0 }, masks: [] },
   );
   await window.setViewportSize({ width: 1100, height: 720 });
   await window.click("[data-pick-toggle]");

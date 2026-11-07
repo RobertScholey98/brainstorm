@@ -11,9 +11,10 @@ const INSET = {
  * gutter, so content, and any rule drawn across it, sits `inset` off both edges whether or not it scrolls. Its content
  * can style itself for a showing scrollbar (`scrolling:`).
  *
- * A `head` stands above the body on the pane's own surface, and content scrolls out of sight at its bottom edge. Its
- * hairline shows only while the body is scrolled from the top, as Claude and T3 Code rule off a scrolled pane. Nothing
- * fades: a gradient over arbitrary content always leaves part of a glyph or a control showing.
+ * A `head` stands above the body, and content scrolls out of sight at its bottom edge. It paints no fill of its own, so
+ * head and body are one surface, whichever surface the pane sits on. Its hairline shows only while the body is
+ * scrolled from the top, as Claude and T3 Code rule off a scrolled pane. Nothing fades: a gradient over arbitrary
+ * content always leaves part of a glyph or a control showing.
  */
 function ScrollPane({
   head,
@@ -37,7 +38,7 @@ function ScrollPane({
   if (head === undefined) return body
   return (
     <>
-      <div data-slot="pane-head" data-scrolled={scrolled || undefined} className="relative shrink-0 bg-card after:absolute after:inset-x-0 after:bottom-0 after:border-b after:border-transparent data-scrolled:after:border-border">
+      <div data-slot="pane-head" data-scrolled={scrolled || undefined} className="relative shrink-0 after:absolute after:inset-x-0 after:bottom-0 after:border-b after:border-transparent data-scrolled:after:border-border">
         {head}
       </div>
       {body}

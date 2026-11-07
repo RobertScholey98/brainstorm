@@ -125,8 +125,8 @@ export const outsideBox = (window, selector) =>
   );
 
 /**
- * How a pane's head meets what scrolls under it, at rest and scrolled `by` px: whether the head fills with its
- * surface's colour, whether its bottom rule shows (on it or its `::after`), how far the scroller's clip starts below
+ * How a pane's head meets what scrolls under it, at rest and scrolled `by` px: whether the head shows the colour
+ * of the body under it, whether its bottom rule shows (on it or its `::after`), how far the scroller's clip starts below
  * the head's bottom edge, how many points of the head's band show the scroller's content instead of the head, and any
  * mask on the scroller or above it.
  */
@@ -135,7 +135,14 @@ export async function paneHead(window, head, body, { by = 120 } = {}) {
   return window.evaluate(
     async ([head, body, by]) => {
       const [h, b] = [document.querySelector(head), document.querySelector(body)];
-      const surface = h.parentElement.closest('aside, [data-slot="sidebar-inset-card"]');
+      /** The colour an element shows: its own fill, or the first one behind it. */
+      const fill = (el) => {
+        for (; el !== null; el = el.parentElement) {
+          const colour = getComputedStyle(el).backgroundColor;
+          if (colour !== "rgba(0, 0, 0, 0)") return colour;
+        }
+        return null;
+      };
       const probe = Object.assign(document.createElement("div"), { className: "border" });
       document.body.append(probe);
       const hairline = `${getComputedStyle(probe).borderTopColor} ${getComputedStyle(probe).borderTopWidth}`;
@@ -158,7 +165,7 @@ export async function paneHead(window, head, body, { by = 120 } = {}) {
         };
       };
       const result = {
-        opaque: getComputedStyle(h).backgroundColor === getComputedStyle(surface).backgroundColor && getComputedStyle(h).backgroundColor !== "rgba(0, 0, 0, 0)",
+        sameFill: fill(h) === fill(b),
         rest: await read(0),
         scrolled: await read(by),
         masks,
