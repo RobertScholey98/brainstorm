@@ -8,8 +8,8 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { originText } from "../core/machines";
 import type { ForkBranch, HistoryEntry, IterationN, Result, SessionId, SessionPreview, SessionView, SlotId } from "../core/types";
-import { IterationStill } from "./Preview";
-import { STRIP_GAP, stripFit, stripRest, type EntryNeed, type StripFit } from "./stripFit";
+import { IterationStill, STILL_BOX } from "./Preview";
+import { pageAt, pageOf, pageRest, stripFit, type EntryNeed, type StripFit } from "./stripFit";
 import { age, useNow } from "./time";
 
 export type LoadIterationStill = (at: { readonly n: IterationN; readonly slot: SlotId | null }) => Promise<Result<SessionPreview | null>>;
@@ -23,9 +23,9 @@ type StripItem = { readonly kind: "stub" } | { readonly kind: "iteration"; reado
  * the iteration it came from. It is one listbox: Left and Right step through it, Home and End jump, and the option Rob
  * lands on is what the canvas shows.
  *
- * While the entries fit they share the strip by what their lines need; once they don't, a whole number of them fill it
- * at one width and the strip rests only on an entry's edge, so it never shows a cut entry, and the shown iteration is
- * always whole.
+ * While the entries fit they share the strip by what their lines need. Once they don't, they fill it a page at a time,
+ * still by need, and the strip rests only on a page's start and hides any entry it can't show whole there, so at rest
+ * it never shows a cut entry, and the shown iteration is always whole.
  */
 export function Filmstrip({
   view,
@@ -61,6 +61,7 @@ export function Filmstrip({
   const shownAt = items.findIndex((i) => i.kind === "iteration" && i.entry.n === showing);
 
   const [fit, setFit] = useState<StripFit>(() => stripFit(0, items.map(() => ({ need: 0, floor: 0 }))));
+  const overflows = fit.pages !== null;
   const [ends, setEnds] = useState({ start: true, end: true });
   useLayoutEffect(() => {
     const [strip, top, arrows, entries] = [section.current, head.current, steps.current, list.current];
@@ -76,8 +77,8 @@ export function Filmstrip({
       const stepped = top.getBoundingClientRect().width;
       arrows.style.display = shown;
       const loose = stripFit(strip.clientWidth - plain, lines);
-      const next = loose.step === null ? loose : stripFit(strip.clientWidth - stepped, lines);
-      setFit((prev) => (prev.shown === next.shown && prev.step === next.step && prev.widths.join() === next.widths.join() ? prev : next));
+      const next = loose.pages === null ? loose : stripFit(strip.clientWidth - stepped, lines);
+      setFit((prev) => (String(prev.pages) === String(next.pages) && prev.widths.join() === next.widths.join() ? prev : next));
     };
     measure();
     const sizes = new ResizeObserver(measure);
@@ -92,27 +93,43 @@ export function Filmstrip({
     };
   }, [items.length]);
 
+  // At rest the strip shows only whole entries. Past the oldest page, the next page's first entry can sit cut at the
+  // end, so it stays out of sight until the strip moves.
+  const settle = useCallback(() => {
+    const box = scroller.current;
+    if (box === null) return;
+    setEnds({ start: box.scrollLeft <= 1, end: box.scrollLeft >= box.scrollWidth - box.clientWidth - 1 });
+    const room = box.getBoundingClientRect();
+    for (const entry of list.current?.children ?? []) {
+      if (!(entry instanceof HTMLElement)) continue;
+      const r = entry.getBoundingClientRect();
+      if (r.left >= room.left - 0.5 && r.right <= room.right + 0.5) delete entry.dataset.off;
+      else entry.dataset.off = "";
+    }
+  }, []);
+
   // The shown entry stays whole in view as Rob steps, as entries land and as the strip resizes. Only the strip scrolls,
   // so the panes around it stay put.
   useLayoutEffect(() => {
     const box = scroller.current;
     if (box === null) return;
     const rest = () => {
-      box.scrollTo({ left: stripRest(fit, items.length, Math.max(0, shownAt), box.scrollLeft), behavior: "instant" });
-      setEnds({ start: box.scrollLeft <= 1, end: box.scrollLeft >= box.scrollWidth - box.clientWidth - 1 });
+      box.scrollTo({ left: pageRest(fit, pageOf(fit, Math.max(0, shownAt))), behavior: "instant" });
+      settle();
     };
     rest();
     const frame = requestAnimationFrame(rest);
     return () => cancelAnimationFrame(frame);
-  }, [fit, shownAt, items.length]);
+  }, [fit, shownAt, items.length, settle]);
 
   const page = (by: -1 | 1) => {
     const box = scroller.current;
-    if (box !== null && fit.step !== null) box.scrollBy({ left: by * (fit.step + STRIP_GAP), behavior: "smooth" });
+    if (box === null || fit.pages === null) return;
+    const to = Math.max(0, Math.min(fit.pages.length - 1, pageAt(fit, box.scrollLeft) + by));
+    box.scrollTo({ left: pageRest(fit, to), behavior: "smooth" });
   };
-  const onScrollEnd = () => {
-    const box = scroller.current;
-    if (box !== null) setEnds({ start: box.scrollLeft <= 1, end: box.scrollLeft >= box.scrollWidth - box.clientWidth - 1 });
+  const onScroll = () => {
+    for (const entry of list.current?.querySelectorAll<HTMLElement>("[data-off]") ?? []) delete entry.dataset.off;
   };
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -128,11 +145,11 @@ export function Filmstrip({
   };
 
   return (
-    <section ref={section} className={STRIP} aria-label="History" data-history data-history-overflows={fit.step !== null || undefined}>
+    <section ref={section} className={STRIP} aria-label="History" data-history data-history-overflows={overflows || undefined}>
       <StripHead
         ref={head}
         steps={
-          <span ref={steps} className="flex gap-0.5" style={fit.step === null ? { display: "none" } : undefined} data-history-steps>
+          <span ref={steps} className="flex gap-0.5" style={overflows ? undefined : { display: "none" }} data-history-steps>
             <StripStep side="start" disabled={ends.start} onClick={() => page(-1)} />
             <StripStep side="end" disabled={ends.end} onClick={() => page(1)} />
           </span>
@@ -142,10 +159,10 @@ export function Filmstrip({
           {`${iterations.length} ${iterations.length === 1 ? "iteration" : "iterations"}${forks.length > 0 ? ` · ${forks.length} ${forks.length === 1 ? "fork" : "forks"}` : ""}`}
         </span>
       </StripHead>
-      <div className="relative flex min-w-0 flex-1">
-        <EdgeCue side="start" shown={fit.step !== null && !ends.start} />
-        <EdgeCue side="end" shown={fit.step !== null && !ends.end} />
-        <div ref={scroller} className={STRIP_SCROLL} onScrollEnd={onScrollEnd} data-history-scroll>
+      <div className="relative flex min-w-0 flex-1 self-stretch">
+        <EdgeCue side="start" shown={overflows && !ends.start} />
+        <EdgeCue side="end" shown={overflows && !ends.end} />
+        <div ref={scroller} className={STRIP_SCROLL} onScroll={onScroll} onScrollEnd={settle} data-history-scroll>
         <div
           ref={list}
           role="listbox"
@@ -156,14 +173,16 @@ export function Filmstrip({
           onKeyDown={onKey}
           data-history-list
         >
-          {items.map((item) =>
-            item.kind === "stub" ? (
-              <ForkStub key="stub" view={view} onOpen={onOpen} />
+          {items.map((item, i) => {
+            const snap = fit.pages?.includes(i) === true;
+            return item.kind === "stub" ? (
+              <ForkStub key="stub" view={view} snap={snap} onOpen={onOpen} />
             ) : item.kind === "fork" ? (
-              <Offshoot key={item.fork.id} fork={item.fork} onOpen={onOpen} />
+              <Offshoot key={item.fork.id} fork={item.fork} snap={snap} onOpen={onOpen} />
             ) : (
               <StillOption
                 key={item.entry.n}
+                snap={snap}
                 entry={item.entry}
                 latest={item.entry.n === latest}
                 selected={item.entry.n === showing}
@@ -173,8 +192,8 @@ export function Filmstrip({
                 loadStill={loadStill}
                 onShow={() => onShow(item.entry.n)}
               />
-            ),
-          )}
+            );
+          })}
           </div>
         </div>
       </div>
@@ -183,15 +202,15 @@ export function Filmstrip({
 }
 
 /**
- * A shadow at an end with more that way. It stands over the inset, which at rest holds no entry, so it says more is
- * hidden there without the entry beside it reading as cut.
+ * A shadow at an end with more that way, over the inset, which at rest holds no entry. It runs the strip's full height
+ * in `shade`, dark in both themes, so it reads as the strip's edge and never as an entry.
  */
 function EdgeCue({ side, shown }: { side: "start" | "end"; shown: boolean }) {
   return (
     <span
       aria-hidden
       className={cn(
-        "pointer-events-none absolute inset-y-0 z-raised w-3 from-fg/12 to-transparent transition-opacity",
+        "pointer-events-none absolute inset-y-0 z-raised w-4 from-shade via-shade/40 via-25% to-transparent transition-opacity",
         side === "start" ? "left-0 bg-linear-to-r" : "right-0 bg-linear-to-l",
         shown ? "opacity-100" : "opacity-0",
       )}
@@ -203,11 +222,13 @@ function EdgeCue({ side, shown }: { side: "start" | "end"; shown: boolean }) {
 
 /** The strip is one row at one height whether or not it has forks or overflows, with its head standing to the left. */
 const STRIP = "flex h-strip shrink-0 items-center border-t bg-card";
-/** Overflow scrolls sideways and rests on an entry's edge. Its ends fade only over the inset, which at rest holds no entry. */
+/** Overflow scrolls sideways and rests on a page's start. Its ends fade only over the inset, which at rest holds no entry. */
 const STRIP_SCROLL = "scroll-fades-x scrollbar-none flex min-w-0 flex-1 snap-x snap-mandatory scroll-px-4 overflow-x-auto overflow-y-hidden";
 const STRIP_LIST = "grid w-max grid-flow-col grid-cols-strip items-center gap-4 px-4";
-/** Every entry in the strip takes the width the fit gives it, its column's. */
-const ENTRY = "min-w-0 snap-start";
+/** Every entry in the strip takes the width the fit gives it, its column's, and goes out of sight while the strip rests with it cut. */
+const ENTRY = "min-w-0 transition-opacity data-off:pointer-events-none data-off:opacity-0";
+/** A page's first entry, the only place the strip rests. */
+const SNAP = "snap-start";
 /** An iteration's entry: its still, then its lines, inside a 1 px edge that holds on the card in both themes. */
 const ENTRY_BOX = "flex items-center gap-2 rounded-lg p-1 ring-1";
 
@@ -268,17 +289,19 @@ export function FilmstripSkeleton() {
   return (
     <div aria-hidden className={STRIP} data-history-loading>
       <StripHead>
-        <Skeleton className="mt-0.5 h-3 w-16" />
+        <Skeleton className="w-max text-transparent">1 iteration</Skeleton>
       </StripHead>
       <div className={STRIP_SCROLL}>
         <div className={STRIP_LIST}>
-          {/* A first iteration's entry, its words hidden in the bars, so it is as wide as the entry that lands. */}
-          <div className={cn(ENTRY_BOX, "ring-border")} data-history-skeleton-entry>
-            <Skeleton className="h-still w-16 rounded-md" />
+          {/* A first iteration's entry, its words hidden in the bars, in the landed entry's frame, edge and still. */}
+          <div className={cn(ENTRY_BOX, "ring-border-strong")} data-history-skeleton-entry>
+            <Skeleton className={STILL_BOX} data-history-skeleton-still />
             <span className="grid gap-0.5 pr-1">
-              <span className="flex items-baseline gap-1.5 text-sm">
+              <span className="flex h-4.5 items-baseline gap-x-1.5 text-sm">
                 <Skeleton className="font-medium text-transparent">Iteration 1</Skeleton>
-                <Skeleton className="text-xs text-transparent">now · latest</Skeleton>
+                <Skeleton className="text-xs text-transparent">·</Skeleton>
+                <Skeleton className="text-xs text-transparent">now</Skeleton>
+                <Skeleton className="text-xs text-transparent">· latest</Skeleton>
               </span>
               <Skeleton className="text-xs text-transparent">{originText({ kind: "brief" })}</Skeleton>
             </span>
@@ -291,6 +314,7 @@ export function FilmstripSkeleton() {
 
 function StillOption({
   entry,
+  snap,
   latest,
   selected,
   now,
@@ -300,6 +324,7 @@ function StillOption({
   onShow,
 }: {
   entry: HistoryEntry;
+  snap: boolean;
   latest: boolean;
   selected: boolean;
   now: number;
@@ -320,7 +345,7 @@ function StillOption({
         tabIndex={selected ? 0 : -1}
         onClick={onShow}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onShow())}
-        className={cn(ENTRY, ENTRY_BOX, "cursor-pointer outline-none ring-border-strong hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring", selected && "bg-selected")}
+        className={cn(ENTRY, snap && SNAP, ENTRY_BOX, "cursor-pointer outline-none ring-border-strong hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring", selected && "bg-selected")}
         data-history-n={entry.n}
         data-selected={selected || undefined}
       >
@@ -329,6 +354,7 @@ function StillOption({
           {/* One line that never cuts: "latest" comes last and wraps out of sight, whole, when it doesn't fit. */}
           <span className="flex h-4.5 min-w-0 flex-wrap items-baseline gap-x-1.5 overflow-hidden text-sm">
             <span className="font-medium">Iteration {entry.n}</span>
+            <span className="text-xs text-fg-muted">·</span>
             <span className="text-xs text-fg-muted tabular-nums" data-history-age>
               {age(entry.createdAt, now)}
             </span>
@@ -348,13 +374,13 @@ function StillOption({
 }
 
 /** A fork made from the iteration before it, as wide as a still and dashed as the fork's own stub, so it never reads as one more iteration. */
-function Offshoot({ fork, onOpen }: { fork: ForkBranch; onOpen: (id: SessionId) => void }) {
+function Offshoot({ fork, snap, onOpen }: { fork: ForkBranch; snap: boolean; onOpen: (id: SessionId) => void }) {
   return (
     <Hint label={`Open the fork ${fork.title}`} side="top">
       <button
         type="button"
         onClick={() => onOpen(fork.id)}
-        className={cn(ENTRY, FORK_BOX, "outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring")}
+        className={cn(ENTRY, snap && SNAP, FORK_BOX, "outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring")}
         data-history-fork={fork.id}
         data-history-from={fork.from}
       >
@@ -364,7 +390,8 @@ function Offshoot({ fork, onOpen }: { fork: ForkBranch; onOpen: (id: SessionId) 
   );
 }
 
-const FORK_BOX = "flex h-still items-center gap-2 rounded-lg border border-dashed px-3 text-left";
+/** Dashed in the entries' strong edge, so a link off the strip holds its shape as an entry does. */
+const FORK_BOX = "flex h-still items-center gap-2 rounded-lg border border-dashed border-border-strong px-3 text-left";
 
 function ForkLines({ first, second, lead }: { first: string; second: string; lead?: string }) {
   return (
@@ -382,19 +409,19 @@ function ForkLines({ first, second, lead }: { first: string; second: string; lea
 }
 
 /** Where a fork came from, first in its strip: a link back to that iteration's brainstorm, unless it is gone. */
-function ForkStub({ view, onOpen }: { view: SessionView; onOpen: (id: SessionId) => void }) {
+function ForkStub({ view, snap, onOpen }: { view: SessionView; snap: boolean; onOpen: (id: SessionId) => void }) {
   const fork = view.fork;
   if (fork === null) return null;
   const label = <ForkLines lead="from" first={fork.parent.title} second={fork.parent.state === "gone" ? `iteration ${fork.from} · discarded` : `iteration ${fork.from}`} />;
   return fork.parent.state === "gone" ? (
-    <span className={cn(ENTRY, FORK_BOX)} data-fork-stub="gone">
+    <span className={cn(ENTRY, snap && SNAP, FORK_BOX)} data-fork-stub="gone">
       {label}
     </span>
   ) : (
     <button
       type="button"
       onClick={() => onOpen(fork.parent.id)}
-      className={cn(ENTRY, FORK_BOX, "outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring")}
+      className={cn(ENTRY, snap && SNAP, FORK_BOX, "outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring")}
       data-fork-stub={fork.parent.id}
     >
       {label}

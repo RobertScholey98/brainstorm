@@ -2,7 +2,7 @@ import { cpSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, canvasFrame, checks, inBlock, launch, openSession, outsideBox, settled, showBoard, shot, workspace } from "./electron.mjs";
+import { build, canvasFrame, checks, inBlock, launch, openSession, outsideBox, pixels, settled, showBoard, shot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-8");
@@ -49,7 +49,7 @@ const stripRest = (window) =>
     const scroller = document.querySelector("[data-history-scroll]");
     const box = scroller.getBoundingClientRect();
     const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : "stub");
-    const inView = [...document.querySelectorAll("[data-history-list] > *")].filter((el) => el.getBoundingClientRect().right > box.left + 1 && el.getBoundingClientRect().left < box.right - 1);
+    const inView = [...document.querySelectorAll("[data-history-list] > *:not([data-off])")].filter((el) => el.getBoundingClientRect().right > box.left + 1 && el.getBoundingClientRect().left < box.right - 1);
     const [first, last] = [inView.at(0).getBoundingClientRect(), inView.at(-1).getBoundingClientRect()];
     return {
       inView: inView.map(name),
@@ -119,6 +119,39 @@ const stripLines = (window) =>
     });
     return { cut: cut.map(name), spare: cut.length === 0 ? [] : spare.map(name), wide: spare.map(name) };
   });
+/**
+ * The edge of every entry, link and stub in the strip, and of the loading entry while it shows: whether it is drawn
+ * in `border-strong`, and its contrast on the card.
+ */
+const stripEdges = (window) =>
+  window.evaluate(() => {
+    const paint = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    const rgb = (...colours) => {
+      paint.clearRect(0, 0, 1, 1);
+      for (const c of colours) {
+        paint.fillStyle = c;
+        paint.fillRect(0, 0, 1, 1);
+      }
+      return [...paint.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+    };
+    const lum = (c) => c.map((v) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4)).reduce((t, v, i) => t + v * [0.2126, 0.7152, 0.0722][i], 0);
+    const token = (name) => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: `color: var(--${name})` }));
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    };
+    const [strong, card] = [token("border-strong"), token("card")];
+    const name = (el) =>
+      el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : el.dataset.forkStub !== undefined ? "stub" : "loading";
+    return [...document.querySelectorAll("[data-history-list] > *, [data-history-skeleton-entry]")].map((el) => {
+      const s = getComputedStyle(el);
+      const ring = s.boxShadow.split(/,(?![^(]*\))/).find((layer) => layer.trim().endsWith("0px 0px 0px 1px"));
+      const edge = parseFloat(s.borderTopWidth) > 0 ? s.borderTopColor : ring?.trim().replace(/ 0px 0px 0px 1px$/, "");
+      const [a, b] = [lum(rgb(card)), lum(rgb(card, edge))].sort((x, y) => y - x);
+      return [name(el), rgb(edge).join() === rgb(strong).join(), Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100 >= 1.3];
+    });
+  });
 /** Runs `act`, then waits for the strip's `scrollend`, so a read never lands while the strip is still moving. */
 async function stripScroll(window, act) {
   await window.$eval("[data-history-scroll]", (el) => {
@@ -182,15 +215,14 @@ try {
   check("with room for both, each entry's lines read whole, and neither holds room its lines don't use", await settled(() => stripLines(window)), { cut: [], spare: [], wide: [] });
   const restHead = await settled(() => stripHead(window));
   check("with no arrows showing, the strip's head is as wide as its words", restHead.spare, 0);
+  check("the entries' edges take the strong edge at 1.3:1 or more, so an unselected one holds its shape on the card", await stripEdges(window), [
+    ["iteration 1", true, true],
+    ["iteration 2", true, true],
+  ]);
   check(
-    "the entries' edges take the strong edge, so an unselected one holds its shape on the card",
-    await window.evaluate(() => {
-      const probe = document.body.appendChild(Object.assign(document.createElement("div"), { className: "ring-1 ring-border-strong" }));
-      const strong = getComputedStyle(probe).boxShadow;
-      probe.remove();
-      return [...document.querySelectorAll("[data-history-n]")].map((el) => getComputedStyle(el).boxShadow === strong);
-    }),
-    [true, true],
+    "an entry's first line joins its number, age and latest with the cards' middle dots",
+    await window.$eval('[data-history-n="2"] [data-history-age]', (age) => [...age.parentElement.children].map((el) => el.textContent.trim())),
+    ["Iteration 2", "·", (await window.textContent('[data-history-n="2"] [data-history-age]')).trim(), "· latest"],
   );
   await window.hover('[data-history-n="2"]');
   check(
@@ -458,6 +490,10 @@ try {
   check("its strip starts with a stub back to the parent", await window.getAttribute("[data-fork-stub]", "data-fork-stub"), session);
   check("and its first still says where it came from", (await strip(window)).map((s) => s.origin), ["Your picks from iteration 2"]);
   check("its strip, stub and all, is the same 84 px", await stripHeight(window), 84);
+  check("the stub's dashed edge takes the entries' strong edge", await stripEdges(window), [
+    ["stub", true, true],
+    ["iteration 1", true, true],
+  ]);
   await shot(window, shots, "6-fork-page");
 
   // The parent's view is held back a moment, so the loading strip can be measured before it lands.
@@ -468,18 +504,30 @@ try {
   await window.click("[data-fork-stub]");
   await window.waitForSelector("[data-history-loading]");
   check("while the parent loads, the strip's place is held at the same 84 px", await window.$eval("[data-history-loading]", (el) => Math.round(el.getBoundingClientRect().height)), 84);
-  const skeletonEntry = await window.$eval("[data-history-skeleton-entry]", (el) => el.getBoundingClientRect().width).catch(() => null);
+  // The head's count line holds what loads, so only the entry's top and size, and its still's place in it, can match.
+  const entryAndStill = (entry, still) => {
+    const [e, s] = [entry.getBoundingClientRect(), still.getBoundingClientRect()];
+    return { entry: [e.top, e.width, e.height].map(Math.round), still: [s.left - e.left, s.top, s.width, s.height].map(Math.round) };
+  };
+  const skeleton = await window.evaluate(
+    `(${entryAndStill})(document.querySelector("[data-history-skeleton-entry]"), document.querySelector("[data-history-skeleton-still]"))`,
+  );
+  const loadingEdge = await stripEdges(window);
   await window.waitForSelector(`[data-history-fork="${forkId}"]`);
   await app.context().unroute(`**/v1/ui/sessions/${session}`);
+  check("the loading entry's edge is the landed entry's strong edge", loadingEdge, [["loading", true, true]]);
+  const landed = await window.evaluate(`(() => {
+    const el = document.querySelector('[data-history-n="1"]');
+    el.style.width = "max-content";
+    const landed = (${entryAndStill})(el, el.querySelector("[data-preview]"));
+    el.style.removeProperty("width");
+    return landed;
+  })()`);
+  const within = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 2) || a;
   check(
-    "the loading strip's entry is as wide as the first iteration's lines, so nothing jumps when it lands",
-    await window.$eval('[data-history-n="1"]', (el, skeleton) => {
-      el.style.width = "max-content";
-      const need = el.getBoundingClientRect().width;
-      el.style.removeProperty("width");
-      return Math.abs(need - skeleton) <= 2;
-    }, skeletonEntry),
-    true,
+    "the loading strip's entry and still land at the first iteration's top and size, its still in the same place, so nothing jumps",
+    { entry: within(landed.entry, skeleton.entry), still: within(landed.still, skeleton.still) },
+    { entry: true, still: true },
   );
   check("and with a fork hanging off a still it is still 84 px", await stripHeight(window), 84);
   check(
@@ -495,11 +543,16 @@ try {
   const lines = await settled(() => stripLines(window));
   console.log(`  strip lines cut at 1440 with a fork: ${lines.cut.join(", ") || "none"}`);
   check("an entry wider than its lines need holds no room while another's line is cut", lines.spare, []);
+  check("the fork's dashed link takes the entries' strong edge, so every edge in the strip is one tone", await stripEdges(window), [
+    ["iteration 1", true, true],
+    ["iteration 2", true, true],
+    ["fork", true, true],
+  ]);
 
   await window.click("[data-back]");
   await window.click("[data-overview]");
   await window.waitForSelector(`[data-overview-session="${forkId}"] [data-fork-of]`);
-  check("home names the fork's parent and iteration", (await window.textContent(`[data-overview-session="${forkId}"] [data-fork-of]`)).replace(/\s+/g, " ").trim(), "Fork of Chore roulette · iteration 2");
+  check("home names the fork's parent and iteration with the session's word, from, behind the branch mark", (await window.textContent(`[data-overview-session="${forkId}"] [data-fork-of]`)).replace(/\s+/g, " ").trim(), "from Chore roulette · iteration 2");
   await shot(window, shots, "7-home-fork");
   /** Whether a sidebar row's title reads whole, and whether its status has fallen to the dot and the time. */
   const rowFit = (id) =>
@@ -639,6 +692,18 @@ try {
       ["terminal", "none"],
     ],
   );
+  check(
+    "a row shows its key only when it says more than the name, so a varied variant's key, its name hyphenated, stays off",
+    await window.$$eval('[data-slot-id="wheel"] [data-variant]', (rows) => rows.map((r) => [r.dataset.variant, r.querySelector("[data-variant-key]")?.textContent ?? null])),
+    [
+      ["neon", "neon"],
+      ["reel", "reel"],
+      ["spin-button-a", null],
+      ["spin-button-b", null],
+      ["spin-button-c", null],
+      ["terminal", "terminal"],
+    ],
+  );
   check("the strip says what made the iteration", (await strip(window)).at(-1).origin, "Vary Spin button ×3 · bolder");
   await shot(window, shots, "9-vary-landed");
   await window.setViewportSize({ width: 1100, height: 720 });
@@ -668,6 +733,30 @@ try {
   );
   check("the later arrow is off at the end, the earlier one on", [await window.isDisabled('[data-history-step="end"]'), await window.isDisabled('[data-history-step="start"]')], [true, false]);
   check("only the start, where entries hide, shows its cue that more waits that way", await edgeCues(window), ["start"]);
+  const cue = await window.$eval('[data-history-cue="start"]', (el) => {
+    const [r, strip] = [el.getBoundingClientRect(), document.querySelector("[data-history]").getBoundingClientRect()];
+    return { x: Math.ceil(r.left), y: Math.round(r.top), width: Math.floor(r.right) - Math.ceil(r.left), height: Math.round(r.height), stripInner: Math.round(strip.bottom - r.top) };
+  });
+  check("the cue runs the strip's full height under its rule, not an entry's 56 px", cue.height, cue.stripInner);
+  for (const theme of ["light", "dark"]) {
+    await window.emulateMedia({ colorScheme: theme });
+    await window.waitForTimeout(300);
+    const card = await window.evaluate(() => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--card)" }));
+      const c = getComputedStyle(probe).color.match(/\d+/g).map(Number);
+      probe.remove();
+      return c;
+    });
+    const row = await pixels(app, window, { x: cue.x, y: cue.y + Math.round(cue.height / 2), width: cue.width, height: 1 });
+    const grey = row.map(([r, g, b]) => Math.round((r + g + b) / 3));
+    const base = Math.round(card.reduce((t, v) => t + v, 0) / 3);
+    check(
+      `in ${theme} the cue shades the card at the strip's edge and fades into it, no column lighter than the card`,
+      { edge: base - grey[0] >= 8, fades: Math.abs(grey.at(-1) - base) <= 2, lighter: grey.filter((v) => v > base + 1).length },
+      { edge: true, fades: true, lighter: 0 },
+    );
+  }
+  await window.emulateMedia({ colorScheme: "light" });
   const uncut = async () => (await settled(() => firstLines(window))).map(([n, age, latest]) => [n, age, latest === "cut" ? "cut" : "uncut"]);
   check("at 1100 the latest entry's age reads whole, and latest whole or not at all", await uncut(), [[3, "whole", "uncut"]]);
   const overflowHead = await settled(() => stripHead(window));
@@ -678,14 +767,18 @@ try {
   );
   await stripScroll(window, () => window.click('[data-history-step="start"]'));
   check(
-    "the earlier arrow steps back one entry and rests on an edge, nothing cut",
+    "the earlier arrow steps back a page and rests on its start, every entry it shows whole, the cut one out of sight",
     await settled(async () => {
       const rest = await stripRest(window);
-      return [rest.inView, rest.cut, rest.insets];
+      const offInView = await window.$$eval("[data-history-list] > [data-off]", (els) => {
+        const box = document.querySelector("[data-history-scroll]").getBoundingClientRect();
+        return els.filter((el) => el.getBoundingClientRect().left < box.right).length;
+      });
+      return [rest.inView, rest.cut, rest.insets[0], offInView];
     }),
-    [["iteration 2", "fork"], [], [16, 16]],
+    [["iteration 1", "iteration 2"], [], 16, 1],
   );
-  check("in the middle both ends show their cue", await edgeCues(window), ["start", "end"]);
+  check("at the start only the end shows its cue", await edgeCues(window), ["end"]);
   // Focusing the latest scrolls it into view, so the wait spans the focus as well as End.
   await stripScroll(window, async () => {
     await window.focus('[data-history-n="3"]');
@@ -712,6 +805,22 @@ try {
     [2, "whole", "uncut"],
     [3, "whole", "uncut"],
   ]);
+  const overflowLines = await settled(() =>
+    window.$$eval("[data-history-list] > *:not([data-off])", (entries) => {
+      const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : "fork");
+      const cut = entries.filter((el) => [...el.querySelectorAll('[data-slot="truncate"]')].some((t) => t.scrollWidth > t.clientWidth));
+      const spare = entries.filter((el) => {
+        const width = el.getBoundingClientRect().width;
+        el.style.width = "max-content";
+        const need = el.getBoundingClientRect().width;
+        el.style.removeProperty("width");
+        return width > Math.max(180, need) + 1;
+      });
+      return { cut: cut.map(name), spare: cut.length === 0 ? [] : spare.map(name) };
+    }),
+  );
+  console.log(`  strip lines cut at 1440 once it overflows: ${overflowLines.cut.join(", ") || "none"}`);
+  check("once the strip overflows, no entry in view holds room while another's line is cut", overflowLines.spare, []);
   await window.click('[data-slot-id="wheel"] [data-variant="spin-button-a"]');
   await window.waitForSelector('[data-variant="spin-button-a"] [data-variant-new]', { state: "detached", timeout: PHASE_MS });
   check(
