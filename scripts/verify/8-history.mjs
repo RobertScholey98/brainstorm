@@ -60,6 +60,15 @@ const stripRest = (window) =>
       arrows: document.querySelectorAll("[data-history-step]").length,
     };
   });
+/** Runs `act`, then waits for the strip's `scrollend`, so a read never lands while the strip is still moving. */
+async function stripScroll(window, act) {
+  await window.$eval("[data-history-scroll]", (el) => {
+    el.dataset.scrolling = "";
+    el.addEventListener("scrollend", () => delete el.dataset.scrolling, { once: true });
+  });
+  await act();
+  await window.waitForSelector("[data-history-scroll]:not([data-scrolling])", { timeout: 5000 });
+}
 const canvasAt = (window) =>
   window.$eval("[data-canvas-iteration]", (el) => ({ n: Number(el.dataset.canvasIteration), past: el.dataset.canvasPast === undefined ? null : Number(el.dataset.canvasPast) }));
 const pool = (canvas) => canvas.textContent(inBlock("wheel/neon", "pool"));
@@ -541,7 +550,7 @@ try {
     [["fork", "iteration 3"], [], true, [16, 16], 2],
   );
   check("the later arrow is off at the end, the earlier one on", [await window.isDisabled('[data-history-step="end"]'), await window.isDisabled('[data-history-step="start"]')], [true, false]);
-  await window.click('[data-history-step="start"]');
+  await stripScroll(window, () => window.click('[data-history-step="start"]'));
   check(
     "the earlier arrow steps back one entry and rests on an edge, nothing cut",
     await settled(async () => {
@@ -550,8 +559,11 @@ try {
     }),
     [["iteration 2", "fork"], [], [16, 16]],
   );
-  await window.focus('[data-history-n="3"]');
-  await window.keyboard.press("End");
+  // Focusing the latest scrolls it into view, so the wait spans the focus as well as End.
+  await stripScroll(window, async () => {
+    await window.focus('[data-history-n="3"]');
+    await window.keyboard.press("End");
+  });
   check(
     "End on the strip brings the latest back whole",
     await settled(async () => {
