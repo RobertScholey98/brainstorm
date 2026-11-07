@@ -27,7 +27,8 @@
     "capture:sheets": "node scripts/capture/sheets.mjs",
     "design:tokens": "node scripts/design/tokens.mjs",
     "design:checkpoint": "node scripts/design/checkpoint.mjs",
-    "verify:8": "node scripts/verify/8-history.mjs"
+    "verify:8": "node scripts/verify/8-history.mjs",
+    "verify:9": "node scripts/verify/9-header.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",

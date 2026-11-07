@@ -1,33 +1,62 @@
-import type { OpenPhase, SessionListing } from "../core/types";
+import type { OpenPhase, RequestPhase, SessionListing } from "../core/types";
 
-export type Tone = "accent" | "info" | "warning" | "danger";
+export type Tone = "accent" | "info" | "warning" | "danger" | "success" | "muted";
+
+/** A tone that stops the brainstorm for Rob, which is what home's Attention filter finds. */
+const ATTENTION: ReadonlySet<Tone> = new Set(["info", "warning", "danger"]);
+
+export const TONE_TEXT: Record<Tone, string> = {
+  accent: "text-accent",
+  info: "text-info",
+  warning: "text-warning",
+  danger: "text-danger",
+  success: "text-success",
+  muted: "text-fg-muted",
+};
+
+export const TONE_DOT: Record<Tone, string> = {
+  accent: "bg-accent",
+  info: "bg-info",
+  warning: "bg-warning",
+  danger: "bg-danger",
+  success: "bg-success",
+  muted: "bg-fg-muted",
+};
 
 /**
- * What a brainstorm is waiting on, as its list row and card say it. The accent is the agent at work; a status hue is
- * something Rob has to look at, which is what home's Attention filter finds. Working and sending pulse, since they
- * change on their own.
+ * Every request phase, the one table the header, the request strip, the brainstorm panel's Thread row and home all
+ * read. `short` is the phase's name where room is tight: a list row, the Thread row, a header that has given up its
+ * long status. The accent is the agent at work, so only phases where it is running take it; queued waits in T3 with
+ * nothing running yet. Live phases pulse, since they change on their own.
  */
-export const STATUS: Record<OpenPhase, { readonly label: string; readonly tone: Tone; readonly live?: true }> = {
-  sending: { label: "Sending", tone: "accent", live: true },
-  starting: { label: "Starting thread", tone: "accent", live: true },
-  queued: { label: "Queued in T3", tone: "accent" },
-  working: { label: "Agent working", tone: "accent", live: true },
-  asking: { label: "Agent asking", tone: "info" },
-  no_change: { label: "No change", tone: "info" },
-  previous_thread: { label: "Previous thread", tone: "warning" },
-  thread_lost: { label: "Thread lost", tone: "warning" },
-  send_failed: { label: "Send failed", tone: "danger" },
-  start_failed: { label: "Start failed", tone: "danger" },
-  run_failed: { label: "Run failed", tone: "danger" },
+export const PHASE: Record<RequestPhase["phase"], { readonly short: string; readonly tone: Tone; readonly live?: true }> = {
+  sending: { short: "Sending", tone: "accent", live: true },
+  starting: { short: "Starting thread", tone: "accent", live: true },
+  queued: { short: "Queued in T3", tone: "muted" },
+  working: { short: "Agent working", tone: "accent", live: true },
+  asking: { short: "Agent asking", tone: "info" },
+  no_change: { short: "No change", tone: "info" },
+  previous_thread: { short: "Previous thread", tone: "warning" },
+  thread_lost: { short: "Thread lost", tone: "warning" },
+  send_failed: { short: "Send failed", tone: "danger" },
+  start_failed: { short: "Start failed", tone: "danger" },
+  run_failed: { short: "Run failed", tone: "danger" },
+  fulfilled: { short: "Fulfilled", tone: "success" },
+  withdrawn: { short: "Withdrawn", tone: "muted" },
 };
 
 /** A lost thread outranks any request, since nobody can answer it. */
 export const sessionPhase = (s: SessionListing): OpenPhase | null => (s.lost ? "thread_lost" : s.request);
 
-export function sessionStatus(s: SessionListing): (typeof STATUS)[OpenPhase] | null {
+/** Whether the brainstorm has stopped for Rob: a lost thread, or a request in a status hue. */
+export function needsAttention(s: SessionListing): boolean {
   const phase = sessionPhase(s);
-  return phase === null ? null : STATUS[phase];
+  return phase !== null && ATTENTION.has(PHASE[phase].tone);
 }
 
-/** Whether the brainstorm has stopped for Rob: a lost thread, or a request in a status hue. */
-export const needsAttention = (s: SessionListing): boolean => (sessionStatus(s)?.tone ?? "accent") !== "accent";
+/**
+ * The tone a phase takes beside the header. The header and the request strip carry a status hue, so a second surface
+ * names the phase in muted text rather than repeat the alarm, as the lost thread does (R5-66). The agent's own activity
+ * keeps the accent wherever it shows.
+ */
+export const echoTone = (phase: RequestPhase["phase"]): Tone => (ATTENTION.has(PHASE[phase].tone) ? "muted" : PHASE[phase].tone);

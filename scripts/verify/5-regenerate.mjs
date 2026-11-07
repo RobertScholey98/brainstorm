@@ -191,7 +191,7 @@ try {
   );
   await window.setViewportSize({ width: 1100, height: 720 });
   check(
-    "at 1100 with a request open the phase actions give up their labels for icons, so the title keeps 160 px or reads whole, and the status message reads whole",
+    "at 1100 with a request open Withdraw gives up its label for an icon and Open thread keeps its name, so the title keeps 160 px or reads whole, and the status message reads whole",
     await settled(() =>
       window.evaluate(() => {
         const [title, message] = [document.querySelector("[data-session-title]"), document.querySelector("[data-request-message]")];
@@ -202,7 +202,7 @@ try {
         ];
       }),
     ),
-    [[28, 28], true, true],
+    [[110, 28], true, true],
   );
   check(
     "in the narrowest window, 1100, the title and message give way, and the phase actions stay clear of Regenerate",
@@ -323,9 +323,10 @@ try {
     "the sidebar's thread row says the agent is working and for how long, in the mark home's rows use",
     await window.$eval('[data-thread="working"]', (el) => ({
       text: el.textContent.trim().replace(/\d+/, "N"),
-      mark: el.querySelector('[data-session-status="working"] .animate-ping') !== null,
+      mark: document.querySelector("[data-thread-mark]")?.dataset.threadMark,
+      pulses: document.querySelector("[data-thread-mark] .animate-ping") !== null,
     })),
-    { text: "Agent working · Ns", mark: true },
+    { text: "Agent working Ns", mark: "accent", pulses: true },
   );
   at.push(await withdrawAt());
   await window.click("[data-back]");
@@ -340,9 +341,9 @@ try {
       const probe = document.body.appendChild(Object.assign(document.createElement("i"), { style: `color: ${accent}` }));
       const tone = getComputedStyle(probe).color;
       probe.remove();
-      return { row: row.textContent.trim(), card: card.textContent.trim(), tone: [row, card].every((el) => getComputedStyle(el).color === tone), pulses: row.querySelector(".animate-ping") !== null };
+      return { row: row.textContent.trim().replace(/\d+/, "N"), card: card.textContent.trim(), tone: [row, card].every((el) => getComputedStyle(el).color === tone), pulses: row.querySelector(".animate-ping") !== null };
     }, session),
-    { row: "Agent working", card: "Agent working", tone: true, pulses: true },
+    { row: "Agent working Ns", card: "Agent working", tone: true, pulses: true },
   );
   await openSession(window, session);
   await window.waitForSelector('[data-request-phase="working"]');

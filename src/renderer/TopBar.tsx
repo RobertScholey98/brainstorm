@@ -8,7 +8,7 @@ import { Hint, HintAnchor } from "@/components/ui/tooltip";
 import type { BlockId, ContentHash, ExportResult, ForkInput, IterationN, IterationView, RobAction, SessionId, SessionView } from "../core/types";
 import { ExportButton } from "./Export";
 import { ForkButton } from "./Fork";
-import { COMPACT, COMPACT_LABEL } from "./headerAction";
+import { COLLAPSE, COMPACT, COMPACT_LABEL, useHeaderFit } from "./headerAction";
 import { Mark } from "./Mark";
 import { PhaseActions, phaseActions, Regenerate, RequestStatus } from "./Regenerate";
 
@@ -34,6 +34,7 @@ export function TopBar({
   const { state, isMobile } = useSidebar();
   const header = useRef<HTMLElement>(null);
   const cluster = useRef<HTMLDivElement>(null);
+  useHeaderFit(header);
   // The row its hints open left of: the right cluster, and the request status before it when there is one.
   const row = useCallback(() => {
     const actions = cluster.current;
@@ -49,7 +50,7 @@ export function TopBar({
   return (
     <header
       ref={header}
-      className="@container/header titlebar-inset flex h-12 shrink-0 items-center gap-3 pl-1"
+      className="titlebar-inset flex h-12 shrink-0 items-center gap-3 pl-1"
       data-topbar
       data-drag-region
       data-sidebar-state={isMobile ? "collapsed" : state}
@@ -144,14 +145,14 @@ export function SessionBar({
         view === null ? (
           // Held in place while the brainstorm loads, so the bar doesn't change shape when it arrives.
           <>
-            <Button variant="outline" disabled className={COMPACT} data-fork-toggle>
+            <Button variant="outline" disabled className={COMPACT} data-collapse={COLLAPSE.fork} data-fork-toggle>
               <GitBranch data-icon="inline-start" aria-hidden />
               <span className={COMPACT_LABEL}>Fork</span>
             </Button>
             <Button variant="accent" disabled data-regenerate-toggle>
               Regenerate
             </Button>
-            <Button variant="outline" disabled className={COMPACT} data-export>
+            <Button variant="outline" disabled className={COMPACT} data-collapse={COLLAPSE.export} data-export>
               <Download data-icon="inline-start" aria-hidden />
               <span className={COMPACT_LABEL}>Export</span>
             </Button>
@@ -194,9 +195,10 @@ export function SessionBar({
             {past === null ? `Iteration ${latest}` : `Iteration ${past} of ${latest}`}
           </Badge>
         )}
-        {view !== null && (view.request !== null || view.attachment.lostAt !== null) && (
-          <div className="flex min-w-0 items-center gap-2" data-header-status>
-            <Separator orientation="vertical" className="h-4 self-center" />
+        {/* In the past the badge names the iteration shown, so a closed request's result, about the latest, steps aside. */}
+        {view !== null && (view.attachment.lostAt !== null || (view.request !== null && (past === null || view.request.phase.actions.length > 0))) && (
+          <div className="flex shrink-0 items-center gap-2" data-header-status>
+            <Separator orientation="vertical" />
             <RequestStatus view={view} />
           </div>
         )}

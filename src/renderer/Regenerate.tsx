@@ -12,8 +12,10 @@ import { Segmented } from "@/components/ui/segmented";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Hint } from "@/components/ui/tooltip";
+import { partLabel } from "../core/fork";
 import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
-import { COMPACT, COMPACT_LABEL } from "./headerAction";
+import { actionRank, COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
+import { PHASE, TONE_TEXT } from "./status";
 import { PinNumber } from "./PinNumber";
 import type { BlockId, BlockView, IterationN, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
@@ -177,7 +179,7 @@ function RegenerateForm({
             <Hint label={f.text} side="left">
               <span className="min-w-0 truncate">{f.text}</span>
             </Hint>
-            <span className="ml-auto shrink-0 text-fg-muted">{f.pin.part ?? "whole block"}</span>
+            <span className="ml-auto shrink-0 text-fg-muted">{f.pin.part === null ? "whole block" : partLabel(f.pin.part)}</span>
           </p>
         ))}
       </div>
@@ -214,12 +216,13 @@ function BlockChoice({ block, showing, checked, onToggle }: { block: BlockView; 
   );
 }
 
+/** The phase's glyph in its tone from the one phase table. */
 function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
-  const cls = "size-4 shrink-0";
+  const cls = `size-4 shrink-0 ${TONE_TEXT[PHASE[phase].tone]}`;
   switch (phase) {
     case "sending":
     case "starting":
-      return <Spinner className={`${cls} text-accent`} aria-hidden data-progress />;
+      return <Spinner className={cls} aria-hidden data-progress />;
     case "working":
       // A live dot in a 14 px halo, the optical size of the other phases' glyphs.
       return (
@@ -231,23 +234,23 @@ function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
         </span>
       );
     case "queued":
-      return <Clock className={`${cls} text-fg-muted`} aria-hidden />;
+      return <Clock className={cls} aria-hidden />;
     case "asking":
-      return <CircleHelp className={`${cls} text-info`} aria-hidden />;
+      return <CircleHelp className={cls} aria-hidden />;
     case "no_change":
-      return <Info className={`${cls} text-info`} aria-hidden />;
+      return <Info className={cls} aria-hidden />;
     case "fulfilled":
-      return <Check className={`${cls} text-success`} aria-hidden />;
+      return <Check className={cls} aria-hidden />;
     case "withdrawn":
       // A state, not an action, so not the undo arrow a button would carry.
-      return <CircleSlash className={`${cls} text-fg-muted`} aria-hidden />;
+      return <CircleSlash className={cls} aria-hidden />;
     case "send_failed":
     case "start_failed":
     case "run_failed":
-      return <CircleAlert className={`${cls} text-danger`} aria-hidden />;
+      return <CircleAlert className={cls} aria-hidden />;
     case "previous_thread":
     case "thread_lost":
-      return <AlertTriangle className={`${cls} text-warning`} aria-hidden />;
+      return <AlertTriangle className={cls} aria-hidden />;
   }
 }
 
@@ -276,67 +279,48 @@ const ACTION_ICON: Partial<Record<RequestPhaseAction, LucideIcon>> = {
   discard: Trash2,
 };
 
-type Tone = "danger" | "warning" | "info";
-
 /**
  * Phases that need more than the bar has room for: an error, the takeover phrase, the agent's reply, or what the next
- * step does. The bar names the phase and the strip under it says the rest, so nothing Rob has to read or copy is cut
- * off. The icon is the strip's tone icon, the same one the bar shows. `own` is an action the strip carries instead
- * of the bar, beside what it acts on.
+ * step does. The bar names the phase and the strip under it says the rest, in the phase's tone, so nothing Rob has to
+ * read or copy is cut off. `own` is an action the strip carries instead of the bar, beside what it acts on.
  */
-const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; readonly tone: Tone; readonly note?: string; readonly own?: RequestPhaseAction }>> = {
-  send_failed: { label: "Send failed", tone: "danger" },
-  start_failed: { label: "Start failed", tone: "danger" },
-  run_failed: { label: "Run failed", tone: "danger", note: "The agent's run failed in T3. Open the thread to see why, or Retry." },
-  thread_lost: { label: "Thread lost", tone: "warning", note: "This brainstorm's thread is gone. In a T3 thread on this project, say:", own: "copy_phrase" },
-  previous_thread: { label: "Sent to the previous thread", tone: "warning", note: "Another thread took this brainstorm over. Resend sends the request to it." },
-  no_change: { label: "No change", tone: "info", note: "The agent replied in T3 without changing the design." },
+const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; readonly note?: string; readonly own?: RequestPhaseAction }>> = {
+  send_failed: { label: "Send failed" },
+  start_failed: { label: "Start failed" },
+  run_failed: { label: "Run failed", note: "The agent's run failed in T3. Open the thread to see why, or Retry." },
+  thread_lost: { label: "Thread lost", note: "This brainstorm's thread is gone. In a T3 thread on this project, say:", own: "copy_phrase" },
+  previous_thread: { label: "Sent to the previous thread", note: "Another thread took this brainstorm over. Resend sends the request to it." },
+  no_change: { label: "No change", note: "The agent replied in T3 without changing the design." },
 };
 
 /**
- * A phase's label takes its icon's tone, so a tone never means one thing in the icon and another in the words: the
- * accent while the agent works, a status hue when Rob has to look, and muted for the rest.
+ * The request's phase in the header: its glyph and its words in the phase's tone. A short header gives up the long
+ * words for the phase's short name first, since the glyph and tone still say it and the strip keeps any detail.
  */
-const TONE_TEXT: Partial<Record<RequestPhase["phase"], string>> = {
-  sending: "text-accent",
-  starting: "text-accent",
-  working: "text-accent",
-  asking: "text-info",
-  send_failed: "text-danger",
-  start_failed: "text-danger",
-  run_failed: "text-danger",
-  thread_lost: "text-warning",
-  previous_thread: "text-warning",
-  no_change: "text-info",
-  fulfilled: "text-success",
-};
-
 export function RequestStatus({ view }: { view: SessionView }) {
   const request = view.request;
   // A lost thread stays named once its request closes, since nothing can be sent until it is taken over.
-  if (view.attachment.lostAt !== null && (request === null || request.phase.actions.length === 0)) {
-    return (
-      <div className="grid-phase grid items-center gap-2 text-sm" data-request-phase={request?.phase.phase} data-thread-lost>
-        <PhaseIcon phase="thread_lost" />
-        <span className={`truncate font-medium ${TONE_TEXT.thread_lost}`} data-request-label>
-          {DETAIL.thread_lost?.label}
-        </span>
-      </div>
-    );
-  }
-  if (request === null) return null;
-  const { phase } = request;
-  const detail = DETAIL[phase.phase];
+  const lost = view.attachment.lostAt !== null && (request === null || request.phase.actions.length === 0);
+  if (!lost && request === null) return null;
+  const phase = lost ? "thread_lost" : request!.phase.phase;
+  const detail = DETAIL[phase];
+  const long = detail?.label ?? request!.message;
+  const short = PHASE[phase].short;
   return (
-    <div className="grid-phase grid items-center gap-2 text-sm" data-request-phase={phase.phase}>
-      <PhaseIcon phase={phase.phase} />
-      {detail === undefined ? (
-        <span className={`truncate ${TONE_TEXT[phase.phase] ?? "text-fg-muted"}`} data-request-message>
-          {request.message}
-        </span>
-      ) : (
-        <span className={`truncate font-medium ${TONE_TEXT[phase.phase]}`} data-request-label>
-          {detail.label}
+    <div
+      className={`grid-phase grid items-center gap-2 text-sm ${TONE_TEXT[PHASE[phase].tone]}`}
+      data-request-phase={request?.phase.phase}
+      data-thread-lost={lost || undefined}
+      data-collapse={short === long ? undefined : COLLAPSE.status}
+    >
+      <PhaseIcon phase={phase} />
+      <span className={cn("truncate", detail !== undefined && "font-medium", short !== long && "in-data-collapsed:hidden")} data-request-message={detail === undefined || undefined}
+        data-request-label={detail !== undefined || undefined}>
+        {long}
+      </span>
+      {short !== long && (
+        <span className={cn("hidden truncate in-data-collapsed:inline", detail !== undefined && "font-medium")} data-request-short>
+          {short}
         </span>
       )}
     </div>
@@ -352,13 +336,15 @@ export function phaseActions(view: SessionView): readonly RequestPhaseAction[] {
 
 /**
  * The request's actions, in the header's right cluster before Regenerate. Anchored there, they stay put as the phase's
- * label changes length, so Withdraw sits at one x from queued to working.
+ * label changes length, so Withdraw sits at one x from queued to working. The last gives up its words first, so the
+ * phase's recovery, its first action, keeps its name longest.
  */
 export function PhaseActions({ view, send, onDiscard }: { view: SessionView; send: (action: RobAction) => Promise<unknown>; onDiscard: () => void }) {
+  const actions = phaseActions(view);
   return (
     <span className="flex shrink-0 items-center gap-2" data-phase-actions>
-      {phaseActions(view).map((action) => (
-        <PhaseAction key={action} action={action} view={view} send={send} onDiscard={onDiscard} />
+      {actions.map((action, i) => (
+        <PhaseAction key={action} action={action} rank={actionRank(i, actions.length)} view={view} send={send} onDiscard={onDiscard} />
       ))}
     </span>
   );
@@ -370,7 +356,7 @@ export function RequestDetail({ view }: { view: SessionView }) {
   if (view.request === null || detail === undefined) return null;
   return (
     <Callout
-      tone={detail.tone}
+      tone={stripTone(view.request.phase.phase)}
       layout="strip"
       role="status"
       actions={detail.own === "copy_phrase" ? <TakeoverPhrase title={view.session.title} /> : undefined}
@@ -383,13 +369,21 @@ export function RequestDetail({ view }: { view: SessionView }) {
   );
 }
 
+/** A strip's tone is its phase's, from the one table; every phase with a strip is a status hue. */
+function stripTone(phase: RequestPhase["phase"]): "danger" | "warning" | "info" {
+  const tone = PHASE[phase].tone;
+  return tone === "danger" || tone === "warning" ? tone : "info";
+}
+
 function PhaseAction({
   action,
+  rank,
   view,
   send,
   onDiscard,
 }: {
   action: RequestPhaseAction;
+  rank: number;
   view: SessionView;
   send: (action: RobAction) => Promise<unknown>;
   onDiscard: () => void;
@@ -397,23 +391,23 @@ function PhaseAction({
   switch (action) {
     case "retry":
     case "resend":
-      return <ActionButton action={action} onClick={() => void send({ kind: "retry_request" })} />;
+      return <ActionButton action={action} rank={rank} onClick={() => void send({ kind: "retry_request" })} />;
     case "withdraw":
-      return <ActionButton action={action} onClick={() => void send({ kind: "withdraw_request" })} />;
+      return <ActionButton action={action} rank={rank} onClick={() => void send({ kind: "withdraw_request" })} />;
     case "open_thread":
-      return <OpenThread view={view} />;
+      return <OpenThread view={view} rank={rank} />;
     case "copy_phrase":
       return <CopyPhrase title={view.session.title} />;
     case "discard":
-      return <ActionButton action={action} onClick={onDiscard} />;
+      return <ActionButton action={action} rank={rank} onClick={onDiscard} />;
   }
 }
 
-function OpenThread({ view }: { view: SessionView }) {
+function OpenThread({ view, rank }: { view: SessionView; rank: number }) {
   if (view.thread === null) return null;
   return (
     <Hint label={`Open ${view.thread.title} in T3`} side="left">
-      <Button variant="outline" className={COMPACT} nativeButton={false} render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-request-action="open_thread">
+      <Button variant="outline" className={COMPACT} nativeButton={false} render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-collapse={rank} data-request-action="open_thread">
         <ActionLabel action="open_thread" />
       </Button>
     </Hint>
@@ -460,10 +454,10 @@ function CopyPhrase({ title }: { title: string }) {
 }
 
 /** Phase actions are full-height outline buttons, the same size as Regenerate and Export beside them. */
-function ActionButton({ action, onClick }: { action: keyof typeof ACTION_HINT; onClick: () => void }) {
+function ActionButton({ action, rank, onClick }: { action: keyof typeof ACTION_HINT; rank: number; onClick: () => void }) {
   return (
     <Hint label={ACTION_HINT[action]} side="left">
-      <Button variant="outline" className={COMPACT} onClick={onClick} data-request-action={action}>
+      <Button variant="outline" className={COMPACT} onClick={onClick} data-collapse={rank} data-request-action={action}>
         <ActionLabel action={action} />
       </Button>
     </Hint>

@@ -24,11 +24,12 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
-import { blockIdOf, isPendingThread, type BlockView, type ContentHash, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
+import { blockIdOf, isPendingThread, type BlockView, type ContentHash, type OpenPhase, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
 import type { PaneLimits } from "./hooks/use-pane-width";
 import { Mark } from "./Mark";
 import { TakeoverPhrase } from "./Regenerate";
-import { PhaseStatus, SessionStatus } from "./SessionStatus";
+import { PhaseDot, SessionStatus } from "./SessionStatus";
+import { echoTone, PHASE, sessionPhase } from "./status";
 import { groupByProject, splitSettled } from "./sessionGroups";
 import { SETTLE_SHORTCUT, settleLabel, settleUndoes } from "./settle";
 import { age, elapsed, useNow } from "./time";
@@ -104,7 +105,7 @@ export function HomePanel({
     const split = splitSettled(sessions ?? []);
     return { groups: groupByProject(split.active), settled: split.settled };
   }, [sessions]);
-  const now = useNow();
+  const now = useNow(sessions?.some((s) => sessionPhase(s) !== null) === true ? 1_000 : undefined);
   return (
     <SidebarContent
       className="animate-in fade-in-0 slide-in-from-left-3 duration-200"
@@ -230,21 +231,19 @@ function SessionRow({
         data-lost={s.lost || undefined}
         data-settled={s.settlement.state === "settled" || undefined}
       >
+        <span className="min-w-0 flex-1 truncate">{s.title}</span>
+        {/* The branch mark trails the title, so a fork's title keeps its siblings' text edge. */}
         {s.fork !== null && (
           <span className="flex shrink-0 text-fg-muted" data-row-fork>
             <GitBranch aria-hidden />
             <span className="sr-only">
-              Fork of {s.fork.parentTitle} · iteration {s.fork.from}:
+              Fork of {s.fork.parentTitle} · iteration {s.fork.from}
             </span>
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate">{s.title}</span>
-        <SessionStatus session={s} compact />
-        <span
-          className="shrink-0 text-xs font-normal text-fg-muted tabular-nums group-focus-within/menu-item:invisible group-hover/menu-item:invisible"
-          data-age={since}
-        >
-          {age(since, now)}
+        {/* An open request says what it is waiting on and for how long, as T3 Code's thread rows do, in the age's place. */}
+        <span className="flex shrink-0 text-xs font-normal text-fg-muted tabular-nums group-focus-within/menu-item:invisible group-hover/menu-item:invisible">
+          {sessionPhase(s) === null || s.settlement.state === "settled" ? <span data-age={since}>{age(since, now)}</span> : <SessionStatus session={s} now={now} />}
         </span>
       </SidebarMenuButton>
       <Hint label={label} shortcut={SETTLE_SHORTCUT} side="left">
@@ -358,8 +357,8 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
         <SidebarMenuItem>
           {pending ? (
             <div className="flex h-8 items-center gap-2 px-2 text-sm" data-thread-link>
-              <SidebarMenuMark className={failed ? "bg-danger" : "bg-accent"} />
-              <span className={failed ? "font-medium text-danger" : "text-fg-muted"} data-thread={failed ? "start_failed" : "starting"}>
+              <SidebarMenuMark className={failed ? "bg-fg-muted" : "bg-accent"} />
+              <span className="text-fg-muted" data-thread={failed ? "start_failed" : "starting"}>
                 {failed ? "New thread didn't start" : "New thread · starting"}
               </span>
             </div>
@@ -367,7 +366,7 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
             // T3 may not have answered yet for an attached thread, so it shows the state without a name or a link.
             <div className="flex h-8 items-center gap-2 px-2 text-sm" data-thread-link>
               {/* The header names a lost thread in amber, and its strip says what to do, so the row only states it. */}
-              <SidebarMenuMark className={lost ? "bg-fg-muted" : "bg-success"} />
+              {lost ? <SidebarMenuMark className="bg-fg-muted" /> : <ThreadMark view={view} />}
               {lost ? (
                 <span className="text-fg-muted" data-thread="lost">
                   Thread lost
@@ -379,7 +378,7 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
           ) : (
             <SidebarMenuButton size="tall" render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-thread-link>
               <span className="mt-0.5 flex">
-                <SidebarMenuMark className="bg-success" />
+                <ThreadMark view={view} />
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate">{view.thread.title}</span>
@@ -422,14 +421,34 @@ function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: Sessi
   );
 }
 
+/** The open request's phase, or null once it has closed. */
+function openPhase(view: SessionView): OpenPhase | null {
+  const phase = view.request?.phase.phase;
+  return phase === undefined || phase === "fulfilled" || phase === "withdrawn" ? null : phase;
+}
+
 /**
- * What the attached thread is doing, as home's rows say it: the open request's phase, counting up while the agent
- * works, or Attached once nothing is open.
+ * The Thread row's lead mark: green while the thread is attached and idle, the phase's dot while a request is open. A
+ * phase in a status hue shows muted here, since the header and its strip already carry the hue.
+ */
+function ThreadMark({ view }: { view: SessionView }) {
+  const phase = openPhase(view);
+  if (phase === null) return <SidebarMenuMark className="bg-success" />;
+  return (
+    <span className="flex size-4 shrink-0 items-center justify-center" data-thread-mark={echoTone(phase)}>
+      <PhaseDot phase={phase} tone={echoTone(phase)} />
+    </span>
+  );
+}
+
+/**
+ * What the attached thread is doing, in the words home's rows use: the open request's phase and how long it has been
+ * open, or Attached once nothing is open. The lead mark carries the tone, so the words stay muted and keep one edge.
  */
 function ThreadState({ view, className }: { view: SessionView; className?: string }) {
   const request = view.request;
-  const phase = request === null || request.phase.phase === "fulfilled" || request.phase.phase === "withdrawn" ? null : request.phase.phase;
-  const now = useNow(phase === "working" ? 1_000 : undefined);
+  const phase = openPhase(view);
+  const now = useNow(phase === null ? undefined : 1_000);
   if (request === null || phase === null) {
     return (
       <span className={cn("text-fg-muted", className)} data-thread="attached">
@@ -438,8 +457,9 @@ function ThreadState({ view, className }: { view: SessionView; className?: strin
     );
   }
   return (
-    <span className={cn("flex", className)} data-thread={phase}>
-      <PhaseStatus phase={phase} after={phase === "working" ? elapsed(request.request.sentAt ?? request.request.createdAt, now) : undefined} />
+    <span className={cn("text-fg-muted", className)} data-thread={phase}>
+      {PHASE[phase].short}
+      <span className="tabular-nums" data-status-elapsed>{` ${elapsed(request.request.sentAt ?? request.request.createdAt, now)}`}</span>
     </span>
   );
 }
