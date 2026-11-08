@@ -226,23 +226,34 @@ function SystemDetail({ api, id, syncing, onSync, onBack }: { api: Api; id: Syst
 
 type Manifest = NonNullable<SystemView["manifest"]>;
 
+const DEFAULT_AXIS = "__default";
+
 function ComponentsTab({ view, manifest }: { view: SystemView; manifest: Manifest }) {
   const [entry, setEntry] = useState<string | null>(null);
   const [axes, setAxes] = useState<Record<string, string>>({});
-  const entries = manifest.catalog;
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const entries = needle === "" ? manifest.catalog : manifest.catalog.filter((e) => [e.name, ...e.parts].some((n) => n.toLowerCase().includes(needle)));
   const chosen = entries.find((e) => e.name === entry) ?? null;
   const stories = chosen === null ? null : chosen.stories;
   const latest = view.latest;
   return (
     <div className="flex min-h-0 flex-1">
-      <ScrollPane inset={4} className="w-inspector shrink-0 border-r bg-card" data-catalog>
-        <ul className="grid gap-0.5 py-3">
-          <CatalogRow label="All stories" detail={`${manifest.stories.length}`} active={entry === null} onClick={() => setEntry(null)} />
-          {entries.map((e) => (
-            <CatalogRow key={e.name} label={e.name} detail={entryDetail(e)} active={entry === e.name} onClick={() => setEntry(e.name)} data-entry={e.name} />
-          ))}
-        </ul>
-      </ScrollPane>
+      {/* The catalog takes the Inspector's width, so the stories get the rest. flex-none beats ScrollPane's flex-1. */}
+      <div className="flex w-inspector flex-none flex-col border-r bg-card" data-catalog>
+        <div className="px-4 pt-3">
+          <Input type="search" placeholder={`Search ${manifest.catalog.length} components`} aria-label="Search components" value={query} onChange={(e) => setQuery(e.target.value)} data-catalog-search />
+        </div>
+        <ScrollPane inset={4}>
+          <ul className="grid gap-0.5 py-3">
+            {needle === "" && <CatalogRow label="All stories" detail={`${manifest.stories.length}`} active={entry === null} onClick={() => setEntry(null)} />}
+            {entries.map((e) => (
+              <CatalogRow key={e.name} label={e.name} detail={entryDetail(e)} active={entry === e.name} onClick={() => setEntry(e.name)} data-entry={e.name} />
+            ))}
+            {entries.length === 0 && <li className="px-2 py-1.5 text-sm text-fg-muted">No component matches "{query.trim()}"</li>}
+          </ul>
+        </ScrollPane>
+      </div>
       <div className="flex min-w-0 flex-1 flex-col">
         {manifest.styles.axes.length > 0 && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-card px-4 py-2">
@@ -334,77 +345,130 @@ function GalleryFrame({ id, n, stories, theme }: { id: SystemId; n: SystemView["
 }
 
 function ThemeTab({ manifest }: { manifest: Manifest }) {
-  const tokens = useMemo(() => manifest.styles.tokens.filter((t) => t.origin === "system"), [manifest]);
   const axes = manifest.styles.axes;
-  const columns = axes.flatMap((a) => a.values.filter((v) => v !== a.default).map((v) => `${a.attribute}=${v}`));
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  // Tokens the library declares with a value Rob can read; internal plumbing such as scroll-fade sizes is left out.
+  const tokens = useMemo(() => manifest.styles.tokens.filter((t) => t.origin === "system" && t.kind !== "other" && t.value !== ""), [manifest]);
+  const colours = tokens.filter((t) => t.kind === "color");
+  const others = tokens.filter((t) => t.kind !== "color");
+  const chosen = Object.entries(picked).filter(([, v]) => v !== DEFAULT_AXIS);
+  const valueOf = (t: (typeof tokens)[number]) => {
+    let value = t.value;
+    for (const [attribute, v] of chosen) value = t.byAxis[`${attribute}=${v}`] ?? value;
+    return value;
+  };
   return (
-    <ScrollPane inset={6} data-system-theme>
-      <div className="grid gap-4 py-6">
-        <p className="text-sm text-fg-muted">
-          {axes.length === 0
-            ? "The library sets its tokens once, on the root."
-            : `Switched by ${axes.map((a) => `${a.attribute} (${a.values.join(", ")})`).join(" and ")}. A brainstorm tweaks these for itself in its Inspector.`}
-        </p>
-        <table className="w-full text-left text-sm">
-          <thead className="text-xs text-fg-muted">
-            <tr>
-              <th className="py-1.5 font-medium">Token</th>
-              <th className="py-1.5 font-medium">Root</th>
-              {columns.map((c) => (
-                <th key={c} className="py-1.5 font-medium">
-                  {c}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {tokens.map((t) => (
-              <tr key={t.name} className="border-t" data-token-row={t.name}>
-                <td className="py-1.5 pr-4 font-mono text-xs">{t.name}</td>
-                <TokenCell kind={t.kind} value={t.value} />
-                {columns.map((c) => (
-                  <TokenCell key={c} kind={t.kind} value={t.byAxis[c] ?? ""} />
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </ScrollPane>
-  );
-}
-
-function TokenCell({ kind, value }: { kind: string; value: string }) {
-  return (
-    <td className="py-1.5 pr-4">
-      <span className="flex items-center gap-2 font-mono text-xs">
-        {kind === "color" && value !== "" && <span aria-hidden className="size-4 shrink-0 rounded-sm ring-1 ring-border-strong" style={{ background: value }} />}
-        <span className="flex min-w-0">
-          <Truncate>{value}</Truncate>
-        </span>
-      </span>
-    </td>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {axes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-card px-6 py-2">
+          {axes.map((a) => (
+            <div key={a.attribute} className="flex items-center gap-2 text-xs whitespace-nowrap text-fg-muted" data-theme-tab-axis={a.attribute}>
+              {a.attribute}
+              <Segmented
+                fit="content"
+                aria-label={a.attribute}
+                value={picked[a.attribute] ?? DEFAULT_AXIS}
+                onValueChange={(v) => setPicked((prev) => ({ ...prev, [a.attribute]: v }))}
+                options={[{ value: DEFAULT_AXIS, label: a.default ?? "default" }, ...a.values.filter((v) => v !== a.default).map((v) => ({ value: v, label: v }))]}
+                itemData="theme-tab-value"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      <ScrollPane inset={6} data-system-theme>
+        <div className="grid gap-6 py-6">
+          <p className="text-sm text-fg-muted">
+            {axes.length === 0
+              ? "The library sets its tokens once, on the root. A brainstorm tweaks them for itself in its Inspector."
+              : "Pick values above to see the tokens as the library sets them there. A brainstorm tweaks these for itself in its Inspector."}
+          </p>
+          {[
+            ["Colours", colours],
+            ["Sizes and type", others],
+          ].map(([heading, list]) =>
+            (list as typeof tokens).length === 0 ? null : (
+              <section key={heading as string} className="grid gap-2">
+                <h3 className="flex items-center gap-2 text-sm font-medium">
+                  {heading as string}
+                  <span className="text-xs font-normal text-fg-muted tabular-nums">{(list as typeof tokens).length}</span>
+                </h3>
+                <ul className="grid grid-cols-1 rounded-md bg-card ring-1 ring-border">
+                  {(list as typeof tokens).map((t) => {
+                    const value = valueOf(t);
+                    return (
+                      <li key={t.name} className="flex items-center gap-4 border-t px-3 py-2 first:border-t-0" data-token-row={t.name}>
+                        <span className="w-popover-sm shrink-0 font-mono text-xs whitespace-nowrap">{t.name}</span>
+                        <span className="flex min-w-0 flex-1 items-center gap-2 font-mono text-xs">
+                          {t.kind === "color" && <span aria-hidden className="size-4 shrink-0 rounded-sm ring-1 ring-border-strong" style={{ background: value }} />}
+                          <Truncate>{value}</Truncate>
+                        </span>
+                        {value !== t.value && <span className="shrink-0 text-xs text-fg-muted">from {t.value}</span>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ),
+          )}
+        </div>
+      </ScrollPane>
+    </div>
   );
 }
 
 function VersionsTab({ view }: { view: SystemView }) {
   const now = useNow();
+  const latest = Math.max(...view.versions.map((v) => v.n));
   return (
     <ScrollPane inset={6}>
       <ul className="grid gap-2 py-6" data-system-versions>
         {view.versions.map((v) => (
-          <li key={v.n} className="flex items-center gap-3 rounded-md bg-card p-3 text-sm ring-1 ring-border">
+          <li key={v.n} className="flex items-center gap-3 rounded-md bg-card p-3 text-sm ring-1 ring-border" data-version={v.n} data-version-latest={v.n === latest || undefined}>
             <Badge>v{v.n}</Badge>
-            <span className="text-fg-muted">
-              {v.components} components · {v.stories} stories{v.failedStories > 0 ? ` (${v.failedStories} didn't render)` : ""}
+            <span className="grid min-w-0 gap-0.5">
+              <span className="text-fg-muted">
+                {v.components} components · {v.stories} stories{v.failedStories > 0 ? ` (${v.failedStories} didn't render)` : ""}
+                {v.n === latest && " · latest"}
+              </span>
+              {(v.added.length > 0 || v.removed.length > 0) && (
+                <span className="flex flex-wrap gap-x-3 font-mono text-xs" data-version-changes>
+                  {v.added.map((name) => (
+                    <span key={name} className="text-success">
+                      +{name}
+                    </span>
+                  ))}
+                  {v.removed.map((name) => (
+                    <span key={name} className="text-danger">
+                      −{name}
+                    </span>
+                  ))}
+                </span>
+              )}
             </span>
-            <span className="ml-auto text-xs text-fg-muted">synced {age(v.syncedAt, now)}</span>
+            <span className="ml-auto flex min-w-0 items-center gap-3 text-xs text-fg-muted">
+              <span className="flex min-w-0" data-version-sessions={v.sessions.length}>
+                <Truncate>{v.sessions.length === 0 ? "no brainstorm on it" : `${v.sessions.length === 1 ? "1 brainstorm" : `${v.sessions.length} brainstorms`}: ${v.sessions.map((s) => s.title).join(", ")}`}</Truncate>
+              </span>
+              <span className="shrink-0">synced {age(v.syncedAt, now)}</span>
+            </span>
           </li>
         ))}
       </ul>
     </ScrollPane>
   );
 }
+
+/** What each sync warning means, in Rob's words; the code stays for the agent's CLI. */
+const WARNING_LABEL: Readonly<Record<string, string>> = {
+  theme_ignored: "May not follow the theme",
+  no_story: "No story",
+  off_scale: "Off the kit's own scales",
+  story_failed: "A story didn't render",
+  frame_missing: "Frame component missing",
+  remote_url: "Remote file",
+  system_source: "Library layout",
+};
 
 function WarningsTab({ warnings }: { warnings: readonly Issue[] }) {
   if (warnings.length === 0) return <p className="p-6 text-sm text-fg-muted">The latest sync had nothing to report.</p>;
@@ -415,7 +479,7 @@ function WarningsTab({ warnings }: { warnings: readonly Issue[] }) {
           <ul className="grid gap-1">
             {warnings.map((w, i) => (
               <CalloutItem key={i}>
-                <span className="font-mono text-xs">{w.code}</span> {w.message}
+                <span className="font-medium">{WARNING_LABEL[w.code] ?? w.code}.</span> {w.message.replace(/^w/, (c) => c.toUpperCase())}
               </CalloutItem>
             ))}
           </ul>

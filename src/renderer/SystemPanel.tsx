@@ -55,6 +55,17 @@ export function SystemSection({
               </Button>
             }
           >
+            {(system.upgrade.added.length > 0 || system.upgrade.removed.length > 0) && (
+              <p data-system-upgrade-changes>
+                {[
+                  system.upgrade.added.length > 0 && `It adds ${list(system.upgrade.added)}`,
+                  system.upgrade.removed.length > 0 && `${system.upgrade.added.length > 0 ? "and removes" : "It removes"} ${list(system.upgrade.removed)}`,
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                .
+              </p>
+            )}
             <p>Upgrading checks every block against it first, and stays on v{system.n} if any breaks.</p>
           </Callout>
         </div>
@@ -75,6 +86,10 @@ function ThemeEditor({ system, readOnly, send, exportTheme }: Parameters<typeof 
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-medium">Theme</h3>
         {tweaked > 0 && <span className="text-xs text-fg-muted">{tweaked === 1 ? "1 tweak" : `${tweaked} tweaks`} in this brainstorm</span>}
+        <Button variant="ghost" size="xs" className="ml-auto" disabled={tweaked === 0} onClick={() => void send({ kind: "reset_theme" })} data-theme-reset>
+          <RotateCcw data-icon="inline-start" aria-hidden />
+          Reset
+        </Button>
       </div>
       {system.axes.map((axis) => (
         <label key={axis.attribute} className="grid grid-cols-1 gap-1.5 text-xs text-fg-muted" data-theme-axis={axis.attribute}>
@@ -83,7 +98,7 @@ function ThemeEditor({ system, readOnly, send, exportTheme }: Parameters<typeof 
             label={axisLabel(axis.attribute)}
             value={theme.axes[axis.attribute] ?? DEFAULT}
             onChange={(value) => void send({ kind: "set_theme_axis", axis: axis.attribute, value: value === DEFAULT ? null : value })}
-            options={[{ value: DEFAULT, label: axis.default ?? "Default" }, ...axis.values.filter((v) => v !== axis.default).map((v) => ({ value: v, label: v }))]}
+            options={[{ value: DEFAULT, label: capital(axis.default ?? "Default") }, ...axis.values.filter((v) => v !== axis.default).map((v) => ({ value: v, label: capital(v) }))]}
           />
         </label>
       ))}
@@ -95,10 +110,6 @@ function ThemeEditor({ system, readOnly, send, exportTheme }: Parameters<typeof 
           <SavedThemes names={system.themes.map((t) => t.name)} onApply={(name) => void send({ kind: "apply_theme", name })} />
         )}
         <ThemeExportButton exportTheme={exportTheme} />
-        <Button variant="ghost" className="ml-auto" disabled={tweaked === 0} onClick={() => void send({ kind: "reset_theme" })} data-theme-reset>
-          <RotateCcw data-icon="inline-start" aria-hidden />
-          Reset
-        </Button>
       </div>
     </div>
   );
@@ -125,7 +136,9 @@ function AxisControl({ label, value, onChange, options }: { label: string; value
   );
 }
 
-const axisLabel = (attribute: string) => (attribute === "class" ? "Theme class" : attribute.replace(/^data-/, "").replace(/^\w/, (c) => c.toUpperCase()));
+const capital = (s: string) => s.replace(/^\w/, (c) => c.toUpperCase());
+const axisLabel = (attribute: string) => (attribute === "class" ? "Theme class" : attribute === "data-theme" ? "Mode" : capital(attribute.replace(/^data-/, "")));
+const list = (names: readonly string[]) => (names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
 /** The value a token takes under the session's axes: the axis value's own, else the root's. */
 function baseValue(token: Token, axes: Readonly<Record<string, string>>): string {
@@ -160,7 +173,12 @@ function TokenList({
         <Count className="ml-auto">{tokens.length}</Count>
       </CollapsibleTrigger>
       {/* Folded, the list still shows the tokens this brainstorm changed. */}
-      {!open && set.length > 0 && <ul className="grid grid-cols-1 gap-1">{set.map(row)}</ul>}
+      {!open && set.length > 0 && (
+        <div className="grid grid-cols-1 gap-1 border-l pl-2" data-token-changed>
+          <span className="text-xs text-fg-muted">Changed here</span>
+          <ul className="grid grid-cols-1 gap-1">{set.map(row)}</ul>
+        </div>
+      )}
       <CollapsibleContent>
         <ul className="grid grid-cols-1 gap-1">{tokens.map(row)}</ul>
       </CollapsibleContent>
@@ -257,7 +275,7 @@ function SavedThemes({ names, onApply }: { names: readonly string[]; onApply: (n
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button variant="outline" data-theme-saved />}>Apply…</PopoverTrigger>
+      <PopoverTrigger render={<Button variant="outline" data-theme-saved />}>Apply saved theme…</PopoverTrigger>
       <PopoverContent size="sm" align="start">
         <PopoverHeader heading="Saved themes" description="Applying one replaces this brainstorm's tweaks." />
         <ul className="grid gap-1">
@@ -327,44 +345,65 @@ function ThemeExportButton({ exportTheme }: { exportTheme: () => Promise<ThemeEx
 }
 
 function ProposedList({ system, send }: { system: SessionSystemView; send: (action: RobAction) => Promise<unknown> }) {
+  const pending = system.proposed.filter((p) => !p.fromKit);
+  const adopted = system.proposed.filter((p) => p.fromKit);
   return (
     <div className="grid gap-2 border-t py-3" data-proposed-list>
-      <h3 className="text-sm font-medium">Not in the system</h3>
-      <p className="text-xs/relaxed text-fg-muted">The kit had nothing that fit, so the design proposes these. Promote one to add it to the library.</p>
-      <ul className="grid gap-2">
-        {system.proposed.map((p) => (
-          <ProposedRow key={p.name} proposed={p} on={system.n} canPromote={system.canPromote} onPromote={(name) => void send({ kind: "promote", name })} />
-        ))}
-      </ul>
+      {pending.length > 0 && (
+        <>
+          <h3 className="text-sm font-medium">Not in the system</h3>
+          <p className="text-xs/relaxed text-fg-muted">The kit had nothing that fit, so the design proposes these. Promote one to add it to the library.</p>
+          <ul className="grid gap-2">
+            {pending.map((p) => (
+              <ProposedRow key={p.name} proposed={p} library={system.name} canPromote={system.canPromote} onPromote={(name) => void send({ kind: "promote", name })} />
+            ))}
+          </ul>
+        </>
+      )}
+      {adopted.length > 0 && (
+        <div className="grid gap-1" data-proposed-adopted>
+          <h3 className="text-sm font-medium">Now in the kit</h3>
+          <ul className="grid gap-1">
+            {adopted.map((p) => (
+              <li key={p.name} className="flex items-center gap-2 text-xs/relaxed text-fg-muted" data-proposed={p.name} data-from-kit>
+                <Check aria-hidden className="size-3.5 shrink-0 text-success" />
+                <span>
+                  <span className="font-mono text-fg">{p.name}</span> since v{p.inSystem}. {p.usedBy.join(", ")} {p.usedBy.length === 1 ? "uses" : "use"} the kit's
+                  component now.
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
 
 function ProposedRow({
   proposed,
-  on,
+  library,
   canPromote,
   onPromote,
 }: {
   proposed: ProposedView;
-  /** The version the session builds with. */
-  on: number;
+  library: string;
   canPromote: boolean;
   onPromote: (name: ProposedName) => void;
 }) {
   const promotion = proposed.promotion;
   const inSystem = proposed.inSystem;
   let status: ReactNode = null;
-  if (inSystem !== null && inSystem <= on) {
-    status = <span className="text-xs/relaxed text-success">The kit has {proposed.name} since v{inSystem}. Regenerate to build these blocks with it.</span>;
-  } else if (inSystem !== null) status = <span className="text-xs text-success">In v{inSystem}; upgrade to use it from the kit</span>;
+  if (inSystem !== null) status = <span className="text-xs text-success">In v{inSystem}; upgrade to use it from the kit</span>;
   else if (promotion?.state === "starting") status = <span className="text-xs text-fg-muted">Starting the thread…</span>;
   else if (promotion?.state === "started") {
     status = (
-      <span className="flex items-center gap-2 text-xs text-fg-muted">
-        Promoting in a T3 thread
+      <span className="flex items-center gap-2 text-xs text-fg-muted" data-promote-status>
+        <span className="flex min-w-0">
+          <Truncate>{`Adding to ${library} in a T3 thread`}</Truncate>
+        </span>
         {promotion.link !== null && (
-          <Button variant="ghost" size="xs" className="ml-auto" nativeButton={false} render={<a href={promotion.link} target="_blank" rel="noreferrer" />} data-promote-thread>
+          <Button variant="ghost" size="xs" className="ml-auto shrink-0" nativeButton={false} render={<a href={promotion.link} target="_blank" rel="noreferrer" />} data-promote-thread>
             <ExternalLink data-icon="inline-start" aria-hidden />
             Open thread
           </Button>
@@ -376,7 +415,7 @@ function ProposedRow({
   const button = (
     <Button variant="outline" size="xs" disabled={!canPromote || promotion?.state === "starting"} onClick={() => onPromote(proposed.name)} data-promote={proposed.name}>
       <Send data-icon="inline-start" aria-hidden />
-      {promotion?.state === "started" ? "Promote again" : "Promote"}
+      {promotion?.state === "failed" ? "Try again" : "Promote"}
     </Button>
   );
   return (
@@ -388,7 +427,7 @@ function ProposedRow({
           </span>
           <span className="font-mono text-xs text-fg-muted">{proposed.name}</span>
         </span>
-        {inSystem !== null ? null : canPromote ? (
+        {inSystem !== null || promotion?.state === "started" ? null : canPromote ? (
           button
         ) : (
           <BlockedHint label="Brainstorm doesn't know the library's T3 project yet" side="left">
