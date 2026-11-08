@@ -86,19 +86,10 @@ export function SystemSection({
             ) : (
               <>
                 <p data-upgrade-breaks>
-                  {list(check.where.map(placeTitle))} wouldn't build with it, so this brainstorm stays on v{system.n}. The agent can change {check.where.length === 1 ? "it" : "them"} to build with both, and
-                  then you upgrade.
+                  {list(check.where.map(placeTitle))} wouldn't build with it, so this brainstorm stays on v{system.n}. The agent can change {check.where.length === 1 ? "it" : "them"} to build with v{system.n} and
+                  v{system.latest}, and then you upgrade.
                 </p>
-                <ul className="grid gap-1" data-upgrade-errors>
-                  {causesFirst(check.issues).map((i, n) => (
-                    <CalloutItem key={n}>
-                      <span className="line-clamp-2">
-                        <span className="font-medium">{placeTitle(i.where)}:</span> {i.message}
-                      </span>
-                    </CalloutItem>
-                  ))}
-                  {check.errors > check.issues.length && <CalloutItem>and {check.errors - check.issues.length} more</CalloutItem>}
-                </ul>
+                <UpgradeErrors issues={check.issues} more={check.errors - check.issues.length} latest={system.latest} placeTitle={placeTitle} />
               </>
             )}
           </Callout>
@@ -170,12 +161,55 @@ function AxisControl({ label, value, onChange, options }: { label: string; value
 }
 
 const capital = (s: string) => s.replace(/^\w/, (c) => c.toUpperCase());
+const MISSING_EXPORT = /^the kit has no export "([^"]+)"/;
+
 /**
- * The upgrade check's errors with what the kit lacks first: a missing export is the cause, and React's "element type is
- * invalid" for the same block only its symptom.
+ * The upgrade check's errors, causes first and in Rob's words: a missing export reads as what the version removes, and
+ * React's "element type is invalid" for the same block, only its symptom, is left out. A long one opens on request.
  */
-const causesFirst = (issues: readonly { where: string; message: string }[]) =>
-  [...issues].sort((a, b) => Number(/threw with/.test(a.message)) - Number(/threw with/.test(b.message)));
+function UpgradeErrors({
+  issues,
+  more,
+  latest,
+  placeTitle,
+}: {
+  issues: readonly { where: string; message: string }[];
+  more: number;
+  latest: number;
+  placeTitle: (where: string) => string;
+}) {
+  const [full, setFull] = useState(false);
+  const caused = new Set(issues.filter((i) => MISSING_EXPORT.test(i.message)).map((i) => i.where));
+  const shown = issues
+    .filter((i) => !(caused.has(i.where) && /threw with/.test(i.message)))
+    .map((i) => {
+      const missing = MISSING_EXPORT.exec(i.message)?.[1];
+      return { where: i.where, message: missing === undefined ? i.message : `it uses ${missing}, which v${latest} doesn't have`, cause: missing !== undefined };
+    })
+    .sort((a, b) => Number(b.cause) - Number(a.cause));
+  const long = shown.some((i) => i.message.length > 90);
+  return (
+    <ul className="grid gap-1" data-upgrade-errors>
+      {shown.map((i, n) => (
+        <CalloutItem key={n}>
+          <span className={full ? "break-words" : "line-clamp-2"}>
+            <span className="font-medium">{placeTitle(i.where)}:</span> {i.message}
+          </span>
+        </CalloutItem>
+      ))}
+      {(more > 0 || long) && (
+        <li className="flex items-center gap-2">
+          {more > 0 && <span>and {more === 1 ? "1 more error" : `${more} more errors`}</span>}
+          {long && (
+            <Button variant="ghost" size="xs" className="-ml-1.5" onClick={() => setFull((f) => !f)} data-upgrade-errors-full>
+              {full ? "Show less" : "Show in full"}
+            </Button>
+          )}
+        </li>
+      )}
+    </ul>
+  );
+}
 
 const list = (names: readonly string[]) => (names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
@@ -339,7 +373,8 @@ function SaveTheme({ disabled, onSave }: { disabled: boolean; onSave: (name: str
       </PopoverContent>
     </Popover>
     {saved !== null && (
-      <span role="status" className="flex items-center gap-1 text-xs text-fg-muted" data-theme-saved-note>
+      // Under both actions, across the row, so Save and Export keep their places while it shows.
+      <span role="status" className="order-last col-span-2 flex items-center gap-1 text-xs text-fg-muted" data-theme-saved-note>
         <Check aria-hidden className="size-3.5 shrink-0 text-success" />
         Saved “{saved}”
       </span>
@@ -466,14 +501,14 @@ function PromoteWork({ api, thread, link, since, library, landed }: { api: Api; 
   const work = useAgentWork(api, thread);
   return (
     <div className="grid min-w-0 grid-cols-1 gap-1 rounded-sm bg-muted px-2 py-1.5" data-promote-status>
-      {landed === null ? (
-        <span className="text-xs text-fg-muted">Adding it to {library}</span>
-      ) : (
+      {landed === null && <span className="text-xs text-fg-muted">Adding it to {library}</span>}
+      <AgentWorkStatus work={work} since={since} link={link} compact />
+      {/* What the agent did reads first, then where it landed. */}
+      {landed !== null && (
         <span className="text-xs text-success" data-promote-landed>
-          In v{landed}; upgrade to use it from the kit
+          In v{landed} · upgrade above to use it from the kit
         </span>
       )}
-      <AgentWorkStatus work={work} since={since} link={link} compact />
       {work?.phase === "finished" && landed === null && <span className="text-xs text-fg-muted">Once the agent syncs the library, the new version shows above with Upgrade.</span>}
     </div>
   );

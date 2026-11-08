@@ -21,6 +21,7 @@ import { Truncate } from "@/components/ui/truncate";
 import type {
   ArgType,
   CatalogEntry,
+  PropInfo,
   FrameToHost,
   GalleryFocus,
   HostToFrame,
@@ -452,6 +453,8 @@ function SystemDetail({
   const [tab, setTab] = useState<Tab>("components");
   /** A component another tab opened, such as a warning's, which the Components tab starts on. */
   const [jump, setJump] = useState<string | null>(null);
+  /** A component the review callout takes the walk to, counted so asking twice goes there twice. */
+  const [show, setShow] = useState<{ name: string; nonce: number } | null>(null);
   useEffect(() => void api.system(id).then((r) => r.ok && setView(r.data)), [api, id, syncing, revision]);
   const latest = view?.latest ?? null;
   const warnings = latest?.warnings ?? [];
@@ -481,8 +484,8 @@ function SystemDetail({
             <PageHeader
               heading={view?.name ?? "Design system"}
               description={
-                <span className="flex min-w-0 gap-x-2 font-mono text-xs">
-                  <Truncate>{view?.source.adapter ?? view?.root ?? ""}</Truncate>
+                <span className="flex min-w-0 items-center gap-x-2 font-mono text-xs">
+                  {view !== null && <ProjectPath path={view.root} />}
                   {latest !== null && <span className="shrink-0" data-system-hash>· {latest.hash.slice(0, 7)}</span>}
                 </span>
               }
@@ -514,7 +517,16 @@ function SystemDetail({
             </p>
           </Callout>
         )}
-        {review !== null && view !== null && <ReviewCallout api={api} view={view} review={review} act={act} />}
+        {review !== null && view !== null && <ReviewCallout
+            api={api}
+            view={view}
+            review={review}
+            act={act}
+            onShow={(name) => {
+              setTab("components");
+              setShow((s) => ({ name, nonce: (s?.nonce ?? 0) + 1 }));
+            }}
+          />}
         <div className="flex h-10 items-center">
           <Tabs<Tab>
             aria-label="Design system"
@@ -535,7 +547,7 @@ function SystemDetail({
           <Skeleton className="h-preview w-full" />
         </div>
       ) : tab === "components" ? (
-        <ComponentsTab key={jump ?? ""} view={view} manifest={view.manifest} review={review} act={act} initialEntry={jump} />
+        <ComponentsTab key={jump ?? ""} view={view} manifest={view.manifest} review={review} act={act} initialEntry={jump} show={show} />
       ) : tab === "theme" ? (
         <ThemeTab manifest={view.manifest} />
       ) : tab === "versions" ? (
@@ -554,6 +566,33 @@ function SystemDetail({
   );
 }
 
+/** A project folder by its last two names, which tell Rob which project it is; the hint and Copy give the full path. */
+function ProjectPath({ path }: { path: string }) {
+  const [copied, setCopied] = useState(false);
+  const short = path.split(/[\\/]/).filter(Boolean).slice(-2).join("/");
+  return (
+    <span className="flex min-w-0 items-center gap-1" data-system-path={path}>
+      <Truncate>{short}</Truncate>
+      <Hint label={copied ? "Copied" : path} side="bottom" align="start">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Copy the project's path"
+          onClick={() =>
+            void navigator.clipboard.writeText(path).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            })
+          }
+          data-system-path-copy
+        >
+          {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+        </Button>
+      </Hint>
+    </span>
+  );
+}
+
 const count = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
 
 /**
@@ -565,11 +604,14 @@ function ReviewCallout({
   view,
   review,
   act,
+  onShow,
 }: {
   api: Api;
   view: SystemView;
   review: SystemReview;
   act: (action: ReviewAction, failed: string) => Promise<boolean>;
+  /** Takes the walk to a component, such as one the agent changed. */
+  onShow: (name: string) => void;
 }) {
   const [busy, setBusy] = useState<"send" | "confirm" | null>(null);
   const sent = review.sent;
@@ -590,6 +632,7 @@ function ReviewCallout({
   const since = sent?.version ?? null;
   const theirs = since === null ? [] : view.versions.filter((v) => v.n > since);
   const agentSynced = theirs.length > 0;
+  const touched = [...agentChanges(view, review).keys()];
   // What's left to do decides the primary action: changes go to the agent first; an unsorted library goes to an agent
   // to sort; while the agent works on what Rob sent, nothing is primary; then Confirm is the way on.
   const sendFirst = changes > 0 || (unsorted && sent === null);
@@ -605,6 +648,12 @@ function ReviewCallout({
             <Button variant={sendFirst ? "accent" : "outline"} disabled={busy !== null} onClick={() => void run("send")} data-review-send>
               {busy === "send" ? <Spinner data-icon="inline-start" /> : <Send data-icon="inline-start" aria-hidden />}
               {changes > 0 ? `Send ${count(changes, "change", "changes")} to the agent` : "Sort into tiers with an agent"}
+            </Button>
+          )}
+          {agentSynced && open === 0 && moves === 0 && touched[0] !== undefined && (
+            <Button variant="outline" onClick={() => onShow(touched[0]!)} data-review-show={touched[0]}>
+              {`Show ${touched[0]}`}
+              <ArrowRight data-icon="inline-end" aria-hidden />
             </Button>
           )}
           <Button variant={confirmFirst ? "accent" : "outline"} disabled={open > 0 || busy !== null} onClick={() => void run("confirm")} data-review-confirm>
@@ -641,12 +690,15 @@ function ReviewCallout({
       {sent !== null && (
         <div className="grid gap-2 rounded-md bg-card p-3 ring-1 ring-border" data-review-status>
           <AgentWorkStatus work={work} since={sent.at} link={review.thread?.link ?? null} />
-          <SentItems sent={sent} />
-          {open === 0 && moves === 0 && (
-            <p className="text-sm text-fg-muted" data-review-next data-agent-synced={agentSynced || undefined}>
-              {agentSynced
-                ? `${agentBusy ? "The agent synced" : "The agent finished and synced"} v${n}: ${changeSummary(theirs)}. Check it in the walk, then confirm v${n}.`
-                : work?.phase === "waiting"
+          <SentItems sent={sent} folded={agentSynced || work?.phase === "finished"} />
+          {open === 0 && moves === 0 && agentSynced && (
+            <p className="text-sm text-fg-muted" data-review-next data-agent-synced>
+              {`v${n}: ${changeSummary(theirs)}. Check ${touched.length === 1 ? "it" : "them"} in the walk, then confirm v${n}.`}
+            </p>
+          )}
+          {open === 0 && moves === 0 && !agentSynced && (
+            <p className="text-sm text-fg-muted" data-review-next>
+              {work?.phase === "waiting"
                   ? `The agent hasn't started on it yet; its changes will come as v${n + 1}. Confirming v${n} now confirms it without them.`
                   : agentBusy
                   ? `The agent is on it; its changes will come as v${n + 1}. Confirming v${n} now confirms it without them.`
@@ -659,6 +711,22 @@ function ReviewCallout({
       )}
     </Callout>
   );
+}
+
+/**
+ * The components the agent's versions touched since Rob sent his review, each with the newest version that touched it:
+ * a new story, a render change, a move or an addition. Empty before he has sent.
+ */
+function agentChanges(view: SystemView, review: SystemReview | null): ReadonlyMap<string, number> {
+  const since = review?.sent?.version ?? null;
+  const touched = new Map<string, number>();
+  if (since === null) return touched;
+  for (const v of view.versions) {
+    if (v.n <= since) continue;
+    const names = [...v.changed.map((c) => c.name), ...v.added, ...v.retiered.map((r) => r.name), ...v.newStories.map((s) => s.name)];
+    for (const name of names) touched.set(name, Math.max(touched.get(name) ?? 0, v.n));
+  }
+  return touched;
 }
 
 /** What the versions after a review changed, in one phrase: "MealCard renders differently; WeekStrip added". */
@@ -681,9 +749,22 @@ function changeSummary(versions: SystemView["versions"]): string {
 }
 
 /** What the last Send handed the agent: Rob's notes, and the tier moves already in the adapter. */
-function SentItems({ sent }: { sent: NonNullable<SystemReview["sent"]> }) {
+function SentItems({ sent, folded }: { sent: NonNullable<SystemReview["sent"]>; folded: boolean }) {
   const moved = Object.entries(sent.moved);
+  // Once the agent has answered, what Rob sent folds to one line, so the walk keeps the room.
+  const [open, setOpen] = useState(false);
   if (sent.notes.length === 0 && moved.length === 0) return <p className="text-sm text-fg-muted">Sent: sort the components into tiers.</p>;
+  if (folded && !open) {
+    const what = [sent.notes.length > 0 ? count(sent.notes.length, "note", "notes") : null, moved.length > 0 ? count(moved.length, "tier move", "tier moves") : null].filter((x) => x !== null).join(" and ");
+    return (
+      <p className="flex items-center gap-2 text-sm text-fg-muted" data-review-sent-folded>
+        You sent {what}.
+        <Button variant="ghost" size="xs" onClick={() => setOpen(true)} data-review-sent-show>
+          Show
+        </Button>
+      </p>
+    );
+  }
   return (
     <ul className="grid gap-1 text-sm" data-review-sent>
       {sent.notes.map((n) => (
@@ -911,6 +992,7 @@ function ComponentsTab({
   review,
   act,
   initialEntry = null,
+  show = null,
 }: {
   view: SystemView;
   manifest: Manifest;
@@ -918,6 +1000,8 @@ function ComponentsTab({
   review: SystemReview | null;
   act: (action: ReviewAction, failed: string) => Promise<boolean>;
   initialEntry?: string | null;
+  /** A component the review callout asked the walk to show. */
+  show?: { name: string; nonce: number } | null;
 }) {
   // A review walks the components in the order it first showed them, so neither Rob's moves nor the agent's next
   // version reorder the walk under him. A component a later version adds joins the end.
@@ -933,12 +1017,18 @@ function ComponentsTab({
   // A review starts on the first component, so Rob can step through them; otherwise the gallery shows every story.
   const [entry, setEntry] = useState<string | null>(() => initialEntry ?? (review === null ? null : (walk[0]?.name ?? null)));
   const shown = (e: CatalogEntry): Tier => review?.tiers[e.name] ?? tierOf(e);
-  /** The components Rob has stepped onto in this review, so a long walk shows how far he has got. */
-  const [seen, setSeen] = useState<ReadonlySet<string>>(() => new Set());
+  /**
+   * The components Rob has stepped onto in this review, with the version he saw, so a long walk shows how far he has
+   * got. One the agent changed after he saw it counts as unseen again.
+   */
+  const [seenAt, setSeenAt] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const n = view.latest?.n ?? 0;
+  const touched = useMemo(() => agentChanges(view, review), [view, review]);
+  const seen = (name: string) => (seenAt.get(name) ?? -1) >= (touched.get(name) ?? 0);
   useEffect(() => {
     if (review === null || entry === null) return;
-    setSeen((prev) => (prev.has(entry) ? prev : new Set([...prev, entry])));
-  }, [review === null, entry]);
+    setSeenAt((prev) => (prev.get(entry) === n ? prev : new Map([...prev, [entry, n]])));
+  }, [review === null, entry, n]);
   const [axes, setAxes] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const search = useRef<HTMLInputElement>(null);
@@ -952,7 +1042,9 @@ function ComponentsTab({
   const sections = needle === "" ? catalogSections(entries, shown) : [{ heading: "", entries: [...entries] }];
   // The gallery follows the catalog's order: by tier, or a search's best matches first. A search narrows it too, until
   // Rob picks one component from it.
-  const stories = chosen !== null ? chosen.stories : sections.flatMap((s) => s.entries.flatMap((e) => e.stories));
+  // A primitive Brainstorm generated has no story, so the gallery shows its own example of it.
+  const framesOf = (e: CatalogEntry) => (e.generated ? [`generated:${e.name}`] : e.stories);
+  const stories = chosen !== null ? framesOf(chosen) : sections.flatMap((s) => s.entries.flatMap(framesOf));
   const latest = view.latest;
   const story = focus === null ? null : (manifest.stories.find((s) => s.id === focus.id) ?? null);
   const owner = story === null ? null : (manifest.catalog.find((e) => e.stories.includes(story.id)) ?? null);
@@ -971,7 +1063,13 @@ function ComponentsTab({
   const rowDetail = (e: CatalogEntry, base: string) =>
     [
       review?.tiers[e.name] !== undefined ? "moved" : null,
-      issuesOn(e.name).length > 0 ? count(issuesOn(e.name).length, "issue", "issues") : sentOn(e.name).length > 0 ? "sent" : null,
+      issuesOn(e.name).length > 0
+        ? count(issuesOn(e.name).length, "issue", "issues")
+        : touched.has(e.name)
+          ? `changed in v${touched.get(e.name)}`
+          : sentOn(e.name).length > 0
+            ? "sent"
+            : null,
       base,
     ]
       .filter((x) => x !== null && x !== "")
@@ -982,7 +1080,10 @@ function ComponentsTab({
     if (at >= 0 && to !== undefined) pick(to.name);
   };
   // The first component after this one that Rob hasn't stepped onto yet, wrapping round; null once he has seen them all.
-  const unseen = [...walk.slice(at + 1), ...walk.slice(0, Math.max(at, 0))].find((e) => !seen.has(e.name)) ?? null;
+  const unseen = [...walk.slice(at + 1), ...walk.slice(0, Math.max(at, 0))].find((e) => !seen(e.name)) ?? null;
+  useEffect(() => {
+    if (show !== null) pick(show.name);
+  }, [show?.nonce]);
   // ← and → walk the review, and / finds a component, wherever focus is but in a field or a control that takes arrows.
   const keys = useRef({ step, review });
   keys.current = { step, review };
@@ -1049,7 +1150,9 @@ function ComponentsTab({
                         via={matchedPart(e, needle, storyNames)}
                         detail={rowDetail(e, s.heading === "" ? entryDetail(e) : sectionDetail(e))}
                         active={entry === e.name && focus === null}
-                        onClick={() => pick(e.name)}
+                        // Outside a review, a component with one story opens it in the workbench, as Storybook opens a
+                        // component on its story; a review walks components, so it stays on the component.
+                        onClick={() => (review === null && e.stories.length === 1 ? openStory(e.stories[0]!) : pick(e.name))}
                         data-entry={e.name}
                       />
                       {/* The picked component's stories, as Storybook nests them, each opening in the workbench. */}
@@ -1124,13 +1227,13 @@ function ComponentsTab({
             act={act}
             previous={at > 0 ? () => step(-1) : null}
             next={at >= 0 && at < walk.length - 1 ? () => step(1) : null}
-            position={at < 0 ? null : { n: at + 1, of: walk.length, seen: walk.filter((e) => seen.has(e.name)).length }}
+            position={at < 0 ? null : { n: at + 1, of: walk.length, seen: walk.filter((e) => seen(e.name)).length }}
             nextUnseen={unseen === null || unseen.name === walk[at + 1]?.name ? null : () => pick(unseen.name)}
           />
         )}
         {focus === null && chosen !== null && chosen.stories.length === 0 && (
           <p className="px-4 py-3 text-sm text-fg-muted">
-            {chosen.generated ? "Brainstorm made this one, since the library has none by this name. Blocks use it for layout and text." : "This component has no story, so there's nothing to show."}
+            {chosen.generated ? "Brainstorm made this one, since the library has none by this name. Blocks use it for layout and text; the example below shows a few of its props." : "This component has no story, so there's nothing to show."}
           </p>
         )}
         <div className="flex min-h-0 flex-1">
@@ -1269,6 +1372,57 @@ function propRows(stories: readonly StoryInfo[]): ArgRow[] {
   return [...seen.values()];
 }
 
+/** One prop in the workbench's table: what the library's source declares, with what its stories set. */
+type PropRow = {
+  readonly name: string;
+  readonly type: string;
+  readonly default: string | null;
+  readonly required: boolean | null;
+  readonly description: string | null;
+  readonly example: string | null;
+};
+
+/**
+ * The component's props: the ones its source declares, in its order, then any only a story sets (such as children,
+ * from a type the source reads from React). A declared prop the source says nothing more about is left out.
+ */
+function propTable(declared: readonly PropInfo[], stories: readonly ArgRow[]): PropRow[] {
+  const set = new Map(stories.map((s) => [s.name, s]));
+  const rows: PropRow[] = [];
+  for (const p of declared) {
+    const s = set.get(p.name);
+    if (s === undefined && p.type === null && p.options === null && p.default === null) continue;
+    const type = p.options !== null ? p.options.map((o) => JSON.stringify(o)).join(" | ") : (p.type ?? (s === undefined ? "—" : typeText(s)));
+    rows.push({ name: p.name, type, default: p.default, required: p.required, description: s?.type?.description ?? null, example: s === undefined ? null : exampleText(s.value) });
+  }
+  for (const s of stories) {
+    if (declared.some((p) => p.name === s.name)) continue;
+    rows.push({ name: s.name, type: typeText(s), default: null, required: null, description: s.type?.description ?? null, example: exampleText(s.value) });
+  }
+  return rows;
+}
+
+/** A default as the source writes it ("default", false, 3) as a value, or undefined for one that isn't a literal. */
+function literal(text: string | null): Json | undefined {
+  if (text === null) return undefined;
+  const quoted = /^'(.*)'$/.exec(text);
+  try {
+    return JSON.parse(quoted === null ? text : JSON.stringify(quoted[1])) as Json;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A control for each declared prop with choices or a yes/no that the story leaves unset, starting at its default. */
+function declaredControls(declared: readonly PropInfo[], taken: ReadonlySet<string>): ArgRow[] {
+  return declared
+    .filter((p) => !taken.has(p.name) && (p.options !== null || p.type === "boolean"))
+    .map((p) => {
+      const control = p.options !== null ? ("select" as const) : ("boolean" as const);
+      return { name: p.name, value: literal(p.default), type: { control, options: p.options, description: null }, control };
+    });
+}
+
 /** A story's value as an example, or null for one that can't be written plainly. */
 const exampleText = (value: unknown): string | null =>
   value === undefined || value === null || (typeof value === "string" && OPAQUE.has(value)) || typeof value === "object" ? null : JSON.stringify(value);
@@ -1323,17 +1477,24 @@ function Workbench({
   overrides: Readonly<Record<string, Json>>;
   onChange: (args: Record<string, Json>) => void;
 }) {
-  const rows = useMemo(() => argRows(story), [story]);
-  const props = useMemo(() => propRows([story, ...siblings.filter((s) => s.id !== story.id)]), [story, siblings]);
+  const declared = owner?.props ?? null;
+  const rows = useMemo(() => {
+    const own = argRows(story);
+    return declared === null ? own : [...own, ...declaredControls(declared, new Set(own.map((r) => r.name)))];
+  }, [story, declared]);
+  const storyProps = useMemo(() => propRows([story, ...siblings.filter((s) => s.id !== story.id)]), [story, siblings]);
+  const props = useMemo(() => propTable(declared ?? [], storyProps), [declared, storyProps]);
   const [copied, setCopied] = useState(false);
   const base = (typeof story.args === "object" && story.args !== null ? story.args : {}) as Record<string, unknown>;
   const current = { ...base, ...overrides };
   const name = story.component ?? owner?.name ?? story.title.split("/").at(-1) ?? "Component";
   const snippet = `import { ${name} } from "kit";\n\n${usageSnippet(name, current)}`;
-  // Setting a control back to the story's own value isn't a change, so it leaves the overrides and the count.
+  // A control starts at the story's value, or the prop's default for one the story leaves unset.
+  const startOf = (key: string) => (key in base ? base[key] : rows.find((r) => r.name === key)?.value);
+  // Setting a control back to where it started isn't a change, so it leaves the overrides and the count.
   const set = (key: string, value: Json) => {
     const { [key]: _was, ...rest } = overrides;
-    onChange(JSON.stringify(value) === JSON.stringify(base[key]) ? rest : { ...rest, [key]: value });
+    onChange(JSON.stringify(value) === JSON.stringify(startOf(key)) ? rest : { ...rest, [key]: value });
   };
   const changed = Object.keys(overrides).length;
   return (
@@ -1360,7 +1521,7 @@ function Workbench({
                       {row.name}
                       {row.name in overrides && <span className="font-sans text-fg-muted">changed</span>}
                     </span>
-                    <ArgControl row={row} value={current[row.name]} onChange={(v) => set(row.name, v)} />
+                    <ArgControl row={row} value={row.name in current ? current[row.name] : row.value} onChange={(v) => set(row.name, v)} />
                   </li>
                 ))}
               </ul>
@@ -1369,23 +1530,43 @@ function Workbench({
           <section className="grid gap-2" data-workbench-props>
             <h3 className="text-sm font-medium">Props</h3>
             {props.length === 0 ? (
-              <p className="text-sm text-fg-muted">Its stories name none. The library's source has them.</p>
+              <p className="text-sm text-fg-muted">Neither its source nor its stories name any.</p>
             ) : (
               <ul className="grid grid-cols-1 rounded-md ring-1 ring-border">
                 {props.map((row) => (
                   <li key={row.name} className="grid gap-0.5 border-t px-3 py-2 first:border-t-0" data-prop={row.name}>
                     <span className="flex items-baseline gap-2">
                       <span className="font-mono text-xs">{row.name}</span>
-                      <span className="ml-auto min-w-0 font-mono text-xs break-words text-fg-muted">{typeText(row)}</span>
+                      {row.required === true && (
+                        <span className="text-xs text-fg-muted" data-prop-required>
+                          required
+                        </span>
+                      )}
+                      <span className="ml-auto min-w-0 text-right font-mono text-xs break-words text-fg-muted">{row.type}</span>
                     </span>
-                    {row.type?.description != null && <span className="text-xs text-fg-muted">{row.type.description}</span>}
-                    {exampleText(row.value) !== null && <span className="text-xs text-fg-muted">e.g. <span className="font-mono">{exampleText(row.value)}</span></span>}
+                    {row.description !== null && <span className="text-xs text-fg-muted">{row.description}</span>}
+                    {(row.default !== null || row.example !== null) && (
+                      <span className="flex flex-wrap gap-x-3 text-xs text-fg-muted">
+                        {row.default !== null && (
+                          <span data-prop-default>
+                            default <span className="font-mono text-fg">{row.default}</span>
+                          </span>
+                        )}
+                        {row.example !== null && row.example !== row.default && (
+                          <span>
+                            e.g. <span className="font-mono">{row.example}</span>
+                          </span>
+                        )}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
             <p className="text-xs text-fg-muted">
-              From {siblings.length <= 1 ? "this story" : `its ${siblings.length} stories`}, with the first value one sets. A prop no story sets isn't listed.
+              {declared === null
+                ? `From ${siblings.length <= 1 ? "this story" : `its ${siblings.length} stories`}. Props no story sets aren't listed.`
+                : `From ${owner?.name ?? "the component"}'s source, with examples from ${siblings.length <= 1 ? "its story" : `its ${siblings.length} stories`}.`}
             </p>
           </section>
           <section className="grid gap-2" data-workbench-usage>
@@ -1464,6 +1645,8 @@ function GalleryFrame({
   theme: ThemeState;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  /** Counts the frame's ready messages, so a reloaded frame gets the kit again. */
+  const [loaded, setLoaded] = useState(0);
   const [ready, setReady] = useState(false);
   const post = (m: HostToFrame) => frame.current?.contentWindow?.postMessage(m, "*");
   const open = useRef(onOpenStory);
@@ -1473,17 +1656,26 @@ function GalleryFrame({
       if (frame.current === null || e.source !== frame.current.contentWindow) return;
       const message = e.data as FrameToHost;
       if (message.kind === "open_story") return open.current(message.id);
-      if (message.kind !== "ready") return;
-      setReady(false);
-      void kitFor(id, n).then((kit) => {
-        if (kit === null) return;
-        post({ kind: "kit", kit });
-        setReady(true);
-      });
+      if (message.kind === "ready") setLoaded((k) => k + 1);
     };
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
-  }, [id, n]);
+  }, []);
+  // The frame loads the version on show, and loads it again when a newer one lands, so a story the new version adds
+  // renders rather than dropping out of the old kit.
+  useEffect(() => {
+    if (loaded === 0) return;
+    let live = true;
+    setReady(false);
+    void kitFor(id, n).then((kit) => {
+      if (!live || kit === null) return;
+      post({ kind: "kit", kit });
+      setReady(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [loaded, id, n]);
   const themeKey = JSON.stringify(theme);
   useEffect(() => {
     if (ready) post({ kind: "theme", theme });
@@ -1656,7 +1848,7 @@ function VersionsTab({ view }: { view: SystemView }) {
             </span>
             <span className="ml-auto flex min-w-0 items-center gap-3 text-xs text-fg-muted">
               <span className="flex min-w-0" data-version-sessions={v.sessions.length}>
-                <Truncate>{v.sessions.length === 0 ? "no brainstorm on it" : `${v.sessions.length === 1 ? "1 brainstorm" : `${v.sessions.length} brainstorms`}: ${v.sessions.map((s) => s.title).join(", ")}`}</Truncate>
+                <Truncate>{v.sessions.length === 0 ? (v.n === latest ? "no brainstorm on it yet" : "") : `${v.sessions.length === 1 ? "1 brainstorm" : `${v.sessions.length} brainstorms`}: ${v.sessions.map((s) => s.title).join(", ")}`}</Truncate>
               </span>
               <span className="shrink-0">synced {at(v.syncedAt, now)}</span>
             </span>
@@ -1672,9 +1864,10 @@ function ChangeLine({ label, names, className, data }: { label: string; names: r
   return (
     <span className="flex flex-wrap gap-x-2" data-change={label}>
       <span className="text-fg-muted">{label}</span>
-      {names.map((n) => (
+      {names.map((n, i) => (
         <span key={n} className={cn("font-mono", className)} {...(data === undefined ? {} : { [`data-${data}`]: n.split(" ")[0] })}>
           {n}
+          {i < names.length - 1 && <span className="text-fg-muted">,</span>}
         </span>
       ))}
     </span>

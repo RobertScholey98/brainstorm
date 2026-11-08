@@ -214,7 +214,32 @@ function writePull(root: string, session: SessionId, files: FileMap): Failure | 
 
 function issueLine(i: Issue): string {
   const where = i.file === null ? "brainstorm" : `${i.file}${i.loc === null ? "" : `:${i.loc.line}:${i.loc.column}`}${i.pointer === null ? "" : `#${i.pointer}`}`;
-  return `${where}: ${i.severity} ${i.code}: ${i.message}`;
+  const line = `${where}: ${i.severity} ${i.code}: ${i.message}`;
+  // A warning that lists many values (off-scale classes, storyless components) puts one per line, so each reads alone.
+  const listed = LISTING_CODES.has(i.code) ? /^(.*?): (.+)$/.exec(i.message) : null;
+  const items = listed === null ? [] : splitTopLevel(listed[2]!);
+  if (listed === null || items.length < 4) return line;
+  return [`${where}: ${i.severity} ${i.code}: ${listed[1]}:`, ...items.map((item) => `    ${item}`)].join("\n");
+}
+
+const LISTING_CODES = new Set(["off_scale", "no_story"]);
+
+/** Splits "a (x, y), b and 3 more" at its commas, leaving those inside brackets alone. */
+function splitTopLevel(text: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "(") depth++;
+    else if (c === ")") depth--;
+    else if (c === "," && depth === 0 && text[i + 1] === " ") {
+      out.push(text.slice(start, i));
+      start = i + 2;
+    }
+  }
+  out.push(text.slice(start));
+  return out;
 }
 
 function failureLines(error: Failure): string[] {

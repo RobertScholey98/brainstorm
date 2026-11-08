@@ -95,7 +95,7 @@ function repairMessage(root: string, repair: { readonly id: string; readonly nam
     "",
     ...repair.issues.slice(0, 20).map((i) => `- ${issueLine(i)}`),
     "",
-    "Brainstorms keep using the last version that synced, so nothing is broken for Rob yet. Find what in the project changed, such as a moved or renamed file, and fix the adapter or the stories so the system syncs again. Change the project's components only if Rob asks.",
+    "Each brainstorm keeps building with the version it uses, so nothing is broken for Rob yet; a fixed sync makes a new version, which a brainstorm takes only when Rob upgrades it. Find what in the project changed, such as a moved or renamed file, and fix the adapter or the stories so the system syncs again. Change the project's components only if Rob asks.",
     "",
     "## How to know it's done",
     "",

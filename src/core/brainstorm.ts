@@ -1812,8 +1812,8 @@ function promoteMessage(input: {
     "",
     "- Write it the way the library writes its components: the same file layout, the same styling approach and variants, and its tokens. Keep its look; the design was built against it.",
     system.entry === null
-      ? `- \`"kit"\` in the proposed files is Brainstorm's name for the components .brainstorm/system.json lists; import each from its own file instead.`
-      : `- \`"kit"\` in the proposed files is Brainstorm's name for this library's entry (${system.entry}); import from the library's own modules instead.`,
+      ? `- The proposed files import from "kit", Brainstorm's name for the components .brainstorm/system.json lists; import each from its own file instead.`
+      : `- The proposed files import from "kit", Brainstorm's name for this library's entry (${system.entry}); import from the library's own modules instead.`,
     ...(draft?.tier == null
       ? []
       : [

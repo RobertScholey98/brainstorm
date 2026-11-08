@@ -98,8 +98,8 @@ export function AgentWorkStatus({
       </div>
       {shown.lastLine !== null &&
         (compact ? (
-          // A narrow column gives the line two rows rather than cutting it short.
-          <p className="line-clamp-2 text-xs text-fg-muted" data-agent-last-line>
+          // A narrow column gives the line three rows rather than cutting it short.
+          <p className="line-clamp-3 text-xs text-fg-muted" data-agent-last-line>
             {shown.lastLine}
           </p>
         ) : (
