@@ -951,7 +951,7 @@ function CanvasAway({
           {stuck !== null ? (
             <>
               <Button variant="accent" onClick={onHere} data-away-here>
-                Show canvas here
+                {act === "pin" ? "Show here and pin" : "Show here and vary"}
               </Button>
               <Button variant="outline" onClick={onWorking} data-away-working>
                 Switch preview to Working
