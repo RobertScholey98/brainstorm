@@ -1,4 +1,5 @@
 import { AppWindow, ChevronDown, CirclePause, EyeOff, Maximize } from "lucide-react";
+import { cn } from "cn";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
@@ -108,19 +109,20 @@ function WindowMenu({
         <PopoverTrigger
           render={<Button variant="caution" aria-label={`Preview window, ${look?.label}`} data-warn={prefs.look === "working" || undefined} data-preview-menu />}
         >
-          {/* Working is the look that isn't for sharing, so the button takes the warning tone, as Hold does when held. */}
-          {prefs.look === "working" ? (
-            <EyeOff data-icon="inline-start" className="text-warning" aria-hidden />
-          ) : (
-            <AppWindow data-icon="inline-start" aria-hidden />
-          )}
-          <span className="text-fg-muted data-collapsed:hidden" data-collapse={BAR_COLLAPSE.preview}>
-            Preview
-          </span>
-          {/* As wide as its widest look, so changing the look moves nothing in the bar. */}
-          <span className="grid justify-items-start" data-preview-menu-look>
+          {/* As wide as its widest look, so changing the look moves nothing in the bar: each look's glyph and words are one
+              group, centred in that room, the chevron fixed at the end. Working is the look that isn't for sharing, so
+              the button takes the warning tone, as Hold does when held. */}
+          <span className="grid justify-items-center" data-preview-menu-look>
             {LOOKS.map((l) => (
-              <span key={l.value} className={l.value === prefs.look ? "col-start-1 row-start-1" : "invisible col-start-1 row-start-1"} aria-hidden={l.value !== prefs.look || undefined}>
+              <span
+                key={l.value}
+                className={cn("col-start-1 row-start-1 flex items-center gap-1.5", l.value !== prefs.look && "invisible")}
+                aria-hidden={l.value !== prefs.look || undefined}
+              >
+                {l.value === "working" ? <EyeOff data-icon="inline-start" className="text-warning" aria-hidden /> : <AppWindow data-icon="inline-start" aria-hidden />}
+                <span className="text-fg-muted data-collapsed:hidden" data-collapse={BAR_COLLAPSE.preview}>
+                  Preview
+                </span>
                 {l.label}
               </span>
             ))}

@@ -1,4 +1,5 @@
 import { AppWindow, EyeOff, MessageSquarePlus } from "lucide-react";
+import { cn } from "cn";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -148,15 +149,18 @@ export function PreviewWindow({ api }: { api: Api }) {
                       onClick={() => tell({ kind: "pick", for: picking === "comment" ? null : "comment" })}
                       data-preview-pin
                     >
-                      <MessageSquarePlus data-icon="inline-start" aria-hidden />
-                      {/* As wide as its wider label, so a pick moves nothing in this bar either. */}
+                      {/* As wide as its wider label, so a pick moves nothing in this bar either; glyph and words centre as one. */}
                       <span className="grid justify-items-center">
-                        <span className={picking === "comment" ? "invisible col-start-1 row-start-1" : "col-start-1 row-start-1"} aria-hidden={picking === "comment" || undefined}>
-                          Pin comment
-                        </span>
-                        <span className={picking === "comment" ? "col-start-1 row-start-1" : "invisible col-start-1 row-start-1"} aria-hidden={picking !== "comment" || undefined}>
-                          Picking…
-                        </span>
+                        {(["Pin comment", "Picking…"] as const).map((label, i) => (
+                          <span
+                            key={label}
+                            className={cn("col-start-1 row-start-1 flex items-center gap-1.5", (picking === "comment") !== (i === 1) && "invisible")}
+                            aria-hidden={(picking === "comment") !== (i === 1) || undefined}
+                          >
+                            <MessageSquarePlus data-icon="inline-start" aria-hidden />
+                            {label}
+                          </span>
+                        ))}
                       </span>
                     </Button>
                   </span>
