@@ -29,6 +29,7 @@ export function CanvasHost({
   onPinHovered,
   onPlacement,
   onZooms,
+  onPointer,
 }: {
   blocks: readonly BlockView[];
   frames: readonly CanvasFrame[];
@@ -52,13 +53,15 @@ export function CanvasHost({
   onPinHovered: (id: FeedbackId | null) => void;
   onPlacement: (placement: Placement) => void;
   onZooms: (zooms: Readonly<Record<string, number>>) => void;
+  /** In present, the pointer moved over the frame. */
+  onPointer?: () => void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   // The version of each block the frame holds. A past iteration can bring back an older one, so it is sent again.
   const sent = useRef(new Map<BlockId, ContentHash>());
   const [readyCount, setReadyCount] = useState(0);
-  const handlers = useRef({ onSelect, onBlockError, onPicked, onPinClicked, onPinHovered, onPlacement, onZooms });
-  handlers.current = { onSelect, onBlockError, onPicked, onPinClicked, onPinHovered, onPlacement, onZooms };
+  const handlers = useRef({ onSelect, onBlockError, onPicked, onPinClicked, onPinHovered, onPlacement, onZooms, onPointer });
+  handlers.current = { onSelect, onBlockError, onPicked, onPinClicked, onPinHovered, onPlacement, onZooms, onPointer };
 
   const post = (message: HostToFrame) => frame.current?.contentWindow?.postMessage(message, "*");
 
@@ -91,6 +94,9 @@ export function CanvasHost({
           return;
         case "zooms":
           handlers.current.onZooms(message.zooms);
+          return;
+        case "pointer":
+          handlers.current.onPointer?.();
           return;
         case "key":
           // Shortcuts work while the canvas has focus: replay the key on the host as if it were pressed here.

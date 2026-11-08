@@ -83,7 +83,7 @@ try {
     };
   });
   check("present stretches the slot to the screen's width from its top, with no title or pins", fills, { width: true, top: 0, chrome: 0 });
-  await snap(window, "03-present-start", "Present, just started from the wheel slot: the 390 px wheel stretched to fill the screen, no canvas chrome, and the opening label near the bottom, Esc to leave · ← → to change slot, which fades after 3.5 s");
+  await snap(window, "03-present-start", "Present, first time this run, just started from the wheel slot: the 390 px wheel stretched to fill the screen, no canvas chrome, and in the top right corner a small label, Esc to leave · ← → to change slot, with Exit; it fades after 3.5 s, and later presents show it only while the pointer moves");
   await sleep(3800);
   await snap(window, "04-present", "Present once the label has faded: nothing on screen but the design, as if it were the app");
   await window.keyboard.press("ArrowRight");
@@ -95,9 +95,24 @@ try {
   check("Escape leaves present, and the canvas keeps the slot it stepped to", await showing(canvas), "result:result/card");
   await window.keyboard.press("F5");
   await window.waitForSelector("[data-presenting]");
+  await sleep(400);
+  check("a later present opens on the design alone, its keys waiting for the pointer", await window.getAttribute("[data-present-hint]", "data-hidden"), "");
+  await window.mouse.move(700, 400);
+  await window.mouse.move(720, 420);
+  await window.waitForSelector("[data-present-hint]:not([data-hidden])");
+  await window.mouse.move(760, 440);
+  await snap(window, "05b-present-pointer", "A later present, after the pointer moved: the keys label and Exit show in the top right corner, and fade 2 s after the pointer stops");
   await window.keyboard.press("F5");
   await window.waitForSelector("[data-presenting]", { state: "detached" });
   check("F5 presents and F5 leaves", true, true);
+  await window.keyboard.press("F5");
+  await window.waitForSelector("[data-presenting]");
+  await window.mouse.move(700, 400);
+  await window.mouse.move(720, 420);
+  await window.click("[data-present-leave]");
+  await window.waitForSelector("[data-presenting]", { state: "detached" });
+  check("Exit in the corner label leaves present", true, true);
+  await window.mouse.move(150, 860);
 
   // The preview window.
   const [preview] = await Promise.all([app.waitForEvent("window"), window.click("[data-preview-open]")]);
@@ -118,7 +133,7 @@ try {
   check(
     "with the window open, the bar offers Hold and the Preview menu, and Present stays last",
     await window.evaluate(() => [...document.querySelectorAll("[data-present-controls] button")].map((b) => b.getAttribute("aria-label") ?? b.textContent.trim())),
-    ["Hold preview", "Preview", "Present"],
+    ["Hold preview", "Preview · Clean", "Present"],
   );
   await snap(window, "07-main-window-open", "The main window while the preview window is open: Hold preview and a Preview menu button grow in to the left of Present, which keeps its place at the canvas bar's right end");
 
@@ -145,12 +160,12 @@ try {
   await sleep(600);
   check("under Hold the preview window keeps what it showed", await showing(mirror), "wheel:wheel/reel");
   check(
-    "the main window says so under the canvas bar, naming the slot and variant held, and the button reads Preview held",
-    [await window.textContent("[data-held-bar]"), await window.textContent("[data-hold]")],
-    ["Preview heldThe preview window keeps showing The wheel · Slot reel.Resume live", "Preview held"],
+    "the main window says so under the canvas bar, naming the slot and variant held, and Hold preview is pressed",
+    [await window.textContent("[data-held-bar]"), await window.getAttribute("[data-hold]", "aria-pressed")],
+    ["Preview heldThe preview window keeps showing The wheel · Slot reel.Resume live", "true"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed and reading Preview held, and a warning-toned bar under the canvas bar, Preview held · The preview window keeps showing The wheel · Slot reel, with Resume live; the main canvas has moved on to the result slot");
+  await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed, and a warning-toned bar under the canvas bar, Preview held · The preview window keeps showing The wheel · Slot reel, with Resume live; the main canvas has moved on to the result slot");
   await window.click("[data-held-release]");
   await settled(() => showing(mirror));
   check("releasing Hold sends it the latest", await showing(mirror), "result:result/card");
@@ -194,7 +209,7 @@ try {
   // The main window still pins.
   await window.click("[data-pick-toggle]");
   await window.mouse.move(150, 860);
-  await snap(window, "14b-main-picking-window-open", "The main window picking while the preview window is open (Working): the pick hint, Esc and Cancel in the canvas bar, which sets Hold preview, Preview and Present aside until the pick ends");
+  await snap(window, "14b-main-picking-window-open", "The main window picking while the preview window is open (Working): the pick hint, Esc and Cancel in the canvas bar; Hold preview, Preview and Present keep their places, their labels giving way to icons only if the hint needs the room");
   await canvas.click(inBlock("result/card", "headline"));
   await window.waitForSelector("[data-composer]");
   check("the main window's canvas still pins while the preview window is open", await preview.$("[data-composer]"), null);
@@ -224,16 +239,20 @@ try {
   await window.click("[data-pick-toggle]");
   await window.waitForSelector('[data-canvas-away="stuck"]');
   check(
-    "with the canvas away and the preview window clean, a pick says it has nowhere to go",
-    [await window.textContent("[data-pick-hint]"), await mirror.evaluate(() => document.body.dataset.mode ?? "view")],
-    ["Clean preview can't take a pickEscCancel", "view"],
+    "with the canvas away and the preview window clean, Pin comment starts no pick: the region says how to go on",
+    [
+      await window.$("[data-pick-hint]"),
+      await mirror.evaluate(() => document.body.dataset.mode ?? "view"),
+      await window.textContent("[data-canvas-away] [data-slot=empty-title]"),
+    ],
+    [null, "view", "To pin a comment, switch the preview to Working"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, Pin comment pressed: the region says the Clean window can't take a pick and why, with Switch preview to Working and Show the canvas here; the bar's hint reads Clean preview can't take a pick");
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says to pin a comment, switch the preview to Working, and why, with Switch to Working (primary), Show the canvas here, and Cancel");
   await window.click("[data-away-working]");
   await preview.waitForSelector("[data-preview-window=working]");
   await mirror.waitForSelector('body[data-mode="pin"]');
-  check("Switch preview to Working hands the pick to the preview window", await window.getAttribute("[data-canvas-away]", "data-canvas-away"), "picking");
+  check("Switch to Working starts the pick in the preview window", await window.getAttribute("[data-canvas-away]", "data-canvas-away"), "picking");
   await window.keyboard.press("Escape");
   await window.click("[data-away-here]");
   await window.waitForSelector("[data-canvas-away]", { state: "detached" });

@@ -6,7 +6,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toast } from "@/components/ui/toast";
-import { TooltipLabel, TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipAction, TooltipLabel, TooltipProvider } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import {
   blockIdOf,
@@ -490,6 +490,7 @@ function SessionWorkspace({
     return () => clearTimeout(timer);
   }, [unseenKey, send]);
 
+  const [stuckPick, setStuckPick] = useState<"comment" | "vary" | null>(null);
   const stepSlot = useCallback(
     (by: -1 | 1) => {
       const next = slots[slots.findIndex((s) => s.id === slot?.id) + by];
@@ -541,12 +542,13 @@ function SessionWorkspace({
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       if (document.querySelector("[data-slot=popover-content]") !== null) return;
+      if (stuckPick !== null) return setStuckPick(null);
       if (interaction.kind === "picking") return setInteraction({ kind: "view" });
       if (interaction.kind === "view" && past !== null) showLatest();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [interaction.kind, past, showLatest]);
+  }, [interaction.kind, past, showLatest, stuckPick]);
 
   const onPicked = useCallback(
     (pin: Pin, at: { x: number; y: number }, rect: CanvasRect) => {
@@ -576,8 +578,13 @@ function SessionWorkspace({
   const sendVary = async (pin: Pin, count: number, direction: string | null) => {
     if ((await send({ kind: "vary", target: pin, count, direction })) !== null) setInteraction({ kind: "view" });
   };
-  const togglePick = (kind: "comment" | "vary") =>
+  // With the canvas away in a clean preview window, nothing can take a pick, so none starts: the canvas region says why
+  // and offers the way on, and the bar and Pin comment stay as they were.
+  const togglePick = (kind: "comment" | "vary") => {
+    if (preview.open && !preview.prefs.here && preview.prefs.look === "clean") return setStuckPick((s) => (s === kind ? null : kind));
+    setStuckPick(null);
     setInteraction((i) => (i.kind === "picking" && i.for === kind ? { kind: "view" } : { kind: "picking", for: kind }));
+  };
   const unrendered = selectedBlock !== null && blockErrors.has(selectedBlock.hash) ? "The block didn't render, so there's nothing to pick" : null;
   const varyBlocked =
     iteration === null
@@ -645,6 +652,12 @@ function SessionWorkspace({
   useEffect(() => link.onMessage((m) => fromPreview.current(m)), [link]);
   // With the canvas given to the preview window, this one keeps its frame under a cover, so pins still report placement.
   const away = preview.open && !preview.prefs.here && !presenting;
+  useEffect(() => {
+    if (!away || preview.prefs.look !== "clean") setStuckPick(null);
+  }, [away, preview.prefs.look]);
+  // The pointer moving in present shows how to leave again, as a video player shows its controls.
+  const [presentPoke, setPresentPoke] = useState(0);
+  const pokePresent = useCallback(() => setPresentPoke((n) => n + 1), []);
 
   const fork = async (input: ForkInput): Promise<boolean> => {
     const result = await api.fork(sessionId, input);
@@ -733,7 +746,7 @@ function SessionWorkspace({
             onSlot={setSelectedSlot}
             onView={setCanvasView}
             onCancelPick={() => setInteraction({ kind: "view" })}
-            {...(away ? { pickHint: preview.prefs.look === "working" ? "Pick in the preview window" : "Clean preview can't take a pick" } : {})}
+            {...(away ? { pickHint: "Pick in the preview window" } : {})}
             trailing={
               <PresentControls
                 onPresent={present}
@@ -781,17 +794,26 @@ function SessionWorkspace({
             onPinHovered={setHoveredPin}
             onPlacement={setPlacement}
             onZooms={setZooms}
+            onPointer={pokePresent}
           />
         )}
         {away && iteration !== null && (
           <CanvasAway
             look={preview.prefs.look}
+            hold={preview.hold}
             picking={picking !== null}
+            stuck={stuckPick}
             onHere={() => preview.onPrefs({ ...preview.prefs, here: true })}
-            onWorking={() => preview.onPrefs({ ...preview.prefs, look: "working" })}
+            onWorking={() => {
+              const kind = stuckPick;
+              setStuckPick(null);
+              preview.onPrefs({ ...preview.prefs, look: "working" });
+              if (kind !== null) setInteraction({ kind: "picking", for: kind });
+            }}
+            onDismiss={() => setStuckPick(null)}
           />
         )}
-        {presenting && <PresentHint several={slots.length > 1} />}
+        {presenting && <PresentHint several={slots.length > 1} poke={presentPoke} onLeave={() => void document.exitFullscreen().catch(() => {})} />}
         {interaction.kind === "composing" && (
           <PinComposer
             key={JSON.stringify(interaction)}
@@ -880,46 +902,62 @@ function SessionWorkspace({
  */
 function CanvasAway({
   look,
+  hold,
   picking,
+  stuck,
   onHere,
   onWorking,
+  onDismiss,
 }: {
   look: PreviewPrefs["look"];
+  hold: boolean;
   picking: boolean;
+  /** A pick asked for while the preview window is clean, which never takes one since an audience may be watching it. */
+  stuck: "comment" | "vary" | null;
   onHere: () => void;
   onWorking: () => void;
+  onDismiss: () => void;
 }) {
-  // A clean preview window never takes a pick, since an audience may be watching it, so a pick needs one of the other two.
-  const stuck = picking && look === "clean";
+  const what = stuck === "vary" ? "vary an element" : "pin a comment";
+  const name = look === "clean" ? "Clean" : "Working";
   return (
-    <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away={stuck ? "stuck" : picking ? "picking" : ""}>
+    <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away={stuck !== null ? "stuck" : picking ? "picking" : ""}>
       <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <AppWindow aria-hidden />
           </EmptyMedia>
           <EmptyTitle>
-            {stuck ? "The preview window is Clean, so it can't take a pick" : picking ? "Click an element in the preview window" : "The canvas is in the preview window"}
+            {stuck !== null ? `To ${what}, switch the preview to Working` : picking ? "Click an element in the preview window" : "The canvas is in the preview window"}
           </EmptyTitle>
           <EmptyDescription>
-            {stuck
-              ? "Clean keeps editing off a shared screen. Switch it to Working to pick there, or show the canvas here."
-              : "Slot tabs, settings and comments here update it as you make them."}
+            {stuck !== null
+              ? "The preview window is Clean, so whoever watches it sees only the design. Working adds the canvas bar and pins there, or show the canvas here instead."
+              : `It shows the ${name} look${hold ? ", held" : ""}. Slot tabs, settings and comments here update it as you make them.`}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row justify-center">
-          {stuck && (
-            <Button variant="outline" onClick={onWorking} data-away-working>
-              Switch preview to Working
-            </Button>
-          )}
-          <Button variant="outline" onClick={onHere} data-away-here>
-            Show the canvas here
-          </Button>
-          {!stuck && (
-            <Button variant="outline" onClick={() => previewWindow("open")} data-away-front>
-              Bring the window to front
-            </Button>
+          {stuck !== null ? (
+            <>
+              <Button variant="accent" onClick={onWorking} data-away-working>
+                Switch to Working
+              </Button>
+              <Button variant="outline" onClick={onHere} data-away-here>
+                Show the canvas here
+              </Button>
+              <Button variant="ghost" onClick={onDismiss} data-away-dismiss>
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onHere} data-away-here>
+                Show the canvas here
+              </Button>
+              <Button variant="outline" onClick={() => previewWindow("open")} data-away-front>
+                Bring the window to front
+              </Button>
+            </>
           )}
         </EmptyContent>
       </Empty>
@@ -946,29 +984,50 @@ function HeldBar({ on, onRelease }: { on: string | null; onRelease: () => void }
   );
 }
 
-/** How to leave and step, shown as present starts and gone once Rob has read it. */
-function PresentHint({ several }: { several: boolean }) {
-  const [shown, setShown] = useState(true);
+/** Whether present has shown its keys once since Brainstorm started: after that they wait for the pointer. */
+let presentTaught = false;
+
+/**
+ * How to leave and step, in the top right corner, away from what the design says. It shows as present starts the first
+ * time, and after that only while the pointer moves, as a video player's controls do, so a quiet screen is the design alone.
+ */
+function PresentHint({ several, poke, onLeave }: { several: boolean; poke: number; onLeave: () => void }) {
+  const [shown, setShown] = useState(() => !presentTaught);
+  const [over, setOver] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setShown(false), 3500);
-    return () => clearTimeout(timer);
+    presentTaught = true;
   }, []);
+  useEffect(() => {
+    if (poke > 0) setShown(true);
+  }, [poke]);
+  useEffect(() => {
+    if (!shown || over) return;
+    const timer = setTimeout(() => setShown(false), poke === 0 ? 3500 : 2000);
+    return () => clearTimeout(timer);
+  }, [shown, over, poke]);
   return (
     <div
-      role="status"
-      className="pointer-events-none absolute inset-x-0 bottom-6 z-toast flex justify-center transition-opacity duration-500 data-hidden:opacity-0"
+      className="absolute top-4 right-4 z-toast flex items-center gap-1 transition-opacity duration-300 data-hidden:pointer-events-none data-hidden:opacity-0"
       data-hidden={shown ? undefined : ""}
+      onPointerEnter={() => setOver(true)}
+      onPointerLeave={() => setOver(false)}
+      onPointerMove={() => setShown(true)}
       data-present-hint
     >
       <TooltipLabel>
-        <Kbd>Esc</Kbd> to leave
-        {several && (
-          <>
-            <span aria-hidden>·</span>
-            <Kbd>←</Kbd>
-            <Kbd>→</Kbd> to change slot
-          </>
-        )}
+        <span role="status" className="contents">
+          <Kbd tone="inverse">Esc</Kbd> to leave
+          {several && (
+            <>
+              <span aria-hidden>·</span>
+              <Kbd tone="inverse">←</Kbd>
+              <Kbd tone="inverse">→</Kbd> to change slot
+            </>
+          )}
+        </span>
+        <TooltipAction onClick={onLeave} data-present-leave>
+          Exit
+        </TooltipAction>
       </TooltipLabel>
     </div>
   );

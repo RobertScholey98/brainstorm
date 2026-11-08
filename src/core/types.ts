@@ -696,6 +696,8 @@ export type FrameToHost =
   | { readonly kind: "zooms"; readonly zooms: Readonly<Record<string, number>> }
   /** A shortcut pressed while the canvas has focus, so the shell's keys work wherever Rob last clicked. */
   | { readonly kind: "key"; readonly key: string; readonly ctrl: boolean; readonly meta: boolean; readonly shift: boolean; readonly alt: boolean }
+  /** In present, the pointer moved over the frame, at most every few hundred ms, so the host can show how to leave. */
+  | { readonly kind: "pointer" }
   /** A preview frame has painted its block: a still of it as a PNG data URL, or null when it couldn't take one. */
   | { readonly kind: "painted"; readonly image: string | null };
 

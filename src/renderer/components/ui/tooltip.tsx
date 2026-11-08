@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, type ReactElement, type ReactNode } from "react"
+import { createContext, useContext, type ComponentProps, type ReactElement, type ReactNode } from "react"
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 import { cn } from "cn"
 
@@ -191,5 +191,20 @@ function TooltipLabel({ children }: { children: ReactNode }) {
   )
 }
 
-export { BlockedHint, Hint, HintAnchor, Tooltip, TooltipLabel, TooltipTrigger, TooltipContent, TooltipProvider }
+/** A button inside a TooltipLabel, in the label's own ink, set off from its words by a rule. */
+function TooltipAction({ className, ...props }: Omit<ComponentProps<"button">, "type">) {
+  return (
+    <button
+      type="button"
+      data-slot="tooltip-action"
+      className={cn(
+        "-my-1 -mr-2 ml-1 rounded-sm border-l border-inverse-fg/20 px-2 py-1 font-medium outline-none hover:bg-inverse-fg/15 focus-visible:ring-2 focus-visible:ring-ring dark:border-fg/15 dark:hover:bg-fg/10",
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+export { BlockedHint, Hint, HintAnchor, Tooltip, TooltipAction, TooltipLabel, TooltipTrigger, TooltipContent, TooltipProvider }
 export type { HintRow }

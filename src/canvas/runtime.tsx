@@ -663,6 +663,13 @@ if (live && !preview) {
     revealSelected("smooth");
   });
   window.addEventListener("pointermove", (e) => (hover = state.mode === "pin" ? pickTarget(e.target) : null), true);
+  // In present the host shows how to leave while the pointer moves, as a video player shows its controls.
+  let pointed = 0;
+  window.addEventListener("pointermove", () => {
+    if (!state.present || performance.now() - pointed < 250) return;
+    pointed = performance.now();
+    post({ kind: "pointer" });
+  });
   window.addEventListener("keydown", (e) => {
     if (e.defaultPrevented || !(e.key === "Escape" || e.key === "F5" || e.key === "F11" || e.ctrlKey || e.metaKey || presentStep(e))) return;
     post({ kind: "key", key: e.key, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, alt: e.altKey });

@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -10,6 +10,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { Hint } from "@/components/ui/tooltip";
 import type { CanvasLayout } from "../core/prefs";
 import type { SlotId, SlotView } from "../core/types";
+import { useBarFit } from "./headerAction";
 
 const VIEWS: readonly { value: CanvasLayout["view"]; label: string }[] = [
   { value: "stage", label: "One slot" },
@@ -56,8 +57,10 @@ export function CanvasBar({
   };
   const several = slots.length > 1;
   const pct = zoom === null ? 100 : Math.round(zoom * 100);
+  const bar = useRef<HTMLDivElement>(null);
+  useBarFit(bar);
   return (
-    <div className="flex h-10 shrink-0 items-center gap-1 border-b bg-card px-2" data-canvas-bar>
+    <div ref={bar} className="flex h-10 shrink-0 items-center gap-1 border-b bg-card px-2" data-canvas-bar>
       {several && (
         <>
           <Hint label="Previous slot" side="bottom">
@@ -84,7 +87,7 @@ export function CanvasBar({
       <div className="flex flex-1 items-center justify-end gap-2 pl-2">
         {picking !== null && (
           <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-fg-muted" role="status" data-pick-hint>
-            <Truncate className="w-0 flex-1 text-right">{pickHint ?? (picking === "vary" ? "Click an element to vary" : "Click an element to pin a comment")}</Truncate>
+            <Truncate className="w-0 flex-1 text-right" data-bar-hint>{pickHint ?? (picking === "vary" ? "Click an element to vary" : "Click an element to pin a comment")}</Truncate>
             <Kbd>Esc</Kbd>
             <Button variant="ghost" onClick={onCancelPick}>
               Cancel
@@ -101,8 +104,8 @@ export function CanvasBar({
           </Hint>
         )}
         {several && <Segmented fit value={view} onValueChange={onView} options={VIEWS} itemData="view-option" aria-label="View" />}
-        {/* A pick gives the hint the room: Present and the preview window wait, and Hold's own bar still says it is on. */}
-        {trailing !== undefined && picking === null && (
+        {/* Every control keeps its place through a pick; their labels give way to the hint first (BAR_COLLAPSE). */}
+        {trailing !== undefined && (
           <>
             {several && <Separator orientation="vertical" data-trailing-divider />}
             {trailing}
