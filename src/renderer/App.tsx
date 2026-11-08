@@ -961,7 +961,7 @@ function CanvasAway({
           {stuck !== null ? (
             <>
               <Button variant="accent" onClick={onHere} data-away-here>
-                {act === "pin" ? "Show here and pin" : "Show here and vary"}
+                {act === "pin" ? "Show canvas here and pin" : "Show canvas here and vary"}
               </Button>
               {/* The way that shows the audience Rob's tools, so it carries the Working look's warning tone. */}
               <Button variant="caution" data-edge onClick={onWorking} data-away-working>
