@@ -900,6 +900,16 @@ export class Store {
     return num(this.#get("SELECT COUNT(*) AS c FROM session WHERE system_id = ? AND archived_at IS NULL", id)?.c);
   }
 
+  /** The active brainstorms on each of a system's versions, by version. */
+  sessionsByVersion(id: SystemId): Map<number, { id: SessionId; title: string }[]> {
+    const out = new Map<number, { id: SessionId; title: string }[]>();
+    for (const r of this.#all("SELECT id, title, system_n FROM session WHERE system_id = ? AND archived_at IS NULL ORDER BY created_at", id)) {
+      const n = num(r.system_n);
+      out.set(n, [...(out.get(n) ?? []), { id: str(r.id) as SessionId, title: str(r.title) }]);
+    }
+    return out;
+  }
+
   sessionsOn(id: SystemId): SessionId[] {
     return this.#all("SELECT id FROM session WHERE system_id = ? AND archived_at IS NULL", id).map((r) => str(r.id) as SessionId);
   }

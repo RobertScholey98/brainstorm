@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Component, type ComponentType, type ReactNode, useSyncExternalStore } from "react";
+import { Component, type ComponentType, type ReactNode, useLayoutEffect, useSyncExternalStore } from "react";
 import * as JSXRuntime from "react/jsx-runtime";
 import { CircleAlert } from "lucide-react";
 import * as ReactDOM from "react-dom";
@@ -170,6 +170,9 @@ function wrapProposed(name: string, Inner: ComponentType<Props>): ComponentType<
 }
 
 function requireProposed(name: string): unknown {
+  // The session's kit has the component now (an upgrade after Promote), so blocks get the real one, untagged.
+  const real = kit?.module?.kit[name];
+  if (real !== undefined) return { __esModule: true, default: real };
   const entry = proposed.get(name);
   if (entry === undefined) throw new Error(`there is no proposed component ${name}`);
   if (entry.loaded === null) {
@@ -589,6 +592,16 @@ function Gallery({ ids }: { ids: readonly string[] | null }) {
   if (kit.module === null) return <BlockFailure message={kit.error ?? "the kit didn't load"} />;
   const wanted = ids === null ? null : new Set(ids);
   const records = kitStories().stories.filter((r) => wanted === null || wanted.has(r.id));
+  return <GalleryStories key={JSON.stringify(ids)} records={records} />;
+}
+
+function GalleryStories({ records }: { records: ReturnType<typeof kitStories>["stories"] }) {
+  // A story that focuses an input on mount scrolls the page to it; each new set of stories opens at the top.
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+    const frame = requestAnimationFrame(() => window.scrollTo(0, 0));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   return (
     <div className="bs-gallery">
       {records.map((r) => (
@@ -1030,10 +1043,14 @@ body {
 body[data-mode="pin"], body[data-mode="pin"] * { cursor: crosshair !important; }
 /* A proposed component: dashed, and tagged "not in system" at its root's top left. */
 .bs-proposed > :not(.bs-proposed-anchor) { outline: 1px dashed var(--bs-warning, #d97706); outline-offset: 2px; }
+/* The tag straddles the outline's top-right corner, so it marks the component without covering the design above it,
+   and fades while the pointer is over the component so what it covers can be read. */
 .bs-proposed-anchor {
   position: absolute; z-index: 2147482000; pointer-events: none;
-  left: anchor(left); bottom: calc(anchor(top) + 3px);
+  right: anchor(right); top: anchor(top); translate: 6px -50%;
+  transition: opacity 120ms ease-out;
 }
+.bs-proposed:hover .bs-proposed-anchor { opacity: 0.15; }
 .bs-proposed-tag {
   display: block; padding: 1px 5px; border-radius: 3px; white-space: nowrap;
   background: var(--bs-warning, #d97706); color: #fff; font: 500 10px/14px var(--bs-font-ui); letter-spacing: 0.01em;

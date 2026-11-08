@@ -4,13 +4,41 @@
   "example": {
     "selected": "Tue",
     "days": [
-      { "day": "Mon", "date": 10, "planned": true },
-      { "day": "Tue", "date": 11, "planned": true },
-      { "day": "Wed", "date": 12, "planned": false },
-      { "day": "Thu", "date": 13, "planned": true },
-      { "day": "Fri", "date": 14, "planned": false },
-      { "day": "Sat", "date": 15, "planned": true },
-      { "day": "Sun", "date": 16, "planned": false }
+      {
+        "day": "Mon",
+        "date": 10,
+        "planned": true
+      },
+      {
+        "day": "Tue",
+        "date": 11,
+        "planned": true
+      },
+      {
+        "day": "Wed",
+        "date": 12,
+        "planned": true
+      },
+      {
+        "day": "Thu",
+        "date": 13,
+        "planned": false
+      },
+      {
+        "day": "Fri",
+        "date": 14,
+        "planned": false
+      },
+      {
+        "day": "Sat",
+        "date": 15,
+        "planned": true
+      },
+      {
+        "day": "Sun",
+        "date": 16,
+        "planned": false
+      }
     ]
   }
 }

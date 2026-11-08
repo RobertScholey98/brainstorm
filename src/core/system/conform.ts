@@ -180,10 +180,53 @@ const offScale = (property: string, value: string, normal: string, family: Famil
   return `${property}: ${value} is off the kit's ${FAMILY_LABEL[family]} scale${normal === value ? "" : ` (${normal})`}; ${near === null ? "" : `use ${near}, the nearest the kit uses, or another of `}${shown(family, allowed)}`;
 };
 
+/**
+ * How the kit reaches each themeable family through its tokens: radius and font size through named tokens such as
+ * `--radius-lg`, spacing through `--spacing` steps, as Tailwind v4 writes them. Empty when the kit has no such tokens.
+ */
+type TokenScales = { readonly named: Partial<Record<"radius" | "fontSize", ReadonlyMap<string, string>>>; readonly spacing: number | null };
+
+function tokenScales(styles: SystemStyles, vars: ReadonlyMap<string, string>): TokenScales {
+  const named: Record<"radius" | "fontSize", Map<string, string>> = { radius: new Map(), fontSize: new Map() };
+  for (const t of styles.tokens) {
+    const family = /^--radius(-[w-]+)?$/.test(t.name) ? "radius" : /^--text-[a-z0-9]+$/.test(t.name) ? "fontSize" : null;
+    if (family === null) continue;
+    const normal = normalizeValue(family, resolveVars(`var(${t.name})`, vars));
+    if (normal !== null && normal !== "0px" && !named[family].has(normal)) named[family].set(normal, t.name);
+  }
+  const spacing = vars.has("--spacing") ? normalizeValue("spacing", resolveVars("var(--spacing)", vars)) : null;
+  const step = spacing === null ? null : Number.parseFloat(spacing);
+  return {
+    named: Object.fromEntries(Object.entries(named).filter(([, m]) => m.size > 0)),
+    spacing: step !== null && Number.isFinite(step) && step > 0 ? step : null,
+  };
+}
+
+/**
+ * A literal radius, spacing or font size where the kit reads a token, so a theme tweak would pass it by and a promoted
+ * copy would carry the pixels into the library. Names the token that gives the value, or the nearest one.
+ */
+function untokened(property: string, value: string, normal: string, family: Family, scales: TokenScales): string | null {
+  if (value.includes("var(") || normal === "0px") return null;
+  const px = Number.parseFloat(normal);
+  if (family === "spacing" && scales.spacing !== null) {
+    if (normal === "1px") return null; // a hairline, as Tailwind's `px` steps write it
+    const steps = Math.round((px / scales.spacing) * 2) / 2;
+    return `${property}: ${value} doesn't follow the theme; write calc(var(--spacing) * ${steps}), which is ${steps * scales.spacing}px in the kit`;
+  }
+  const named = family === "radius" || family === "fontSize" ? scales.named[family] : undefined;
+  if (named === undefined) return null;
+  const exact = named.get(normal);
+  if (exact !== undefined) return `${property}: ${value} doesn't follow the theme; write var(${exact}), which is ${normal} in the kit`;
+  const near = [...named.entries()].sort((a, b) => Math.abs(Number.parseFloat(a[0]) - px) - Math.abs(Number.parseFloat(b[0]) - px))[0];
+  return near === undefined ? null : `${property}: ${value} doesn't follow the theme; write var(${near[1]}), the nearest token at ${near[0]}`;
+}
+
 /** Every value in a proposed component's CSS, against the kit's tokens and the values the kit uses. */
 export function cssConformance(css: string, file: string, styles: SystemStyles): Issue[] {
   const tokenNames = new Set(styles.tokens.map((t) => t.name));
   const vars = new Map(styles.tokens.map((t) => [t.name, t.value || Object.values(t.byAxis)[0] || ""]));
+  const scales = tokenScales(styles, vars);
   const issues: Issue[] = [];
   const seen = new Set<string>();
   for (const rule of flattenCss(parseCss(css))) {
@@ -215,6 +258,11 @@ export function cssConformance(css: string, file: string, styles: SystemStyles):
       }
       const normal = normalizeValue(family, resolveVars(d.value, vars));
       if (normal === null) continue;
+      const literal = untokened(d.property, d.value, normal, family, scales);
+      if (literal !== null) {
+        issues.push(issue("untokened_value", literal, { file }));
+        continue;
+      }
       const allowed = styles.measured[family];
       if (normal === "0px" || allowed.includes(normal)) continue;
       // Shorthands such as `padding: 8px 12px` normalize to null above; each single value is checked here.
@@ -223,7 +271,7 @@ export function cssConformance(css: string, file: string, styles: SystemStyles):
       );
     }
   }
-  return [...issues, ...shorthandIssues(css, file, styles, vars)];
+  return [...issues, ...shorthandIssues(css, file, styles, vars, scales)];
 }
 
 function firstColorToken(styles: SystemStyles): string | null {
@@ -231,7 +279,7 @@ function firstColorToken(styles: SystemStyles): string | null {
 }
 
 /** `padding: 8px 12px` and the like: each part is held to the family's scale on its own. */
-function shorthandIssues(css: string, file: string, styles: SystemStyles, vars: ReadonlyMap<string, string>): Issue[] {
+function shorthandIssues(css: string, file: string, styles: SystemStyles, vars: ReadonlyMap<string, string>, scales: TokenScales): Issue[] {
   const issues: Issue[] = [];
   for (const rule of flattenCss(parseCss(css))) {
     for (const d of rule.decls) {
@@ -241,7 +289,13 @@ function shorthandIssues(css: string, file: string, styles: SystemStyles, vars: 
       if (parts.length < 2) continue;
       for (const part of parts) {
         const normal = normalizeValue(family, resolveVars(part, vars));
-        if (normal === null || normal === "0px" || styles.measured[family].includes(normal)) continue;
+        if (normal === null || normal === "0px") continue;
+        const literal = untokened(d.property, part, normal, family, scales);
+        if (literal !== null) {
+          issues.push(issue("untokened_value", literal, { file }));
+          continue;
+        }
+        if (styles.measured[family].includes(normal)) continue;
         issues.push(
           issue("off_scale_value", offScale(d.property, part, normal, family, styles.measured[family]), { file }),
         );

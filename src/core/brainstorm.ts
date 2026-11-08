@@ -34,7 +34,7 @@ import {
 } from "./store";
 import { blockConformance, compiledForConformance, proposedConformance, proposedImports } from "./system/conform";
 import type { CheckEnv } from "./check";
-import { Systems } from "./systems";
+import { Systems, componentChanges } from "./systems";
 import {
   blockIdOf,
   framesOf,
@@ -717,6 +717,11 @@ export class Brainstorm {
       if (result.kind === "ok") proposedContents.push({ hash: p.hash, files: p.files, compiled: result.compiled });
     }
     for (const p of ctx.proposed) {
+      if (exports.has(p.name)) {
+        issues.push(
+          issue("proposed_in_kit", `the kit exports ${p.name} now, so blocks get the kit's; import it from "kit" and delete proposed/${p.name}`, { file: proposedFile(p.name, "tsx") }),
+        );
+      }
       if (!used.has(p.name)) {
         issues.push(issue("unused_proposed", `no block imports proposed/${p.name}; import it, or delete the folder`, { file: proposedFile(p.name, "tsx") }));
       }
@@ -782,6 +787,7 @@ export class Brainstorm {
     const newest = this.#store.latestSystemVersion(ref.id) ?? version;
     const promotions = new Map(this.#store.promotions(id).map((p) => [p.name, p]));
     const newestExports = new Set(newest.manifest.exports.map((e) => e.name));
+    const ownExports = new Set(version.manifest.exports.map((e) => e.name));
     const proposed: ProposedView[] = (iteration?.proposed ?? []).map((p) => {
       const promotion = promotions.get(p.name);
       const { name: _n, ...state } = promotion ?? { name: p.name };
@@ -792,6 +798,7 @@ export class Brainstorm {
         usedBy: p.usedBy,
         promotion: promotion === undefined ? null : (state as NonNullable<ProposedView["promotion"]>),
         inSystem: newestExports.has(p.name) ? newest.n : null,
+        fromKit: ownExports.has(p.name),
       };
     });
     return {
@@ -806,6 +813,7 @@ export class Brainstorm {
       themes: this.#store.themes(ref.id),
       proposed,
       canPromote: system?.projectId != null,
+      upgrade: componentChanges(version.manifest, newest.manifest),
     };
   }
 
@@ -1145,7 +1153,14 @@ export class Brainstorm {
     const result = await this.#bridge.start({
       project: system.projectId,
       title: `Promote ${name} into ${system.name}`,
-      message: promoteMessage({ session, system: { id: system.id, name: system.name, root: system.source.root, entry: system.source.entry }, name, files, draft }),
+      message: promoteMessage({
+        session,
+        system: { id: system.id, name: system.name, root: system.source.root, entry: system.source.entry },
+        name,
+        files,
+        draft,
+        generated: this.#systems.version(ref).manifest.catalog.filter((e) => e.generated).map((e) => e.name),
+      }),
     });
     if (result.kind === "failed") {
       this.#store.setPromotion(id, name, { state: "failed", error: result.error }, this.#now());
@@ -1718,8 +1733,14 @@ function promoteMessage(input: {
   name: ProposedName;
   files: { tsx: string; json: string; css: string | null };
   draft: ProposedDraft | null;
+  /** The primitives Brainstorm generated because the library has none. */
+  generated: readonly string[];
 }): string {
   const { session, system, name, files, draft } = input;
+  const fromKit = [...files.tsx.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']kit["']/g)].flatMap((m) =>
+    (m[1] ?? "").split(",").map((n) => n.trim().split(/\s+as\s+/)[0] ?? ""),
+  );
+  const standIns = fromKit.filter((n) => input.generated.includes(n));
   const fence = (lang: string, text: string) => `\`\`\`${lang}\n${text.trimEnd()}\n\`\`\``;
   return [
     `[brainstorm] promote ${name} from session ${session.id} ("${session.title}")`,
@@ -1729,8 +1750,14 @@ function promoteMessage(input: {
     draft === null ? "" : `What it's for: ${draft.description}`,
     "",
     "- Write it the way the library writes its components: the same file layout, the same styling approach and variants, and its tokens. Keep its look; the design was built against it.",
-    `- Export it from the library's entry (${system.entry}), and write a story for it${draft === null ? "" : ` with these args: ${JSON.stringify(draft.example)}`}.`,
-    `- Then run \`brainstorm system sync ${system.id}\`, so the design system's next version has it. Rob upgrades the session to that version himself.`,
+    `- \`"kit"\` in the proposed files is Brainstorm's name for this library's entry (${system.entry}); import from the library's own modules instead.`,
+    ...(standIns.length === 0
+      ? []
+      : [
+          `- ${standIns.join(", ")} ${standIns.length === 1 ? "is a layout primitive" : "are layout primitives"} Brainstorm generated because the library has none. Write that layout the way the library's own components do, such as with its utility classes.`,
+        ]),
+    `- Export it from the library's entry, and write a story for it${draft === null ? "" : ` with these args: ${JSON.stringify(draft.example)}`}.`,
+    `- Then run \`brainstorm system sync ${system.id}\`, so the design system's next version has it. Brainstorm then offers the upgrade in the session, and after it the design uses the library's component.`,
     "",
     "The proposed files:",
     "",

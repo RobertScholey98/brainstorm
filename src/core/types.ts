@@ -273,8 +273,10 @@ const ISSUE_SEVERITY = {
   invalid_proposed: "error",
   unknown_class: "error",
   off_scale_value: "error",
+  untokened_value: "error",
   dynamic_class: "warning",
   unused_proposed: "warning",
+  proposed_in_kit: "warning",
 } as const satisfies Record<string, "error" | "warning">;
 
 export type IssueCode = keyof typeof ISSUE_SEVERITY;
@@ -737,7 +739,13 @@ export type SavedTheme = {
 
 export type SystemView = SystemListing & {
   readonly source: SystemSourceView;
-  readonly versions: readonly Omit<SystemVersionSummary, "warnings">[];
+  /** Each version, with the brainstorms that build with it. */
+  readonly versions: readonly (Omit<SystemVersionSummary, "warnings"> & {
+    readonly sessions: readonly { readonly id: SessionId; readonly title: string }[];
+    /** Components it exports that the version before didn't, and ones it dropped. */
+    readonly added: readonly string[];
+    readonly removed: readonly string[];
+  })[];
   /** The latest version's manifest, without its story sources. */
   readonly manifest: Omit<SystemManifest, "storyFiles"> | null;
   readonly themes: readonly SavedTheme[];
@@ -769,6 +777,8 @@ export type ProposedView = {
   readonly promotion: (PromotionState & { readonly at: string }) | null;
   /** The newest version of the system that exports a component by this name, or null. */
   readonly inSystem: SystemVersionN | null;
+  /** The session's version exports it, so blocks that import it get the kit's component, untagged. */
+  readonly fromKit: boolean;
 };
 
 export type SessionSystemView = {
@@ -785,6 +795,8 @@ export type SessionSystemView = {
   readonly proposed: readonly ProposedView[];
   /** Whether a T3 project is known for the system's source, so Promote can start a thread there. */
   readonly canPromote: boolean;
+  /** What the newest version changes against the session's, by exported component name; empty when they're the same. */
+  readonly upgrade: { readonly added: readonly string[]; readonly removed: readonly string[] };
 };
 
 export type ThemeExport = { readonly css: ExportResult; readonly json: ExportResult };

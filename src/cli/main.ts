@@ -325,7 +325,8 @@ const versionLine = (s: SystemListing) =>
 
 function syncLines({ system, created, warnings }: SyncOutcome, verb: string): string[] {
   return [
-    ...warnings.map(issueLine),
+    // Files read best from the library's root, as its author knows them.
+    ...warnings.map((w) => issueLine(w.file === null ? w : { ...w, file: relative(system.root, w.file).split(sep).join("/") })),
     created ? `${verb} ${system.id} "${system.name}" ${versionLine(system)}` : `nothing changed; ${system.id} is still ${versionLine(system)}`,
   ];
 }

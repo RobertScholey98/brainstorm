@@ -168,22 +168,26 @@ export default function Chores() {
   }, 120_000);
 
   test("a proposed component is held to the kit's classes and scales", async () => {
-    const offScale = { "proposed/ChoreList/component.tsx": choreListTsx.replace('className="chore-list"', 'className="chore-list fancy-rows"'), "proposed/ChoreList/component.json": choreListJson, "proposed/ChoreList/component.css": ".chore-list { padding: 13px; gap: var(--made-up); }\n" };
+    const offScale = { "proposed/ChoreList/component.tsx": choreListTsx.replace('className="chore-list"', 'className="chore-list fancy-rows"'), "proposed/ChoreList/component.json": choreListJson, "proposed/ChoreList/component.css": ".chore-list { padding: 13px; border-radius: 8px; margin: calc(var(--spacing) * 3.25); gap: var(--made-up); }\n" };
     const bad = await service.commit({ session: S, thread: T1, files: copy(1, usesProposed, offScale), addresses: [], note: null });
     const issues = bad.ok ? [] : bad.error.code === "validation_failed" ? bad.error.issues : [];
-    expect(issues.map((i) => [i.code, i.file])).toEqual([
-      ["unknown_class", "proposed/ChoreList/component.tsx"],
-      ["off_scale_value", "proposed/ChoreList/component.css"],
-      ["off_scale_value", "proposed/ChoreList/component.css"],
+    expect(issues.map((i) => [i.code, i.message.split(";")[0]])).toEqual([
+      ["unknown_class", expect.stringContaining("fancy-rows")],
+      // A literal where the kit reads a token would miss a theme tweak, and a promoted copy would carry the pixels.
+      ["untokened_value", "padding: 13px doesn't follow the theme"],
+      ["untokened_value", "border-radius: 8px doesn't follow the theme"],
+      ["off_scale_value", "margin: calc(var(--spacing) * 3.25) is off the kit's spacing scale (13px)"],
+      ["off_scale_value", "gap reads --made-up, which the kit doesn't define"],
     ]);
-    expect(issues[1]?.message).toMatch(/^padding: 13px is off the kit's spacing scale; use 12px, the nearest the kit uses, or another of /);
+    expect(issues[2]?.message).toBe("border-radius: 8px doesn't follow the theme; write var(--radius), which is 8px in the kit");
+    expect(issues[3]?.message).toMatch(/; use 12px, the nearest the kit uses, or another of /);
 
-    const good = { ...offScale, "proposed/ChoreList/component.tsx": choreListTsx, "proposed/ChoreList/component.css": ".chore-list { display: flex; flex-direction: column; gap: 8px; }\n" };
+    const good = { ...offScale, "proposed/ChoreList/component.tsx": choreListTsx, "proposed/ChoreList/component.css": ".chore-list { display: flex; flex-direction: column; gap: calc(var(--spacing) * 2); border-radius: var(--radius); }\n" };
     data(await service.commit({ session: S, thread: T1, files: copy(1, usesProposed, good), addresses: [], note: null }));
     const view = data(await service.view(S));
     expect(view.iteration?.proposed.map((p) => [p.name, p.title, p.usedBy])).toEqual([["ChoreList", "Chore list", ["home/a"]]]);
     expect(view.system?.proposed).toEqual([
-      { name: "ChoreList", title: "Chore list", description: "The week's chores, one row each", usedBy: ["home/a"], promotion: null, inSystem: null },
+      { name: "ChoreList", title: "Chore list", description: "The week's chores, one row each", usedBy: ["home/a"], promotion: null, inSystem: null, fromKit: false },
     ]);
   }, 120_000);
 
@@ -209,6 +213,8 @@ export default function Chores() {
     expect(started?.project).toBe("proj-a");
     expect(started?.message.split("\n")[0]).toBe(`[brainstorm] promote ChoreList from session ${S} ("Chores")`);
     expect(started?.message).toContain(choreListTsx.trimEnd());
+    // The library has no Text of its own, so the thread is told it was a stand-in rather than left to import it.
+    expect(started?.message).toContain("- Text is a layout primitive Brainstorm generated because the library has none.");
     expect(data(await service.view(S)).system?.proposed[0]?.promotion).toMatchObject({ state: "started", link: `https://app.t3.codes/threads/p/${started?.thread}` });
   }, 120_000);
 
@@ -225,8 +231,12 @@ export default function Chores() {
     expect(heard).toEqual([S]);
     const before = data(await service.view(S)).system;
     expect([before?.n, before?.latest, before?.proposed[0]?.inSystem]).toEqual([1, 2, 2]);
+    // The upgrade says what it brings, so Rob can tell why it's worth taking.
+    expect(before?.upgrade).toEqual({ added: ["ChoreList"], removed: [] });
     data(await service.act(S, { kind: "upgrade_system" }));
-    expect(data(await service.view(S)).system?.n).toBe(2);
+    const upgraded = data(await service.view(S)).system;
+    // The kit exports ChoreList now, so the blocks that import proposed/ChoreList get the kit's, untagged.
+    expect([upgraded?.n, upgraded?.proposed[0]?.fromKit]).toEqual([2, true]);
 
     // Version 3 drops Card, which it does use.
     writeFileSync(join(lib, "src/index.ts"), 'export { Button } from "./Button";\nexport { CardBody, CardTitle } from "./Card";\n');
@@ -234,6 +244,13 @@ export default function Chores() {
     const refused = await service.act(S, { kind: "upgrade_system" });
     expect(refused.ok ? null : refused.error.message).toBe("version 3 breaks this design in 2 places, so the session stays on version 2");
     expect(data(await service.view(S)).system?.n).toBe(2);
+    // Each version lists what it changed and which brainstorms sit on it.
+    const versions = data(service.systems.view(system)).versions.map((v) => ({ n: v.n, added: v.added, removed: v.removed, sessions: v.sessions.map((s) => s.id) }));
+    expect(versions).toEqual([
+      { n: 3, added: [], removed: ["Card", "ChoreList"], sessions: [] },
+      { n: 2, added: ["ChoreList"], removed: [], sessions: [S] },
+      { n: 1, added: [], removed: [], sessions: [] },
+    ]);
   }, 240_000);
 
   test("a freeform session refuses proposed components", async () => {

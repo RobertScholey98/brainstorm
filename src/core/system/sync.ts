@@ -69,7 +69,7 @@ export async function syncSystem(source: SystemSource, checker: Checker): Promis
     return htmls.length > 0 && !readsColorToken(htmls.flatMap(htmlClasses), rules) && !htmls.some((h) => /style="[^"]*var\(--/.test(h));
   });
   for (const entry of unthemed) {
-    warnings.push(issue("theme_ignored", `${entry.name}'s stories read no colour token, so a theme change won't reach it`, { file: source.entry }));
+    warnings.push(issue("theme_ignored", `${entry.name}'s stories render nothing that reads a colour token, so a theme change reaches it only through the colour it inherits; check it in the gallery under each theme`, { file: source.entry }));
   }
 
   const storyless = catalog.filter((e) => e.stories.length === 0 && !e.generated).map((e) => e.name);

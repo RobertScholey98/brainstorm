@@ -22,6 +22,7 @@ import {
   type ThreadId,
 } from "./types";
 import type { SystemDocs } from "./workingCopy";
+import type { SystemManifest } from "./system/model";
 
 const ok = <T>(data: T): Result<T> => ({ ok: true, data });
 const fail = (error: Failure): { ok: false; error: Failure } => ({ ok: false, error });
@@ -82,10 +83,16 @@ export class Systems {
     return ok({
       ...this.#listing(s),
       source: { root: s.source.root, entry: s.source.entry, css: s.source.css, stories: s.source.stories, frame: s.source.frame, stubs: s.source.stubs },
-      versions: this.#store.systemVersions(id).map((v) => {
-        const { warnings: _w, ...rest } = summary({ ...v, system: id, warnings: [] });
-        return rest;
-      }),
+      versions: (() => {
+        const using = this.#store.sessionsByVersion(id);
+        const all = this.#store.systemVersions(id);
+        return all.map((v) => {
+          const { warnings: _w, ...rest } = summary({ ...v, system: id, warnings: [] });
+          const before = all.find((o) => o.n === v.n - 1);
+          const changes = before === undefined ? { added: [], removed: [] } : componentChanges(before.manifest, v.manifest);
+          return { ...rest, sessions: using.get(v.n) ?? [], ...changes };
+        });
+      })(),
       manifest: latest === null ? null : (manifest as NonNullable<SystemView["manifest"]>),
       themes: this.#store.themes(id),
     });
@@ -196,7 +203,17 @@ export class Systems {
     const files = this.#store.kitFiles(ref.id, ref.n);
     const v = this.version(ref);
     if (files === null) throw new Error(`design system ${ref.id} has no version ${ref.n}`);
-    const others = Object.fromEntries(Object.entries(proposed).filter(([spec]) => spec !== exclude));
+    // Once the version exports a component by a proposed one's name, `proposed/<Name>` is the kit's, as on the canvas.
+    const exported = new Set(v.manifest.exports.map((e) => e.name));
+    const others = Object.fromEntries(
+      Object.entries(proposed)
+        .filter(([spec]) => spec !== exclude)
+        .map(([spec, source]) => {
+          const name = spec.slice("proposed/".length);
+          return [spec, exported.has(name) ? `export { ${name} as default } from "kit";
+` : source];
+        }),
+    );
     return {
       kit: { hash: v.hash, bundle: files.bundle },
       proposed: others,
@@ -222,4 +239,18 @@ const samePath = (a: string, b: string) => resolve(a).toLowerCase() === resolve(
 function syncFailed(issues: readonly Issue[]): Failure {
   const errors = issues.filter(isError).length;
   return { code: "validation_failed", message: `the design system didn't sync (${errors} error${errors === 1 ? "" : "s"}); nothing was saved`, issues };
+}
+
+/**
+ * The components the library exports in one version and not the other. Exports, not catalog entries: a story keeps its
+ * catalog entry after the component it shows stops being exported.
+ */
+export function componentChanges(
+  before: Pick<SystemManifest, "exports" | "generated">,
+  after: Pick<SystemManifest, "exports" | "generated">,
+): { added: string[]; removed: string[] } {
+  const own = (m: Pick<SystemManifest, "exports" | "generated">) =>
+    new Set(m.exports.filter((e) => e.type === "component" && !m.generated.includes(e.name)).map((e) => e.name));
+  const [a, b] = [own(before), own(after)];
+  return { added: [...b].filter((n) => !a.has(n)).sort(), removed: [...a].filter((n) => !b.has(n)).sort() };
 }

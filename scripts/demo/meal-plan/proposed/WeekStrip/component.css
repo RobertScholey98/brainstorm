@@ -1,7 +1,7 @@
 .week-strip {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: calc(var(--spacing) * 1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -10,10 +10,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 8px 0;
+  gap: calc(var(--spacing) * 0.5);
+  padding: calc(var(--spacing) * 2) 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--card);
   color: var(--card-foreground);
 }
@@ -28,7 +28,7 @@
 .week-dot {
   width: 6px;
   height: 6px;
-  border-radius: 6px;
+  border-radius: 50%;
   background: transparent;
 }
 .week-dot[data-planned] {
