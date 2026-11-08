@@ -101,7 +101,7 @@ export default function Wheel({ people, spinSeconds, accent, density }) {
 ```
 
 - It is a default-exported function component that receives `data samples ⊕ appearance defaults ⊕ applicable overrides` as flat props.
-- It may import only `react` (sucrase's automatic runtime adds `react/jsx-runtime`). TypeScript types are stripped, not checked.
+- It may import only `react` (sucrase's automatic runtime adds `react/jsx-runtime`). TypeScript types are stripped, not checked. In a session with a design system it imports `kit` and `proposed/<Name>` too, and writes no HTML tags, `className`, `style` or `block.css`; **Design systems** below says how.
 - It must render without throwing under the render probe with defaults, and again with Rob's applicable overrides. No `window` or `document` during render, but effects are fine.
 - It marks meaningful elements with `data-part`, unique within the block's render. The host wraps the block in `<div data-bid="<slot>/<variant>" style="display:contents">`, so blocks never write `data-bid`.
 
@@ -186,6 +186,16 @@ Handle with the use-brainstorm skill: this thread is new, so run `brainstorm ses
 
 When the app runs on a home other than the default, a third line names `BRAINSTORM_HOME`, since T3 starts agents with its own environment.
 
+### Design systems
+
+ADR 007 in `docs/design-system/` records the decision and what the build changed. In short:
+
+- `brainstorm system add <package folder> [--thread <id>]` syncs a React library: `src/core/system/source.ts` finds its entry, CSS and Storybook stories; `build.ts` bundles it with esbuild-wasm (React external) and compiles its Tailwind v4 CSS; `sync.ts` renders each story in the check sandbox and records warnings; `css.ts` reads the tokens, theme axes and the values the kit uses. A version is immutable and content-hashed, and a sync that changes nothing makes none. `--thread` names the T3 project that holds the library, which Promote needs.
+- `primitives.ts` adds `Box`, `Stack`, `Grid`, `Text` and `Heading` on the kit's scales when the library has none. `catalog.ts` writes `system/CATALOG.md`, which `pull` puts in the working copy with the story sources.
+- `session new --system <id|name>` pins the session to the system's latest version. `conform.ts` holds blocks to composition and proposed components (`proposed/<Name>/component.{tsx,json,css}`) to the kit's classes and values. Upgrade re-checks everything against a newer version and refuses one that breaks a block.
+- The canvas loads the kit's bundle and CSS (`@layer kit`), the session's proposed components and its theme before any block, and tags each proposed component "not in system". The Inspector's Design system section edits the session's theme, saves it to the system, exports it as CSS and DTCG tokens, offers the upgrade, and promotes a proposed component through a new T3 thread on the library's project.
+- `scripts/capture/systems.mjs --library <package folder> --round <n>` drives all of this end to end and writes a shot per step to `design-review/systems/round-<n>/`.
+
 ## Storage (`node:sqlite`, `PRAGMA user_version` migrations)
 
 ```sql
@@ -224,6 +234,8 @@ fork(session_id TEXT PRIMARY KEY REFERENCES session, parent_id TEXT NOT NULL REF
 variant_seen(session_id TEXT NOT NULL REFERENCES session, block_id TEXT NOT NULL,
         PRIMARY KEY(session_id, block_id))                                       -- migration 6; seeded with every block that existed
 ```
+
+Migration 7 adds the design system tables (`design_system`, `design_system_version`, `design_system_theme`, `session_theme`, `proposed_content`, `iteration_proposed`, `promotion`) and `session.system_id` and `system_n`; ADR 007's **Data** lists their columns.
 
 A fork is a session like any other, plus its `fork` row. `createFork` writes the session, the `fork` row, its iteration 1 (the source iteration narrowed to one variant per slot, with Rob's settings baked into the picked variants' `block.json` defaults and re-checked), his open pins on those variants as new feedback numbered from 1, and request 1, all in one transaction, attached to the sentinel thread `pending:<sessionId>`. The sentinel fails the thread-id pattern, so the bridge refuses to send to it or show it, and the attachment invariant holds while no thread exists yet. An iteration's origin is derived, never stored: the request it fulfilled, a fork's iteration 1, a root's iteration 1 from the brief, or else the agent's own commit and its note. A block is new while it first appeared after iteration 1 and has no `variant_seen` row.
 

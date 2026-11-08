@@ -132,6 +132,7 @@ A session made with `--system` builds only with that design system, so every des
 - A block writes no HTML tags, no `className` or `style`, and no `block.css`. Pins need a `data-part`; pass it to the kit's primitives, which forward `data-*` props.
 - When the kit has nothing that fits, write a proposed component in `proposed/<Name>/`: `component.tsx` (default export), `component.json` (`{ "title", "description", "example" }`) and an optional `component.css`. A block imports it as `import ChoreList from "proposed/ChoreList"`. Rob sees it labelled "not in system" and can promote it into the library.
 - A proposed component may write HTML, but only with classes the kit's CSS defines, and in `component.css` only the kit's token variables and the values the catalog lists. Prefer the kit's components inside it.
+- Once the kit exports a component by a proposed component's name, after Rob upgrades the session to that version, import it from `"kit"` and delete the proposed folder.
 
 | Code | What to do |
 | --- | --- |

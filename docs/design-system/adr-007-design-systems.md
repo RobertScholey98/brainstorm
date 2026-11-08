@@ -1,6 +1,6 @@
 # ADR 007: Design systems
 
-Status: proposed. Rob asked for it on 2026-11-08: "create designs that exclusively use the design systems already in place", so a design "can simply be built from existing components". Rob settled the questions below in the same conversation. Nothing here is built yet.
+Status: accepted and built. Rob asked for it on 2026-11-08: "create designs that exclusively use the design systems already in place", so a design "can simply be built from existing components". Rob settled the questions below in the same conversation. **As built** at the end records where the build departs from this design and why.
 
 ## Context
 
@@ -81,15 +81,20 @@ The value check can't judge layout intent. A proposed component can use `justify
 
 ## Data
 
+Store migration 7 (`src/core/store.ts`):
+
 ```
-design_system          id, name, source (projectPath, entry, storiesGlob, stubs, frame)
-design_system_version  systemId, n, hash, bundle, css, tokens, measured, catalog, syncedAt
-design_system_theme    systemId, name, tokens
-session                + systemVersion (nullable, set at creation, changed only by upgrade)
-theme_override         sessionId, token -> value
+design_system          id, name, source_json (root, entry, css, stories, stubs, frame), project_id
+design_system_version  system_id, n, hash, bundle, css, manifest_json (catalog, stories, styles), warnings_json, synced_at
+design_system_theme    system_id, name, state_json (axes, tokens)
+session                + system_id, system_n (null for a freeform session; set at creation, changed only by upgrade)
+session_theme          session_id, key ("axis:<attribute>" or "token:<name>") -> value
+proposed_content       hash -> source, css, json, compiled
+iteration_proposed     session_id, n, name -> hash
+promotion              session_id, name -> state, thread_id, link, error, at
 ```
 
-Proposed components are files of an iteration, alongside its blocks, so history, fork and vary carry them without new rules.
+Proposed components are content-addressed files of an iteration, alongside its blocks, so history, fork and vary carry them without new rules.
 
 ## Alternatives not taken
 
@@ -107,3 +112,36 @@ Proposed components are files of an iteration, alongside its blocks, so history,
 4. Proposed components, the measured-value check and Promote.
 
 The riskiest unknown is step 2: whether a real library renders offline in the sandbox with its providers stubbed. Prototype it against one of Rob's libraries before building the rest.
+
+## As built
+
+Built on 2026-11-08 and checked end to end against robnet's `packages/ui` (72 components, 73 stories) with
+`scripts/capture/systems.mjs`. Where the build departs from the decision above:
+
+- **No per-OS binaries.** Sync bundles with esbuild-wasm and compiles Tailwind v4 with its pure-JS compiler, so the app
+  ships no native tools. Tailwind's scanner is replaced by a word scan of the library's sources; it keeps words with
+  parentheses and commas, such as `py-(--card-spacing)`, which shadcn's v4 components write.
+- **Checks are static, and story failures warn.** A story that throws in the sandbox is a warning (`story_failed`), not
+  a refused version, because one broken story shouldn't hold back a library's other 72 components. "Every component
+  changes with the theme" is a static check of the CSS each story's classes reach (`theme_ignored`), and the measured
+  values come from the kit's compiled CSS rather than from rendered computed styles. The compiled CSS holds every value
+  the kit's classes can produce, and reading it needs no browser in the sync.
+- **Proposed components are checked statically.** The commit check allows a proposed component's `className` only
+  classes the kit's CSS or its own `component.css` defines, and checks every value in `component.css` against the kit's
+  tokens and measured scales. The error names the value and the nearest one the kit uses ("padding: 9px is off the kit's
+  spacing scale; use 8px, the nearest the kit uses"). `component.css` is served wrapped in `@scope ([data-proposed]) `.
+- **Theme controls live in the Inspector.** The session's theme has axes (attributes such as `data-theme` and
+  `data-accent` that the library's CSS switches on) and token overrides. The Inspector's Design system section holds both;
+  the canvas bar stays about slots and variants. An axis with up to three values is a segmented control and one with more
+  is a select. Tokens are text fields with a colour swatch, folded into Colours and Sizes and type lists that keep any
+  token this session changed in view, since a library's 40-odd tokens would otherwise bury the rest of the Inspector.
+- **The kit's CSS sits under the app's.** The canvas loads the kit's CSS inside `@layer kit`, so its preflight and
+  utilities can't restyle the frames, pins and labels the canvas draws around blocks. The theme is set on the canvas
+  document's root as attributes, classes and custom properties.
+- **The "not in system" tag** is drawn with CSS anchor positioning on the proposed component's root element, since the
+  component's wrapper is `display: contents` and has no box to hang it on.
+- **A new version reaches open sessions.** A sync that creates a version notifies every session on the system, so an open
+  Inspector offers the upgrade at once. After an upgrade, a proposed component the kit now exports says to regenerate,
+  rather than offering Promote again.
+- **Promote** starts the thread with `t3 thread start`, then reads the thread once to keep its link for the Inspector's
+  Open thread.
