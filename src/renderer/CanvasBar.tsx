@@ -32,7 +32,6 @@ export function CanvasBar({
   onSlot,
   onView,
   onCancelPick,
-  pickHint,
   trailing,
 }: {
   slots: readonly SlotView[];
@@ -45,8 +44,6 @@ export function CanvasBar({
   onSlot: (slot: SlotId) => void;
   onView: (view: CanvasLayout["view"]) => void;
   onCancelPick: () => void;
-  /** What the pick hint says, when it isn't this window's canvas that takes the pick. */
-  pickHint?: string;
   /** How the canvas is shown beyond this window, at the bar's right end: present, and the preview window. */
   trailing?: ReactNode;
 }) {
@@ -87,13 +84,13 @@ export function CanvasBar({
       <div className="flex flex-1 items-center justify-end gap-2 pl-2">
         {/* The hint's room is kept while no pick is on, unseen, so the controls after it never move when one starts. */}
         <span
-          className={cn("flex min-w-0 flex-1 items-center gap-2 text-sm text-fg-muted", picking === null && "invisible")}
+          className={cn("flex min-w-0 flex-1 items-center gap-1.5 text-sm text-fg-muted", picking === null && "invisible")}
           {...(picking === null ? { "aria-hidden": true, inert: true } : { role: "status", "data-pick-hint": "" })}
         >
           {/* A pointer glyph in the accent, and the words at full strength, so the hint reads as a mode, not a slot tab. */}
-          <span className="flex w-0 flex-1 items-center justify-end gap-1.5 text-fg" data-bar-hint>
-            <MousePointer2 aria-hidden className="size-3.5 shrink-0 text-accent" />
-            <Truncate className="min-w-0">{pickHint ?? (picking === "vary" ? PICK_HINTS.vary : PICK_HINTS.comment)}</Truncate>
+          <span className="flex w-0 flex-1 items-center justify-end gap-1 text-fg" data-bar-hint>
+            <MousePointer2 aria-hidden className="size-3 shrink-0 text-accent" />
+            <Truncate className="min-w-0">{picking === "vary" ? PICK_HINTS.vary : PICK_HINTS.comment}</Truncate>
           </span>
           <Hint label="Stop picking" shortcut="Esc" side="bottom">
             <Button variant="ghost" onClick={onCancelPick}>

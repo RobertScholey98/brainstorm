@@ -143,6 +143,11 @@ try {
     await window.evaluate(() => [document.querySelector("[data-hold]")?.innerText.trim(), document.querySelector("[data-preview-menu]")?.innerText.replace(/\s+/g, " ").trim()]),
     ["Hold", "Preview Clean"],
   );
+  check(
+    "and Present keeps its word too: the feature the bar ends on is named",
+    await window.evaluate(() => document.querySelector("[data-present]")?.innerText.trim()),
+    "Present",
+  );
   await snap(window, "07-main-window-open", "The main window while the preview window is open: Hold preview and a Preview menu button grow in to the left of Present, which keeps its place at the canvas bar's right end");
   await window.hover("[data-hold]");
   await window.waitForSelector("[data-slot=tooltip-content], [role=tooltip]", { timeout: 3000 }).catch(() => {});
@@ -198,7 +203,7 @@ try {
   await mirror.waitForSelector("html:not([data-present])");
   await settled(() => showing(mirror));
   await preview.mouse.move(640, 790);
-  await snap(preview, "11-preview-working", "The preview window, Working look: the same canvas bar as the main window (slot tabs, view switch), then Not for sharing (amber eye-off and amber text) with Switch to Clean, and Pin comment at its right, over the canvas drawn as the main window draws it");
+  await snap(preview, "11-preview-working", "The preview window, Working look: the same canvas bar as the main window (slot tabs, view switch), then Not for sharing (amber eye-off and amber text) with Switch to Clean in the same warning tone, and Pin comment at its right, over the canvas drawn as the main window draws it");
   await window.click("[data-hold]");
   await preview.waitForSelector("[data-held-bar]");
   await preview.mouse.move(640, 790);
@@ -256,8 +261,8 @@ try {
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
   check("a pick started here while the canvas is away waits in the preview window", [await window.textContent("[data-canvas-away] [data-slot=empty-title]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")], ["Click an element in the preview window", "Press Esc or Cancel to stop."]);
-  check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Click in previewCancel");
-  await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's hint reads Click in preview, with Cancel, and the region's title says to click an element there");
+  check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Click to pinCancel");
+  await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's hint reads Click to pin, with Cancel, and the region's title says to click an element there");
   await window.keyboard.press("Escape");
 
   // A clean preview window can't take a pick, so with the canvas away the main window says so and offers a way on.

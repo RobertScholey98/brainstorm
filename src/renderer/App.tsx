@@ -41,7 +41,6 @@ import { CanvasHost, type FeedbackCue, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { Filmstrip, FilmstripSkeleton, PastBar } from "./History";
 import { HeldBar } from "./HeldBar";
-import { PICK_HINTS } from "./headerAction";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
 import { fitPanes, usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
@@ -750,7 +749,6 @@ function SessionWorkspace({
             onSlot={setSelectedSlot}
             onView={setCanvasView}
             onCancelPick={() => setInteraction({ kind: "view" })}
-            {...(away ? { pickHint: PICK_HINTS.away } : {})}
             trailing={
               <PresentControls
                 onPresent={present}

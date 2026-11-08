@@ -136,7 +136,7 @@ export function PreviewWindow({ api }: { api: Api }) {
                   Not for sharing
                 </span>
                 <Hint label="Show only the design in this window, as an audience should see it" side="bottom">
-                  <Button variant="outline" onClick={() => tell({ kind: "clean" })} data-preview-to-clean>
+                  <Button variant="caution" data-warn onClick={() => tell({ kind: "clean" })} data-preview-to-clean>
                     Switch to Clean
                   </Button>
                 </Hint>

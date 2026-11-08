@@ -74,17 +74,18 @@ const rowFits = (row: HTMLElement): boolean => {
 };
 
 /**
- * The order the canvas bar's right end gives up its labels when the bar runs short: Present goes to its icon, Hold
- * preview shortens to Hold, then the preview menu drops "Preview", then Hold goes to its icon. The menu's look and chevron never go: whether a shared
+ * The order the canvas bar's right end gives up its labels when the bar runs short: Hold preview shortens to Hold, then
+ * Present goes to its icon, then the preview menu drops "Preview", then Hold goes to its icon. Present is the feature the
+ * bar ends on, and its bare glyph would read as full-screening the shared window, so it keeps its word past Hold's. The menu's look and chevron never go: whether a shared
  * window is Clean is what Rob checks before he shares it.
  */
-export const BAR_COLLAPSE = { present: 0, holdSuffix: 1, preview: 2, hold: 3 } as const;
+export const BAR_COLLAPSE = { holdSuffix: 0, present: 1, preview: 2, hold: 3 } as const;
 
 /**
  * The bar sets aside the room its longest pick hint needs, picking or not, here or away, so the labels depend on the
  * bar's width alone and nothing in it moves when a pick starts or the canvas leaves for the preview window.
  */
-export const PICK_HINTS = { comment: "Click to pin", vary: "Click to vary", away: "Click in preview" } as const;
+export const PICK_HINTS = { comment: "Click to pin", vary: "Click to vary" } as const;
 let ruler: CanvasRenderingContext2D | null = null;
 const barFits = (bar: HTMLElement): boolean => {
   const hint = bar.querySelector("[data-bar-hint]");
