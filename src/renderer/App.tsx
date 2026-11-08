@@ -944,7 +944,7 @@ function CanvasAway({
             {stuck !== null
               ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience. Show the canvas here to ${act === "pin" ? "pin" : "vary an element"}, or switch the preview to Working (not for sharing).`
               : picking
-                ? "Click an element there. Esc or Cancel stops picking here."
+                ? "Click an element in the preview window. Press Esc or Cancel to stop."
                 : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
           </EmptyDescription>
         </EmptyHeader>
@@ -954,7 +954,8 @@ function CanvasAway({
               <Button variant="accent" onClick={onHere} data-away-here>
                 {act === "pin" ? "Show here and pin" : "Show here and vary"}
               </Button>
-              <Button variant="outline" onClick={onWorking} data-away-working>
+              {/* The way that shows the audience Rob's tools, so it carries the Working look's warning tone. */}
+              <Button variant="caution" data-warn onClick={onWorking} data-away-working>
                 Switch preview to Working
               </Button>
               <Button variant="ghost" onClick={onDismiss} data-away-dismiss>
