@@ -12,6 +12,12 @@ import type {
   Override,
   PartName,
   Pin,
+  PromotionState,
+  ProposedFiles,
+  ProposedName,
+  SavedTheme,
+  SystemId,
+  SystemVersionN,
   ProjectId,
   PropName,
   Request,
@@ -25,7 +31,10 @@ import type {
   SlotManifest,
   ThreadId,
   VariantKey,
+  Issue,
 } from "./types";
+import type { SystemManifest } from "./system/model";
+import type { SystemSource } from "./system/source";
 import { contentHash } from "./workingCopy";
 
 /** A step is SQL, or code for a change SQL can't express, such as recomputing content hashes. */
@@ -71,6 +80,25 @@ const MIGRATIONS: readonly Migration[] = [
   CREATE INDEX fork_parent ON fork(parent_id);
   CREATE TABLE variant_seen(session_id TEXT NOT NULL REFERENCES session, block_id TEXT NOT NULL, PRIMARY KEY(session_id, block_id));
   INSERT INTO variant_seen(session_id, block_id) SELECT DISTINCT session_id, block_id FROM iteration_block;
+  `,
+  // Design systems (ADR 007). A version is immutable; a session holds one, and moves only by Rob's upgrade.
+  `
+  CREATE TABLE design_system(id TEXT PRIMARY KEY, name TEXT NOT NULL, source_json TEXT NOT NULL, project_id TEXT,
+    created_at TEXT NOT NULL);
+  CREATE TABLE design_system_version(system_id TEXT NOT NULL REFERENCES design_system, n INTEGER NOT NULL, hash TEXT NOT NULL,
+    bundle TEXT NOT NULL, css TEXT NOT NULL, manifest_json TEXT NOT NULL, warnings_json TEXT NOT NULL, synced_at TEXT NOT NULL,
+    PRIMARY KEY(system_id, n));
+  CREATE TABLE design_system_theme(system_id TEXT NOT NULL REFERENCES design_system, name TEXT NOT NULL, axes_json TEXT NOT NULL,
+    tokens_json TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(system_id, name));
+  ALTER TABLE session ADD COLUMN system_id TEXT;
+  ALTER TABLE session ADD COLUMN system_n INTEGER;
+  CREATE TABLE session_theme(session_id TEXT NOT NULL REFERENCES session, key TEXT NOT NULL, value TEXT NOT NULL,
+    set_at TEXT NOT NULL, PRIMARY KEY(session_id, key));
+  CREATE TABLE proposed_content(hash TEXT PRIMARY KEY, source TEXT NOT NULL, css TEXT, json TEXT NOT NULL, compiled TEXT NOT NULL);
+  CREATE TABLE iteration_proposed(session_id TEXT NOT NULL, n INTEGER NOT NULL, name TEXT NOT NULL,
+    hash TEXT NOT NULL REFERENCES proposed_content, PRIMARY KEY(session_id, n, name));
+  CREATE TABLE promotion(session_id TEXT NOT NULL REFERENCES session, name TEXT NOT NULL, state TEXT NOT NULL,
+    thread_id TEXT, error TEXT, at TEXT NOT NULL, PRIMARY KEY(session_id, name));
   `,
 ];
 
@@ -122,6 +150,33 @@ export type StoredIteration = {
 
 export type IterationBlock = { readonly id: BlockId; readonly hash: ContentHash };
 
+export type IterationProposed = { readonly name: ProposedName; readonly hash: ContentHash };
+
+export type StoredProposedContent = { readonly hash: ContentHash; readonly files: ProposedFiles; readonly compiled: string };
+
+export type StoredSystem = {
+  readonly id: SystemId;
+  readonly name: string;
+  readonly source: SystemSource;
+  /** The T3 project its source belongs to, when Brainstorm knows it, so Promote can start a thread there. */
+  readonly projectId: ProjectId | null;
+  readonly createdAt: string;
+};
+
+export type StoredSystemVersion = {
+  readonly system: SystemId;
+  readonly n: SystemVersionN;
+  readonly hash: string;
+  readonly manifest: SystemManifest;
+  readonly warnings: readonly Issue[];
+  readonly syncedAt: string;
+};
+
+/** A session's design system version, or null for a freeform session. */
+export type SessionSystem = { readonly id: SystemId; readonly n: SystemVersionN };
+
+export type StoredPromotion = PromotionState & { readonly name: ProposedName; readonly at: string };
+
 /** A feedback row with its event log; the service folds the status. */
 export type FeedbackRecord = {
   readonly id: FeedbackId;
@@ -157,8 +212,12 @@ export type NewFork = {
   readonly iteration: StoredIteration;
   readonly blocks: readonly IterationBlock[];
   readonly contents: readonly StoredContent[];
+  readonly proposed: readonly IterationProposed[];
   readonly feedback: readonly { readonly pin: Pin; readonly text: string }[];
   readonly request: { readonly body: RequestBody; readonly at: string };
+  /** The parent's design system version and theme, which the fork keeps. */
+  readonly system: SessionSystem | null;
+  readonly theme: readonly { readonly key: string; readonly value: string }[];
 };
 
 /**
@@ -235,6 +294,23 @@ const toEvent = (r: Row): FeedbackEvent => {
   const at = str(r.at);
   return kind === "address" ? { kind, iteration: num(r.iteration) as IterationN, at } : { kind, at };
 };
+
+const toSystem = (r: Row): StoredSystem => ({
+  id: str(r.id) as SystemId,
+  name: str(r.name),
+  source: JSON.parse(str(r.source_json)) as SystemSource,
+  projectId: r.project_id === null ? null : (str(r.project_id) as ProjectId),
+  createdAt: str(r.created_at),
+});
+
+const toSystemVersion = (r: Row): StoredSystemVersion => ({
+  system: str(r.system_id) as SystemId,
+  n: num(r.n) as SystemVersionN,
+  hash: str(r.hash),
+  manifest: JSON.parse(str(r.manifest_json)) as SystemManifest,
+  warnings: JSON.parse(str(r.warnings_json)) as Issue[],
+  syncedAt: str(r.synced_at),
+});
 
 /** SQL only. Private to the Brainstorm service, which owns every rule about what may be written. */
 export class Store {
@@ -326,15 +402,17 @@ export class Store {
     this.#run("UPDATE project SET name = ? WHERE id = ?", name, id);
   }
 
-  createSession(session: SessionSummary, thread: ThreadId): void {
+  createSession(session: SessionSummary, thread: ThreadId, system: SessionSystem | null = null): void {
     this.tx(() => {
       this.#run(
-        "INSERT INTO session(id, project_id, title, brief, created_at) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO session(id, project_id, title, brief, created_at, system_id, system_n) VALUES (?, ?, ?, ?, ?, ?, ?)",
         session.id,
         session.projectId,
         session.title,
         session.brief,
         session.createdAt,
+        system?.id ?? null,
+        system?.n ?? null,
       );
       this.#run("INSERT INTO attachment(session_id, thread_id, attached_at) VALUES (?, ?, ?)", session.id, thread, session.createdAt);
     });
@@ -375,7 +453,8 @@ export class Store {
   createFork(input: NewFork, thread: ThreadId): void {
     const { session, fork, iteration } = input;
     this.tx(() => {
-      this.createSession(session, thread);
+      this.createSession(session, thread, input.system);
+      for (const t of input.theme) this.setSessionTheme(session.id, t.key, t.value, fork.createdAt);
       this.#run(
         "INSERT INTO fork(session_id, parent_id, parent_n, baked_json, created_at) VALUES (?, ?, ?, ?, ?)",
         session.id,
@@ -384,7 +463,15 @@ export class Store {
         JSON.stringify(fork.baked),
         fork.createdAt,
       );
-      this.insertIteration({ session: session.id, iteration, blocks: input.blocks, contents: input.contents, addresses: [] });
+      this.insertIteration({
+        session: session.id,
+        iteration,
+        blocks: input.blocks,
+        contents: input.contents,
+        proposed: input.proposed,
+        proposedContents: [],
+        addresses: [],
+      });
       const ids = input.feedback.map((f) => this.insertFeedback(session.id, { pin: f.pin, text: f.text, createdIn: iteration.n, at: fork.createdAt }));
       this.insertRequest(session.id, { body: input.request.body, feedbackIds: ids, base: iteration.n, threadId: thread, at: input.request.at });
     });
@@ -515,10 +602,22 @@ export class Store {
     iteration: StoredIteration;
     blocks: readonly IterationBlock[];
     contents: readonly StoredContent[];
+    proposed: readonly IterationProposed[];
+    proposedContents: readonly StoredProposedContent[];
     addresses: readonly FeedbackId[];
   }): void {
     const { session, iteration } = input;
     this.tx(() => {
+      for (const c of input.proposedContents) {
+        this.#run(
+          "INSERT OR IGNORE INTO proposed_content(hash, source, css, json, compiled) VALUES (?, ?, ?, ?, ?)",
+          c.hash,
+          c.files.tsx,
+          c.files.css,
+          c.files.json,
+          c.compiled,
+        );
+      }
       for (const c of input.contents) {
         this.#run(
           `INSERT OR IGNORE INTO block_content(hash, source, css, block_json, controls_json, controls_derived, compiled, parts_json)
@@ -544,6 +643,9 @@ export class Store {
       );
       for (const b of input.blocks) {
         this.#run("INSERT INTO iteration_block(session_id, n, block_id, hash) VALUES (?, ?, ?, ?)", session, iteration.n, b.id, b.hash);
+      }
+      for (const p of input.proposed) {
+        this.#run("INSERT INTO iteration_proposed(session_id, n, name, hash) VALUES (?, ?, ?, ?)", session, iteration.n, p.name, p.hash);
       }
       for (const id of input.addresses) {
         this.appendFeedbackEvent(session, id, { kind: "address", iteration: iteration.n, at: iteration.createdAt });
@@ -713,5 +815,178 @@ export class Store {
       session,
       n,
     );
+  }
+
+  // --- Design systems (ADR 007) ---------------------------------------------------------------------------------------
+
+  iterationProposed(session: SessionId, n: IterationN): IterationProposed[] {
+    return this.#all("SELECT name, hash FROM iteration_proposed WHERE session_id = ? AND n = ? ORDER BY name", session, n).map((r) => ({
+      name: str(r.name) as ProposedName,
+      hash: str(r.hash) as ContentHash,
+    }));
+  }
+
+  proposedContent(hash: ContentHash): StoredProposedContent {
+    const r = this.#get("SELECT * FROM proposed_content WHERE hash = ?", hash);
+    if (r === undefined) throw new Error(`no proposed content ${hash}`);
+    return { hash, files: { tsx: str(r.source), json: str(r.json), css: strOrNull(r.css) }, compiled: str(r.compiled) };
+  }
+
+  insertSystem(system: StoredSystem): void {
+    this.#run(
+      "INSERT INTO design_system(id, name, source_json, project_id, created_at) VALUES (?, ?, ?, ?, ?)",
+      system.id,
+      system.name,
+      JSON.stringify(system.source),
+      system.projectId,
+      system.createdAt,
+    );
+  }
+
+  updateSystem(id: SystemId, change: { source: SystemSource; name: string; projectId: ProjectId | null }): void {
+    this.#run("UPDATE design_system SET source_json = ?, name = ?, project_id = COALESCE(?, project_id) WHERE id = ?", JSON.stringify(change.source), change.name, change.projectId, id);
+  }
+
+  systems(): StoredSystem[] {
+    return this.#all("SELECT * FROM design_system ORDER BY created_at, id").map(toSystem);
+  }
+
+  system(id: SystemId): StoredSystem | null {
+    const r = this.#get("SELECT * FROM design_system WHERE id = ?", id);
+    return r === undefined ? null : toSystem(r);
+  }
+
+  latestSystemVersion(id: SystemId): StoredSystemVersion | null {
+    const r = this.#get("SELECT system_id, n, hash, manifest_json, warnings_json, synced_at FROM design_system_version WHERE system_id = ? ORDER BY n DESC LIMIT 1", id);
+    return r === undefined ? null : toSystemVersion(r);
+  }
+
+  systemVersion(id: SystemId, n: SystemVersionN): StoredSystemVersion | null {
+    const r = this.#get("SELECT system_id, n, hash, manifest_json, warnings_json, synced_at FROM design_system_version WHERE system_id = ? AND n = ?", id, n);
+    return r === undefined ? null : toSystemVersion(r);
+  }
+
+  /** Every version, newest first, without the bundle, CSS or manifest. */
+  systemVersions(id: SystemId): { n: SystemVersionN; hash: string; syncedAt: string; manifest: SystemManifest }[] {
+    return this.#all("SELECT n, hash, synced_at, manifest_json FROM design_system_version WHERE system_id = ? ORDER BY n DESC", id).map((r) => ({
+      n: num(r.n) as SystemVersionN,
+      hash: str(r.hash),
+      syncedAt: str(r.synced_at),
+      manifest: JSON.parse(str(r.manifest_json)) as SystemManifest,
+    }));
+  }
+
+  kitFiles(id: SystemId, n: SystemVersionN): { bundle: string; css: string } | null {
+    const r = this.#get("SELECT bundle, css FROM design_system_version WHERE system_id = ? AND n = ?", id, n);
+    return r === undefined ? null : { bundle: str(r.bundle), css: str(r.css) };
+  }
+
+  insertSystemVersion(v: StoredSystemVersion & { bundle: string; css: string }): void {
+    this.#run(
+      `INSERT INTO design_system_version(system_id, n, hash, bundle, css, manifest_json, warnings_json, synced_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      v.system,
+      v.n,
+      v.hash,
+      v.bundle,
+      v.css,
+      JSON.stringify(v.manifest),
+      JSON.stringify(v.warnings),
+      v.syncedAt,
+    );
+  }
+
+  sessionsUsing(id: SystemId): number {
+    return num(this.#get("SELECT COUNT(*) AS c FROM session WHERE system_id = ? AND archived_at IS NULL", id)?.c);
+  }
+
+  sessionSystem(session: SessionId): SessionSystem | null {
+    const r = this.#get("SELECT system_id, system_n FROM session WHERE id = ?", session);
+    return r === undefined || r.system_id === null ? null : { id: str(r.system_id) as SystemId, n: num(r.system_n) as SystemVersionN };
+  }
+
+  setSessionSystemVersion(session: SessionId, n: SystemVersionN): void {
+    this.#run("UPDATE session SET system_n = ? WHERE id = ?", n, session);
+  }
+
+  themes(system: SystemId): SavedTheme[] {
+    return this.#all("SELECT * FROM design_system_theme WHERE system_id = ? ORDER BY created_at, name", system).map((r) => ({
+      name: str(r.name),
+      axes: JSON.parse(str(r.axes_json)) as Record<string, string>,
+      tokens: JSON.parse(str(r.tokens_json)) as Record<string, string>,
+      createdAt: str(r.created_at),
+    }));
+  }
+
+  saveTheme(system: SystemId, theme: SavedTheme): void {
+    this.#run(
+      `INSERT INTO design_system_theme(system_id, name, axes_json, tokens_json, created_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(system_id, name) DO UPDATE SET axes_json = excluded.axes_json, tokens_json = excluded.tokens_json, created_at = excluded.created_at`,
+      system,
+      theme.name,
+      JSON.stringify(theme.axes),
+      JSON.stringify(theme.tokens),
+      theme.createdAt,
+    );
+  }
+
+  /** Keys are `axis:<attribute>` and `token:<name>`. */
+  sessionTheme(session: SessionId): { key: string; value: string }[] {
+    return this.#all("SELECT key, value FROM session_theme WHERE session_id = ? ORDER BY key", session).map((r) => ({ key: str(r.key), value: str(r.value) }));
+  }
+
+  setSessionTheme(session: SessionId, key: string, value: string | null, at: string): void {
+    if (value === null) this.#run("DELETE FROM session_theme WHERE session_id = ? AND key = ?", session, key);
+    else {
+      this.#run(
+        "INSERT INTO session_theme(session_id, key, value, set_at) VALUES (?, ?, ?, ?) ON CONFLICT(session_id, key) DO UPDATE SET value = excluded.value, set_at = excluded.set_at",
+        session,
+        key,
+        value,
+        at,
+      );
+    }
+  }
+
+  clearSessionTheme(session: SessionId): void {
+    this.#run("DELETE FROM session_theme WHERE session_id = ?", session);
+  }
+
+  promotions(session: SessionId): StoredPromotion[] {
+    return this.#all("SELECT * FROM promotion WHERE session_id = ? ORDER BY name", session).map((r) => {
+      const base = { name: str(r.name) as ProposedName, at: str(r.at) };
+      const state = str(r.state);
+      return state === "started"
+        ? { ...base, state, thread: str(r.thread_id) as ThreadId }
+        : state === "failed"
+          ? { ...base, state, error: str(r.error) }
+          : { ...base, state: "starting" as const };
+    });
+  }
+
+  setPromotion(session: SessionId, name: ProposedName, state: PromotionState, at: string): void {
+    this.#run(
+      `INSERT INTO promotion(session_id, name, state, thread_id, error, at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(session_id, name) DO UPDATE SET state = excluded.state, thread_id = excluded.thread_id, error = excluded.error, at = excluded.at`,
+      session,
+      name,
+      state.state,
+      state.state === "started" ? state.thread : null,
+      state.state === "failed" ? state.error : null,
+      at,
+    );
+  }
+
+  /** Projects whose stored repo path holds `path`, longest first, to find the T3 project a library lives in. */
+  projectsHolding(path: string): ProjectId[] {
+    const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    const target = norm(path);
+    return this.#all("SELECT id, repo_path FROM project WHERE repo_path IS NOT NULL")
+      .filter((r) => {
+        const root = norm(str(r.repo_path));
+        return target === root || target.startsWith(`${root}/`);
+      })
+      .sort((a, b) => str(b.repo_path).length - str(a.repo_path).length)
+      .map((r) => str(r.id) as ProjectId);
   }
 }

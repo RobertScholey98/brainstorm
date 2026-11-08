@@ -49,5 +49,18 @@ export function failedTitle(action: RobAction | "export" | "list" | "load" | "se
       return "Couldn't withdraw the request";
     case "check_thread":
       return "Couldn't check the thread";
+    case "set_theme_axis":
+    case "set_theme_token":
+    case "clear_theme_token":
+    case "reset_theme":
+      return "Couldn't change the theme";
+    case "apply_theme":
+      return `Couldn't apply the theme "${action.name}"`;
+    case "save_theme":
+      return `Couldn't save the theme "${action.name}"`;
+    case "upgrade_system":
+      return "Couldn't upgrade the design system";
+    case "promote":
+      return `Couldn't promote ${action.name}`;
   }
 }
