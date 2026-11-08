@@ -941,7 +941,7 @@ function CanvasAway({
           </EmptyTitle>
           <EmptyDescription>
             {stuck !== null
-              ? `Your audience sees only the design. Show the canvas here to ${act}. Or switch the preview to Working, which shows your audience your pins and tools.`
+              ? `Clean keeps pins and tools hidden from your audience. Show the canvas here to ${act}, or switch the preview to Working, where your audience would see them too.`
               : picking
                 ? "Esc or Cancel stops picking."
                 : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
