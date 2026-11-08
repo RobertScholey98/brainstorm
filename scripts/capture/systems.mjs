@@ -132,8 +132,8 @@ const meta = {
     days: [
       { day: 'Mon', date: 10, planned: true },
       { day: 'Tue', date: 11, planned: true },
-      { day: 'Wed', date: 12, planned: false },
-      { day: 'Thu', date: 13, planned: true },
+      { day: 'Wed', date: 12, planned: true },
+      { day: 'Thu', date: 13, planned: false },
       { day: 'Fri', date: 14, planned: false },
       { day: 'Sat', date: 15, planned: true },
       { day: 'Sun', date: 16, planned: false },
@@ -183,18 +183,25 @@ try {
   const good = { recipe: readFileSync(recipe, "utf8"), strip: readFileSync(strip, "utf8"), css: readFileSync(css, "utf8") };
   writeFileSync(recipe, good.recipe.replace('<Button data-part="add">{primary}</Button>', '<button className="px-[13px] rounded-[7px] bg-primary" data-part="add">{primary}</button>'));
   writeFileSync(strip, good.strip.replace('<Card data-part="day">', '<Card data-part="day" style={{ marginTop: 13 }}>'));
-  writeFileSync(css, good.css.replace("padding: 8px 0;", "padding: 9px 0;").replace("border-radius: 10px;", "border-radius: 11px;"));
+  writeFileSync(css, good.css.replace("padding: calc(var(--spacing) * 2) 0;", "padding: 9px 0;").replace("border-radius: var(--radius);", "border-radius: 11px;"));
   cli(["commit", session, "--from", work, "--note", "First pass"]);
   writeFileSync(recipe, good.recipe);
   writeFileSync(strip, good.strip);
   writeFileSync(css, good.css);
   cli(["commit", session, "--from", work, "--note", "Two week layouts and a recipe card, all from the kit"]);
+  // A freeform study has no kit to propose against, so it refuses proposed components outright.
+  const sketch = cli(["session", "new", "--title", "Sketch", "--brief", "A loose sketch with no design system."]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
+  if (sketch === undefined) throw new Error(`session new failed:\n${transcript.at(-1)}`);
+  const loose = join(home, "sketch");
+  cli(["pull", sketch, "--out", loose]);
+  cpSync(join(demo, "proposed"), join(loose, "proposed"), { recursive: true });
+  cli(["commit", sketch, "--from", loose, "--note", "Borrow the week strip"]);
   await textShot(
     app,
     "agent-cli",
-    "What the agent sees: adding robnet's UI library, starting a study with it, a commit refused for drifting from the kit, then the fixed commit",
+    "What the agent sees: adding robnet's UI library, starting a study with it, a commit refused for drifting from the kit, the fixed commit, and a freeform study refusing a proposed component",
     transcript.join("\n\n"),
-    "The agent's terminal: system add syncs robnet's packages/ui (72 components, 73 stories, with warnings for stories that read no colour token and the kit's own off-scale values); session new --system; a commit refused for a raw <button> with className, an inline style, and off-scale padding and radius in the proposed component's CSS, each naming the nearest value the kit uses; then the clean commit",
+    "The agent's terminal: system add syncs robnet's packages/ui (72 components, 73 stories, with warnings for stories that read no colour token and the kit's own off-scale values); session new --system; a commit refused for a raw <button> with className, an inline style, and literal padding and radius in the proposed component's CSS, each naming the kit token to write instead so theme tweaks reach it; then the clean commit; last, a freeform session (no --system) refuses a proposed/ folder with invalid_proposed",
   );
 
   // Rob looks at the library in the app.
@@ -204,11 +211,15 @@ try {
   await window.click(`[data-system="${system.id}"]`);
   await window.waitForSelector('[data-gallery="true"]', { timeout: 60_000 });
   await new Promise((r) => setTimeout(r, 2500));
-  await shot(window, "system-gallery", "A design system's Components tab: the catalog down the left, every story rendered live from the synced kit in the gallery, the theme axes (data-theme, data-accent) above it");
+  await shot(window, "system-gallery", "A design system's Components tab: the searchable catalog down the left, every story rendered live from the synced kit in the gallery, the theme axes (data-theme, data-accent) above it");
   await window.click('[data-entry="Card"]');
   await window.waitForSelector('[data-gallery="true"]', { timeout: 60_000 });
   await new Promise((r) => setTimeout(r, 1500));
   await shot(window, "system-gallery-card", "The gallery narrowed to one component, Card, rendering its story from the library");
+  await window.fill("[data-catalog-search]", "st");
+  await window.waitForSelector('[data-entry="Stack"]');
+  await shot(window, "system-catalog-search", "The catalog filtered by 'st': the library's matching components beside Stack, the layout primitive Brainstorm generated because the library has none, marked as Brainstorm's");
+  await window.fill("[data-catalog-search]", "");
   await window.click('[data-system-tab="theme"]');
   await window.waitForSelector("[data-system-theme]");
   await shot(window, "system-theme", "The Theme tab: the library's theme axes and its tokens with their values per axis");
@@ -230,7 +241,7 @@ try {
   await canvas.waitForSelector('div[data-bid="week/strip"] [data-part="strip"]', { timeout: 60_000 });
   await canvas.waitForSelector('div[data-bid="recipe/card"] [data-part="recipe"]', { timeout: 60_000 });
   await settled(() => canvas.$$eval("[data-bid]", (els) => els.map((e) => e.getBoundingClientRect().height)));
-  await shot(window, "session-board", "All slots on the board: two week layouts and the recipe card, each composed from the kit; the WeekStrip the kit lacked carries a 'not in system' tag");
+  await shot(window, "session-board", "All slots on the board, each showing its picked variant: the week slot on its 'strip' variant (the sidebar lists its 'list' variant too) and the recipe card, all composed from the kit; the WeekStrip the kit lacked carries a 'not in system' tag");
   const stripBlock = await canvas.$('div[data-bid="week/strip"] > *');
   await shot(window, "proposed-tag", "Close-up of the week-strip block: the proposed WeekStrip outlined with its 'WeekStrip · not in system' tag, beside kit components", {
     element: stripBlock,
@@ -263,13 +274,18 @@ try {
   await window.waitForSelector("[data-theme-exported]", { timeout: 30_000 });
   await shot(window, "theme-export", "Exporting the session's theme: a CSS file of the overrides and a DTCG tokens file, with the path and Show in folder");
   await window.keyboard.press("Escape");
+  // The Export button keeps focus after the popover closes, and its focus tooltip would cover the next shots.
+  await new Promise((r) => setTimeout(r, 400));
+  await window.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+  await window.keyboard.press("Escape");
+  await new Promise((r) => setTimeout(r, 300));
 
   // Rob promotes the proposed component into the library.
   await window.locator("[data-proposed-list]").scrollIntoViewIfNeeded();
   await window.click('[data-promote="WeekStrip"]');
   await window.waitForSelector('[data-proposed="WeekStrip"][data-promotion="started"]', { timeout: 30_000 });
   await window.locator("[data-proposed-list]").scrollIntoViewIfNeeded();
-  await shot(window, "promote-started", "After Promote: the WeekStrip row says a thread on robnet's project is adding it to the library, with a link to that thread");
+  await shot(window, "promote-started", "After Promote: the WeekStrip row says a thread on robnet's project is adding it to the library, with Open thread, and offers no second Promote while it runs");
   const started = t3.started().at(-1);
   await textShot(
     app,
@@ -292,13 +308,16 @@ try {
   await window.click("[data-system-upgrade]");
   await window.waitForSelector('[data-system-version="2"]', { timeout: 60_000 });
   await window.locator("[data-proposed-list]").scrollIntoViewIfNeeded();
-  await shot(window, "upgraded", "After Upgrade: the brainstorm builds with v2, the theme tweaks kept, and the WeekStrip row says the library has it now");
+  // The kit's WeekStrip replaces the proposed one in place: the block re-renders untagged.
+  await canvas.waitForFunction(() => document.querySelector('div[data-bid="week/strip"] .bs-proposed-tag') === null, null, { timeout: 30_000 });
+  await window.waitForSelector('[data-proposed="WeekStrip"][data-from-kit]');
+  await shot(window, "upgraded", "After Upgrade: the brainstorm builds with v2 and keeps its theme tweaks; the week strip now renders the library's own WeekStrip, untagged, and the Inspector lists WeekStrip under Now in the kit");
   await window.click("[data-back]");
   await window.click("[data-nav-systems]");
   await window.click(`[data-system="${system.id}"]`);
   await window.click('[data-system-tab="versions"]');
   await window.waitForSelector("[data-system-versions]");
-  await shot(window, "system-versions", "The Versions tab: v1 and v2, each with when it was synced and what it holds; the brainstorm using it");
+  await shot(window, "system-versions", "The Versions tab: v1 and v2, each with when it was synced, what it holds, and the brainstorms that build with it");
 } finally {
   restoreLibrary();
   writeFileSync(join(out, "manifest.json"), `${JSON.stringify({ shots: manifest, errors }, null, 2)}\n`);

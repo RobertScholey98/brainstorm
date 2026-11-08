@@ -129,7 +129,10 @@ Built on 2026-11-08 and checked end to end against robnet's `packages/ui` (72 co
 - **Proposed components are checked statically.** The commit check allows a proposed component's `className` only
   classes the kit's CSS or its own `component.css` defines, and checks every value in `component.css` against the kit's
   tokens and measured scales. The error names the value and the nearest one the kit uses ("padding: 9px is off the kit's
-  spacing scale; use 8px, the nearest the kit uses"). `component.css` is served wrapped in `@scope ([data-proposed]) `.
+  spacing scale; use 8px, the nearest the kit uses"). Where the kit has tokens for a family, a value on the scale must
+  still be written through them (`untokened_value`): `calc(var(--spacing) * 2)`, `var(--radius)`, `var(--text-sm)`,
+  so a theme that changes the token changes the proposed component too. A 1px hairline is exempt. `component.css` is
+  served wrapped in `@scope ([data-proposed]) `.
 - **Theme controls live in the Inspector.** The session's theme has axes (attributes such as `data-theme` and
   `data-accent` that the library's CSS switches on) and token overrides. The Inspector's Design system section holds both;
   the canvas bar stays about slots and variants. An axis with up to three values is a segmented control and one with more
@@ -139,9 +142,14 @@ Built on 2026-11-08 and checked end to end against robnet's `packages/ui` (72 co
   utilities can't restyle the frames, pins and labels the canvas draws around blocks. The theme is set on the canvas
   document's root as attributes, classes and custom properties.
 - **The "not in system" tag** is drawn with CSS anchor positioning on the proposed component's root element, since the
-  component's wrapper is `display: contents` and has no box to hang it on.
+  component's wrapper is `display: contents` and has no box to hang it on. It sits on the element's top-right edge and
+  fades while the pointer is over the component, so it never hides the content it labels.
 - **A new version reaches open sessions.** A sync that creates a version notifies every session on the system, so an open
-  Inspector offers the upgrade at once. After an upgrade, a proposed component the kit now exports says to regenerate,
-  rather than offering Promote again.
+  Inspector offers the upgrade at once, naming the components the version adds and removes; the Versions tab lists the
+  same changes per version. The changes are the library's component exports, not catalog entries, since a story keeps
+  its entry after its component stops being exported. After an upgrade, `proposed/<Name>` resolves to the kit's export
+  of that name, in the check and on the canvas, so the blocks use the library's component at once with no tag, and the
+  Inspector lists it under "Now in the kit". A `proposed_in_kit` warning tells the agent to switch the import to `"kit"`.
 - **Promote** starts the thread with `t3 thread start`, then reads the thread once to keep its link for the Inspector's
-  Open thread.
+  Open thread. The message tells the thread that `"kit"` is the library's own entry, and names any layout primitive the
+  component leans on that Brainstorm generated, so the thread writes it rather than importing what the library lacks.
