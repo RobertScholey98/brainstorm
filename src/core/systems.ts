@@ -5,8 +5,8 @@ import { PLAIN_ENV, type CheckEnv, type Checker } from "./check";
 import type { Store, SessionSystem, StoredSystem, StoredSystemVersion } from "./store";
 import { catalogMarkdown } from "./system/catalog";
 import { fingerprint, inputsOf } from "./system/inputs";
-import { importMessage } from "./system/importBrief";
-import { ADAPTER_FILE, detectSource, projectRootOf, tiersOf, type SourceOverrides, type SystemSource } from "./system/source";
+import { importMessage, reviewMessage } from "./system/importBrief";
+import { ADAPTER_FILE, detectSource, projectRootOf, tiersOf, writeAdapterTiers, type SourceOverrides, type SystemSource } from "./system/source";
 import { syncSystem } from "./system/sync";
 import {
   isError,
@@ -17,10 +17,12 @@ import {
   type KitPayload,
   type ProjectId,
   type Result,
+  type ReviewAction,
   type SystemCheck,
   type SystemId,
   type SystemImport,
   type SystemListing,
+  type SystemReview,
   type SystemVersionN,
   type SystemVersionSummary,
   type SystemView,
@@ -101,6 +103,7 @@ export class Systems {
       sessions: this.#store.sessionsUsing(s.id),
       syncError: s.syncError,
       adapter: typeof s.source.adapter === "string",
+      review: s.review,
     };
   }
 
@@ -155,12 +158,23 @@ export class Systems {
     if (!synced.ok) return fail(syncFailed(synced.issues));
     const id = this.#newId();
     const at = this.#now();
+    // Rob reviews every system before brainstorms use it. His notes go back to the thread that imported it, if any.
+    const imported = this.#store.imports().find((imp) => samePath(imp.root, root));
+    const review: SystemReview = {
+      state: "pending",
+      tiers: {},
+      issues: [],
+      thread: imported?.state === "started" ? { id: imported.thread, link: imported.link } : null,
+      sent: null,
+      confirmed: null,
+    };
     this.#store.tx(() => {
-      this.#store.insertSystem({ id, name: source.value.name, source: source.value, projectId, createdAt: at, inputs: null, syncError: null });
+      this.#store.insertSystem({ id, name: source.value.name, source: source.value, projectId, createdAt: at, inputs: null, syncError: null, review: null });
+      this.#store.setReview(id, review);
       this.#store.setSystemInputs(id, inputsOf(source.value, synced.value.inputs));
       this.#store.insertSystemVersion({ system: id, n: 1 as SystemVersionN, ...synced.value, syncedAt: at });
       // The import an agent ran for this folder is done once the system it wrote is added.
-      for (const imp of this.#store.imports()) if (samePath(imp.root, root)) this.#store.deleteImport(imp.root);
+      if (imported !== undefined) this.#store.deleteImport(imported.root);
     });
     this.#changed();
     const view = this.view(id);
@@ -329,6 +343,114 @@ export class Systems {
     return ok(null);
   }
 
+  /**
+   * Rob's review of an imported system (ADR 008): move a component to another tier, raise or drop an issue, send the
+   * review back to the agent, or confirm the system so brainstorms can use it.
+   */
+  async review(id: SystemId, action: ReviewAction): Promise<Result<SystemView>> {
+    const s = this.#store.system(id);
+    if (s === null) return fail(noSystem(id));
+    const review = s.review;
+    if (review === null || review.state !== "pending") return fail({ code: "invalid_action", message: `${s.name} isn't awaiting review` });
+    const save = (next: SystemReview): Result<SystemView> => {
+      this.#store.setReview(id, next);
+      this.#changed();
+      return this.view(id);
+    };
+    switch (action.kind) {
+      case "tier": {
+        const entry = this.#store.latestSystemVersion(id)?.manifest.catalog.find((e) => e.name === action.name && !e.generated);
+        if (entry === undefined) return fail({ code: "usage", message: `${s.name} has no component ${action.name}` });
+        const { [action.name]: _was, ...rest } = review.tiers;
+        // Moving a component back to the tier it synced with undoes the move.
+        return save({ ...review, tiers: (entry.tier ?? "primitive") === action.tier ? rest : { ...rest, [action.name]: action.tier } });
+      }
+      case "issue": {
+        const note = action.note.trim();
+        if (note === "") return fail({ code: "usage", message: "an issue needs a note" });
+        const n = Math.max(0, ...review.issues.map((i) => i.id)) + 1;
+        return save({ ...review, issues: [...review.issues, { id: n, name: action.name, note, at: this.#now() }] });
+      }
+      case "drop_issue":
+        return save({ ...review, issues: review.issues.filter((i) => i.id !== action.issue) });
+      case "send":
+        return this.#sendReview(s, review);
+      case "confirm":
+        return this.#confirm(s, review);
+    }
+  }
+
+  /** Writes the review's tier moves into the adapter, then sends the notes to the import's thread, or a new one. */
+  async #sendReview(s: StoredSystem, review: SystemReview): Promise<Result<SystemView>> {
+    const unsorted = !existsSync(resolve(s.source.root, ADAPTER_FILE));
+    const moved = review.tiers;
+    if (review.issues.length === 0 && Object.keys(moved).length === 0 && !unsorted) {
+      return fail({ code: "invalid_action", message: "there's nothing to send; raise an issue or move a component to another tier first" });
+    }
+    const projectId = s.projectId ?? this.#store.projectsHolding(s.source.root)[0] ?? null;
+    if (review.thread === null && projectId === null) {
+      return fail({
+        code: "invalid_action",
+        message: `Brainstorm doesn't know which T3 project holds ${s.source.root}, so it can't start the agent there; start a brainstorm from that project once, then try again`,
+      });
+    }
+    const message = reviewMessage({ id: s.id, name: s.name, root: s.source.root, issues: review.issues, moved, unsorted });
+    if (Object.keys(moved).length > 0) {
+      writeAdapterTiers(s.source, moved);
+      this.#store.setReview(s.id, { ...review, tiers: {} });
+      // Synced now, so the catalog shows the moves as they leave the review. A failed sync is kept on the system, and
+      // the agent the review goes to can fix it.
+      await this.#syncing.get(s.id);
+      await this.sync(s.id);
+    }
+    let thread = review.thread;
+    const sent = thread === null ? null : await this.#bridge.send(thread.id, message);
+    if (sent?.kind !== "sent") {
+      // No import thread, or T3 lost it: start one on the project.
+      if (projectId === null) return fail({ code: "unavailable", message: `T3 didn't take the review: ${sent?.kind === "failed" ? sent.error : "no thread"}` });
+      const started = await this.#bridge.start({ project: projectId, title: `Review the ${s.name} design system`, message });
+      if (started.kind === "failed") {
+        this.#changed();
+        return fail({ code: "unavailable", message: `T3 didn't start the agent: ${started.error}` });
+      }
+      const shown = await this.#bridge.snapshot(started.thread, { messages: 0 });
+      thread = { id: started.thread, link: shown.kind === "found" ? shown.snapshot.thread.link : null };
+    }
+    this.#store.setReview(s.id, {
+      ...review,
+      tiers: {},
+      issues: [],
+      thread,
+      sent: { at: this.#now(), issues: review.issues.length, tiers: Object.keys(moved).length },
+    });
+    this.#changed();
+    return this.view(s.id);
+  }
+
+  /** Writes any tier moves and syncs them, then marks the system confirmed at its newest version. */
+  async #confirm(s: StoredSystem, review: SystemReview): Promise<Result<SystemView>> {
+    if (review.issues.length > 0) {
+      const n = review.issues.length;
+      return fail({
+        code: "invalid_action",
+        message: `send the ${n === 1 ? "open issue" : `${n} open issues`} to the agent, or drop ${n === 1 ? "it" : "them"}, before confirming`,
+      });
+    }
+    if (Object.keys(review.tiers).length > 0) {
+      writeAdapterTiers(s.source, review.tiers);
+      this.#store.setReview(s.id, { ...review, tiers: {} });
+      // A sync already running read the adapter before this write, so wait for it and sync again.
+      await this.#syncing.get(s.id);
+      const synced = await this.sync(s.id);
+      if (!synced.ok) return synced;
+    }
+    const latest = this.#store.latestSystemVersion(s.id);
+    if (latest === null) return fail(noSystem(`${s.id} (it has no synced version)`));
+    this.#store.setReview(s.id, { ...review, tiers: {}, state: "confirmed", confirmed: { at: this.#now(), n: latest.n } });
+    this.#changed();
+    return this.view(s.id);
+  }
+
   async #projectOf(root: string, thread: ThreadId | null): Promise<ProjectId | null> {
     const known = this.#store.projectsHolding(root)[0];
     if (known !== undefined) return known;
@@ -337,7 +459,7 @@ export class Systems {
     return shown.kind === "found" ? shown.snapshot.thread.projectId : null;
   }
 
-  /** A system by id or name, at its newest version, for a new session. */
+  /** A system by id or name, at its newest version. */
   find(ref: string): Result<SessionSystem> {
     const wanted = ref.trim().toLowerCase();
     const all = this.#store.systems();
@@ -346,6 +468,20 @@ export class Systems {
     const latest = this.#store.latestSystemVersion(s.id);
     if (latest === null) return fail(noSystem(`${ref} (it has no synced version)`));
     return ok({ id: s.id, n: latest.n });
+  }
+
+  /** `find` for a new session, which may only build with a system Rob has confirmed (ADR 008). */
+  forSession(ref: string): Result<SessionSystem> {
+    const found = this.find(ref);
+    if (!found.ok) return found;
+    const s = this.#store.system(found.data.id);
+    if (s?.review?.state === "pending") {
+      return fail({
+        code: "invalid_action",
+        message: `Rob hasn't confirmed the design system "${s.name}" yet; he reviews a newly added system on Brainstorm's Design systems page before brainstorms can use it`,
+      });
+    }
+    return found;
   }
 
   version(ref: SessionSystem): StoredSystemVersion {

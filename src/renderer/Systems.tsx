@@ -1,4 +1,4 @@
-import { ArrowLeft, Bot, Check, Component, Copy, ExternalLink, FolderOpen, FolderPlus, RefreshCw, RotateCcw, Wrench } from "lucide-react";
+import { ArrowLeft, Bot, Check, ChevronLeft, ChevronRight, Component, Copy, ExternalLink, Flag, FolderOpen, FolderPlus, ListChecks, RefreshCw, RotateCcw, Send, Wrench, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Callout, CalloutItem } from "@/components/ui/callout";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
+import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollPane } from "@/components/ui/scroll-pane";
 import { Segmented } from "@/components/ui/segmented";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,6 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Tabs } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { BlockedHint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type {
   ArgType,
@@ -22,10 +25,13 @@ import type {
   HostToFrame,
   Issue,
   Json,
+  ReviewAction,
+  ReviewIssue,
   StoryInfo,
   SystemId,
   SystemImport,
   SystemListing,
+  SystemReview,
   SystemView,
   ThemeState,
   Tier,
@@ -94,6 +100,7 @@ export function SystemsPage({
         onRepair={(root) => void startImport(root, selected)}
         repairing={imports.some((i) => systems?.find((s) => s.id === selected)?.root === i.root)}
         onBack={() => onSelect(null)}
+        showNotice={showNotice}
       />
     );
   }
@@ -338,11 +345,22 @@ function SystemCard({
         )}
         {error !== null && (
           <span className="text-sm text-danger" data-system-sync-error>
-            The last sync failed{ago(error.at, now)}:{firstError(error)}
+            {`The last sync failed${ago(error.at, now)}: ${firstError(error)}`}
+          </span>
+        )}
+        {system.review?.state === "pending" && (
+          <span className="text-sm font-medium text-info" data-system-awaiting>
+            Awaiting your review. Brainstorms can use it once you confirm it.
           </span>
         )}
       </button>
       <span className="flex shrink-0 items-center gap-2">
+        {system.review?.state === "pending" && (
+          <Button variant="accent" onClick={onOpen} data-system-review={system.id}>
+            <ListChecks data-icon="inline-start" aria-hidden />
+            Review
+          </Button>
+        )}
         {error !== null && system.adapter && (
           <Button variant="outline" disabled={repairing} onClick={onRepair} data-system-repair={system.id}>
             {repairing ? <Spinner data-icon="inline-start" /> : <Wrench data-icon="inline-start" aria-hidden />}
@@ -375,6 +393,7 @@ function SystemDetail({
   onSync,
   onRepair,
   onBack,
+  showNotice,
 }: {
   api: Api;
   id: SystemId;
@@ -384,6 +403,7 @@ function SystemDetail({
   onSync: () => void;
   onRepair: (root: string) => void;
   onBack: () => void;
+  showNotice: (notice: Notice) => void;
 }) {
   const now = useNow();
   const [view, setView] = useState<SystemView | null>(null);
@@ -392,6 +412,17 @@ function SystemDetail({
   const latest = view?.latest ?? null;
   const warnings = latest?.warnings ?? [];
   const error = view?.syncError ?? null;
+  const review = view?.review?.state === "pending" ? view.review : null;
+  /** Applies one review action and shows the system as it comes back. Resolves false when the server refused it. */
+  const act = async (action: ReviewAction, failed: string): Promise<boolean> => {
+    const r = await api.reviewSystem(id, action);
+    if (!r.ok) {
+      showNotice({ title: failed, detail: r.error.message });
+      return false;
+    }
+    setView(r.data);
+    return true;
+  };
   return (
     <div className="flex size-full flex-col" data-system-detail={id}>
       <div className="flex flex-col gap-4 border-b bg-card px-6 pt-4">
@@ -435,6 +466,7 @@ function SystemDetail({
             <p>Brainstorms keep using version {latest?.n ?? 1}. Brainstorm syncs again when the project changes.</p>
           </Callout>
         )}
+        {review !== null && view !== null && <ReviewCallout view={view} review={review} act={act} />}
         <div className="flex h-10 items-center">
           <Tabs<Tab>
             aria-label="Design system"
@@ -455,7 +487,7 @@ function SystemDetail({
           <Skeleton className="h-preview w-full" />
         </div>
       ) : tab === "components" ? (
-        <ComponentsTab view={view} manifest={view.manifest} />
+        <ComponentsTab view={view} manifest={view.manifest} review={review} act={act} />
       ) : tab === "theme" ? (
         <ThemeTab manifest={view.manifest} />
       ) : tab === "versions" ? (
@@ -464,6 +496,208 @@ function SystemDetail({
         <WarningsTab warnings={warnings} />
       )}
     </div>
+  );
+}
+
+const count = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
+
+/**
+ * Rob's review of a newly imported system (ADR 008), above the tabs while it's pending: what he has changed so far, the
+ * issues he raised, and the two ways out, back to the agent or confirmed.
+ */
+function ReviewCallout({ view, review, act }: { view: SystemView; review: SystemReview; act: (action: ReviewAction, failed: string) => Promise<boolean> }) {
+  const now = useNow();
+  const [busy, setBusy] = useState<"send" | "confirm" | null>(null);
+  const moves = Object.keys(review.tiers).length;
+  const open = review.issues.length;
+  // A library added from its package has no adapter, so nothing has sorted its components into tiers yet.
+  const unsorted = !view.adapter;
+  const run = async (kind: "send" | "confirm") => {
+    setBusy(kind);
+    await act({ kind }, kind === "send" ? "Couldn't send the review" : "Couldn't confirm the design system");
+    setBusy(null);
+  };
+  const confirm = (
+    <Button variant="accent" disabled={open > 0 || busy !== null} onClick={() => void run("confirm")} data-review-confirm>
+      {busy === "confirm" ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" aria-hidden />}
+      {busy === "confirm" ? "Confirming…" : "Confirm design system"}
+    </Button>
+  );
+  return (
+    <Callout
+      tone="info"
+      heading="Review this import before brainstorms use it"
+      data-system-review-callout
+      actions={
+        <>
+          {open > 0 ? (
+            <BlockedHint label="Send the open issues to the agent, or drop them, first" side="top">
+              {confirm}
+            </BlockedHint>
+          ) : (
+            confirm
+          )}
+          {(moves > 0 || open > 0 || unsorted) && (
+            <Button variant="outline" disabled={busy !== null} onClick={() => void run("send")} data-review-send>
+              {busy === "send" ? <Spinner data-icon="inline-start" /> : <Send data-icon="inline-start" aria-hidden />}
+              {moves + open > 0 ? `Send ${count(moves + open, "change", "changes")} to the agent` : "Sort into tiers with an agent"}
+            </Button>
+          )}
+          <RaiseIssue label="Raise an issue" heading="An issue with the whole system" placeholder="DatePicker is missing" onRaise={(note) => act({ kind: "issue", name: null, note }, "Couldn't raise the issue")} />
+        </>
+      }
+    >
+      <p>
+        Step through the components by tier and check how each one renders. Move one to another tier, or raise an issue for the agent to fix. Brainstorms can build with the system once you confirm it.
+      </p>
+      {unsorted && <p>This library came from its package, so nothing sorted its components into tiers and they all list as primitives. Sort them yourself, or have an agent do it.</p>}
+      {(moves > 0 || review.sent !== null) && (
+        <p className="flex flex-wrap items-center gap-x-2" data-review-status>
+          {moves > 0 && <span>{count(moves, "tier change", "tier changes")}, written to the adapter when you send or confirm.</span>}
+          {review.sent !== null && (
+            <span>
+              Sent {count(review.sent.issues + review.sent.tiers, "change", "changes")} to the agent{ago(review.sent.at, now)}.
+            </span>
+          )}
+          {review.thread?.link != null && (
+            <a className="underline underline-offset-2" href={review.thread.link} target="_blank" rel="noreferrer" data-review-thread>
+              Open thread
+            </a>
+          )}
+        </p>
+      )}
+      {open > 0 && (
+        <ul className="grid gap-1" data-review-issues>
+          {review.issues.map((i) => (
+            <IssueItem key={i.id} issue={i} onDrop={() => void act({ kind: "drop_issue", issue: i.id }, "Couldn't drop the issue")} />
+          ))}
+        </ul>
+      )}
+    </Callout>
+  );
+}
+
+function IssueItem({ issue, onDrop }: { issue: ReviewIssue; onDrop: () => void }) {
+  return (
+    <CalloutItem>
+      <span className="flex items-start gap-2" data-review-issue={issue.id}>
+        <span className="min-w-0 flex-1">
+          <span className="font-medium">{issue.name ?? "The whole system"}:</span> {issue.note}
+        </span>
+        <Button variant="ghost" size="icon-xs" aria-label={`Drop the issue on ${issue.name ?? "the whole system"}`} onClick={onDrop} data-review-drop={issue.id}>
+          <X aria-hidden />
+        </Button>
+      </span>
+    </CalloutItem>
+  );
+}
+
+/** One component under review: its tier, the issues raised on it, and the way to the next one. */
+function ReviewStrip({
+  entry,
+  tier,
+  synced,
+  issues,
+  act,
+  previous,
+  next,
+  position,
+}: {
+  entry: CatalogEntry;
+  tier: Tier;
+  /** The tier it synced with, which a move away from is staged. */
+  synced: Tier;
+  issues: readonly ReviewIssue[];
+  act: (action: ReviewAction, failed: string) => Promise<boolean>;
+  previous: (() => void) | null;
+  next: (() => void) | null;
+  position: { n: number; of: number } | null;
+}) {
+  return (
+    <div className="grid gap-2 border-b bg-card px-4 py-2" data-review-strip={entry.name}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="text-sm font-medium">{entry.name}</span>
+        <div className="flex items-center gap-2 text-xs whitespace-nowrap text-fg-muted">
+          Tier
+          <Segmented<Tier>
+            fit="content"
+            aria-label={`${entry.name}'s tier`}
+            value={tier}
+            onValueChange={(t) => void act({ kind: "tier", name: entry.name, tier: t }, "Couldn't change the tier")}
+            options={TIER_ORDER.map((t) => ({ value: t, label: TIER_LABEL[t] }))}
+            itemData="review-tier"
+          />
+          {tier !== synced && <span data-review-moved>moved from {TIER_LABEL[synced].toLowerCase()}</span>}
+        </div>
+        <RaiseIssue label="Raise an issue" heading={`An issue with ${entry.name}`} placeholder="The price badge doesn't render" onRaise={(note) => act({ kind: "issue", name: entry.name, note }, "Couldn't raise the issue")} />
+        <div className="ml-auto flex items-center gap-1 text-xs text-fg-muted">
+          {position !== null && <span className="tabular-nums">{`${position.n} of ${position.of}`}</span>}
+          <Button variant="ghost" size="xs" disabled={previous === null} onClick={() => previous?.()} data-review-previous>
+            <ChevronLeft data-icon="inline-start" aria-hidden />
+            Previous
+          </Button>
+          <Button variant="ghost" size="xs" disabled={next === null} onClick={() => next?.()} data-review-next>
+            Next
+            <ChevronRight data-icon="inline-end" aria-hidden />
+          </Button>
+        </div>
+      </div>
+      {issues.length > 0 && (
+        <ul className="grid gap-1 text-sm">
+          {issues.map((i) => (
+            <li key={i.id} className="flex items-start gap-2" data-review-issue={i.id}>
+              <Flag aria-hidden className="mt-0.5 size-3.5 shrink-0 text-warning" />
+              <span className="min-w-0 flex-1">{i.note}</span>
+              <Button variant="ghost" size="icon-xs" aria-label="Drop the issue" onClick={() => void act({ kind: "drop_issue", issue: i.id }, "Couldn't drop the issue")} data-review-drop={i.id}>
+                <X aria-hidden />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const TIER_LABEL: Readonly<Record<Tier, string>> = { layout: "Layout", composite: "Composite", primitive: "Primitive" };
+
+/** A note for the agent, on one component or on the whole system. */
+function RaiseIssue({ label, heading, placeholder, onRaise }: { label: string; heading: string; placeholder: string; onRaise: (note: string) => Promise<boolean> }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const raise = async () => {
+    if (note.trim() === "") return;
+    if (!(await onRaise(note.trim()))) return;
+    setOpen(false);
+    setNote("");
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={<Button variant="outline" size="xs" data-review-raise />}>
+        <Flag data-icon="inline-start" aria-hidden />
+        {label}
+      </PopoverTrigger>
+      <PopoverContent size="md" align="start">
+        <PopoverHeader heading={heading} description="The agent gets it with the rest of your review, and fixes the adapter or the stories." />
+        <Textarea
+          aria-label="Issue"
+          placeholder={placeholder}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && (e.metaKey || e.ctrlKey) && void raise()}
+          autoFocus
+          data-review-note
+        />
+        <PopoverFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button variant="accent" disabled={note.trim() === ""} onClick={() => void raise()} data-review-raise-confirm>
+            Raise issue
+          </Button>
+        </PopoverFooter>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -491,10 +725,10 @@ function searchCatalog(catalog: readonly CatalogEntry[], needle: string): Catalo
 }
 
 /** The catalog in sections: the library's components by tier, most composed first, then Brainstorm's primitives. */
-function catalogSections(entries: readonly CatalogEntry[]): { heading: string; entries: CatalogEntry[] }[] {
+function catalogSections(entries: readonly CatalogEntry[], tier: (e: CatalogEntry) => Tier = tierOf): { heading: string; entries: CatalogEntry[] }[] {
   const own = entries.filter((e) => !e.generated);
   return [
-    ...TIER_ORDER.map((t) => ({ heading: TIER_HEADING[t], entries: own.filter((e) => tierOf(e) === t) })),
+    ...TIER_ORDER.map((t) => ({ heading: TIER_HEADING[t], entries: own.filter((e) => tier(e) === t) })),
     { heading: "Brainstorm's", entries: entries.filter((e) => e.generated) },
   ].filter((s) => s.entries.length > 0);
 }
@@ -507,8 +741,23 @@ const WIDTHS = [
 ] as const;
 type WidthChoice = (typeof WIDTHS)[number]["value"];
 
-function ComponentsTab({ view, manifest }: { view: SystemView; manifest: Manifest }) {
-  const [entry, setEntry] = useState<string | null>(null);
+function ComponentsTab({
+  view,
+  manifest,
+  review,
+  act,
+}: {
+  view: SystemView;
+  manifest: Manifest;
+  /** Rob's review while the import awaits it (ADR 008), else null. */
+  review: SystemReview | null;
+  act: (action: ReviewAction, failed: string) => Promise<boolean>;
+}) {
+  // A review walks the components in the tiers they synced with, so moving one doesn't reorder the walk.
+  const walk = useMemo(() => catalogSections(manifest.catalog).filter((s) => s.heading !== "Brainstorm's").flatMap((s) => s.entries), [manifest]);
+  // A review starts on the first component, so Rob can step through them; otherwise the gallery shows every story.
+  const [entry, setEntry] = useState<string | null>(() => (review === null ? null : (walk[0]?.name ?? null)));
+  const shown = (e: CatalogEntry): Tier => review?.tiers[e.name] ?? tierOf(e);
   const [axes, setAxes] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   /** The story open in the workbench, with the args Rob changed and the width he picked. */
@@ -525,7 +774,13 @@ function ComponentsTab({ view, manifest }: { view: SystemView; manifest: Manifes
     setEntry(name);
     setFocus(null);
   };
-  const sections = needle === "" ? catalogSections(entries) : [{ heading: "", entries: [...entries] }];
+  const sections = needle === "" ? catalogSections(entries, shown) : [{ heading: "", entries: [...entries] }];
+  const issuesOn = (name: string) => review?.issues.filter((i) => i.name === name) ?? [];
+  const rowDetail = (e: CatalogEntry, base: string) =>
+    [review?.tiers[e.name] !== undefined ? "moved" : null, issuesOn(e.name).length > 0 ? `${issuesOn(e.name).length} ${issuesOn(e.name).length === 1 ? "issue" : "issues"}` : null, base]
+      .filter((x) => x !== null && x !== "")
+      .join(" · ");
+  const at = chosen === null ? -1 : walk.findIndex((e) => e.name === chosen.name);
   return (
     <div className="flex min-h-0 flex-1">
       {/* The catalog takes the Inspector's width, so the stories get the rest. flex-none beats ScrollPane's flex-1. */}
@@ -550,7 +805,7 @@ function ComponentsTab({ view, manifest }: { view: SystemView; manifest: Manifes
                 )}
                 <ul className="grid gap-0.5">
                   {s.entries.map((e) => (
-                    <CatalogRow key={e.name} label={e.name} via={matchedPart(e, needle)} detail={s.heading === "" ? entryDetail(e) : sectionDetail(e)} active={entry === e.name} onClick={() => pick(e.name)} data-entry={e.name} />
+                    <CatalogRow key={e.name} label={e.name} via={matchedPart(e, needle)} detail={rowDetail(e, s.heading === "" ? entryDetail(e) : sectionDetail(e))} active={entry === e.name} onClick={() => pick(e.name)} data-entry={e.name} />
                   ))}
                 </ul>
               </section>
@@ -571,7 +826,7 @@ function ComponentsTab({ view, manifest }: { view: SystemView; manifest: Manifes
                 <span className="flex min-w-0 text-sm font-medium">
                   <Truncate>{`${owner?.name ?? story.title} · ${story.name}`}</Truncate>
                 </span>
-                {owner !== null && !owner.generated && <Badge data-workbench-tier>{tierOf(owner)}</Badge>}
+                {owner !== null && !owner.generated && <Badge data-workbench-tier>{shown(owner)}</Badge>}
               </div>
             )}
             {manifest.styles.axes.map((a) => (
@@ -600,6 +855,19 @@ function ComponentsTab({ view, manifest }: { view: SystemView; manifest: Manifes
               </div>
             )}
           </div>
+        )}
+        {review !== null && chosen !== null && !chosen.generated && (
+          <ReviewStrip
+            key={chosen.name}
+            entry={chosen}
+            tier={shown(chosen)}
+            synced={tierOf(chosen)}
+            issues={issuesOn(chosen.name)}
+            act={act}
+            previous={at > 0 ? () => pick(walk[at - 1]?.name ?? null) : null}
+            next={at >= 0 && at < walk.length - 1 ? () => pick(walk[at + 1]?.name ?? null) : null}
+            position={at < 0 ? null : { n: at + 1, of: walk.length }}
+          />
         )}
         {focus === null && chosen !== null && chosen.stories.length === 0 && (
           <p className="px-4 py-3 text-sm text-fg-muted">

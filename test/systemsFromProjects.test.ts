@@ -175,6 +175,79 @@ describe("a design system from an app project", () => {
     expect(await service.systems.syncChanged()).toEqual([system]);
     expect(data(service.systems.view(system)).syncError).toBeNull();
   }, 240_000);
+
+  test("Rob reviews the import: tier moves and issues go back to the import's thread, and confirm lets brainstorms use it", async () => {
+    const importThread = bridge.started[0]?.thread;
+    const review = (action: Parameters<typeof service.systems.review>[1]) => service.systems.review(system, action);
+    expect(data(service.systems.view(system)).review).toMatchObject({ state: "pending", thread: { id: importThread } });
+    const early = await service.newSession({ title: "Early", brief: "", thread: T1, projectPath: app, system: "Fixture app" });
+    expect(early.ok ? "" : early.error.message).toContain(`Rob hasn't confirmed the design system "Fixture app" yet`);
+
+    // A move is staged until Rob sends or confirms, and moving it back undoes it.
+    expect(data(await review({ kind: "tier", name: "Badge", tier: "composite" })).review?.tiers).toEqual({ Badge: "composite" });
+    expect(data(await review({ kind: "tier", name: "Badge", tier: "primitive" })).review?.tiers).toEqual({});
+    data(await review({ kind: "tier", name: "Badge", tier: "composite" }));
+    data(await review({ kind: "issue", name: "MealCard", note: "the price is missing" }));
+    const both = data(await review({ kind: "issue", name: null, note: "DatePicker is missing" }));
+    expect(both.review?.issues.map((i) => [i.id, i.name, i.note])).toEqual([
+      [1, "MealCard", "the price is missing"],
+      [2, null, "DatePicker is missing"],
+    ]);
+    const blocked = await review({ kind: "confirm" });
+    expect(blocked.ok ? "" : blocked.error.message).toBe("send the 2 open issues to the agent, or drop them, before confirming");
+    data(await review({ kind: "drop_issue", issue: 2 }));
+
+    const sent = data(await review({ kind: "send" }));
+    expect(sent.review).toMatchObject({ state: "pending", tiers: {}, issues: [], sent: { issues: 1, tiers: 1 } });
+    const message = bridge.sent.at(-1);
+    expect(message?.thread).toBe(importThread);
+    expect(message?.message.split("\n")[0]).toBe(`[brainstorm] review of the Fixture app design system (${system})`);
+    expect(message?.message).toContain("- MealCard: the price is missing");
+    expect(message?.message).toContain("- Badge: composite");
+    expect(message?.message).not.toContain("came from its package");
+    expect(JSON.parse(readFileSync(join(app, ".brainstorm/system.json"), "utf8")).tiers).toEqual({ Badge: "composite" });
+
+    // Send synced the adapter it wrote, so the version it returns has Badge as a composite. Rob confirms that version.
+    expect(sent.manifest?.catalog.find((e) => e.name === "Badge")?.tier).toBe("composite");
+    expect(await service.systems.syncChanged()).toEqual([]);
+    const synced = data(service.systems.view(system));
+    const confirmed = data(await review({ kind: "confirm" }));
+    expect(confirmed.review).toMatchObject({ state: "confirmed", confirmed: { n: synced.latest?.n } });
+    expect(service.systems.forSession("Fixture app").ok).toBe(true);
+    const late = await review({ kind: "issue", name: null, note: "too late" });
+    expect(late.ok ? "" : late.error.message).toBe("Fixture app isn't awaiting review");
+  }, 240_000);
+});
+
+describe("a library added from its package", () => {
+  test("has no tiers until Rob or an agent sorts it; confirming a move writes an adapter that syncs the same kit", async () => {
+    const lib = mkdtempSync(join(import.meta.dirname, ".kit-lib-"));
+    cpSync(join(import.meta.dirname, "kit-lib"), lib, { recursive: true });
+    try {
+      const added = data(await service.systems.add({ path: lib, thread: T1 }));
+      const id = added.system.id;
+      const names = added.system.manifest?.catalog.map((e) => e.name);
+      expect(added.system).toMatchObject({ adapter: false, review: { state: "pending", thread: null } });
+      expect(added.system.manifest?.catalog.filter((e) => !e.generated).every((e) => e.tier === "primitive")).toBe(true);
+
+      // With nothing to send, the review still asks an agent to sort the tiers, in a new thread on the project.
+      const before = bridge.started.length;
+      data(await service.systems.review(id, { kind: "send" }));
+      expect(bridge.started.length).toBe(before + 1);
+      expect(bridge.started.at(-1)?.message).toContain("This library came from its package");
+
+      data(await service.systems.review(id, { kind: "tier", name: "Card", tier: "composite" }));
+      const confirmed = data(await service.systems.review(id, { kind: "confirm" }));
+      expect(confirmed).toMatchObject({ adapter: true, review: { state: "confirmed", confirmed: { n: 2 } } });
+      expect(confirmed.manifest?.catalog.map((e) => e.name)).toEqual(names);
+      expect(confirmed.manifest?.catalog.find((e) => e.name === "Card")?.tier).toBe("composite");
+      const written = JSON.parse(readFileSync(join(lib, ".brainstorm/system.json"), "utf8"));
+      expect(written).toMatchObject({ name: "@fixture/kit", tiers: { Card: "composite" } });
+      expect(typeof written.entry).toBe("string");
+    } finally {
+      rmSync(lib, { recursive: true, force: true });
+    }
+  }, 240_000);
 });
 
 describe("tiers in a session", () => {
@@ -196,7 +269,8 @@ describe("tiers in a session", () => {
       b.add(T1, "proj-app", "App thread");
       return Brainstorm.open({ dbPath: join(home, "db"), exportsDir: join(home, "x"), bridge: b, checker, now: () => AT, newSessionId: () => S2 });
     })();
-    data(await other.systems.add({ path: app }));
+    const added = data(await other.systems.add({ path: app }));
+    data(await other.systems.review(added.system.id, { kind: "confirm" }));
     data(await other.newSession({ title: "Meals", brief: "", thread: T1, projectPath: app, system: "Fixture app" }));
     const commit = (files: FileMap) => other.commit({ session: S2, thread: T1, files, addresses: [], note: null });
     const codes = (r: Awaited<ReturnType<typeof commit>>) => (r.ok ? [] : r.error.code === "validation_failed" ? r.error.issues.filter((i) => i.severity === "error").map((i) => i.code) : [r.error.code]);

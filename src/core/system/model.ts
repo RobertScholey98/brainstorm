@@ -10,7 +10,7 @@ export type KitExportInfo = { readonly name: string; readonly type: "component" 
 /** What a component may contain (ADR 008): a primitive anything the library writes, a composite and a layout only the kit. */
 export type Tier = "primitive" | "composite" | "layout";
 /** Most composed first, the order the catalog and the workbench list them in. */
-export const TIERS: readonly Tier[] = ["layout", "composite", "primitive"];
+export const TIERS = ["layout", "composite", "primitive"] as const satisfies readonly Tier[];
 export const isTier = (value: unknown): value is Tier => value === "primitive" || value === "composite" || value === "layout";
 
 /** A story arg's control, as Storybook's `argTypes` describe it, reduced to what the workbench draws. */

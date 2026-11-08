@@ -747,7 +747,33 @@ export type SystemListing = {
   readonly syncError: { readonly message: string; readonly issues: readonly Issue[]; readonly at: string } | null;
   /** The project has `.brainstorm/system.json`, so an agent can repair a failed sync. */
   readonly adapter: boolean;
+  /** Rob's review of the import (ADR 008). A system added before reviews existed has none, and counts as confirmed. */
+  readonly review: SystemReview | null;
 };
+
+/** A note Rob raised in a review: on one component, or on the whole system when `name` is null. */
+export type ReviewIssue = { readonly id: number; readonly name: string | null; readonly note: string; readonly at: string };
+
+/**
+ * Rob's review of an imported system (ADR 008). Brainstorms can't use it while it's pending. Tier moves wait here until
+ * Rob sends the review to the agent or confirms it, when Brainstorm writes them into the adapter's `tiers`.
+ */
+export type SystemReview = {
+  readonly state: "pending" | "confirmed";
+  readonly tiers: Readonly<Record<string, Tier>>;
+  readonly issues: readonly ReviewIssue[];
+  /** The T3 thread the import ran in, or that the review was last sent to. */
+  readonly thread: { readonly id: ThreadId; readonly link: string | null } | null;
+  readonly sent: { readonly at: string; readonly issues: number; readonly tiers: number } | null;
+  readonly confirmed: { readonly at: string; readonly n: SystemVersionN } | null;
+};
+
+export type ReviewAction =
+  | { readonly kind: "tier"; readonly name: string; readonly tier: Tier }
+  | { readonly kind: "issue"; readonly name: string | null; readonly note: string }
+  | { readonly kind: "drop_issue"; readonly issue: number }
+  | { readonly kind: "send" }
+  | { readonly kind: "confirm" };
 
 /** An agent importing a project's design system in a T3 thread (ADR 008). */
 export type SystemImport = { readonly root: string; readonly projectId: ProjectId; readonly at: string } & PromotionState;

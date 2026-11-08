@@ -326,13 +326,14 @@ type SyncOutcome = { readonly system: SystemView; readonly created: boolean; rea
 const versionLine = (s: SystemListing) =>
   s.latest === null
     ? "never synced"
-    : `v${s.latest.n} · ${s.latest.components} components · ${s.latest.stories} stories${s.latest.failedStories > 0 ? ` (${s.latest.failedStories} failed)` : ""}`;
+    : `v${s.latest.n} · ${s.latest.components} components · ${s.latest.stories} stories${s.latest.failedStories > 0 ? ` (${s.latest.failedStories} failed)` : ""}${s.review?.state === "pending" ? " · awaiting Rob's review" : ""}`;
 
 function syncLines({ system, created, warnings }: SyncOutcome, verb: string): string[] {
   return [
     // Files read best from the library's root, as its author knows them.
     ...warnings.map((w) => issueLine(w.file === null ? w : { ...w, file: relative(system.root, w.file).split(sep).join("/") })),
     created ? `${verb} ${system.id} "${system.name}" ${versionLine(system)}` : `nothing changed; ${system.id} is still ${versionLine(system)}`,
+    ...(system.review?.state === "pending" ? ["Rob reviews it on Brainstorm's Design systems page; brainstorms can use it once he confirms it"] : []),
   ];
 }
 

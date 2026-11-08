@@ -1,9 +1,9 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { parseWith } from "../parse";
 import { issue, type Issue, type Parsed } from "../types";
-import type { Tier } from "./model";
+import { TIERS, type Tier } from "./model";
 
 /** Where a design system's library lives, as Brainstorm found it. Paths are absolute unless a field says otherwise. */
 export type SystemSource = {
@@ -24,6 +24,8 @@ export type SystemSource = {
   readonly adapter?: string | null;
   /** Globs relative to `root` for each tier's files. Empty for a package folder. */
   readonly tiers?: Readonly<Record<Tier, readonly string[]>>;
+  /** The adapter's `tiers`: a tier by exported name, which wins over story tags and the tier globs. */
+  readonly componentTiers?: Readonly<Record<string, Tier>>;
   /** Globs relative to `root`: files in the tier globs that aren't the kit, and app files the kit may import. */
   readonly exclude?: readonly string[];
   readonly shared?: readonly string[];
@@ -73,6 +75,7 @@ const adapterShape = z.strictObject({
   stories: z.array(z.string().min(1)).nullable().default(null),
   frame: z.string().min(1).nullable().default(null),
   stubs: z.record(z.string().min(1), z.string().min(1)).default({}),
+  tiers: z.record(z.string().min(1), z.enum(TIERS)).default({}),
 });
 
 export type Adapter = z.output<typeof adapterShape>;
@@ -188,9 +191,35 @@ function fromAdapter(root: string, adapterPath: string, name: string | null): Pa
       exclude: a.exclude,
       shared: a.shared,
       aliases: Object.fromEntries(Object.entries(a.aliases).map(([prefix, dir]) => [prefix, path.resolve(root, dir)])),
+      componentTiers: a.tiers,
     },
     warnings,
   };
+}
+
+/**
+ * Writes tier changes Rob made in a review into the adapter's `tiers` (ADR 008), so they last as the project's own
+ * files do. A library synced from its package gets an adapter that names its entry, stylesheet and frame, so it syncs
+ * as before. Returns the adapter's path.
+ */
+export function writeAdapterTiers(source: SystemSource, tiers: Readonly<Record<string, Tier>>): string {
+  const file = path.join(source.root, ADAPTER_FILE);
+  const rel = (abs: string) => path.relative(source.root, abs).split(path.sep).join("/");
+  const current: Record<string, unknown> = existsSync(file)
+    ? (JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>)
+    : {
+        name: source.name,
+        entry: source.entry === null ? null : rel(source.entry),
+        stylesheet: source.css === null ? null : rel(source.css),
+        frame: source.frame,
+        stubs: Object.fromEntries(Object.entries(source.stubs).map(([spec, abs]) => [spec, rel(abs)])),
+      };
+  const before = (typeof current.tiers === "object" && current.tiers !== null ? current.tiers : {}) as Record<string, Tier>;
+  const merged = { ...before, ...tiers };
+  const sorted = Object.fromEntries(Object.keys(merged).sort().map((k) => [k, merged[k]]));
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify({ ...current, tiers: sorted }, null, 2)}\n`);
+  return file;
 }
 
 /**

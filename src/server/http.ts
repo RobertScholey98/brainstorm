@@ -7,6 +7,7 @@ import { packageRoot } from "../core/packageRoot";
 import type { AppUpdates } from "../core/appUpdate";
 import type { Brainstorm } from "../core/brainstorm";
 import { zBranded } from "../core/parse";
+import { TIERS } from "../core/system/model";
 import { VARY_MAX } from "../core/fork";
 import { uiPrefsPatch, type AppSettings } from "../core/prefs";
 import type { AppAbout, SkillHost } from "../core/about";
@@ -87,6 +88,13 @@ const addSystemBody = z.strictObject({
 });
 const folderBody = z.strictObject({ path: z.string().trim().min(1) });
 const importBody = z.strictObject({ path: z.string().trim().min(1), repair: z.string().trim().min(1).nullable().default(null) });
+const reviewBody = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("tier"), name: z.string().min(1), tier: z.enum(TIERS) }),
+  z.strictObject({ kind: z.literal("issue"), name: z.string().min(1).nullable(), note: z.string().trim().min(1).max(2000) }),
+  z.strictObject({ kind: z.literal("drop_issue"), issue: z.number().int().min(1) }),
+  z.strictObject({ kind: z.literal("send") }),
+  z.strictObject({ kind: z.literal("confirm") }),
+]);
 const themeName = z.string().trim().min(1).max(60);
 const cssName = z.string().regex(/^--[\w-]+$/, "a custom property, such as --primary");
 const attachBody = z.strictObject({ ref: z.string().trim().min(1), thread: threadId });
@@ -375,6 +383,16 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       handle: withSystem(async (id, { params }) => {
         const n = Number(params[1]);
         return Number.isInteger(n) && n >= 1 ? service.systems.kit(id, n as SystemVersionN) : usage(`"${params[1]}" is not a version number`);
+      }),
+    },
+    // Rob's review of an imported system (ADR 008). Only the window reviews: an agent can't confirm a system for Rob.
+    {
+      method: "POST",
+      path: /^\/v1\/ui\/systems\/([^/]+)\/review$/,
+      auth: "ui",
+      handle: withSystem(async (id, { body }) => {
+        const b = parseBody(reviewBody, body);
+        return b.ok ? service.systems.review(id, b.data) : b;
       }),
     },
     { method: "POST", path: /^\/v1\/ui\/sessions\/([^/]+)\/theme-export$/, auth: "ui", handle: withSession(async (id) => service.exportTheme(id)) },

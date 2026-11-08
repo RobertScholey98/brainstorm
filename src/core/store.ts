@@ -17,6 +17,7 @@ import type {
   ProposedName,
   SavedTheme,
   SystemId,
+  SystemReview,
   SystemVersionN,
   ProjectId,
   PropName,
@@ -107,6 +108,10 @@ const MIGRATIONS: readonly Migration[] = [
   CREATE TABLE system_import(root TEXT PRIMARY KEY, project_id TEXT NOT NULL, state TEXT NOT NULL, thread_id TEXT, link TEXT,
     error TEXT, at TEXT NOT NULL);
   `,
+  // Rob reviews an imported system before brainstorms use it (ADR 008).
+  `
+  ALTER TABLE design_system ADD COLUMN review_json TEXT;
+  `,
 ];
 
 /**
@@ -172,6 +177,8 @@ export type StoredSystem = {
   readonly inputs: SystemInputs | null;
   /** Why the last sync failed, or null when it succeeded. */
   readonly syncError: SyncError | null;
+  /** Rob's review of the import; null for a system added before reviews existed. */
+  readonly review: SystemReview | null;
 };
 
 export type { SystemInputs } from "./system/inputs";
@@ -319,6 +326,7 @@ const toSystem = (r: Row): StoredSystem => ({
   createdAt: str(r.created_at),
   inputs: r.inputs_json == null ? null : (JSON.parse(str(r.inputs_json)) as SystemInputs),
   syncError: r.sync_error_json == null ? null : (JSON.parse(str(r.sync_error_json)) as SyncError),
+  review: r.review_json == null ? null : (JSON.parse(str(r.review_json)) as SystemReview),
 });
 
 const toSystemVersion = (r: Row): StoredSystemVersion => ({
@@ -867,6 +875,10 @@ export class Store {
 
   setSystemInputs(id: SystemId, inputs: SystemInputs): void {
     this.#run("UPDATE design_system SET inputs_json = ? WHERE id = ?", JSON.stringify(inputs), id);
+  }
+
+  setReview(id: SystemId, review: SystemReview | null): void {
+    this.#run("UPDATE design_system SET review_json = ? WHERE id = ?", review === null ? null : JSON.stringify(review), id);
   }
 
   setSyncError(id: SystemId, error: SyncError | null): void {

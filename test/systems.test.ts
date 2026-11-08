@@ -144,6 +144,18 @@ describe("a design system", () => {
     expect(again.created).toBe(false);
     expect(again.system.versions.map((v) => v.n)).toEqual([1]);
   }, 120_000);
+
+  test("awaits Rob's review, and no brainstorm builds with it until he confirms it", async () => {
+    expect(data(service.systems.view(system)).review).toMatchObject({ state: "pending", tiers: {}, issues: [], thread: null, confirmed: null });
+    const early = await service.newSession({ title: "Early", brief: "", thread: T1, projectPath: null, system: "@fixture/kit" });
+    expect(early.ok ? "" : early.error.message).toContain(`Rob hasn't confirmed the design system "@fixture/kit" yet`);
+    // An agent can still read it by name while it waits.
+    expect(service.systems.find("@fixture/kit").ok).toBe(true);
+    const confirmed = data(await service.systems.review(system, { kind: "confirm" }));
+    expect(confirmed.review).toMatchObject({ state: "confirmed", confirmed: { n: 1 } });
+    // Confirming without a tier move writes nothing into the library.
+    expect(confirmed.adapter).toBe(false);
+  });
 });
 
 describe("a session with a design system", () => {

@@ -257,7 +257,7 @@ export class Brainstorm {
   }): Promise<Result<NewSessionResult>> {
     let system: SessionSystem | null = null;
     if (input.system !== undefined && input.system !== null) {
-      const found = this.#systems.find(input.system);
+      const found = this.#systems.forSession(input.system);
       if (!found.ok) return found;
       system = found.data;
     }

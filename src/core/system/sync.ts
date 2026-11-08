@@ -72,7 +72,7 @@ export async function syncSystem(source: SystemSource, checker: Checker): Promis
     warnings.push(issue("duplicate_export", `more than one tier file exports ${list(inspected.duplicates, 8)}; the kit keeps the first`, { file: sourceFile(source) }));
   }
   const tiers = Object.fromEntries(Object.entries(inspected.tiers).filter((e): e is [string, Tier] => isTier(e[1])));
-  const catalog = catalogOf(inspected.exports, stories, inspected.generated, tiers);
+  const catalog = catalogOf(inspected.exports, stories, inspected.generated, tiers, source.componentTiers ?? {});
   const htmlById = new Map(inspected.stories.map((s) => [s.id, s.html]));
   const unthemed = catalog.filter((entry) => {
     const htmls = entry.stories.map((id) => htmlById.get(id)).filter((h): h is string => typeof h === "string");
@@ -98,10 +98,13 @@ export async function syncSystem(source: SystemSource, checker: Checker): Promis
     warnings.push(issue("off_scale", `the kit writes ${shown.length} value${shown.length === 1 ? "" : "s"} off its token scales: ${list(shown, 8)}`, { file: source.css }));
   }
 
+  // The adapter's tiers change the catalog without changing the bundle, so they're part of the version too. A system
+  // without them keeps the hash it always had, so it doesn't make a new version.
+  const named = Object.entries(source.componentTiers ?? {}).sort(([a], [b]) => a.localeCompare(b));
   return {
     ok: true,
     value: {
-      hash,
+      hash: named.length === 0 ? hash : createHash("sha256").update(hash).update("\0").update(JSON.stringify(named)).digest("hex"),
       bundle,
       css,
       manifest: {
@@ -139,6 +142,7 @@ export function catalogOf(
   stories: readonly StoryInfo[],
   generated: readonly string[],
   tiers: Readonly<Record<string, Tier>> = {},
+  named: Readonly<Record<string, Tier>> = {},
 ): CatalogEntry[] {
   const components = exports.filter((e) => e.type === "component").map((e) => e.name);
   const exported = new Set(exports.map((e) => e.name));
@@ -162,9 +166,10 @@ export function catalogOf(
   const looseParts = new Map(looseHeads.map((h) => [h, loose.filter((n) => n !== h && n.startsWith(h) && /^[A-Z]/.test(n.slice(h.length)))]));
   const generatedSet = new Set(generated);
   const byId = new Map(stories.map((s) => [s.id, s]));
-  // A tier tag on any of its stories wins, then the tier of the file that exports it, else a primitive (ADR 008).
+  // The adapter's tier for the name wins, then a tier tag on any of its stories, then the tier of the file that exports
+  // it, else a primitive (ADR 008).
   const tierOf = (name: string, ids: readonly string[]): Tier =>
-    ids.flatMap((id) => byId.get(id)?.tags ?? []).find(isTier) ?? tiers[name] ?? "primitive";
+    named[name] ?? ids.flatMap((id) => byId.get(id)?.tags ?? []).find(isTier) ?? tiers[name] ?? "primitive";
   return [
     ...[...heads].map(([name, ids]) => ({ name, parts: parts.get(name) ?? [], stories: ids, generated: false, tier: tierOf(name, ids) })),
     ...looseHeads.map((name) => ({ name, parts: looseParts.get(name) ?? [], stories: [], generated: generatedSet.has(name), tier: tierOf(name, []) })),
