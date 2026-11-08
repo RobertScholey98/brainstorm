@@ -147,7 +147,6 @@ export function PreviewWindow({ api }: { api: Api }) {
             }
           />
         )}
-        {!clean && settings.hold && <HeldBar on={describe({ blocks, scene })} here="preview" onRelease={() => tell({ kind: "resume" })} />}
         <section ref={area} className="relative min-h-0 flex-1 overflow-hidden bg-canvas" aria-label="Preview" data-canvas-region>
           <CanvasHost
             blocks={blocks}
@@ -173,6 +172,7 @@ export function PreviewWindow({ api }: { api: Api }) {
             onPlacement={() => {}}
             onZooms={setZooms}
           />
+          {!clean && settings.hold && <HeldBar on={describe({ blocks, scene })} here="preview" onRelease={() => tell({ kind: "resume" })} />}
           {composing?.for === "comment" && (
             <PinComposer
               key={JSON.stringify(composing)}

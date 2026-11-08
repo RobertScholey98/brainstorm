@@ -168,7 +168,7 @@ try {
     ["Preview heldThe preview window keeps showing The wheel · Slot reel.Resume live", "true"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed, and a warning-toned bar under the canvas bar, Preview held · The preview window keeps showing The wheel · Slot reel, with Resume live; the main canvas has moved on to the result slot");
+  await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed amber, and, lying over the canvas's top edge so nothing below moves, a warning-toned bar under the canvas bar, Preview held · The preview window keeps showing The wheel · Slot reel, with Resume live; the main canvas has moved on to the result slot");
   await window.click("[data-held-release]");
   await settled(() => showing(mirror));
   check("releasing Hold sends it the latest", await showing(mirror), "result:result/card");
@@ -236,7 +236,7 @@ try {
   await window.click("[data-pick-toggle]");
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
-  check("a pick started here while the canvas is away waits in the preview window", await window.textContent("[data-canvas-away] [data-slot=empty-title]"), "Pick an element in the preview window");
+  check("a pick started here while the canvas is away waits in the preview window", await window.textContent("[data-canvas-away] [data-slot=empty-title]"), "Click an element in the preview");
   check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Click in the previewCancel");
   await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's hint reads Click in the preview, with Cancel, and the region's title says to click an element there");
   await window.keyboard.press("Escape");
@@ -255,10 +255,10 @@ try {
       await mirror.evaluate(() => document.body.dataset.mode ?? "view"),
       await window.textContent("[data-canvas-away] [data-slot=empty-title]"),
     ],
-    [null, "view", "Pin here, not in the Clean preview"],
+    [null, "view", "The Clean preview takes no pins"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says to pin here, not in the Clean preview, and why, with Show canvas here (primary, which then starts the pick here), Switch preview to Working, and Cancel");
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says the Clean preview takes no pins and why, with Show canvas here (primary, which then starts the pick here), then Switch preview to Working and Cancel as quiet text buttons");
   await window.click("[data-away-working]");
   await preview.waitForSelector("[data-preview-window=working]");
   await mirror.waitForSelector('body[data-mode="pin"]');

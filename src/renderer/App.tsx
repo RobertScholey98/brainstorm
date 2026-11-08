@@ -762,7 +762,6 @@ function SessionWorkspace({
             }
           />
         )}
-        {preview.open && preview.hold && <HeldBar on={preview.heldOn} here="main" onRelease={() => link.setHold(false)} />}
         {past !== null && <PastBar n={past.n} onLatest={showLatest} />}
         <section
           ref={canvasArea}
@@ -820,6 +819,7 @@ function SessionWorkspace({
             onDismiss={() => setStuckPick(null)}
           />
         )}
+        {preview.open && preview.hold && !presenting && <HeldBar on={preview.heldOn} here="main" onRelease={() => link.setHold(false)} />}
         {presenting && <PresentHint several={slots.length > 1} poke={presentPoke} onLeave={() => void document.exitFullscreen().catch(() => {})} />}
         {interaction.kind === "composing" && (
           <PinComposer
@@ -935,11 +935,11 @@ function CanvasAway({
             <AppWindow aria-hidden />
           </EmptyMedia>
           <EmptyTitle>
-            {stuck !== null ? `${act === "pin" ? "Pin" : "Vary"} here, not in the Clean preview` : picking ? "Pick an element in the preview window" : "The canvas is in the preview window"}
+            {stuck !== null ? (act === "pin" ? "The Clean preview takes no pins" : "The Clean preview can't vary an element") : picking ? "Click an element in the preview" : "The canvas is in the preview window"}
           </EmptyTitle>
           <EmptyDescription>
             {stuck !== null
-              ? `Clean shows your audience only the design. Show the canvas here to ${act}; Working would show them your pins and tools.`
+              ? `Your audience sees only the design. Show the canvas here to ${act}, or switch the preview to Working, which shows them your pins and tools.`
               : picking
                 ? "Esc or Cancel stops picking."
                 : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
@@ -951,7 +951,7 @@ function CanvasAway({
               <Button variant="accent" onClick={onHere} data-away-here>
                 Show canvas here
               </Button>
-              <Button variant="outline" onClick={onWorking} data-away-working>
+              <Button variant="ghost" onClick={onWorking} data-away-working>
                 Switch preview to Working
               </Button>
               <Button variant="ghost" onClick={onDismiss} data-away-dismiss>
