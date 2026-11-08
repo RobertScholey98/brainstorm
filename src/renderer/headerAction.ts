@@ -1,5 +1,5 @@
 import { useLayoutEffect, type RefObject } from "react";
-import { overflows, shows } from "@/components/ui/ink";
+import { overflows, shows, SLACK } from "@/components/ui/ink";
 import type { RequestPhaseAction } from "../core/types";
 
 /**
@@ -72,6 +72,38 @@ const rowFits = (row: HTMLElement): boolean => {
   const title = row.querySelector("[data-row-title]");
   return title === null || !overflows(title);
 };
+
+/**
+ * The order the canvas bar's right end gives up its labels when the bar runs short: Hold preview shortens to Hold, then
+ * Present goes to its icon, then the preview menu drops "Preview", then Hold goes to its icon. Present is the feature the
+ * bar ends on, and its bare glyph would read as full-screening the shared window, so it keeps its word past Hold's. The menu's look and chevron never go: whether a shared
+ * window is Clean is what Rob checks before he shares it.
+ */
+export const BAR_COLLAPSE = { holdSuffix: 0, present: 1, preview: 2, hold: 3 } as const;
+
+/**
+ * The bar sets aside the room its longest pick hint needs, picking or not, here or away, so the labels depend on the
+ * bar's width alone and nothing in it moves when a pick starts or the canvas leaves for the preview window.
+ */
+export const PICK_HINTS = { comment: "Click to pin", vary: "Click to vary" } as const;
+let ruler: CanvasRenderingContext2D | null = null;
+const barFits = (bar: HTMLElement): boolean => {
+  const hint = bar.querySelector("[data-bar-hint]");
+  if (hint === null) return true;
+  ruler ??= document.createElement("canvas").getContext("2d");
+  if (ruler === null) return !overflows(hint);
+  ruler.font = getComputedStyle(hint).font;
+  const r = ruler;
+  // The chip's glyph, padding and close button take room the words can't have.
+  const words = hint.querySelector("[data-bar-hint-words]");
+  const chip = words?.parentElement;
+  const chrome = words == null || chip == null ? 0 : chip.getBoundingClientRect().width - words.getBoundingClientRect().width;
+  const room = hint.getBoundingClientRect().width - chrome;
+  return room >= Math.max(...Object.values(PICK_HINTS).map((h) => r.measureText(h).width)) - SLACK;
+};
+
+/** Fits the canvas bar: its right end's labels give way, in `BAR_COLLAPSE` order, before the pick hint cuts. */
+export const useBarFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, barFits, "[data-bar-hint], [data-present-controls]", BAR_COLLAPSE.hold + 1);
 
 /** Fits a sidebar row: its status drops its time, then its words, then a fork its branch glyph, before its title cuts. */
 export const useRowFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, rowFits, "[data-row-title]");

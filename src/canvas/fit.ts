@@ -6,6 +6,8 @@
  * a declared height.
  */
 export const CANVAS_PAD = 24;
+/** The canvas's top inset: CANVAS_PAD and room for the held strip (24 px) to lie over it 8 px short of a frame's label. */
+export const CANVAS_TOP = 32;
 export const GAP = 24;
 
 export function fitFrames(

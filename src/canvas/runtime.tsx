@@ -8,7 +8,7 @@ import { createRoot } from "react-dom/client";
 import { listStories, storyElement, type StoryRecord } from "../core/system/story";
 import { designCss, SCROLLBAR } from "../core/design";
 import { partLabel } from "../core/part";
-import { CANVAS_PAD, fitFrames, GAP } from "./fit";
+import { CANVAS_PAD, CANVAS_TOP, fitFrames, GAP } from "./fit";
 import type {
   BlockId,
   CanvasFrame,
@@ -51,6 +51,8 @@ type CanvasState = {
   readonly hashes: ReadonlyMap<BlockId, ContentHash>;
   /** Slots whose block is taller than the frame's declared height, so the frame scrolls. */
   readonly scrolling: ReadonlySet<string>;
+  /** The slot on the stage fills the window, with none of the canvas's chrome (ADR 007). */
+  readonly present: boolean;
   /** The design system's kit the blocks import, once it has loaded; bumps when it or the proposed components change. */
   readonly kitVersion: number;
   /** The system page's gallery: story ids to show, every story when null, or no gallery when undefined. */
@@ -303,11 +305,14 @@ let state: CanvasState = {
   variants: {},
   hashes: new Map(),
   scrolling: new Set(),
+  present: false,
   kitVersion: 0,
   gallery: undefined,
 };
 /** The block Rob just pressed in the canvas. Its selection comes back from the host and needs no reveal. */
 let pressed: BlockId | null = null;
+/** How near the top edge, in px, the pointer brings back present's keys label. */
+const PRESENT_EDGE = 96;
 const listeners = new Set<() => void>();
 const setState = (next: Partial<CanvasState>) => {
   state = { ...state, ...next };
@@ -379,12 +384,19 @@ function receive(message: HostToFrame): void {
     case "variants":
       setState({ variants: message.slots });
       return;
+    case "present":
+      document.documentElement.toggleAttribute("data-present", message.on);
+      setState({ present: message.on });
+      fitCanvas();
+      requestAnimationFrame(paintPresentFill);
+      if (!message.on) requestAnimationFrame(() => revealSelected("auto"));
+      return;
   }
 }
 
 /**
  * Scrolls the selected frame in only as far as it takes, from wherever the selection came: a press, the shell, a
- * resize. A frame taller or wider than the room shows from its label, 24 px off the bar, never with its label cut:
+ * resize. A frame taller or wider than the room shows from its label, 32 px off the bar, never with its label cut:
  * scrollIntoView's "nearest" would line up its far edge instead, and leave the label tucked under the bar.
  */
 function revealSelected(behavior: ScrollBehavior): void {
@@ -392,9 +404,9 @@ function revealSelected(behavior: ScrollBehavior): void {
   if (frame === null) return;
   const r = frame.getBoundingClientRect();
   const { clientWidth, clientHeight } = document.documentElement;
-  const by = (start: number, end: number, room: number) =>
-    start < CANVAS_PAD ? start - CANVAS_PAD : end > room - CANVAS_PAD ? Math.min(end - (room - CANVAS_PAD), start - CANVAS_PAD) : 0;
-  scrollBy({ left: by(r.left, r.right, clientWidth), top: by(r.top, r.bottom, clientHeight), behavior });
+  const by = (start: number, end: number, room: number, pad: number) =>
+    start < pad ? start - pad : end > room - CANVAS_PAD ? Math.min(end - (room - CANVAS_PAD), start - pad) : 0;
+  scrollBy({ left: by(r.left, r.right, clientWidth, CANVAS_PAD), top: by(r.top, r.bottom, clientHeight, CANVAS_TOP), behavior });
 }
 
 /** How far inside the canvas edge a revealed pin or picked element stops: room for a pin's pulse, and no more. */
@@ -402,7 +414,7 @@ const REVEAL_MARGIN = 12;
 
 /**
  * Brings `target` into view by the least it takes, and never leaves its frame's label cut by the bar. A target already
- * in view moves nothing. When the move would leave the label half under the bar, the label sits 24 px under it, as on
+ * in view moves nothing. When the move would leave the label half under the bar, the label sits 32 px under it, as on
  * a fresh stage, or, when the target lies too far down a tall frame to show beside it, wholly out of view with the
  * frame's top edge.
  */
@@ -414,7 +426,7 @@ function revealInFrame(target: Element, behavior: ScrollBehavior): void {
   const frame = target.closest(".bs-frame");
   const label = frame?.querySelector(".bs-frame-title")?.getBoundingClientRect();
   const top = frame?.querySelector(".bs-frame-body")?.getBoundingClientRect().top;
-  if (label !== undefined && top !== undefined && top - by > 0 && label.top - by < CANVAS_PAD) by = by < 0 ? label.top - CANVAS_PAD : Math.max(by, top);
+  if (label !== undefined && top !== undefined && top - by > 0 && label.top - by < CANVAS_TOP) by = by < 0 ? label.top - CANVAS_TOP : Math.max(by, top);
   scrollBy({ top: by, behavior });
 }
 
@@ -424,7 +436,19 @@ function revealInFrame(target: Element, behavior: ScrollBehavior): void {
  */
 const gutter = (f: CanvasFrame) => (state.scrolling.has(f.slot) ? SCROLLBAR : 0);
 
+/**
+ * In present the window is the block's, so whatever its frame body leaves bare takes the block's own fill, as a scrolling
+ * frame's gutter does: a block shorter than the window ends in its own colour, not the canvas's card.
+ */
+function paintPresentFill(): void {
+  const root = state.present ? document.querySelector(".bs-frame:not([data-offstage]) .bs-frame-body > [data-bid] > *") : null;
+  const fill = root === null ? "rgba(0, 0, 0, 0)" : getComputedStyle(root).backgroundColor;
+  if (fill === "rgba(0, 0, 0, 0)") document.documentElement.style.removeProperty("--bs-present-fill");
+  else document.documentElement.style.setProperty("--bs-present-fill", fill);
+}
+
 function measureScrolling(): void {
+  paintPresentFill();
   const scrolling = new Set<string>();
   for (const body of document.querySelectorAll<HTMLElement>(".bs-frame-body[data-height]")) {
     paintGutter(body);
@@ -463,7 +487,8 @@ function fitCanvas(): void {
   // The scrollbar's gutter is kept on both sides and the padding gives it back, so in either view the room is the
   // window less its pad, with or without a scrollbar.
   const room = innerWidth - 2 * CANVAS_PAD;
-  const next = fitFrames(
+  // Present lays the slot out at the window's own width, so nothing zooms.
+  const next = state.present ? new Map<string, number>() : fitFrames(
     state.frames.map((f) => ({ slot: f.slot, width: f.frame.width, gutter: gutter(f) })),
     room,
     state.stage,
@@ -474,7 +499,7 @@ function fitCanvas(): void {
   post({ kind: "zooms", zooms: Object.fromEntries(next) });
 }
 
-const HOST_KINDS = new Set<string>(["modules", "state", "mode", "pins", "pulse", "variants", "kit", "theme", "proposed", "gallery"] satisfies HostToFrame["kind"][]);
+const HOST_KINDS = new Set<string>(["modules", "state", "mode", "pins", "pulse", "variants", "present", "kit", "theme", "proposed", "gallery"] satisfies HostToFrame["kind"][]);
 
 class BlockBoundary extends Component<
   { blockId: BlockId; hash: ContentHash; props: Props; children: ReactNode },
@@ -629,7 +654,7 @@ function Canvas() {
       {s.frames.map((frame) => {
         const selected = s.selected === frame.blockId;
         const variants = s.variants[frame.slot] ?? [];
-        const zoom = s.zooms.get(frame.slot);
+        const zoom = s.present ? undefined : s.zooms.get(frame.slot);
         // Off the stage, a frame stays mounted and laid out, so its block keeps its state, its errors still report and
         // its pins still tell placed from detached.
         const offstage = s.stage !== null && s.stage !== frame.slot;
@@ -641,8 +666,9 @@ function Canvas() {
             data-selected={selected || undefined}
             data-offstage={offstage || undefined}
             aria-hidden={offstage || undefined}
-            // The frame is as wide as its zoomed body, so a long title truncates inside it rather than widening it.
-            style={{ width: frame.frame.width * (zoom ?? 1) + gutter(frame) }}
+            // The frame is as wide as its zoomed body, so a long title truncates inside it rather than widening it. In
+            // present it is the window: the declared width gives way, and a declared height becomes the window's.
+            style={{ width: s.present ? "100%" : frame.frame.width * (zoom ?? 1) + gutter(frame) }}
             onPointerDownCapture={() => {
               pressed = frame.blockId;
               revealOnRelease = true;
@@ -663,8 +689,8 @@ function Canvas() {
               data-scrolls={gutter(frame) > 0 || undefined}
               style={{
                 ...surfaceStyle(),
-                width: frame.frame.width + gutter(frame) / (zoom ?? 1),
-                height: frame.frame.height ?? undefined,
+                width: s.present ? "100%" : frame.frame.width + gutter(frame) / (zoom ?? 1),
+                height: frame.frame.height === null ? undefined : s.present ? "100vh" : frame.frame.height,
                 zoom,
                 ["--bs-unzoom" as string]: zoom === undefined ? undefined : 1 / zoom,
               }}
@@ -919,12 +945,40 @@ if (live && !preview) {
     revealSelected("smooth");
   });
   window.addEventListener("pointermove", (e) => (hover = state.mode === "pin" ? pickTarget(e.target) : null), true);
+  // In present the host shows how to leave when the pointer nears the top edge, as slideshow tools do; pointing at the
+  // design anywhere else leaves the screen clean, and a pointer still for 2 s hides until it moves.
+  let pointed = 0;
+  let idle: ReturnType<typeof setTimeout> | undefined;
+  window.addEventListener("pointermove", (e) => {
+    if (!state.present) return;
+    delete document.documentElement.dataset.idle;
+    clearTimeout(idle);
+    idle = setTimeout(() => {
+      if (state.present) document.documentElement.dataset.idle = "";
+    }, 2000);
+    if (e.clientY > PRESENT_EDGE || performance.now() - pointed < 250) return;
+    pointed = performance.now();
+    post({ kind: "pointer" });
+  });
   window.addEventListener("keydown", (e) => {
-    if (e.defaultPrevented || !(e.key === "Escape" || e.ctrlKey || e.metaKey)) return;
+    if (e.defaultPrevented || !(e.key === "Escape" || e.key === "F5" || e.key === "F11" || e.ctrlKey || e.metaKey || presentStep(e))) return;
     post({ kind: "key", key: e.key, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, alt: e.altKey });
   });
   document.documentElement.addEventListener("pointerleave", () => (hover = null));
   wake();
+}
+
+/**
+ * In present, left and right step between slots, as a slideshow's do, unless the key lands somewhere the design reads
+ * it: a field, or anything that takes arrow keys of its own.
+ */
+function presentStep(e: KeyboardEvent): boolean {
+  if (!state.present || (e.key !== "ArrowLeft" && e.key !== "ArrowRight") || e.altKey || e.shiftKey) return false;
+  const target = e.target instanceof Element ? e.target : null;
+  return (
+    target === null ||
+    target.closest("input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=slider], [role=listbox], [role=tablist], [role=radiogroup], [role=menu]") === null
+  );
 }
 
 /** Runs every frame while there are pins to place or a pick to highlight, and stops once there is neither. */
@@ -960,12 +1014,12 @@ body {
 }
 #canvas {
   display: flex; align-items: flex-start; gap: ${GAP}px;
-  padding: ${CANVAS_PAD}px calc(${CANVAS_PAD}px - var(--bs-scrollbar)) 48px;
+  padding: ${CANVAS_TOP}px calc(${CANVAS_PAD}px - var(--bs-scrollbar)) 48px;
 }
 /* Both views centre what fits; safe keeps a row a rounding pixel too wide from losing its left edge. */
 #canvas { justify-content: safe center; }
 /* A reveal stops at the canvas padding, so a frame's label sits the same way off the bar in both views. */
-.bs-frame { flex: none; min-width: 0; scroll-margin: ${CANVAS_PAD}px; }
+.bs-frame { flex: none; min-width: 0; scroll-margin: ${CANVAS_TOP}px ${CANVAS_PAD}px ${CANVAS_PAD}px; }
 .bs-frame[data-offstage] { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none; }
 .bs-frame-title {
   display: flex; gap: 8px; max-width: 100%; box-sizing: border-box;
@@ -1041,6 +1095,15 @@ body {
   background: var(--bs-accent); color: var(--bs-accent-fg); font: 500 12px/16px var(--bs-font-ui);
 }
 body[data-mode="pin"], body[data-mode="pin"] * { cursor: crosshair !important; }
+/* Present: the slot is the window. Its frame keeps its body, so a pick and the block's own state carry on, and drops the rest. */
+html[data-present] { scrollbar-gutter: auto; }
+html[data-present][data-idle], html[data-present][data-idle] * { cursor: none !important; }
+html[data-present] body, html[data-present] .bs-frame-body { background: var(--bs-present-fill, var(--bs-card)); }
+html[data-present] #canvas { display: block; padding: 0; }
+html[data-present] .bs-frame-title, html[data-present] .bs-switch, html[data-present] .bs-pin { display: none !important; }
+html[data-present] .bs-frame-body { min-height: 100vh; border-radius: 0; box-shadow: none !important; transition: none; }
+/* The block's own root reaches the window's foot, so its background, pattern and all, runs to the bottom edge as a page's would. */
+html[data-present] .bs-frame-body > [data-bid] > * { min-height: 100vh; box-sizing: border-box; }
 /* A proposed component: dashed, and tagged "not in system" at its root's top left. */
 .bs-proposed > :not(.bs-proposed-anchor) { outline: 1px dashed var(--bs-warning, #d97706); outline-offset: 2px; }
 /* The tag straddles the outline's top-right corner, so it marks the component without covering the design above it,

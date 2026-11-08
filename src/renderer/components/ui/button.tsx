@@ -12,7 +12,15 @@ const buttonVariants = cva(
         accent: "border-accent bg-accent text-accent-fg hover:border-accent-hover hover:bg-accent-hover aria-expanded:border-accent-hover aria-expanded:bg-accent-hover",
         // On a tinted surface, marked `data-tint`, the card fill would punch a hole in the tint, so the edge alone draws it.
         outline:
-          "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
+          "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg data-edge:border-accent data-edge:text-accent aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
+        // An outline toggle whose pressed state is a warning, as Hold preview's is: pressed, it leaves a shared window behind.
+        // A trigger marked `data-warn` takes the same tone, as the Preview menu does while its window isn't for sharing;
+        // one marked `data-edge` takes only its edge, for a way into that state offered beside a safer primary.
+        caution:
+          "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg data-edge:border-warning data-warn:border-warning data-warn:bg-warning/20 data-warn:text-fg aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-warning aria-pressed:bg-warning/20 aria-pressed:text-fg",
+        // The action closing a status strip: the strip's whole height at its end, set off by a rule, not a box.
+        // Its hit area reaches past its fill to the strip's edges and a little beyond, so it clicks like a full-size control.
+        strip: "relative rounded-none border-0 bg-warning font-semibold text-card after:absolute after:inset-x-0 after:-inset-y-1 hover:bg-warning/85 focus-visible:ring-inset",
         ghost:
           "hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg aria-pressed:bg-selected aria-pressed:text-fg",
         destructive:
@@ -23,6 +31,8 @@ const buttonVariants = cva(
         default: "h-7 gap-1.5 px-2 text-sm has-[[data-icon=inline-end]:not([data-collapsed])]:pr-1.5 has-[[data-icon=inline-start]:not([data-collapsed])]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         icon: "size-7",
         "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3.5",
+        // As tall as the strip it ends, as the held strip's Resume live is.
+        strip: "h-full gap-1.5 px-4 text-sm [&_svg:not([class*='size-'])]:size-3",
         // A 24 px action that names itself, as a list row's hover action does.
         xs: "h-6 gap-1 px-1.5 text-xs font-normal [&_svg:not([class*='size-'])]:size-3.5",
         // A glyph over its count, for a narrow rail with no room to set a corner count clear of the glyph.

@@ -42,7 +42,7 @@ try {
   const idleBox = await toggleBox();
   await window.click("[data-pick-toggle]");
   await window.waitForSelector("[data-pick-hint]");
-  check("Pin comment keeps its width and its left edge while it reads Picking…", await toggleBox(), idleBox);
+  check("Pin comment keeps its width and its left edge while it is pressed", await toggleBox(), idleBox);
   await canvas.hover(HEADLINE);
   await canvas.waitForSelector(".bs-pick[data-on]");
   check("hovering in pin mode highlights the nearest data-part, named in words as the feedback list names it", await canvas.textContent(".bs-pick[data-on] span"), "Headline");
@@ -107,7 +107,7 @@ try {
   await canvas.evaluate(() => scrollTo(0, 0));
   await window.click('[data-feedback="2"] [data-feedback-text]');
   await canvas.waitForSelector('.bs-pin[data-pin="2"].bs-pulse');
-  check("pulsing a pin already in view near a tall frame's foot moves nothing, so its label stays 24 px under the bar", await settled(stageAt), [0, 24]);
+  check("pulsing a pin already in view near a tall frame's foot moves nothing, so its label stays 32 px under the bar", await settled(stageAt), [0, 32]);
   await window.setViewportSize({ width: 1440, height: 640 });
   await canvas.evaluate(() => scrollTo(0, 0));
   await window.click('[data-feedback="2"] [data-feedback-text]');

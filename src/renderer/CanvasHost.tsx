@@ -33,6 +33,7 @@ export function CanvasHost({
   props,
   selected,
   stage,
+  present = false,
   mode,
   pins,
   focused,
@@ -45,6 +46,7 @@ export function CanvasHost({
   onPinHovered,
   onPlacement,
   onZooms,
+  onPointer,
   system,
 }: {
   /** The session's design system, or null for a freeform session. Its kit loads before any block. */
@@ -55,6 +57,8 @@ export function CanvasHost({
   selected: BlockId | null;
   /** The slot on the stage, or null for the board. */
   stage: SlotId | null;
+  /** The staged slot fills the frame with no canvas chrome (ADR 007). */
+  present?: boolean;
   mode: CanvasMode;
   pins: readonly CanvasPin[];
   /** The pin whose feedback row is open in the Inspector. */
@@ -69,13 +73,15 @@ export function CanvasHost({
   onPinHovered: (id: FeedbackId | null) => void;
   onPlacement: (placement: Placement) => void;
   onZooms: (zooms: Readonly<Record<string, number>>) => void;
+  /** In present, the pointer moved over the frame. */
+  onPointer?: () => void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   // The version of each block the frame holds. A past iteration can bring back an older one, so it is sent again.
   const sent = useRef(new Map<BlockId, ContentHash>());
   const [readyCount, setReadyCount] = useState(0);
-  const handlers = useRef({ onSelect, onBlockError, onPicked, onPinClicked, onPinHovered, onPlacement, onZooms });
-  handlers.current = { onSelect, onBlockError, onPicked, onPinClicked, onPinHovered, onPlacement, onZooms };
+  const handlers = useRef({ onSelect, onBlockError, onPicked, onPinClicked, onPinHovered, onPlacement, onZooms, onPointer });
+  handlers.current = { onSelect, onBlockError, onPicked, onPinClicked, onPinHovered, onPlacement, onZooms, onPointer };
 
   const post = (message: HostToFrame) => frame.current?.contentWindow?.postMessage(message, "*");
 
@@ -142,6 +148,9 @@ export function CanvasHost({
         case "zooms":
           handlers.current.onZooms(message.zooms);
           return;
+        case "pointer":
+          handlers.current.onPointer?.();
+          return;
         case "key":
           // Shortcuts work while the canvas has focus: replay the key on the host as if it were pressed here.
           (document.activeElement ?? document.body).dispatchEvent(
@@ -164,6 +173,11 @@ export function CanvasHost({
     post({ kind: "modules", modules: fresh.map((b) => ({ blockId: b.id, hash: b.hash, compiled: b.compiled, css: b.css })) });
     for (const b of fresh) sent.current.set(b.id, b.hash);
   }, [readyCount, blocks, kitReady]);
+
+  // Before the state, so a frame that comes up presenting never lays out its chrome first.
+  useEffect(() => {
+    if (readyCount > 0) post({ kind: "present", on: present });
+  }, [readyCount, present]);
 
   useEffect(() => {
     if (readyCount > 0 && kitReady) post({ kind: "state", frames, props, selected, stage });

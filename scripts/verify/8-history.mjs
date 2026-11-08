@@ -317,17 +317,17 @@ try {
   await canvas.waitForFunction((sel) => document.querySelector(sel)?.textContent?.includes("Odds lean"), inBlock("wheel/neon", "pool"));
   check("clicking a still shows that iteration, read-only", [await canvasAt(window), (await pool(canvas)).includes("Odds lean")], [{ n: 1, past: 1 }, true]);
   await window.waitForTimeout(400);
-  check("under the Viewing bar the frame's label sits 24 px below the canvas's top, as on the latest", await labelOffset(canvas), 24);
+  check("under the Viewing bar the frame's label sits 32 px below the canvas's top, as on the latest", await labelOffset(canvas), 32);
   check(
     "under a bar naming it, with Back to latest",
     [(await window.textContent("[data-past-bar]")).startsWith("Viewing iteration 1"), (await window.textContent("[data-back-to-latest]")).trim()],
     [true, "Back to latest"],
   );
   check(
-    "Back to latest ends where the canvas bar's view switch ends",
+    "Back to latest ends where the canvas bar's last control, Present, ends",
     await window.evaluate(() => {
       const right = (el) => Math.round(el.getBoundingClientRect().right);
-      return right(document.querySelector("[data-back-to-latest]")) - right(document.querySelector('[data-canvas-bar] [data-slot="segmented"]'));
+      return right(document.querySelector("[data-back-to-latest]")) - right(document.querySelector("[data-canvas-bar] [data-present]"));
     }),
     0,
   );
@@ -427,7 +427,7 @@ try {
   await window.click("[data-history-toggle]");
   await window.waitForSelector("[data-history]", { state: "detached" });
   await window.waitForTimeout(400);
-  check("once the strip folds the frame's label still sits 24 px below the canvas's top", await labelOffset(canvas), 24);
+  check("once the strip folds the frame's label still sits 32 px below the canvas's top", await labelOffset(canvas), 32);
   const prefs = await window.evaluate(async () => (await fetch("/v1/ui/prefs").then((r) => r.json()).catch(() => null)));
   void prefs;
   await app.close();
@@ -690,7 +690,7 @@ try {
   await canvas.waitForSelector(inBlock("wheel/neon", "spin-button"));
   await window.click("[data-vary-toggle]");
   await window.waitForSelector("[data-pick-hint]");
-  check("Vary element starts a pick, with its own hint", (await window.textContent("[data-pick-hint] span")).trim(), "Click an element to vary");
+  check("Vary element starts a pick, with its own hint", (await window.textContent("[data-pick-hint]")).trim(), "Click to vary");
   await window.keyboard.press("Escape");
   await window.waitForSelector("[data-pick-hint]", { state: "detached" });
   check("Escape ends the vary pick", await window.getAttribute("[data-vary-toggle]", "aria-pressed"), "false");

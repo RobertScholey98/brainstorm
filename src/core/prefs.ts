@@ -15,7 +15,16 @@ export type UiPrefs = {
   readonly canvas: Readonly<Record<string, CanvasLayout>>;
   /** How home is filtered and sorted. The search text isn't kept: it answers one question, not a standing view. */
   readonly home: HomeQuery;
+  /** How the preview window shows the canvas, and whether the main window keeps its own while it is open (ADR 007). */
+  readonly preview: PreviewPrefs;
 };
+
+/**
+ * `clean` shows the design alone, filling the window, for an audience; `working` is the canvas as the main window draws
+ * it, pins and all. `here` keeps the main window's canvas while the preview window is open.
+ */
+export type PreviewPrefs = { readonly look: "clean" | "working"; readonly here: boolean };
+export const DEFAULT_PREVIEW: PreviewPrefs = { look: "clean", here: true };
 
 /** Which brainstorms home shows. `attention` is any that needs Rob: a lost thread, or a request that stopped for him. */
 export type HomeStatus = "active" | "attention" | "settled" | "all";
@@ -33,9 +42,17 @@ export type UiPrefsPatch = {
   readonly historyStrip?: { readonly session: SessionId; readonly open: boolean };
   readonly canvas?: { readonly session: SessionId; readonly layout: CanvasLayout };
   readonly home?: HomeQuery;
+  readonly preview?: PreviewPrefs;
 };
 
-export const NO_PREFS: UiPrefs = { panes: { sidebar: null, inspector: null }, inspectorRail: false, historyStrip: {}, canvas: {}, home: DEFAULT_HOME };
+export const NO_PREFS: UiPrefs = {
+  panes: { sidebar: null, inspector: null },
+  inspectorRail: false,
+  historyStrip: {},
+  canvas: {},
+  home: DEFAULT_HOME,
+  preview: DEFAULT_PREVIEW,
+};
 
 /** A strip Rob hasn't set in this brainstorm stays shut while there is one iteration, and opens once a second lands. */
 export function stripOpen(choice: boolean | undefined, iterations: number): boolean {
@@ -51,6 +68,7 @@ const home: z.ZodType<HomeQuery> = z.strictObject({
   projects: z.array(z.string().min(1).max(200).transform((p) => p as ProjectId)).max(500),
   sort: z.enum(["recent", "created", "title"]),
 });
+const preview: z.ZodType<PreviewPrefs> = z.strictObject({ look: z.enum(["clean", "working"]), here: z.boolean() });
 
 export const uiPrefsPatch: z.ZodType<UiPrefsPatch> = z.strictObject({
   panes: z.strictObject({ sidebar: width.optional(), inspector: width.optional() }).optional(),
@@ -58,6 +76,7 @@ export const uiPrefsPatch: z.ZodType<UiPrefsPatch> = z.strictObject({
   historyStrip: z.strictObject({ session: sessionId, open: z.boolean() }).optional(),
   canvas: z.strictObject({ session: sessionId, layout }).optional(),
   home: home.optional(),
+  preview: preview.optional(),
 });
 
 /** One stored row per preference, so changing one never rewrites another. */
@@ -69,6 +88,7 @@ export function prefRows(patch: UiPrefsPatch): [key: string, value: unknown][] {
   if (patch.historyStrip !== undefined) rows.push([`strip.${patch.historyStrip.session}`, patch.historyStrip.open]);
   if (patch.canvas !== undefined) rows.push([`canvas.${patch.canvas.session}`, patch.canvas.layout]);
   if (patch.home !== undefined) rows.push(["home.query", patch.home]);
+  if (patch.preview !== undefined) rows.push(["preview.window", patch.preview]);
   return rows;
 }
 
@@ -92,6 +112,9 @@ export function readPrefs(rows: readonly { readonly key: string; readonly json: 
     } else if (key === "home.query") {
       const h = home.safeParse(value);
       if (h.success) prefs = { ...prefs, home: h.data };
+    } else if (key === "preview.window") {
+      const p = preview.safeParse(value);
+      if (p.success) prefs = { ...prefs, preview: p.data };
     } else if (key.startsWith("canvas.")) {
       const l = layout.safeParse(value);
       if (l.success) prefs = { ...prefs, canvas: { ...prefs.canvas, [key.slice(7)]: l.data } };
@@ -108,5 +131,6 @@ export function applyPrefs(prefs: UiPrefs, patch: UiPrefsPatch): UiPrefs {
     historyStrip: patch.historyStrip === undefined ? prefs.historyStrip : { ...prefs.historyStrip, [patch.historyStrip.session]: patch.historyStrip.open },
     canvas: patch.canvas === undefined ? prefs.canvas : { ...prefs.canvas, [patch.canvas.session]: patch.canvas.layout },
     home: patch.home ?? prefs.home,
+    preview: patch.preview ?? prefs.preview,
   };
 }

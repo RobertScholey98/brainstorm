@@ -847,6 +847,11 @@ export type HostToFrame =
   | { readonly kind: "pulse"; readonly id: FeedbackId }
   /** Export only: every variant of each slot, for the in-page switcher. Keyed by SlotId. */
   | { readonly kind: "variants"; readonly slots: Readonly<Record<string, readonly CanvasVariant[]>> }
+  /**
+   * Present: the slot on the stage fills the window with none of the canvas's own chrome (title, frame edge, selection,
+   * pins), as if the design were the app itself. Pick mode still works in it (ADR 007).
+   */
+  | { readonly kind: "present"; readonly on: boolean }
   /** A design system's kit, sent once per version; null clears it. */
   | { readonly kind: "kit"; readonly kit: KitPayload | null }
   | { readonly kind: "theme"; readonly theme: ThemeState }
@@ -875,6 +880,8 @@ export type FrameToHost =
   | { readonly kind: "zooms"; readonly zooms: Readonly<Record<string, number>> }
   /** A shortcut pressed while the canvas has focus, so the shell's keys work wherever Rob last clicked. */
   | { readonly kind: "key"; readonly key: string; readonly ctrl: boolean; readonly meta: boolean; readonly shift: boolean; readonly alt: boolean }
+  /** In present, the pointer moved near the frame's top edge, at most every few hundred ms, so the host can show how to leave. */
+  | { readonly kind: "pointer" }
   /** A preview frame has painted its block: a still of it as a PNG data URL, or null when it couldn't take one. */
   | { readonly kind: "painted"; readonly image: string | null };
 

@@ -4,7 +4,6 @@ import { flushSync } from "react-dom";
 import { partLabel } from "../core/fork";
 import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, CanvasRect, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
-import { HeldLabel } from "./HeldLabel";
 import { PinNumber } from "./PinNumber";
 import { POPOVER_WIDTH } from "./placement";
 import { useComposerPlace } from "./useComposerPlace";
@@ -64,6 +63,7 @@ export function FeedbackPanel({
   pinBlocked = "There is nothing on the canvas to pin to yet",
   picking,
   composing,
+  asked = false,
   focused,
   echoed,
   onHover,
@@ -83,6 +83,8 @@ export function FeedbackPanel({
   picking: boolean;
   /** Whether the pin composer is up, so the button reads open as every popover trigger does. */
   composing: boolean;
+  /** A pick it asked for that couldn't start, while the canvas region asks how to go on: an edge only, short of pressed. */
+  asked?: boolean;
   focused: FeedbackCue | null;
   /** The comment whose pin is under the pointer on the canvas, tinted as if the pointer were on it. */
   echoed: FeedbackId | null;
@@ -99,9 +101,10 @@ export function FeedbackPanel({
         {feedback.length > 0 && <Count>{feedback.length}</Count>}
         {canPin ? (
           <Hint label="Pin a comment to an element. The agent sees it with your next Regenerate" side="left">
-            <Button variant="outline" className="ml-auto" aria-pressed={picking} aria-expanded={composing} data-pick-toggle onClick={onPickToggle}>
+            <Button variant="outline" className="ml-auto" aria-pressed={picking} aria-expanded={composing} data-edge={asked || undefined} data-pick-toggle onClick={onPickToggle}>
               <MessageSquarePlus data-icon="inline-start" aria-hidden />
-              <HeldLabel active={picking} idle="Pin comment" busy="Picking…" />
+              {/* Pressed while a pick is on; the canvas bar's chip names the mode and its way out. */}
+              Pin comment
             </Button>
           </Hint>
         ) : (

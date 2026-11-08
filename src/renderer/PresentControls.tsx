@@ -1,0 +1,208 @@
+import { AppWindow, ChevronDown, CirclePause, EyeOff, Maximize, X } from "lucide-react";
+import { cn } from "cn";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
+import { Segmented } from "@/components/ui/segmented";
+import { Switch } from "@/components/ui/switch";
+import { Kbd } from "@/components/ui/kbd";
+import { Hint } from "@/components/ui/tooltip";
+import type { PreviewPrefs } from "../core/prefs";
+import { BAR_COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
+import { canOpenPreviewWindow, previewWindow } from "./mirror";
+
+const LOOKS: readonly { value: PreviewPrefs["look"]; label: string; about: string }[] = [
+  { value: "clean", label: "Clean", about: "just the design, ready to share." },
+  { value: "working", label: "Working", about: "canvas and pins, not for sharing." },
+];
+
+/**
+ * The canvas bar's right end (ADR 007), all outline buttons, so they read as one group whether labelled or not. Present sits last and never moves; the preview window's controls grow to its
+ * left: the window's button while it is shut, then Hold and the window's menu while it is open.
+ */
+export function PresentControls({
+  onPresent,
+  open,
+  hold,
+  heldOn,
+  onHold,
+  prefs,
+  onPrefs,
+}: {
+  onPresent: () => void;
+  open: boolean;
+  hold: boolean;
+  /** What the preview window is held on, such as "The wheel · Slot reel". */
+  heldOn: string | null;
+  onHold: (hold: boolean) => void;
+  prefs: PreviewPrefs;
+  onPrefs: (prefs: PreviewPrefs) => void;
+}) {
+  const windowed = canOpenPreviewWindow();
+  return (
+    <span className="flex shrink-0 items-center gap-1" data-present-controls>
+      {windowed && open && <HoldButton hold={hold} heldOn={heldOn} onHold={onHold} />}
+      {windowed && (open ? <WindowMenu prefs={prefs} onPrefs={onPrefs} hold={hold} heldOn={heldOn} onHold={onHold} /> : <OpenWindow />)}
+      <Hint name="Present" label="Fill the screen with this slot" shortcut="F5" side="bottom" align="end">
+        <Button variant="outline" aria-label="Present" onClick={onPresent} className={COMPACT} data-collapse={BAR_COLLAPSE.present} data-present>
+          <Maximize data-icon="inline-start" aria-hidden />
+          <span className={COMPACT_LABEL}>Present</span>
+        </Button>
+      </Hint>
+    </span>
+  );
+}
+
+/** Pressed while held, its label kept: the bar under the canvas bar names what the window is held on and offers Resume live. */
+function HoldButton({ hold, heldOn, onHold }: { hold: boolean; heldOn: string | null; onHold: (hold: boolean) => void }) {
+  return (
+    <Hint
+      name={hold ? "Preview held" : "Hold preview"}
+      label={
+        hold
+          ? `It shows ${heldOn ?? "what it showed"}. Resume live sends your latest changes`
+          : "Freeze the preview while you keep editing here"
+      }
+      side="bottom"
+    >
+      <Button variant="caution" aria-pressed={hold} onClick={() => onHold(!hold)} className={COMPACT} data-collapse={BAR_COLLAPSE.hold} data-hold>
+        <CirclePause data-icon="inline-start" className={hold ? "text-warning" : undefined} aria-hidden />
+        <span className={COMPACT_LABEL}>
+          Hold
+          <span className="data-collapsed:hidden" data-collapse={BAR_COLLAPSE.holdSuffix}>
+            {" preview"}
+          </span>
+        </span>
+      </Button>
+    </Hint>
+  );
+}
+
+function OpenWindow() {
+  return (
+    <Hint name="Preview window" label="Mirror this canvas in a window of its own, to share or to put on another screen" side="bottom">
+      {/* Named, as the Preview menu that takes its place is, until the bar's width needs the room. */}
+      <Button variant="outline" aria-label="Open preview window" onClick={() => previewWindow("open")} className={COMPACT} data-collapse={BAR_COLLAPSE.hold} data-preview-open>
+        <AppWindow data-icon="inline-start" aria-hidden />
+        <span className={COMPACT_LABEL}>Preview</span>
+      </Button>
+    </Hint>
+  );
+}
+
+function WindowMenu({
+  prefs,
+  onPrefs,
+  hold,
+  heldOn,
+  onHold,
+}: {
+  prefs: PreviewPrefs;
+  onPrefs: (prefs: PreviewPrefs) => void;
+  hold: boolean;
+  heldOn: string | null;
+  onHold: (hold: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const run = (command: "open" | "close" | "fullscreen") => {
+    setOpen(false);
+    previewWindow(command);
+  };
+  const look = LOOKS.find((l) => l.value === prefs.look) ?? LOOKS[0];
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <Hint name={`${look?.label} preview`} label="Change its look, hold it or close it" side="bottom">
+        <PopoverTrigger
+          render={<Button variant="caution" aria-label={`Preview window, ${look?.label}`} data-warn={prefs.look === "working" || undefined} data-preview-menu />}
+        >
+          {/* As wide as its widest look, so changing the look moves nothing in the bar: each look's glyph and words are one
+              group, centred in that room, the chevron fixed at the end. Working is the look that isn't for sharing, so
+              the button takes the warning tone, as Hold does when held. */}
+          <span className="grid justify-items-center" data-preview-menu-look>
+            {LOOKS.map((l) => (
+              <span
+                key={l.value}
+                className={cn("col-start-1 row-start-1 flex items-center gap-1.5", l.value !== prefs.look && "invisible")}
+                aria-hidden={l.value !== prefs.look || undefined}
+              >
+                {l.value === "working" ? <EyeOff data-icon="inline-start" className="text-warning" aria-hidden /> : <AppWindow data-icon="inline-start" aria-hidden />}
+                <span className="text-fg/75 data-collapsed:hidden" data-collapse={BAR_COLLAPSE.preview}>
+                  Preview
+                </span>
+                <span className="font-semibold">{l.label}</span>
+              </span>
+            ))}
+          </span>
+          <ChevronDown data-icon="inline-end" aria-hidden />
+        </PopoverTrigger>
+      </Hint>
+      <PopoverContent size="md" align="end" data-preview-popover>
+        <PopoverHeader
+          heading="Preview window"
+          description={hold ? `Held on ${heldOn ?? "what it showed"}` : "Mirrors this canvas live."}
+        />
+        <div className="grid gap-1.5">
+          <span className="text-xs font-medium text-fg-muted">Look</span>
+          {/* Each look wears the glyph its menu button does, Working's in the warning tone, so the risk shows before the click. */}
+          <Segmented
+            value={prefs.look}
+            onValueChange={(next) => onPrefs({ ...prefs, look: next })}
+            options={LOOKS.map((l) => ({
+              value: l.value,
+              label: (
+                <span className="flex items-center gap-1.5">
+                  {l.value === "working" ? <EyeOff aria-hidden className="size-3.5 text-warning" /> : <AppWindow aria-hidden className="size-3.5" />}
+                  {l.label}
+                </span>
+              ),
+            }))}
+            itemData="preview-look"
+            aria-label="Look"
+          />
+          {/* A short line for each look, so Working's risk reads before the click; the chosen one at full contrast. */}
+          <ul className="grid gap-0.5 text-xs" data-preview-look-about>
+            {LOOKS.map((l) => (
+              <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted"}>
+                {/* Each look's name at full contrast, so the one not chosen reads as a choice, not as off. */}
+                <span className="font-semibold text-fg">{l.label}:</span> {l.about}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <label className="flex items-start justify-between gap-3">
+          <span className="grid gap-0.5">
+            <span className="text-sm">Hold preview</span>
+            <span className="text-xs text-fg-muted">{hold ? "Turn off to send your latest edits to the preview." : "Freeze the preview while you keep editing here."}</span>
+          </span>
+          <Switch checked={hold} onCheckedChange={onHold} tone="warning" className="mt-0.5" data-preview-menu-hold />
+        </label>
+        <label className="flex items-start justify-between gap-3">
+          <span className="grid gap-0.5">
+            <span className="text-sm">Show canvas in main window</span>
+            <span className="text-xs text-fg-muted">Keep the canvas here as well as in the preview window.</span>
+          </span>
+          <Switch checked={prefs.here} onCheckedChange={(here) => onPrefs({ ...prefs, here })} className="mt-0.5" data-preview-here />
+        </label>
+        <div className="grid grid-cols-2 gap-1.5">
+          <Button variant="outline" onClick={() => run("open")} data-preview-front>
+            Bring preview to front
+          </Button>
+          <Hint label="Or press F11 with the preview window in front" side="bottom">
+            <Button variant="outline" onClick={() => run("fullscreen")} data-preview-fullscreen>
+              Full screen preview
+              {/* The key that does the same in the preview window, on the button it matches, as Present's hint shows F5. */}
+              <Kbd>F11</Kbd>
+            </Button>
+          </Hint>
+        </div>
+        <PopoverFooter>
+          {/* A command, so it looks like one beside the other window actions, not a dismiss. */}
+          <Button variant="outline" onClick={() => run("close")} data-preview-close>
+            <X data-icon="inline-start" aria-hidden />
+            Close preview
+          </Button>
+        </PopoverFooter>
+      </PopoverContent>
+    </Popover>
+  );
+}

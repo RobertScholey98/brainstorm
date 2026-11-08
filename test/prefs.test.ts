@@ -24,16 +24,20 @@ async function withServer<T>(home: string, fn: (call: (method: string, body?: un
 }
 
 describe("UI prefs", () => {
-  test("pane widths, the Inspector rail, the history strip, a brainstorm's canvas view and home's filters survive a restart", async () => {
+  test("pane widths, the Inspector rail, the history strip, a brainstorm's canvas view, home's filters and the preview window survive a restart", async () => {
     const home = mkdtempSync(join(tmpdir(), "bs-prefs-"));
     await withServer(home, async (call) => {
-      expect((await call("GET")).body).toEqual({ ok: true, data: { panes: { sidebar: null, inspector: null }, inspectorRail: false, historyStrip: {}, canvas: {}, home: { status: "active", projects: [], sort: "recent" } } });
+      expect((await call("GET")).body).toEqual({
+        ok: true,
+        data: { panes: { sidebar: null, inspector: null }, inspectorRail: false, historyStrip: {}, canvas: {}, home: { status: "active", projects: [], sort: "recent" }, preview: { look: "clean", here: true } },
+      });
       await call("POST", { panes: { sidebar: 312 } });
       await call("POST", { panes: { inspector: 344 }, inspectorRail: true });
       await call("POST", { canvas: { session: "s_abcdefgh", layout: { view: "board", slot: "wheel" } } });
       await call("POST", { home: { status: "settled", projects: ["proj-a"], sort: "title" } });
       await call("POST", { historyStrip: { session: "s_abcdefgh", open: false } });
       await call("POST", { historyStrip: { session: "s_zzzzzzzz", open: true } });
+      await call("POST", { preview: { look: "working", here: false } });
     });
     await withServer(home, async (call) => {
       expect((await call("GET")).body).toEqual({
@@ -44,6 +48,7 @@ describe("UI prefs", () => {
           historyStrip: { s_abcdefgh: false, s_zzzzzzzz: true },
           canvas: { s_abcdefgh: { view: "board", slot: "wheel" } },
           home: { status: "settled", projects: ["proj-a"], sort: "title" },
+          preview: { look: "working", here: false },
         },
       });
     });
@@ -59,8 +64,10 @@ describe("UI prefs", () => {
         { home: { status: "active", projects: [], sort: "recent", search: "wheel" } },
         { historyStrip: false },
         { historyStrip: { session: "wheel", open: true } },
+        { preview: { look: "present", here: true } },
+        { preview: { look: "clean" } },
       ];
-      expect(await Promise.all(bad.map(async (b) => (await call("POST", b)).status)), "the search text is never stored").toEqual([400, 400, 400, 400, 400, 400, 400]);
+      expect(await Promise.all(bad.map(async (b) => (await call("POST", b)).status)), "the search text is never stored").toEqual([400, 400, 400, 400, 400, 400, 400, 400, 400]);
       expect((await call("GET")).body.data.panes).toEqual({ sidebar: null, inspector: null });
     });
   });
@@ -76,8 +83,16 @@ describe("UI prefs", () => {
       { key: "history.strip", json: "false" },
       { key: "strip.s_abcdefgh", json: "true" },
       { key: "strip.s_zzzzzzzz", json: '"open"' },
+      { key: "preview.window", json: '{"look":"stage","here":true}' },
     ];
-    expect(readPrefs(rows)).toEqual({ panes: { sidebar: 264, inspector: null }, inspectorRail: false, historyStrip: { s_abcdefgh: true }, canvas: { s_abcdefgh: { view: "stage", slot: null } }, home: { status: "active", projects: [], sort: "recent" } });
+    expect(readPrefs(rows)).toEqual({
+      panes: { sidebar: 264, inspector: null },
+      inspectorRail: false,
+      historyStrip: { s_abcdefgh: true },
+      canvas: { s_abcdefgh: { view: "stage", slot: null } },
+      home: { status: "active", projects: [], sort: "recent" },
+      preview: { look: "clean", here: true },
+    });
   });
 });
 
@@ -99,6 +114,7 @@ describe("applyPrefs", () => {
       historyStrip: { s_abcdefgh: true, s_zzzzzzzz: false },
       canvas: { s_abcdefgh: { view: "stage", slot: "wheel" }, s_zzzzzzzz: { view: "board", slot: null } },
       home: { status: "active", projects: [], sort: "recent" },
+      preview: { look: "clean", here: true },
     });
   });
 });

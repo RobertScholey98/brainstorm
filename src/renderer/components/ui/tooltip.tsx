@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, type ReactElement, type ReactNode } from "react"
+import { createContext, useContext, type ComponentProps, type ReactElement, type ReactNode } from "react"
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 import { cn } from "cn"
 
@@ -120,6 +120,7 @@ function Hint({
   label,
   shortcut,
   side,
+  align,
   disabled,
   children,
 }: {
@@ -127,6 +128,8 @@ function Hint({
   label: ReactNode
   shortcut?: string
   side: NonNullable<TooltipPrimitive.Positioner.Props["side"]>
+  /** Which edge of the control the hint lines up with: "end" keeps a hint at a bar's end from spilling past it. */
+  align?: TooltipPrimitive.Positioner.Props["align"]
   disabled?: boolean
   children: ReactElement
 }) {
@@ -134,7 +137,7 @@ function Hint({
   return (
     <Tooltip disabled={disabled}>
       <TooltipTrigger render={children} />
-      <TooltipContent side={side} anchor={row?.anchor} sideOffset={row === null ? undefined : rowOffset(row)} covers={row?.text}>
+      <TooltipContent side={side} align={align} anchor={row?.anchor} sideOffset={row === null ? undefined : rowOffset(row)} covers={row?.text}>
         {name !== undefined && (
           <>
             <span className="font-medium" data-hint-name>
@@ -179,5 +182,32 @@ function BlockedHint({
   )
 }
 
-export { BlockedHint, Hint, HintAnchor, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+/**
+ * A tooltip's look on a label no trigger owns, placed by its caller: present's opening line on how to leave. It reads as
+ * a label, as a tooltip does, so it never looks like a panel to act in.
+ */
+function TooltipLabel({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <span data-slot="tooltip-label" data-open="" className={cn(overlaySurface({ tone: "inverse" }), "flex items-center gap-2 px-3 py-1.5 text-sm", className)}>
+      {children}
+    </span>
+  )
+}
+
+/** A button inside a TooltipLabel, in the label's own ink, set off from its words by a rule. */
+function TooltipAction({ className, ...props }: Omit<ComponentProps<"button">, "type">) {
+  return (
+    <button
+      type="button"
+      data-slot="tooltip-action"
+      className={cn(
+        "-my-1 -mr-2 ml-1 flex items-center gap-1.5 rounded-sm border-l border-inverse-fg/20 px-2 py-1 font-medium outline-none hover:bg-inverse-fg/15 focus-visible:ring-2 focus-visible:ring-ring dark:border-fg/15 dark:hover:bg-fg/10",
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+export { BlockedHint, Hint, HintAnchor, Tooltip, TooltipAction, TooltipLabel, TooltipTrigger, TooltipContent, TooltipProvider }
 export type { HintRow }

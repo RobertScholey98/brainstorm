@@ -1,14 +1,16 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, MousePointer2, X } from "lucide-react";
+import { useRef, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
 import { Segmented } from "@/components/ui/segmented";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
 import { Truncate } from "@/components/ui/truncate";
+import { cn } from "cn";
 import { Hint } from "@/components/ui/tooltip";
 import type { CanvasLayout } from "../core/prefs";
 import type { SlotId, SlotView } from "../core/types";
+import { PICK_HINTS, useBarFit } from "./headerAction";
 
 const VIEWS: readonly { value: CanvasLayout["view"]; label: string }[] = [
   { value: "stage", label: "One slot" },
@@ -30,6 +32,7 @@ export function CanvasBar({
   onSlot,
   onView,
   onCancelPick,
+  trailing,
 }: {
   slots: readonly SlotView[];
   current: SlotId | null;
@@ -41,6 +44,8 @@ export function CanvasBar({
   onSlot: (slot: SlotId) => void;
   onView: (view: CanvasLayout["view"]) => void;
   onCancelPick: () => void;
+  /** How the canvas is shown beyond this window, at the bar's right end: present, and the preview window. */
+  trailing?: ReactNode;
 }) {
   const at = slots.findIndex((s) => s.id === current);
   const step = (by: number) => {
@@ -49,8 +54,10 @@ export function CanvasBar({
   };
   const several = slots.length > 1;
   const pct = zoom === null ? 100 : Math.round(zoom * 100);
+  const bar = useRef<HTMLDivElement>(null);
+  useBarFit(bar);
   return (
-    <div className="flex h-10 shrink-0 items-center gap-1 border-b bg-card px-2" data-canvas-bar>
+    <div ref={bar} className="flex h-10 shrink-0 items-center gap-1 border-b bg-card px-2" data-canvas-bar>
       {several && (
         <>
           <Hint label="Previous slot" side="bottom">
@@ -75,17 +82,29 @@ export function CanvasBar({
       <Tabs value={current} onValueChange={onSlot} tabs={slots.map((s) => ({ value: s.id, label: s.title }))} itemData="slot-tab" aria-label="Slots" />
       {/* It takes only the room the tabs leave, so in a narrow window the pick hint's text gives way, never a tab. */}
       <div className="flex flex-1 items-center justify-end gap-2 pl-2">
-        {picking !== null && (
-          <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-fg-muted" role="status" data-pick-hint>
-            <Truncate className="w-0 flex-1 text-right">{picking === "vary" ? "Click an element to vary" : "Click an element to pin a comment"}</Truncate>
-            <Kbd>Esc</Kbd>
-            <Button variant="ghost" onClick={onCancelPick}>
-              Cancel
-            </Button>
-            {/* Pick mode's own controls, then the view's, as the header divides a request's actions from Regenerate. */}
-            {several && <Separator orientation="vertical" data-pick-divider />}
+        {/* The hint's room is kept while no pick is on, unseen, so the controls after it never move when one starts. */}
+        <span
+          className={cn("flex min-w-0 flex-1 items-center gap-1.5 text-sm", picking === null && "invisible")}
+          {...(picking === null ? { "aria-hidden": true, inert: true } : { role: "status", "data-pick-hint": "" })}
+        >
+          {/* One accent chip, pointer glyph, words and the way out together, so the pick reads as a mode and never as a
+              slot tab; the room around it is the longest hint's, kept whether or not a pick is on. */}
+          <span className="flex w-0 flex-1 items-center justify-end" data-bar-hint>
+            <span className="flex h-7 min-w-0 items-center gap-1 rounded-md border border-accent/40 bg-accent/10 pr-0.5 pl-2 text-fg" data-tint data-pick-chip>
+              <MousePointer2 aria-hidden className="size-3 shrink-0 text-accent" />
+              <Truncate className="min-w-0" data-bar-hint-words>
+                {picking === "vary" ? PICK_HINTS.vary : PICK_HINTS.comment}
+              </Truncate>
+              <Hint label="Stop picking" shortcut="Esc" side="bottom">
+                <Button variant="ghost" size="icon-xs" aria-label="Stop picking" onClick={onCancelPick} data-pick-cancel>
+                  <X aria-hidden />
+                </Button>
+              </Hint>
+            </span>
           </span>
-        )}
+          {/* Pick mode's own controls, then the view's, as the header divides a request's actions from Regenerate. */}
+          {several && <Separator orientation="vertical" {...(picking === null ? {} : { "data-pick-divider": "" })} />}
+        </span>
         {pct < 100 && (
           <Hint label="Scaled to fit the canvas. Hide the sidebar (Ctrl+B) or collapse the Inspector to give it more room." side="bottom">
             <Badge tabIndex={0} data-canvas-zoom={pct}>
@@ -94,6 +113,13 @@ export function CanvasBar({
           </Hint>
         )}
         {several && <Segmented fit value={view} onValueChange={onView} options={VIEWS} itemData="view-option" aria-label="View" />}
+        {/* Every control keeps its place through a pick; their labels give way to the hint first (BAR_COLLAPSE). */}
+        {trailing !== undefined && (
+          <>
+            {several && <Separator orientation="vertical" data-trailing-divider />}
+            {trailing}
+          </>
+        )}
       </div>
     </div>
   );
