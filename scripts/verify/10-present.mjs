@@ -273,7 +273,7 @@ try {
     ["Preview held on The result · Assignment cardResume live", "The canvas is in the Working preview, which is held."],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "15b-canvas-away-held", "Canvas away while Hold preview is on: the held strip along the region's top, Preview held on the slot and variant, with Resume live; under it the placeholder leads with the consequence, Your edits show nowhere right now, then says the canvas is in the Working preview, which is held, with Show canvas here now the primary and Bring preview to front the outline");
+  await snap(window, "15b-canvas-away-held", "Canvas away while Hold preview is on: the held strip along the region's top, Preview held on the slot and variant, with Resume live; under it the placeholder leads with the consequence, Your edits show nowhere right now, then says the canvas is in the Working preview, which is held, with Show canvas here now the primary and Bring preview to front the outline; the window glyph above the title is amber");
   await window.click("[data-held-release]");
   await window.waitForSelector("[data-held-bar]", { state: "detached" });
   await window.click("[data-pick-toggle]");

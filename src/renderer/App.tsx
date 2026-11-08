@@ -935,7 +935,8 @@ function CanvasAway({
       <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">
-            <AppWindow aria-hidden />
+            {/* Held, with the canvas away, Rob's edits show nowhere: the glyph takes the held strip's warning tone. */}
+            <AppWindow aria-hidden className={hold && stuck === null && picking === null ? "text-warning" : undefined} />
           </EmptyMedia>
           <EmptyTitle>
             {stuck !== null
@@ -962,7 +963,7 @@ function CanvasAway({
                   : look === "clean"
                     ? // The look an audience may be watching: every edit reaches it as it's made.
                       "Your audience sees each edit as you make it. Hold pauses it."
-                    : "It's live and follows your edits here."}
+                    : "It's live and follows your edits."}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row justify-center">
