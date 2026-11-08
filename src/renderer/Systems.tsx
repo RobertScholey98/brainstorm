@@ -1392,7 +1392,9 @@ function propTable(declared: readonly PropInfo[], stories: readonly ArgRow[]): P
   for (const p of declared) {
     const s = set.get(p.name);
     if (s === undefined && p.type === null && p.options === null && p.default === null) continue;
-    const type = p.options !== null ? p.options.map((o) => JSON.stringify(o)).join(" | ") : (p.type ?? (s === undefined ? "—" : typeText(s)));
+    // Choices read plainer than a type that names them indirectly (keyof typeof VARIANTS), so they come first.
+    const type =
+      p.options !== null ? p.options.map((o) => JSON.stringify(o)).join(" | ") : s?.type?.options != null ? typeText(s) : (p.type ?? (s === undefined ? "—" : typeText(s)));
     rows.push({ name: p.name, type, default: p.default, required: p.required, description: s?.type?.description ?? null, example: s === undefined ? null : exampleText(s.value) });
   }
   for (const s of stories) {
@@ -1542,8 +1544,10 @@ function Workbench({
                           required
                         </span>
                       )}
-                      <span className="ml-auto min-w-0 text-right font-mono text-xs break-words text-fg-muted">{row.type}</span>
+                      {row.type.length <= 24 && <span className="ml-auto min-w-0 font-mono text-xs break-words text-fg-muted">{row.type}</span>}
                     </span>
+                    {/* A long union reads better as its own line than wrapped against the right edge. */}
+                    {row.type.length > 24 && <span className="font-mono text-xs break-words text-fg-muted">{row.type}</span>}
                     {row.description !== null && <span className="text-xs text-fg-muted">{row.description}</span>}
                     {(row.default !== null || row.example !== null) && (
                       <span className="flex flex-wrap gap-x-3 text-xs text-fg-muted">
