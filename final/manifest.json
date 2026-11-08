@@ -1,0 +1,81 @@
+{
+  "shots": [
+    {
+      "file": "01-agent-cli.png",
+      "shows": "The agent's terminal: system add syncs robnet's packages/ui (72 components, 73 stories, with warnings for stories that read no colour token and the kit's own off-scale values); session new --system; a commit refused for a raw <button> with className, an inline style, and literal padding and radius in the proposed component's CSS, each naming the kit token to write instead so theme tweaks reach it; then the clean commit; last, a freeform session (no --system) refuses a proposed/ folder with invalid_proposed"
+    },
+    {
+      "file": "02-systems-list.png",
+      "shows": "The Design systems page: robnet's UI library as a card with its version, component and story counts, and Sync; the add-a-library field above"
+    },
+    {
+      "file": "03-system-gallery.png",
+      "shows": "A design system's Components tab: the searchable catalog down the left, every story rendered live from the synced kit in the gallery, the theme axes (data-theme, data-accent) above it"
+    },
+    {
+      "file": "04-system-gallery-card.png",
+      "shows": "The gallery narrowed to one component, Card, rendering its story from the library"
+    },
+    {
+      "file": "05-system-catalog-search.png",
+      "shows": "The catalog filtered by 'st': names that start with it first, so Stack, the layout primitive Brainstorm generated because the library has none and marked as Brainstorm's, leads; the gallery narrows to the matches' stories"
+    },
+    {
+      "file": "06-system-theme.png",
+      "shows": "The Theme tab: the library's theme axes and its tokens with their values per axis"
+    },
+    {
+      "file": "07-system-warnings.png",
+      "shows": "The Warnings tab: what the sync noticed but didn't refuse: stories with no colour token, components with no story, values the kit itself writes off its scales"
+    },
+    {
+      "file": "08-session-stage.png",
+      "shows": "The meal-plan brainstorm as it opens: the first block, built only from robnet's Card, Item, Badge, Progress and Button, on the stage; the Inspector's controls and, below them, the Design system section"
+    },
+    {
+      "file": "09-session-board.png",
+      "shows": "All slots on the board, each showing its picked variant: the week slot on its 'strip' variant (the sidebar lists its 'list' variant too) and the recipe card, all composed from the kit; the WeekStrip the kit lacked carries a 'not in system' tag"
+    },
+    {
+      "file": "10-proposed-tag.png",
+      "shows": "Close-up of the week-strip block: the proposed WeekStrip outlined with its 'WeekStrip · not in system' tag, beside kit components"
+    },
+    {
+      "file": "11-inspector-system.png",
+      "shows": "The Inspector's Design system section: robnet's UI at v1, the theme axes, colour and size tokens, Save as theme, Export theme and Reset, and the proposed WeekStrip with Promote"
+    },
+    {
+      "file": "12-theme-tweaked.png",
+      "shows": "The same brainstorm after three theme tweaks (dark, rose accent, 1rem radius): every block on the canvas follows, since they all read the kit's tokens, and the Inspector counts the tweaks"
+    },
+    {
+      "file": "13-theme-save.png",
+      "shows": "Saving the tweaks as a named theme of the design system, so another brainstorm can apply it"
+    },
+    {
+      "file": "14-theme-export.png",
+      "shows": "Exporting the session's theme: a CSS file of the overrides and a DTCG tokens file, with the path and Show in folder"
+    },
+    {
+      "file": "15-promote-started.png",
+      "shows": "After Promote: the WeekStrip row says a thread on robnet's project is adding it to the library, with Open thread, and offers no second Promote while it runs"
+    },
+    {
+      "file": "16-promote-message.png",
+      "shows": "The first message of the T3 thread Promote started on the library's project: which component, from which brainstorm, the library's folder and entry, its proposed files, and the example props for its story"
+    },
+    {
+      "file": "17-upgrade-offered.png",
+      "shows": "Once the library is synced with WeekStrip, the open brainstorm offers version 2: Upgrade checks every block against it first"
+    },
+    {
+      "file": "18-upgraded.png",
+      "shows": "After Upgrade: the brainstorm builds with v2 and keeps its theme tweaks; the week strip now renders the library's own WeekStrip, untagged, and the Inspector lists WeekStrip under Now in the kit"
+    },
+    {
+      "file": "19-system-versions.png",
+      "shows": "The Versions tab: v1 and v2, each with when it was synced, what it holds, and the brainstorms that build with it"
+    }
+  ],
+  "errors": []
+}
