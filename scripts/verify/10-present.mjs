@@ -207,7 +207,7 @@ try {
   await window.click("[data-hold]");
   await preview.waitForSelector("[data-held-bar]");
   await preview.mouse.move(640, 790);
-  await snap(preview, "11b-preview-working-held", "The Working preview window while Hold preview is on in the main window: the same warning-toned held strip as the main window's, in its canvas's top inset, saying changes in the main window wait for Resume live, which ends the strip as an amber full-height segment with a play glyph; an amber rule under the bar marks the Working look");
+  await snap(preview, "11b-preview-working-held", "The Working preview window while Hold preview is on in the main window: the same warning-toned held strip as the main window's, in its canvas's top inset, in the same words, Preview held on the slot and variant it keeps, with Resume live ending the strip as an amber full-height segment with a play glyph; an amber rule under the bar marks the Working look");
   await preview.click("[data-held-release]");
   await preview.waitForSelector("[data-held-bar]", { state: "detached" });
   check("Resume live in the working preview window ends Hold in the main window", await window.getAttribute("[data-hold]", "aria-pressed"), "false");

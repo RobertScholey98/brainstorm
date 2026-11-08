@@ -109,7 +109,7 @@ function WindowMenu({
   const look = LOOKS.find((l) => l.value === prefs.look) ?? LOOKS[0];
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint name={`Preview window · ${look?.label} look`} label="Change its look, hold it or close it" side="bottom">
+      <Hint name={`${look?.label} preview`} label="Change its look, hold it or close it" side="bottom">
         <PopoverTrigger
           render={<Button variant="caution" aria-label={`Preview window, ${look?.label}`} data-warn={prefs.look === "working" || undefined} data-preview-menu />}
         >

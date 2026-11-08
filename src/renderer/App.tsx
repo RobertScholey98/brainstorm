@@ -819,7 +819,7 @@ function SessionWorkspace({
             onDismiss={() => setStuckPick(null)}
           />
         )}
-        {preview.open && preview.hold && !presenting && <HeldBar on={preview.heldOn} here="main" onRelease={() => link.setHold(false)} />}
+        {preview.open && preview.hold && !presenting && <HeldBar on={preview.heldOn} onRelease={() => link.setHold(false)} />}
         {presenting && <PresentHint several={slots.length > 1} poke={presentPoke} onLeave={() => void document.exitFullscreen().catch(() => {})} />}
         {interaction.kind === "composing" && (
           <PinComposer
@@ -938,7 +938,7 @@ function CanvasAway({
             {stuck !== null ? "The canvas is in the Clean preview" : picking ? "Click an element in the preview window" : `The canvas is in the ${name} preview`}
           </EmptyTitle>
           {/* Two lines whatever it says, so starting or ending a pick moves nothing in the region. */}
-          <EmptyDescription className="min-h-10">
+          <EmptyDescription className="flex min-h-10 items-center justify-center">
             {stuck !== null
               ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience. Show the canvas here to ${act === "pin" ? "pin" : "vary an element"}, or switch the preview to Working (not for sharing).`
               : picking

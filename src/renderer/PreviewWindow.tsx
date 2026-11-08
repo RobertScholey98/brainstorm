@@ -10,7 +10,6 @@ import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type FeedbackCue } from "./CanvasHost";
 import { PinComposer } from "./Feedback";
 import { HeldBar } from "./HeldBar";
-import { HeldLabel } from "./HeldLabel";
 import { describe, openChannel, type MirrorScene, type PreviewSettings, type ToMain, type ToPreview } from "./mirror";
 import { failedTitle, type Notice } from "./notice";
 import { VaryComposer } from "./Vary";
@@ -150,7 +149,8 @@ export function PreviewWindow({ api }: { api: Api }) {
                       data-preview-pin
                     >
                       <MessageSquarePlus data-icon="inline-start" aria-hidden />
-                      <HeldLabel active={picking === "comment"} idle="Pin comment" busy="Picking…" />
+                      {/* Pressed while a pick is on; the chip beside it already names the mode and its way out. */}
+                      Pin comment
                     </Button>
                   </span>
                 </Hint>
@@ -185,7 +185,7 @@ export function PreviewWindow({ api }: { api: Api }) {
             onPlacement={() => {}}
             onZooms={setZooms}
           />
-          {!clean && settings.hold && <HeldBar on={describe({ blocks, scene })} here="preview" onRelease={() => tell({ kind: "resume" })} />}
+          {!clean && settings.hold && <HeldBar on={describe({ blocks, scene })} onRelease={() => tell({ kind: "resume" })} />}
           {composing?.for === "comment" && (
             <PinComposer
               key={JSON.stringify(composing)}
