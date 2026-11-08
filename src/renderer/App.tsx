@@ -935,15 +935,17 @@ function CanvasAway({
             <AppWindow aria-hidden />
           </EmptyMedia>
           <EmptyTitle>
-            {stuck !== null ? "The canvas is in the Clean preview" : picking ? "Click an element in the preview window" : "The canvas is in the preview window"}
+            {stuck !== null ? "The canvas is in the Clean preview" : picking ? "Click an element in the preview window" : `The canvas is in the ${name} preview`}
           </EmptyTitle>
           {/* Two lines whatever it says, so starting or ending a pick moves nothing in the region. */}
           <EmptyDescription className="min-h-10">
             {stuck !== null
               ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience. Show the canvas here to ${act === "pin" ? "pin" : "vary an element"}, or switch the preview to Working (not for sharing).`
               : picking
-                ? "Press Esc or Cancel to stop."
-                : `The ${name} preview is ${hold ? "held" : "live"}. Slot and setting changes here appear there${hold ? " when you resume" : ""}.`}
+                ? "Your comment lands here in Feedback. Press Esc or Cancel to stop."
+                : hold
+                  ? `It's held. It catches up with your edits here when you resume.`
+                  : `It's live and follows your edits here.`}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row justify-center">
@@ -953,7 +955,7 @@ function CanvasAway({
                 {act === "pin" ? "Show here and pin" : "Show here and vary"}
               </Button>
               {/* The way that shows the audience Rob's tools, so it carries the Working look's warning tone. */}
-              <Button variant="caution" data-warn onClick={onWorking} data-away-working>
+              <Button variant="caution" data-edge onClick={onWorking} data-away-working>
                 Switch preview to Working
               </Button>
               <Button variant="ghost" onClick={onDismiss} data-away-dismiss>

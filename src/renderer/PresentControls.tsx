@@ -141,7 +141,22 @@ function WindowMenu({
         />
         <div className="grid gap-1.5">
           <span className="text-xs font-medium text-fg-muted">Look</span>
-          <Segmented value={prefs.look} onValueChange={(next) => onPrefs({ ...prefs, look: next })} options={LOOKS} itemData="preview-look" aria-label="Look" />
+          {/* Each look wears the glyph its menu button does, Working's in the warning tone, so the risk shows before the click. */}
+          <Segmented
+            value={prefs.look}
+            onValueChange={(next) => onPrefs({ ...prefs, look: next })}
+            options={LOOKS.map((l) => ({
+              value: l.value,
+              label: (
+                <span className="flex items-center gap-1.5">
+                  {l.value === "working" ? <EyeOff aria-hidden className="size-3.5 text-warning" /> : <AppWindow aria-hidden className="size-3.5" />}
+                  {l.label}
+                </span>
+              ),
+            }))}
+            itemData="preview-look"
+            aria-label="Look"
+          />
           <ul className="grid gap-0.5 text-xs" data-preview-look-about>
             {LOOKS.map((l) => (
               <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted"} data-chosen={l.value === prefs.look || undefined}>
