@@ -181,10 +181,10 @@ try {
   check(
     "the main window says so under the canvas bar, naming the slot and variant held, and Hold preview is pressed",
     [await window.textContent("[data-held-bar]"), await window.getAttribute("[data-hold]", "aria-pressed")],
-    ["Preview heldThe preview window still shows The wheel · Slot reelResume live", "true"],
+    ["Preview held on The wheel · Slot reelResume live", "true"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed amber, and, as a slim strip in the canvas's top inset above the frame caption so nothing moves or hides, a warning-toned bar under the canvas bar, Preview held · The preview window still shows The wheel · Slot reel, with a compact Resume live inside the strip; the main canvas has moved on to the result slot");
+  await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed amber, and, as a slim strip in the canvas's top inset above the frame caption so nothing moves or hides, a warning-toned bar under the canvas bar, Preview held on The wheel · Slot reel (the names in semibold), with a compact Resume live inside the strip; the main canvas has moved on to the result slot");
   await window.click("[data-held-release]");
   await settled(() => showing(mirror));
   check("releasing Hold sends it the latest", await showing(mirror), "result:result/card");

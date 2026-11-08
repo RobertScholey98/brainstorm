@@ -13,18 +13,20 @@ export function HeldBar({ on, here, onRelease }: { on: string | null; here: "mai
     <div className="absolute inset-x-0 top-0 z-sticky bg-card">
       <div role="status" className="flex h-5 items-center gap-2 border-b border-warning bg-warning/30 pl-3 text-xs dark:bg-warning-subtle" data-held-bar>
         <Pause aria-hidden className="size-3 shrink-0 fill-current text-warning" />
-        <span className="shrink-0 font-semibold">Preview held</span>
         {/* The main window names what its audience still sees, the slot and variant set apart as names; the preview
             window, which shows that itself, says what waits for Resume live. */}
-        {here === "preview" ? (
-          <Truncate className="w-0 flex-1">Changes from the main window show when you resume.</Truncate>
-        ) : on === null ? (
-          <Truncate className="w-0 flex-1">The preview window keeps what it showed.</Truncate>
-        ) : (
+        {here === "main" && on !== null ? (
           <span className="flex w-0 flex-1 items-center">
-            <span className="shrink-0 whitespace-pre">The preview window still shows </span>
+            <span className="shrink-0 whitespace-pre">
+              <span className="font-semibold">Preview held</span> on{" "}
+            </span>
             <Truncate className="min-w-0 font-semibold">{on}</Truncate>
           </span>
+        ) : (
+          <>
+            <span className="shrink-0 font-semibold">Preview held</span>
+            <Truncate className="w-0 flex-1">{here === "preview" ? "Changes from the main window show when you resume." : "The preview window keeps what it showed."}</Truncate>
+          </>
         )}
         <Button variant="strip" size="strip" onClick={onRelease} data-held-release>
           <Play aria-hidden className="fill-current" />
