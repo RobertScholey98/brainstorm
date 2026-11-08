@@ -139,7 +139,7 @@ function WindowMenu({
       <PopoverContent size="md" align="end" data-preview-popover>
         <PopoverHeader
           heading="Preview window"
-          description={hold ? `Held on ${heldOn ?? "what it showed"}.` : "Mirrors this canvas live."}
+          description={hold ? `Held on ${heldOn ?? "what it showed"}` : "Mirrors this canvas live."}
         />
         <div className="grid gap-1.5">
           <span className="text-xs font-medium text-fg-muted">Look</span>

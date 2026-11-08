@@ -802,7 +802,7 @@ function SessionWorkspace({
           <CanvasAway
             look={preview.prefs.look}
             hold={preview.hold}
-            picking={picking !== null}
+            picking={picking}
             stuck={stuckPick}
             onHere={() => {
               const kind = stuckPick;
@@ -920,7 +920,8 @@ function CanvasAway({
 }: {
   look: PreviewPrefs["look"];
   hold: boolean;
-  picking: boolean;
+  /** A pick that is on, waiting for a click in the preview window. */
+  picking: "comment" | "vary" | null;
   /** A pick asked for while the preview window is clean, which never takes one since an audience may be watching it. */
   stuck: "comment" | "vary" | null;
   onHere: () => void;
@@ -930,7 +931,7 @@ function CanvasAway({
   const act = stuck === "vary" ? "vary" : "pin";
   const name = look === "clean" ? "Clean" : "Working";
   return (
-    <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away={stuck !== null ? "stuck" : picking ? "picking" : ""}>
+    <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away={stuck !== null ? "stuck" : picking !== null ? "picking" : ""}>
       <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">
@@ -941,20 +942,27 @@ function CanvasAway({
               ? act === "pin"
                 ? "Pins don't show in the Clean preview"
                 : "Vary can't pick in the Clean preview"
-              : picking
+              : picking !== null
                 ? "Click an element in the preview window"
-                : `The canvas is in the ${name} preview`}
+                : hold
+                  ? "Your edits show nowhere right now"
+                  : `The canvas is in the ${name} preview`}
           </EmptyTitle>
           {/* Two lines' room whatever it says, so starting or ending a pick moves nothing in the region; a one-line body
               sits under its title and leaves the spare line above the buttons. */}
           <EmptyDescription className="min-h-10">
             {stuck !== null
               ? `${act === "pin" ? "They show" : "It picks"} only in Working, which isn't for sharing.`
-              : picking
-                ? "Add your comment there; it appears in Feedback here. Esc stops."
+              : picking !== null
+                ? picking === "vary"
+                  ? "Choose its variants there. Esc stops."
+                  : "Add your comment there; it appears in Feedback here. Esc stops."
                 : hold
-                  ? `The preview is held, so your edits show nowhere until you resume.`
-                  : `It's live and follows your edits here.`}
+                  ? `The canvas is in the ${name} preview, which is held.`
+                  : look === "clean"
+                    ? // The look an audience may be watching: every edit reaches it as it's made.
+                      "Your audience sees each edit as you make it. Hold pauses it."
+                    : "It's live and follows your edits here."}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row justify-center">
@@ -987,8 +995,9 @@ function CanvasAway({
               <Button variant="accent" onClick={() => previewWindow("open")} data-away-front>
                 Bring preview to front
               </Button>
+              {/* A pick that is on carries over to the canvas here, so the button says so. */}
               <Button variant="outline" onClick={onHere} data-away-here>
-                Show canvas here
+                {picking === "comment" ? "Show canvas here and pin" : picking === "vary" ? "Show canvas here and vary" : "Show canvas here"}
               </Button>
             </>
           )}
