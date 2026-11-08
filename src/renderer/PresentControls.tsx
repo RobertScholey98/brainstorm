@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
+import { Kbd } from "@/components/ui/kbd";
 import { Hint } from "@/components/ui/tooltip";
 import type { PreviewPrefs } from "../core/prefs";
 import { BAR_COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
@@ -166,9 +167,11 @@ function WindowMenu({
           </Button>
           <Button variant="outline" onClick={() => run("fullscreen")} data-preview-fullscreen>
             Full screen preview
+            {/* The key that does the same in the preview window, on the button it matches, as Present's hint shows F5. */}
+            <Kbd>F11</Kbd>
           </Button>
         </div>
-        <PopoverFooter hint="Or press F11 in the preview window.">
+        <PopoverFooter>
           <Button variant="ghost" onClick={() => run("close")} data-preview-close>
             Close preview
           </Button>

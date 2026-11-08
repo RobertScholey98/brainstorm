@@ -16,7 +16,7 @@ const buttonVariants = cva(
         // An outline toggle whose pressed state is a warning, as Hold preview's is: pressed, it leaves a shared window behind.
         // A trigger marked `data-warn` takes the same tone, as the Preview menu does while its window isn't for sharing.
         caution:
-          "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg data-warn:border-warning data-warn:bg-warning-subtle aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-warning aria-pressed:bg-warning-subtle aria-pressed:text-fg",
+          "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg data-warn:border-warning data-warn:bg-warning/15 aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-warning aria-pressed:bg-warning/20 aria-pressed:text-fg",
         // The action closing a status strip: the strip's whole height at its end, set off by a rule, not a box.
         strip: "rounded-none border-0 bg-warning font-semibold text-card hover:bg-warning/85 focus-visible:ring-inset",
         ghost:
