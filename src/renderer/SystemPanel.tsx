@@ -1,11 +1,14 @@
-import { ArrowUpCircle, Check, Download, Palette, RotateCcw, Send } from "lucide-react";
+import { ArrowUpCircle, Check, ChevronRight, Download, ExternalLink, Palette, RotateCcw, Send } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Count } from "@/components/ui/count";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -56,8 +59,8 @@ export function SystemSection({
           </Callout>
         </div>
       )}
-      <ThemeEditor system={system} readOnly={readOnly} send={send} exportTheme={exportTheme} />
       {system.proposed.length > 0 && <ProposedList system={system} send={send} />}
+      <ThemeEditor system={system} readOnly={readOnly} send={send} exportTheme={exportTheme} />
     </section>
   );
 }
@@ -68,20 +71,19 @@ function ThemeEditor({ system, readOnly, send, exportTheme }: Parameters<typeof 
   const others = useMemo(() => system.tokens.filter((t) => t.origin === "system" && t.kind !== "color" && t.kind !== "other"), [system.tokens]);
   const tweaked = Object.keys(theme.axes).length + Object.keys(theme.tokens).length;
   return (
-    <div className="grid gap-3 pb-4" inert={readOnly} data-theme-editor data-tweaks={tweaked}>
+    <div className="grid grid-cols-1 gap-3 border-t py-3" inert={readOnly} data-theme-editor data-tweaks={tweaked}>
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-medium">Theme</h3>
         {tweaked > 0 && <span className="text-xs text-fg-muted">{tweaked === 1 ? "1 tweak" : `${tweaked} tweaks`} in this brainstorm</span>}
       </div>
       {system.axes.map((axis) => (
-        <label key={axis.attribute} className="grid gap-1.5 text-xs text-fg-muted" data-theme-axis={axis.attribute}>
+        <label key={axis.attribute} className="grid grid-cols-1 gap-1.5 text-xs text-fg-muted" data-theme-axis={axis.attribute}>
           {axisLabel(axis.attribute)}
-          <Segmented
-            aria-label={axisLabel(axis.attribute)}
+          <AxisControl
+            label={axisLabel(axis.attribute)}
             value={theme.axes[axis.attribute] ?? DEFAULT}
-            onValueChange={(value) => void send({ kind: "set_theme_axis", axis: axis.attribute, value: value === DEFAULT ? null : value })}
+            onChange={(value) => void send({ kind: "set_theme_axis", axis: axis.attribute, value: value === DEFAULT ? null : value })}
             options={[{ value: DEFAULT, label: axis.default ?? "Default" }, ...axis.values.filter((v) => v !== axis.default).map((v) => ({ value: v, label: v }))]}
-            itemData="axis-value"
           />
         </label>
       ))}
@@ -99,6 +101,27 @@ function ThemeEditor({ system, readOnly, send, exportTheme }: Parameters<typeof 
         </Button>
       </div>
     </div>
+  );
+}
+
+/** Up to three values fit side by side in the Inspector; more, such as a palette of accents, go in a select. */
+function AxisControl({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: readonly { value: string; label: string }[] }) {
+  if (options.length <= 3) return <Segmented aria-label={label} value={value} onValueChange={onChange} options={options} itemData="axis-value" />;
+  return (
+    <Select items={options} value={value} onValueChange={(v) => v !== null && onChange(v)}>
+      <SelectTrigger aria-label={label} className="w-full" data-axis-select>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value} data-axis-value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -126,15 +149,22 @@ function TokenList({
   axes: Readonly<Record<string, string>>;
   send: (action: RobAction) => Promise<unknown>;
 }) {
+  const [open, setOpen] = useState(false);
+  const set = tokens.filter((t) => theme[t.name] !== undefined);
+  const row = (t: Token) => <TokenRow key={t.name} token={t} value={theme[t.name] ?? null} base={baseValue(t, axes)} send={send} />;
   return (
-    <div className="grid gap-1" data-token-list={heading}>
-      <h4 className="text-xs text-fg-muted">{heading}</h4>
-      <ul className="grid gap-1">
-        {tokens.map((t) => (
-          <TokenRow key={t.name} token={t} value={theme[t.name] ?? null} base={baseValue(t, axes)} send={send} />
-        ))}
-      </ul>
-    </div>
+    <Collapsible open={open} onOpenChange={setOpen} className="grid grid-cols-1 gap-1" data-token-list={heading}>
+      <CollapsibleTrigger className="group/tokens -mx-1 flex h-7 cursor-pointer items-center gap-1.5 rounded-sm px-1 text-xs text-fg-muted hover:bg-hover hover:text-fg">
+        <ChevronRight aria-hidden className="size-3.5 transition-transform group-data-[panel-open]/tokens:rotate-90" />
+        {heading}
+        <Count className="ml-auto">{tokens.length}</Count>
+      </CollapsibleTrigger>
+      {/* Folded, the list still shows the tokens this brainstorm changed. */}
+      {!open && set.length > 0 && <ul className="grid grid-cols-1 gap-1">{set.map(row)}</ul>}
+      <CollapsibleContent>
+        <ul className="grid grid-cols-1 gap-1">{tokens.map(row)}</ul>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -156,7 +186,7 @@ function TokenRow({ token, value, base, send }: { token: Token; value: string | 
       </span>
       <Input
         aria-label={token.name}
-        className="h-7 w-menu font-mono text-xs"
+        className="h-7 w-menu shrink-0 font-mono text-xs"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
@@ -303,19 +333,45 @@ function ProposedList({ system, send }: { system: SessionSystemView; send: (acti
       <p className="text-xs/relaxed text-fg-muted">The kit had nothing that fit, so the design proposes these. Promote one to add it to the library.</p>
       <ul className="grid gap-2">
         {system.proposed.map((p) => (
-          <ProposedRow key={p.name} proposed={p} canPromote={system.canPromote} onPromote={(name) => void send({ kind: "promote", name })} />
+          <ProposedRow key={p.name} proposed={p} on={system.n} canPromote={system.canPromote} onPromote={(name) => void send({ kind: "promote", name })} />
         ))}
       </ul>
     </div>
   );
 }
 
-function ProposedRow({ proposed, canPromote, onPromote }: { proposed: ProposedView; canPromote: boolean; onPromote: (name: ProposedName) => void }) {
+function ProposedRow({
+  proposed,
+  on,
+  canPromote,
+  onPromote,
+}: {
+  proposed: ProposedView;
+  /** The version the session builds with. */
+  on: number;
+  canPromote: boolean;
+  onPromote: (name: ProposedName) => void;
+}) {
   const promotion = proposed.promotion;
+  const inSystem = proposed.inSystem;
   let status: ReactNode = null;
-  if (proposed.inSystem !== null) status = <span className="text-xs text-success">In v{proposed.inSystem}; upgrade to use it from the kit</span>;
+  if (inSystem !== null && inSystem <= on) {
+    status = <span className="text-xs/relaxed text-success">The kit has {proposed.name} since v{inSystem}. Regenerate to build these blocks with it.</span>;
+  } else if (inSystem !== null) status = <span className="text-xs text-success">In v{inSystem}; upgrade to use it from the kit</span>;
   else if (promotion?.state === "starting") status = <span className="text-xs text-fg-muted">Starting the thread…</span>;
-  else if (promotion?.state === "started") status = <span className="text-xs text-fg-muted">Promoting in a T3 thread</span>;
+  else if (promotion?.state === "started") {
+    status = (
+      <span className="flex items-center gap-2 text-xs text-fg-muted">
+        Promoting in a T3 thread
+        {promotion.link !== null && (
+          <Button variant="ghost" size="xs" className="ml-auto" nativeButton={false} render={<a href={promotion.link} target="_blank" rel="noreferrer" />} data-promote-thread>
+            <ExternalLink data-icon="inline-start" aria-hidden />
+            Open thread
+          </Button>
+        )}
+      </span>
+    );
+  }
   else if (promotion?.state === "failed") status = <span className="text-xs text-danger">Couldn't start: {promotion.error}</span>;
   const button = (
     <Button variant="outline" size="xs" disabled={!canPromote || promotion?.state === "starting"} onClick={() => onPromote(proposed.name)} data-promote={proposed.name}>
@@ -332,7 +388,7 @@ function ProposedRow({ proposed, canPromote, onPromote }: { proposed: ProposedVi
           </span>
           <span className="font-mono text-xs text-fg-muted">{proposed.name}</span>
         </span>
-        {canPromote ? (
+        {inSystem !== null ? null : canPromote ? (
           button
         ) : (
           <BlockedHint label="Brainstorm doesn't know the library's T3 project yet" side="left">

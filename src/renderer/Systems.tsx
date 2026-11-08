@@ -245,9 +245,9 @@ function ComponentsTab({ view, manifest }: { view: SystemView; manifest: Manifes
       </ScrollPane>
       <div className="flex min-w-0 flex-1 flex-col">
         {manifest.styles.axes.length > 0 && (
-          <div className="flex items-center gap-3 border-b bg-card px-4 py-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-card px-4 py-2">
             {manifest.styles.axes.map((a) => (
-              <div key={a.attribute} className="flex items-center gap-2 text-xs text-fg-muted">
+              <div key={a.attribute} className="flex items-center gap-2 text-xs whitespace-nowrap text-fg-muted">
                 {a.attribute}
                 <Segmented
                   fit="content"
