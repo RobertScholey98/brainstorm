@@ -1,4 +1,4 @@
-import { AppWindow, ChevronDown, CirclePause, EyeOff, Maximize } from "lucide-react";
+import { AppWindow, ChevronDown, CirclePause, EyeOff, Maximize, X } from "lucide-react";
 import { cn } from "cn";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -195,7 +195,9 @@ function WindowMenu({
           </Hint>
         </div>
         <PopoverFooter>
-          <Button variant="ghost" onClick={() => run("close")} data-preview-close>
+          {/* A command, so it looks like one beside the other window actions, not a dismiss. */}
+          <Button variant="outline" onClick={() => run("close")} data-preview-close>
+            <X data-icon="inline-start" aria-hidden />
             Close preview
           </Button>
         </PopoverFooter>

@@ -83,7 +83,7 @@ try {
     };
   });
   check("present stretches the slot to the screen's width from its top, with no title or pins", fills, { width: true, top: 0, chrome: 0 });
-  await snap(window, "03-present-start", "Present, first time this run, just started from the wheel slot: the 390 px wheel stretched to fill the screen, no canvas chrome, and at the top centre a small label, Change slot ← → | Exit Esc; it fades after 3.5 s, and later presents show it only when the pointer nears the top edge");
+  await snap(window, "03-present-start", "Present, first time this run, just started from the wheel slot: the 390 px wheel stretched to fill the screen, no canvas chrome, and at the top centre a small label, 1 / 2, Change slot ← → | Exit Esc; it fades after 3.5 s, and later presents show it only when the pointer nears the top edge");
   await sleep(3800);
   await snap(window, "04-present", "Present once the label has faded: nothing on screen but the design, as if it were the app");
   await window.keyboard.press("ArrowRight");
@@ -263,7 +263,7 @@ try {
   check(
     "held with the canvas away, the held strip still lies along the region's top and the placeholder says it's held",
     [await window.textContent("[data-held-bar]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")],
-    ["Preview held on The result · Assignment cardResume live", "The preview is held. It catches up with your edits when you resume."],
+    ["Preview held on The result · Assignment cardResume live", "The preview is held. It catches up when you resume."],
   );
   await window.mouse.move(150, 860);
   await snap(window, "15b-canvas-away-held", "Canvas away while Hold preview is on: the held strip along the region's top, Preview held on the slot and variant, with Resume live; under it the placeholder says the canvas is in the Working preview, and that the preview is held and catches up when resumed");
@@ -272,7 +272,7 @@ try {
   await window.click("[data-pick-toggle]");
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
-  check("a pick started here while the canvas is away waits in the preview window", [await window.textContent("[data-canvas-away] [data-slot=empty-title]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")], ["Click an element in the preview window", "Your comment goes to Feedback, on the right. Press Esc to stop."]);
+  check("a pick started here while the canvas is away waits in the preview window", [await window.textContent("[data-canvas-away] [data-slot=empty-title]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")], ["Click an element in the preview window", "Write it there; it lands in Feedback here. Press Esc to stop."]);
   check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Click to pin");
   await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's pick chip reads Click to pin, with its close, and the region's title says to click an element there and where the comment goes");
   await window.keyboard.press("Escape");
@@ -294,7 +294,7 @@ try {
     [null, "view", "The canvas is in the Clean preview"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar has no pick chip); the Inspector's Pin comment shows open (accent edge) while the region asks, so the click shows where it was made; the region says the canvas is in the Clean preview, which hides pins from the audience, with Show here and pin (primary: it shows the canvas here and starts the pick), Switch preview to Working (an outline with only an amber edge, lighter than the primary), and Not now");
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar has no pick chip); the Inspector's Pin comment takes an accent edge only (no fill, short of pressed) while the region asks, so the click shows where it was made; the region says the canvas is in the Clean preview, which hides pins from the audience, with Show here and pin (primary: it shows the canvas here and starts the pick), Switch preview to Working (an outline with only an amber edge, lighter than the primary), and Not now");
   await window.click("[data-away-working]");
   await preview.waitForSelector("[data-preview-window=working]");
   await mirror.waitForSelector('body[data-mode="pin"]');

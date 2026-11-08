@@ -820,7 +820,7 @@ function SessionWorkspace({
           />
         )}
         {preview.open && preview.hold && !presenting && <HeldBar on={preview.heldOn} onRelease={() => link.setHold(false)} />}
-        {presenting && <PresentHint several={slots.length > 1} poke={presentPoke} onLeave={() => void document.exitFullscreen().catch(() => {})} />}
+        {presenting && <PresentHint at={slot === null ? 0 : slots.indexOf(slot) + 1} of={slots.length} poke={presentPoke} onLeave={() => void document.exitFullscreen().catch(() => {})} />}
         {interaction.kind === "composing" && (
           <PinComposer
             key={JSON.stringify(interaction)}
@@ -880,7 +880,7 @@ function SessionWorkspace({
           onReset={onReset}
           onDismiss={onDismiss}
         >
-          <VarySection picking={picking === "vary"} open={interaction.kind === "varying" || stuckPick === "vary"} blocked={varyBlocked} onPickToggle={() => togglePick("vary")} />
+          <VarySection picking={picking === "vary"} open={interaction.kind === "varying"} asked={stuckPick === "vary"} blocked={varyBlocked} onPickToggle={() => togglePick("vary")} />
           <FeedbackPanel
             feedback={feedback}
             blocks={blocks}
@@ -889,8 +889,9 @@ function SessionWorkspace({
             past={past !== null}
             pinBlocked={past !== null ? "Back to latest to pin a comment" : (unrendered ?? undefined)}
             picking={picking === "comment"}
-            // Open, too, while the away placeholder asks how to go on with a pick it couldn't start, so the click shows where it was made.
-            composing={interaction.kind === "composing" || stuckPick === "comment"}
+            composing={interaction.kind === "composing"}
+            // While the away placeholder asks how to go on with the pick it couldn't start, so the click shows where it was made.
+            asked={stuckPick === "comment"}
             focused={focus}
             echoed={hoveredPin}
             onHover={setHoveredFeedback}
@@ -944,9 +945,9 @@ function CanvasAway({
             {stuck !== null
               ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience.`
               : picking
-                ? "Your comment goes to Feedback, on the right. Press Esc to stop."
+                ? "Write it there; it lands in Feedback here. Press Esc to stop."
                 : hold
-                  ? `The preview is held. It catches up with your edits when you resume.`
+                  ? `The preview is held. It catches up when you resume.`
                   : `It's live and follows your edits here.`}
           </EmptyDescription>
         </EmptyHeader>
@@ -989,7 +990,8 @@ let presentTaught = false;
  * first time, and after that only while the pointer is near the top edge, as slideshow tools keep theirs, so pointing
  * at the design leaves the screen clean.
  */
-function PresentHint({ several, poke, onLeave }: { several: boolean; poke: number; onLeave: () => void }) {
+function PresentHint({ at, of, poke, onLeave }: { at: number; of: number; poke: number; onLeave: () => void }) {
+  const several = of > 1;
   const [shown, setShown] = useState(() => !presentTaught);
   const [over, setOver] = useState(false);
   useEffect(() => {
@@ -1016,7 +1018,10 @@ function PresentHint({ several, poke, onLeave }: { several: boolean; poke: numbe
       <TooltipLabel className="ring-1 ring-inverse-fg/25 dark:ring-fg/25">
         {several && (
           <span role="status" className="contents">
-            {/* Words, then keys, as Exit is. */}
+            {/* Where it is among the slots, so Rob knows whether → has more to show; then words, then keys, as Exit is. */}
+            <span className="text-inverse-fg/70 tabular-nums dark:text-fg/70" data-present-position>
+              {at} / {of}
+            </span>
             Change slot
             <span className="flex items-center gap-0.5" aria-label="Left and right arrow keys">
               <Kbd tone="inverse">←</Kbd>

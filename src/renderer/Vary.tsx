@@ -9,7 +9,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import { partLabel, VARY_MAX } from "../core/fork";
 import type { BlockView, CanvasRect, Pin, SlotView } from "../core/types";
-import { HeldLabel } from "./HeldLabel";
 import { POPOVER_WIDTH } from "./placement";
 import { useComposerPlace } from "./useComposerPlace";
 
@@ -19,11 +18,24 @@ const DEFAULT_COUNT = 3;
  * The Inspector's Vary row, above Feedback and its Pin comment: a pick mode of its own on the same machinery. `blocked`
  * says why it can't start: before the first iteration, in the past, or while a request is open.
  */
-export function VarySection({ picking, open, blocked, onPickToggle }: { picking: boolean; open: boolean; blocked: string | null; onPickToggle: () => void }) {
+export function VarySection({
+  picking,
+  open,
+  asked = false,
+  blocked,
+  onPickToggle,
+}: {
+  picking: boolean;
+  open: boolean;
+  /** A pick it asked for that couldn't start, as Pin comment's `asked`. */
+  asked?: boolean;
+  blocked: string | null;
+  onPickToggle: () => void;
+}) {
   const button = (
-    <Button variant="outline" className="ml-auto" aria-pressed={picking} aria-expanded={open} disabled={blocked !== null} onClick={onPickToggle} data-vary-toggle>
+    <Button variant="outline" className="ml-auto" aria-pressed={picking} aria-expanded={open} data-edge={asked || undefined} disabled={blocked !== null} onClick={onPickToggle} data-vary-toggle>
       <Shuffle data-icon="inline-start" aria-hidden />
-      <HeldLabel active={picking} idle="Vary element" busy="Picking…" />
+      Vary element
     </Button>
   );
   return (

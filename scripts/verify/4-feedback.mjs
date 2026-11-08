@@ -42,7 +42,7 @@ try {
   const idleBox = await toggleBox();
   await window.click("[data-pick-toggle]");
   await window.waitForSelector("[data-pick-hint]");
-  check("Pin comment keeps its width and its left edge while it reads Picking…", await toggleBox(), idleBox);
+  check("Pin comment keeps its width and its left edge while it is pressed", await toggleBox(), idleBox);
   await canvas.hover(HEADLINE);
   await canvas.waitForSelector(".bs-pick[data-on]");
   check("hovering in pin mode highlights the nearest data-part, named in words as the feedback list names it", await canvas.textContent(".bs-pick[data-on] span"), "Headline");

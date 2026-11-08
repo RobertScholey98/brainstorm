@@ -12,7 +12,7 @@ const buttonVariants = cva(
         accent: "border-accent bg-accent text-accent-fg hover:border-accent-hover hover:bg-accent-hover aria-expanded:border-accent-hover aria-expanded:bg-accent-hover",
         // On a tinted surface, marked `data-tint`, the card fill would punch a hole in the tint, so the edge alone draws it.
         outline:
-          "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
+          "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg data-edge:border-accent aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
         // An outline toggle whose pressed state is a warning, as Hold preview's is: pressed, it leaves a shared window behind.
         // A trigger marked `data-warn` takes the same tone, as the Preview menu does while its window isn't for sharing;
         // one marked `data-edge` takes only its edge, for a way into that state offered beside a safer primary.
