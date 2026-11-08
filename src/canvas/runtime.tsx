@@ -60,6 +60,7 @@ type CanvasState = {
   readonly gallery: readonly string[] | null | undefined;
   /** One story the workbench shows alone, with Rob's args over its own, at a width or filling the frame (ADR 008). */
   readonly galleryFocus: GalleryFocus | null;
+  readonly galleryComponents: Readonly<Record<string, string>>;
 };
 
 const boot = JSON.parse(document.getElementById("brainstorm-boot")?.textContent ?? "{}") as {
@@ -312,6 +313,7 @@ let state: CanvasState = {
   kitVersion: 0,
   gallery: undefined,
   galleryFocus: null,
+  galleryComponents: {},
 };
 /** The block Rob just pressed in the canvas. Its selection comes back from the host and needs no reveal. */
 let pressed: BlockId | null = null;
@@ -341,7 +343,7 @@ function receive(message: HostToFrame): void {
       applyTheme(message.theme);
       return;
     case "gallery":
-      setState({ gallery: message.stories, galleryFocus: message.focus ?? null });
+      setState({ gallery: message.stories, galleryFocus: message.focus ?? null, galleryComponents: message.components ?? {} });
       return;
     case "modules": {
       const hashes = new Map(state.hashes);
@@ -643,7 +645,7 @@ function GalleryStories({ records }: { records: ReturnType<typeof kitStories>["s
         <section key={r.id} className="bs-frame bs-story" data-story={r.id}>
           <header className="bs-frame-title">
             <button type="button" className="bs-story-open" onClick={() => post({ kind: "open_story", id: r.id })} data-open-story={r.id}>
-              <span>{r.title.split("/").at(-1)}</span>
+              <span>{state.galleryComponents[r.id] ?? r.title.split("/").at(-1)}</span>
               <span className="bs-frame-size">{r.name}</span>
             </button>
             <button type="button" className="bs-story-cue" tabIndex={-1} aria-hidden onClick={() => post({ kind: "open_story", id: r.id })}>

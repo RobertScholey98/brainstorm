@@ -1,7 +1,7 @@
 import type { BlockView, RobAction } from "../core/types";
 
-/** A failure notice: what Rob tried, then why it didn't happen. */
-export type Notice = { readonly title: string; readonly detail: string };
+/** A failure notice: what Rob tried, then why it didn't happen. A success one says what it did, for a step whose result shows nowhere else. */
+export type Notice = { readonly title: string; readonly detail: string; readonly tone?: "success" };
 
 /** The step that failed, named as Rob took it, so a notice that came while he looked elsewhere still says what was lost. */
 export function failedTitle(action: RobAction | "export" | "list" | "load" | "settle" | "unsettle" | "discard" | "fork" | "history" | "update" | "check" | "download" | "skill", blocks: readonly BlockView[] = []): string {

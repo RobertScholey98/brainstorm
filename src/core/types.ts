@@ -764,8 +764,16 @@ export type SystemReview = {
   readonly issues: readonly ReviewIssue[];
   /** The T3 thread the import ran in, or that the review was last sent to. */
   readonly thread: { readonly id: ThreadId; readonly link: string | null } | null;
-  /** The last review sent to the agent: Rob's notes and the tier moves Brainstorm wrote into the adapter. */
-  readonly sent: { readonly at: string; readonly notes: readonly ReviewIssue[]; readonly moved: Readonly<Record<string, Tier>> } | null;
+  /**
+   * The last review sent to the agent: Rob's notes, the tier moves Brainstorm wrote into the adapter, and the version
+   * that was newest once they were written, so a later one is the agent's.
+   */
+  readonly sent: {
+    readonly at: string;
+    readonly notes: readonly ReviewIssue[];
+    readonly moved: Readonly<Record<string, Tier>>;
+    readonly version: number | null;
+  } | null;
   readonly confirmed: { readonly at: string; readonly n: SystemVersionN } | null;
 };
 
@@ -810,6 +818,8 @@ export type SystemView = SystemListing & {
     readonly tokens: readonly { readonly name: string; readonly before: string; readonly after: string }[];
     /** Components that moved to another tier since the version before. */
     readonly retiered: readonly { readonly name: string; readonly from: Tier; readonly to: Tier }[];
+    /** Stories a component already in the version before gained, by story name. */
+    readonly newStories: readonly { readonly name: string; readonly stories: readonly string[] }[];
   })[];
   /** The latest version's manifest, without its story sources. */
   readonly manifest: Omit<SystemManifest, "storyFiles"> | null;
@@ -953,7 +963,13 @@ export type HostToFrame =
   /** Proposed components that blocks import as `proposed/<name>`. */
   | { readonly kind: "proposed"; readonly modules: readonly ProposedModule[] }
   /** The system page's gallery: the loaded kit's stories with these ids, or every story when null. */
-  | { readonly kind: "gallery"; readonly stories: readonly string[] | null; readonly focus?: GalleryFocus | null };
+  | {
+      readonly kind: "gallery";
+      readonly stories: readonly string[] | null;
+      readonly focus?: GalleryFocus | null;
+      /** Each story's component, by story id, so a frame is labelled as the catalog names it, not by its story title. */
+      readonly components?: Readonly<Record<string, string>>;
+    };
 
 /** The workbench's one story (ADR 008): Rob's args over the story's own, at a width in pixels or filling the frame. */
 export type GalleryFocus = { readonly id: string; readonly args: Readonly<Record<string, Json>>; readonly width: number | null };

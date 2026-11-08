@@ -1,8 +1,7 @@
 import { ExternalLink } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
-import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { AgentWork, OpenPhase, ThreadId } from "../core/types";
 import type { Api } from "./api";
@@ -53,26 +52,35 @@ const WORK: Record<AgentWork["phase"], { readonly label: string; readonly tone: 
 
 /**
  * One agent's work, as Claude Code shows a background task: its phase with how long it has run, the end of its latest
- * reply, and the thread to open. `since` is when Brainstorm handed the work over. `compact` shows Open thread as its icon,
- * for the Inspector's narrow column.
+ * reply, and the thread to open. `since` is when Brainstorm handed the work over. `compact` is for the Inspector's
+ * narrow column: the last line gets two rows, and Open thread its own row under it.
  */
 export function AgentWorkStatus({
   work,
   since,
   link,
   compact = false,
+  actions,
   className,
 }: {
   work: AgentWork | null;
   since: string;
   link: string | null;
   compact?: boolean;
+  /** More ways out, such as Hide, set beside Open thread. */
+  actions?: ReactNode;
   className?: string;
 }) {
   const now = useNow(work?.phase === "working" || work?.phase === "waiting" ? 1_000 : undefined);
   const shown = work ?? { phase: "waiting" as const, lastLine: null, link };
   const w = WORK[shown.phase];
   const href = shown.link ?? link;
+  const openThread = href === null ? null : (
+    <Button variant="ghost" size="xs" className={compact ? "-ml-1.5 justify-self-start" : undefined} nativeButton={false} render={<a href={href} target="_blank" rel="noreferrer" />} data-agent-thread>
+      <ExternalLink data-icon="inline-start" aria-hidden />
+      Open thread
+    </Button>
+  );
   return (
     <div className={cn("grid min-w-0 gap-1", className)} data-agent-work={work?.phase ?? "unknown"}>
       <div className="flex min-w-0 items-center gap-2 text-sm">
@@ -81,25 +89,25 @@ export function AgentWorkStatus({
           {work === null ? "Asking T3…" : w.label}
         </span>
         {w.counts === true && work !== null && <Elapsed since={since} now={now} className="text-fg-muted tabular-nums" />}
-        {href !== null &&
-          (compact ? (
-            <Hint label="Open thread" side="left">
-              <Button variant="ghost" size="icon-xs" className="ml-auto shrink-0" aria-label="Open thread" nativeButton={false} render={<a href={href} target="_blank" rel="noreferrer" />} data-agent-thread>
-                <ExternalLink aria-hidden />
-              </Button>
-            </Hint>
-          ) : (
-            <Button variant="ghost" size="xs" className="ml-auto shrink-0" nativeButton={false} render={<a href={href} target="_blank" rel="noreferrer" />} data-agent-thread>
-              <ExternalLink data-icon="inline-start" aria-hidden />
-              Open thread
-            </Button>
-          ))}
+        {!compact && (
+          <span className="ml-auto flex shrink-0 items-center gap-1">
+            {href !== null && openThread}
+            {actions}
+          </span>
+        )}
       </div>
-      {shown.lastLine !== null && (
-        <p className="flex min-w-0 text-xs text-fg-muted" data-agent-last-line>
-          <Truncate>{shown.lastLine}</Truncate>
-        </p>
-      )}
+      {shown.lastLine !== null &&
+        (compact ? (
+          // A narrow column gives the line two rows rather than cutting it short.
+          <p className="line-clamp-2 text-xs text-fg-muted" data-agent-last-line>
+            {shown.lastLine}
+          </p>
+        ) : (
+          <p className="flex min-w-0 text-xs text-fg-muted" data-agent-last-line>
+            <Truncate>{shown.lastLine}</Truncate>
+          </p>
+        ))}
+      {href !== null && compact && openThread}
     </div>
   );
 }

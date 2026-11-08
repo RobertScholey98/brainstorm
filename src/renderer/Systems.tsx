@@ -82,15 +82,19 @@ export function SystemsPage({
     showNotice({
       title: r.data.created ? `Synced version ${r.data.system.latest?.n ?? ""}` : "Nothing changed",
       detail: r.data.created ? "Brainstorms on an older version can upgrade from their Inspector." : "The project builds the same as its latest version.",
+      tone: "success",
     });
   };
 
+  // The add field starts empty again once an import is under way; the import's card names the folder.
+  const [addField, setAddField] = useState(0);
   const startImport = async (path: string, repair: SystemId | null = null) => {
     const r = await api.importSystem(path, repair);
     refresh();
     if (!r.ok) return showNotice({ title: repair === null ? "Couldn't start the import" : "Couldn't start the repair", detail: r.error.message });
     if (r.data.state === "failed") return showNotice({ title: "T3 didn't start the agent", detail: r.data.error });
     setNoSystem(null);
+    if (repair === null) setAddField((n) => n + 1);
   };
 
   if (selected !== null) {
@@ -119,6 +123,7 @@ export function SystemsPage({
               description="A React library, or an app's own components. A brainstorm built with one composes only its components, so the design can be built as drawn. Brainstorm syncs a system again whenever its project changes."
             />
             <AddSystem
+              key={addField}
               onAdd={async (path) => {
                 const r = await api.addSystem(path);
                 if (!r.ok) {
@@ -250,7 +255,7 @@ function AddSystem({
     await add(r.data.path);
   };
   return (
-    <div className="flex max-w-sheet items-center gap-2" data-system-add>
+    <div className="flex items-center gap-2" data-system-add>
       <Input
         aria-label="Library or project folder"
         className="min-w-0 flex-1 font-mono text-xs"
@@ -296,11 +301,28 @@ function ImportCard({ api, item, onRetry, onDismiss }: { api: Api; item: SystemI
           </span>
         ) : (
           <>
-            <AgentWorkStatus work={work} since={item.at} link={item.link} />
+            <AgentWorkStatus
+              work={work}
+              since={item.at}
+              link={item.link}
+              actions={
+                done ? undefined : (
+                  <Hint label="The agent keeps going in T3" side="bottom">
+                    <Button variant="ghost" size="xs" onClick={onDismiss} data-import-dismiss>
+                      Hide
+                    </Button>
+                  </Hint>
+                )
+              }
+            />
             <span className="text-sm text-fg-muted">
-              {done
-                ? "The agent stopped without adding the system. Open the thread to see what it needs."
-                : "It writes .brainstorm/system.json and the missing stories, checks them, then adds the system here for your review."}
+              {done ? (
+                "The agent stopped without adding the system. Open the thread to see what it needs."
+              ) : (
+                <>
+                  It writes <span className="font-mono text-xs">.brainstorm/system.json</span> and the missing stories, checks them, then adds the system here for your review.
+                </>
+              )}
             </span>
           </>
         )}
@@ -312,13 +334,7 @@ function ImportCard({ api, item, onRetry, onDismiss }: { api: Api; item: SystemI
             Try again
           </Button>
         )}
-        {item.state === "started" && !done ? (
-          <Hint label="The agent keeps going in T3" side="bottom">
-            <Button variant="ghost" onClick={onDismiss} data-import-dismiss>
-              Hide
-            </Button>
-          </Hint>
-        ) : (
+        {(item.state !== "started" || done) && (
           <Button variant="ghost" onClick={onDismiss} data-import-dismiss>
             Dismiss
           </Button>
@@ -449,23 +465,25 @@ function SystemDetail({
       return false;
     }
     setView(r.data);
+    if (action.kind === "confirm") showNotice({ title: `Confirmed v${r.data.latest?.n ?? 1}`, detail: `Brainstorms can use ${r.data.name} now.`, tone: "success" });
     return true;
   };
   return (
     <div className="flex size-full flex-col" data-system-detail={id}>
-      <div className="flex flex-col gap-4 border-b bg-card px-6 pt-4">
-        <Button variant="ghost" size="xs" className="self-start" onClick={onBack} data-systems-back>
-          <ArrowLeft data-icon="inline-start" aria-hidden />
-          Design systems
-        </Button>
-        <div className="flex items-start gap-4">
+      <div className="flex flex-col gap-3 border-b bg-card px-6 pt-4">
+        <div className="flex items-start gap-2">
+          <Hint label="Design systems" side="bottom" align="start">
+            <Button variant="ghost" size="icon" className="-ml-2 shrink-0" aria-label="Back to design systems" onClick={onBack} data-systems-back>
+              <ArrowLeft aria-hidden />
+            </Button>
+          </Hint>
           <div className="min-w-0 flex-1">
             <PageHeader
               heading={view?.name ?? "Design system"}
               description={
-                <span className="flex min-w-0 flex-wrap gap-x-2 font-mono text-xs">
-                  <span className="min-w-0 break-all">{view?.source.adapter ?? view?.root}</span>
-                  {latest !== null && <span data-system-hash>· {latest.hash.slice(0, 7)}</span>}
+                <span className="flex min-w-0 gap-x-2 font-mono text-xs">
+                  <Truncate>{view?.source.adapter ?? view?.root ?? ""}</Truncate>
+                  {latest !== null && <span className="shrink-0" data-system-hash>· {latest.hash.slice(0, 7)}</span>}
                 </span>
               }
             />
@@ -567,8 +585,15 @@ function ReviewCallout({
     await act({ kind }, kind === "send" ? "Couldn't send the review" : "Couldn't confirm the design system");
     setBusy(null);
   };
-  // What's left to do decides the primary action: changes go to the agent first, and only then is Confirm the way on.
-  const sendFirst = changes > 0;
+  const n = view.latest?.n ?? 1;
+  // A version newer than the one the review went out at is the agent's.
+  const since = sent?.version ?? null;
+  const theirs = since === null ? [] : view.versions.filter((v) => v.n > since);
+  const agentSynced = theirs.length > 0;
+  // What's left to do decides the primary action: changes go to the agent first; an unsorted library goes to an agent
+  // to sort; while the agent works on what Rob sent, nothing is primary; then Confirm is the way on.
+  const sendFirst = changes > 0 || (unsorted && sent === null);
+  const confirmFirst = !sendFirst && !(agentBusy && !agentSynced);
   return (
     <Callout
       tone="info"
@@ -582,17 +607,19 @@ function ReviewCallout({
               {changes > 0 ? `Send ${count(changes, "change", "changes")} to the agent` : "Sort into tiers with an agent"}
             </Button>
           )}
-          <Button variant={sendFirst ? "outline" : "accent"} disabled={open > 0 || busy !== null} onClick={() => void run("confirm")} data-review-confirm>
+          <Button variant={confirmFirst ? "accent" : "outline"} disabled={open > 0 || busy !== null} onClick={() => void run("confirm")} data-review-confirm>
             {busy === "confirm" ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" aria-hidden />}
-            {busy === "confirm" ? "Confirming…" : `Confirm v${view.latest?.n ?? 1}`}
+            {busy === "confirm" ? "Confirming…" : `Confirm v${n}`}
           </Button>
           <RaiseIssue label="Raise a system issue" heading="An issue with the whole system" placeholder="DatePicker is missing" onRaise={(note) => act({ kind: "issue", name: null, note }, "Couldn't raise the issue")} />
         </>
       }
     >
-      <p>
-        Step through the components with <Kbd>←</Kbd> <Kbd>→</Kbd> and check how each renders. Move one to another tier, or raise an issue for the agent. Brainstorms can use the system once you confirm it.
-      </p>
+      {sent === null && (
+        <p>
+          Step through the components with <Kbd>←</Kbd> <Kbd>→</Kbd> and check how each renders. Move one to another tier, or raise an issue for the agent. Brainstorms can use the system once you confirm it.
+        </p>
+      )}
       {unsorted && sent === null && <p>This library came from its package, so nothing sorted its components into tiers and they all list as primitives. Sort them yourself, or have an agent do it.</p>}
       {(moves > 0 || open > 0) && (
         <div className="grid gap-1" data-review-pending>
@@ -616,18 +643,41 @@ function ReviewCallout({
           <AgentWorkStatus work={work} since={sent.at} link={review.thread?.link ?? null} />
           <SentItems sent={sent} />
           {open === 0 && moves === 0 && (
-            <p className="text-sm text-fg-muted" data-review-next>
-              {agentBusy
-                ? `The agent is still on it. Confirming now confirms v${view.latest?.n ?? 1} without its changes.`
-                : work?.phase === "finished"
-                  ? `The agent finished. Check its changes in v${view.latest?.n ?? 1}, then confirm.`
-                  : `Confirm v${view.latest?.n ?? 1} once you're happy with it.`}
+            <p className="text-sm text-fg-muted" data-review-next data-agent-synced={agentSynced || undefined}>
+              {agentSynced
+                ? `${agentBusy ? "The agent synced" : "The agent finished and synced"} v${n}: ${changeSummary(theirs)}. Check it in the walk, then confirm v${n}.`
+                : work?.phase === "waiting"
+                  ? `The agent hasn't started on it yet; its changes will come as v${n + 1}. Confirming v${n} now confirms it without them.`
+                  : agentBusy
+                  ? `The agent is on it; its changes will come as v${n + 1}. Confirming v${n} now confirms it without them.`
+                  : work?.phase === "finished"
+                    ? `The agent finished without a new version. Read its reply in T3, then confirm v${n} or raise what's left.`
+                    : `Confirm v${n} once you're happy with it.`}
             </p>
           )}
         </div>
       )}
     </Callout>
   );
+}
+
+/** What the versions after a review changed, in one phrase: "MealCard renders differently; WeekStrip added". */
+function changeSummary(versions: SystemView["versions"]): string {
+  const joined = (list: readonly string[]) => (list.length === 1 ? list[0] : `${list.slice(0, -1).join(", ")} and ${list.at(-1)}`);
+  const each = (pick: (v: SystemView["versions"][number]) => readonly string[]) => [...new Set(versions.flatMap(pick))];
+  const changed = each((v) => v.changed.map((c) => c.name));
+  const added = each((v) => v.added);
+  const removed = each((v) => v.removed);
+  const moved = each((v) => v.retiered.map((r) => `${r.name} to ${TIER_LABEL[r.to].toLowerCase()}`));
+  const stories = each((v) => v.newStories.flatMap((c) => c.stories.map((s) => `${c.name} › ${s}`)));
+  const said = [
+    changed.length === 0 ? null : `${joined(changed)} ${changed.length === 1 ? "renders" : "render"} differently`,
+    added.length === 0 ? null : `${joined(added)} added`,
+    removed.length === 0 ? null : `${joined(removed)} removed`,
+    moved.length === 0 ? null : `moved ${joined(moved)}`,
+    stories.length === 0 ? null : `new ${stories.length === 1 ? "story" : "stories"} ${joined(stories)}`,
+  ].filter((x) => x !== null);
+  return said.length === 0 ? "its stories render as before" : said.join("; ");
 }
 
 /** What the last Send handed the agent: Rob's notes, and the tier moves already in the adapter. */
@@ -663,8 +713,9 @@ function IssueItem({ issue, onDrop }: { issue: ReviewIssue; onDrop: () => void }
         <span className="min-w-0 flex-1">
           <span className="font-medium">{issue.name ?? "The whole system"}:</span> {issue.note}
         </span>
-        <Button variant="ghost" size="icon-xs" aria-label={`Drop the issue on ${issue.name ?? "the whole system"}`} onClick={onDrop} data-review-drop={issue.id}>
-          <X aria-hidden />
+        <Button variant="ghost" size="xs" className="shrink-0" aria-label={`Drop the issue on ${issue.name ?? "the whole system"}`} onClick={onDrop} data-review-drop={issue.id}>
+          <X data-icon="inline-start" aria-hidden />
+          Drop
         </Button>
       </span>
     </CalloutItem>
@@ -827,7 +878,7 @@ function searchCatalog(catalog: readonly CatalogEntry[], needle: string, storyNa
     if (name.startsWith(needle)) return 0;
     if (name.includes(needle)) return 1;
     if (e.stories.some((id) => storyNames.get(id)?.toLowerCase().includes(needle))) return 2;
-    return e.parts.some((p) => p.toLowerCase().includes(needle)) ? 3 : null;
+    return e.parts.some((p) => partMatches(p, needle)) ? 3 : null;
   };
   const shows = (e: CatalogEntry) => (e.stories.length > 0 ? 0 : 1);
   return catalog
@@ -895,6 +946,7 @@ function ComponentsTab({
   const [focus, setFocus] = useState<{ id: string; args: Record<string, Json>; width: WidthChoice } | null>(null);
   const needle = query.trim().toLowerCase();
   const storyNames = useMemo(() => new Map(manifest.stories.map((s) => [s.id, s.name])), [manifest]);
+  const components = useMemo(() => Object.fromEntries(manifest.catalog.flatMap((e) => e.stories.map((id) => [id, e.name]))), [manifest]);
   const entries = needle === "" ? manifest.catalog : searchCatalog(manifest.catalog, needle, storyNames);
   const chosen = entries.find((e) => e.name === entry) ?? null;
   const sections = needle === "" ? catalogSections(entries, shown) : [{ heading: "", entries: [...entries] }];
@@ -1026,6 +1078,11 @@ function ComponentsTab({
                 <span className="flex min-w-0 text-sm font-medium">
                   <Truncate>{`${owner?.name ?? story.title} · ${story.name}`}</Truncate>
                 </span>
+                {Object.keys(focus.args).length > 0 && (
+                  <span className="shrink-0 text-xs text-fg-muted" data-workbench-edited>
+                    edited
+                  </span>
+                )}
                 {owner !== null && !owner.generated && <Badge data-workbench-tier>{shown(owner)}</Badge>}
               </div>
             )}
@@ -1084,6 +1141,7 @@ function ComponentsTab({
               stories={stories}
               focus={focus === null ? null : { id: focus.id, args: focus.args, width: focus.width === "fill" ? null : Number(focus.width) }}
               onOpenStory={openStory}
+              components={components}
               theme={{ axes: Object.fromEntries(Object.entries(axes).filter(([, v]) => v !== DEFAULT_AXIS)), tokens: {} }}
             />
           )}
@@ -1107,8 +1165,11 @@ function ComponentsTab({
 const matchedPart = (e: CatalogEntry, needle: string, storyNames: ReadonlyMap<string, string>) => {
   if (needle === "" || e.name.toLowerCase().includes(needle)) return undefined;
   const story = e.stories.map((id) => storyNames.get(id) ?? "").find((n) => n.toLowerCase().includes(needle));
-  return story !== undefined ? `› ${story}` : e.parts.find((p) => p.toLowerCase().includes(needle));
+  return story !== undefined ? `› ${story}` : e.parts.find((p) => partMatches(p, needle));
 };
+
+/** A sub-component matches where one of its words starts with the search, so "st" finds StackItem, not BreadcrumbList. */
+const partMatches = (part: string, needle: string) => part.split(/(?=[A-Z])/).some((w) => w.toLowerCase().startsWith(needle)) || part.toLowerCase().startsWith(needle);
 
 /** `text` with the first stretch that has the search's words marked, as Storybook marks its matches. */
 function Marked({ text, match }: { text: string; match: string }) {
@@ -1392,7 +1453,9 @@ function GalleryFrame({
   focus,
   onOpenStory,
   theme,
+  components,
 }: {
+  components: Readonly<Record<string, string>>;
   id: SystemId;
   n: SystemView["versions"][number]["n"];
   stories: readonly string[] | null;
@@ -1427,8 +1490,8 @@ function GalleryFrame({
   }, [ready, themeKey]);
   const storyKey = JSON.stringify([stories, focus]);
   useEffect(() => {
-    if (ready) post({ kind: "gallery", stories, focus });
-  }, [ready, storyKey]);
+    if (ready) post({ kind: "gallery", stories, focus, components });
+  }, [ready, storyKey, components]);
   return (
     <div className="relative min-h-0 min-w-0 flex-1" data-gallery={ready || undefined} data-gallery-focused={focus?.id}>
       <iframe ref={frame} title="Stories" src="/canvas" sandbox="allow-scripts" className="block size-full border-0" />
@@ -1438,22 +1501,29 @@ function GalleryFrame({
 
 function ThemeTab({ manifest }: { manifest: Manifest }) {
   const axes = manifest.styles.axes;
+  // The first axis (light or dark, as a rule) gets a column per value, so Rob compares them side by side; the others
+  // are switches above, as the gallery has them.
+  const main = axes[0] ?? null;
+  const rest = axes.slice(1);
   const [picked, setPicked] = useState<Record<string, string>>({});
   // Tokens the library declares with a value Rob can read; internal plumbing such as scroll-fade sizes is left out.
   const tokens = useMemo(() => manifest.styles.tokens.filter((t) => t.origin === "system" && t.kind !== "other" && t.value !== ""), [manifest]);
-  const colours = tokens.filter((t) => t.kind === "color");
-  const others = tokens.filter((t) => t.kind !== "color");
-  const chosen = Object.entries(picked).filter(([, v]) => v !== DEFAULT_AXIS);
-  const valueOf = (t: (typeof tokens)[number]) => {
+  const [filter, setFilter] = useState("");
+  const needle = filter.trim().toLowerCase();
+  const shownTokens = needle === "" ? tokens : tokens.filter((t) => t.name.toLowerCase().includes(needle));
+  const colours = shownTokens.filter((t) => t.kind === "color");
+  const others = shownTokens.filter((t) => t.kind !== "color");
+  const columns = main === null ? [{ value: DEFAULT_AXIS, label: "Value" }] : axisOptions(main, DEFAULT_AXIS);
+  const valueOf = (t: (typeof tokens)[number], column: string) => {
     let value = t.value;
-    for (const [attribute, v] of chosen) value = t.byAxis[`${attribute}=${v}`] ?? value;
-    return value;
+    for (const [attribute, v] of Object.entries(picked)) if (v !== DEFAULT_AXIS) value = t.byAxis[`${attribute}=${v}`] ?? value;
+    return main === null || column === DEFAULT_AXIS ? value : (t.byAxis[`${main.attribute}=${column}`] ?? value);
   };
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {axes.length > 0 && (
+      {rest.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-card px-6 py-2">
-          {axes.map((a) => (
+          {rest.map((a) => (
             <div key={a.attribute} className="flex items-center gap-2 text-xs whitespace-nowrap text-fg-muted" data-theme-tab-axis={a.attribute}>
               {axisLabel(a.attribute)}
               <Segmented
@@ -1471,10 +1541,21 @@ function ThemeTab({ manifest }: { manifest: Manifest }) {
       <ScrollPane inset={6} data-system-theme>
         <div className="grid max-w-sheet gap-6 py-6">
           <p className="text-sm text-fg-muted">
-            {axes.length === 0
-              ? "The library sets its tokens once, on the root. A brainstorm tweaks them for itself in its Inspector."
-              : "Pick values above to see the tokens as the library sets them there. A brainstorm tweaks these for itself in its Inspector."}
+            {main === null
+              ? "The library sets its tokens once, on the root."
+              : `The library's tokens in each ${axisLabel(main.attribute).toLowerCase()}; a value the same as the first column's is dimmed.`}{" "}
+            A brainstorm tweaks these for itself in its Inspector.
           </p>
+          <Input
+            aria-label="Filter tokens"
+            className="max-w-picker"
+            placeholder={`Filter ${tokens.length} tokens`}
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setFilter("")}
+            data-token-filter
+          />
+          {shownTokens.length === 0 && <p className="text-sm text-fg-muted">No token has “{filter.trim()}” in its name.</p>}
           {[
             ["Colours", colours],
             ["Sizes and type", others],
@@ -1485,21 +1566,43 @@ function ThemeTab({ manifest }: { manifest: Manifest }) {
                   {heading as string}
                   <span className="text-xs font-normal text-fg-muted tabular-nums">{(list as typeof tokens).length}</span>
                 </h3>
-                <ul className="grid grid-cols-1 rounded-md bg-card ring-1 ring-border">
-                  {(list as typeof tokens).map((t) => {
-                    const value = valueOf(t);
-                    return (
-                      <li key={t.name} className="flex items-center gap-4 border-t px-3 py-2 first:border-t-0" data-token-row={t.name}>
-                        <span className="w-popover-sm shrink-0 font-mono text-xs whitespace-nowrap">{t.name}</span>
-                        <span className="flex min-w-0 flex-1 items-center gap-2 font-mono text-xs">
-                          {t.kind === "color" && <span aria-hidden className="size-5 shrink-0 rounded-sm ring-1 ring-border-strong" style={{ background: value }} />}
-                          <Truncate>{value}</Truncate>
-                        </span>
-                        {value !== t.value && <span className="shrink-0 text-xs text-fg-muted">from {t.value}</span>}
-                      </li>
-                    );
-                  })}
-                </ul>
+                <table className="w-full table-fixed rounded-md bg-card text-xs ring-1 ring-border">
+                  <thead>
+                    <tr className="text-left text-fg-muted">
+                      <th className="px-3 py-2 font-normal">Token</th>
+                      {columns.map((c) => (
+                        <th key={c.value} className="px-3 py-2 font-normal" data-theme-column={c.value}>
+                          {c.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(list as typeof tokens).map((t) => {
+                      const first = valueOf(t, DEFAULT_AXIS);
+                      return (
+                        <tr key={t.name} className="border-t" data-token-row={t.name}>
+                          <td className="px-3 py-2 font-mono">
+                            <span className="flex min-w-0">
+                              <Truncate>{t.name}</Truncate>
+                            </span>
+                          </td>
+                          {columns.map((c, i) => {
+                            const value = valueOf(t, c.value);
+                            return (
+                              <td key={c.value} className={cn("px-3 py-2 font-mono", i > 0 && value === first && "text-fg-muted")}>
+                                <span className="flex min-w-0 items-center gap-2">
+                                  {t.kind === "color" && <span aria-hidden className="size-5 shrink-0 rounded-sm ring-1 ring-border-strong" style={{ background: value }} />}
+                                  <Truncate>{value}</Truncate>
+                                </span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </section>
             ),
           )}
@@ -1526,12 +1629,15 @@ function VersionsTab({ view }: { view: SystemView }) {
                 {v.components} components · {v.stories} stories{v.failedStories > 0 ? ` (${v.failedStories} didn't render)` : ""}
                 {v.n === latest && " · latest"}
               </span>
-              {(v.added.length > 0 || v.removed.length > 0 || v.changed.length > 0 || v.retiered.length > 0) && (
+              {(v.added.length > 0 || v.removed.length > 0 || v.changed.length > 0 || v.retiered.length > 0 || v.newStories.length > 0) && (
                 <span className="grid gap-0.5 text-xs" data-version-changes>
                   {v.added.length > 0 && <ChangeLine label="Added" names={v.added} className="text-success" />}
                   {v.removed.length > 0 && <ChangeLine label="Removed" names={v.removed} className="text-danger" />}
                   {v.changed.length > 0 && (
                     <ChangeLine label="Renders differently" names={v.changed.map((c) => c.name)} className="text-fg" data="version-changed" />
+                  )}
+                  {v.newStories.length > 0 && (
+                    <ChangeLine label="New stories" names={v.newStories.flatMap((c) => c.stories.map((s) => `${c.name} › ${s}`))} className="text-fg" />
                   )}
                   {v.retiered.length > 0 && (
                     <ChangeLine label="Tier" names={v.retiered.map((r) => `${r.name} ${TIER_LABEL[r.from].toLowerCase()} → ${TIER_LABEL[r.to].toLowerCase()}`)} className="text-fg" />

@@ -1828,7 +1828,7 @@ function promoteMessage(input: {
       ? `- Write a story for it in .brainstorm/stories/${draft === null ? "" : ` with these args: ${JSON.stringify(draft.example)}`}${draft?.tier == null || draft.tier === "primitive" ? "" : `, with \`tags: ["${draft.tier}"]\` in its meta if its file isn't under the adapter's ${draft.tier}s`}.`
       : `- Export it from the library's entry, and write a story for it${draft === null ? "" : ` with these args: ${JSON.stringify(draft.example)}`}.`,
     `- Then run \`brainstorm system sync ${system.id}\`, so the design system's next version has it. Brainstorm then offers the upgrade in the session, and after it the design uses the library's component.`,
-    "- End with a short report. Its first line says what you added and which version the sync made; Brainstorm shows that line beside the promotion. Then say where you departed from the proposed files, and why.",
+    "- End with a short report: where you departed from the proposed files, and why, then a last line saying what you added and which version the sync made. Brainstorm shows that last line beside the promotion.",
     "",
     "The proposed files:",
     "",

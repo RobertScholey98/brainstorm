@@ -1,4 +1,4 @@
-import { ArrowUpCircle, Check, ChevronRight, Download, ExternalLink, Paintbrush, Palette, RotateCcw, Send, Wrench } from "lucide-react";
+import { ArrowUpCircle, Check, ChevronDown, ChevronRight, Download, ExternalLink, Paintbrush, Palette, RotateCcw, Send, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -90,9 +90,11 @@ export function SystemSection({
                   then you upgrade.
                 </p>
                 <ul className="grid gap-1" data-upgrade-errors>
-                  {check.issues.map((i, n) => (
+                  {causesFirst(check.issues).map((i, n) => (
                     <CalloutItem key={n}>
-                      <span className="font-medium">{placeTitle(i.where)}:</span> {i.message}
+                      <span className="line-clamp-2">
+                        <span className="font-medium">{placeTitle(i.where)}:</span> {i.message}
+                      </span>
                     </CalloutItem>
                   ))}
                   {check.errors > check.issues.length && <CalloutItem>and {check.errors - check.issues.length} more</CalloutItem>}
@@ -136,15 +138,11 @@ function ThemeEditor({ system, readOnly, send, exportTheme }: Omit<Parameters<ty
       ))}
       {colours.length > 0 && <TokenList heading="Colours" tokens={colours} theme={theme.tokens} axes={theme.axes} send={send} />}
       {others.length > 0 && <TokenList heading="Sizes and type" tokens={others} theme={theme.tokens} axes={theme.axes} send={send} />}
-      {/* Two equal columns, so the theme's actions line up however many there are. */}
+      {/* A saved theme is picked like an axis value, so its picker sits above the two actions on this theme. */}
+      {system.themes.length > 0 && <SavedThemes names={system.themes.map((t) => t.name)} onApply={(name) => void send({ kind: "apply_theme", name })} />}
       <div className="grid grid-cols-2 gap-2">
         <SaveTheme disabled={tweaked === 0} onSave={(name) => send({ kind: "save_theme", name })} />
         <ThemeExportButton exportTheme={exportTheme} />
-        {system.themes.length > 0 && (
-          <div className="col-span-2 grid">
-            <SavedThemes names={system.themes.map((t) => t.name)} onApply={(name) => void send({ kind: "apply_theme", name })} />
-          </div>
-        )}
       </div>
     </div>
   );
@@ -172,6 +170,13 @@ function AxisControl({ label, value, onChange, options }: { label: string; value
 }
 
 const capital = (s: string) => s.replace(/^\w/, (c) => c.toUpperCase());
+/**
+ * The upgrade check's errors with what the kit lacks first: a missing export is the cause, and React's "element type is
+ * invalid" for the same block only its symptom.
+ */
+const causesFirst = (issues: readonly { where: string; message: string }[]) =>
+  [...issues].sort((a, b) => Number(/threw with/.test(a.message)) - Number(/threw with/.test(b.message)));
+
 const list = (names: readonly string[]) => (names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
 /** What the newest version changes, in a sentence or two, or null when it changes nothing a block would notice. */
@@ -231,7 +236,7 @@ function TokenList({
       </CollapsibleTrigger>
       {/* Folded, the list still shows the tokens this brainstorm changed. */}
       {!open && set.length > 0 && (
-        <div className="grid grid-cols-1 gap-1 border-l pl-2" data-token-changed>
+        <div className="ml-1.5 grid grid-cols-1 gap-1 border-l pl-3" data-token-changed>
           <span className="text-xs text-fg-muted">Changed here</span>
           <ul className="grid grid-cols-1 gap-1">{set.map(row)}</ul>
         </div>
@@ -347,9 +352,10 @@ function SavedThemes({ names, onApply }: { names: readonly string[]; onApply: (n
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button variant="outline" data-theme-saved />}>
+      <PopoverTrigger render={<Button variant="outline" className="w-full" data-theme-saved />}>
         <Paintbrush data-icon="inline-start" aria-hidden />
         Apply a saved theme
+        <ChevronDown data-icon="inline-end" aria-hidden className="ml-auto text-fg-muted" />
       </PopoverTrigger>
       <PopoverContent size="sm" align="start">
         <PopoverHeader heading="Saved themes" description="Applying one replaces this brainstorm's tweaks." />
@@ -456,13 +462,19 @@ function ProposedList({ api, system, send }: { api: Api; system: SessionSystemVi
 }
 
 /** A promotion under way: what the agent adding the component to the library is doing, as the import card shows it. */
-function PromoteWork({ api, thread, link, since, library }: { api: Api; thread: ThreadId; link: string | null; since: string; library: string }) {
+function PromoteWork({ api, thread, link, since, library, landed }: { api: Api; thread: ThreadId; link: string | null; since: string; library: string; landed: number | null }) {
   const work = useAgentWork(api, thread);
   return (
     <div className="grid min-w-0 grid-cols-1 gap-1 rounded-sm bg-muted px-2 py-1.5" data-promote-status>
-      <span className="text-xs text-fg-muted">Adding it to {library}</span>
+      {landed === null ? (
+        <span className="text-xs text-fg-muted">Adding it to {library}</span>
+      ) : (
+        <span className="text-xs text-success" data-promote-landed>
+          In v{landed}; upgrade to use it from the kit
+        </span>
+      )}
       <AgentWorkStatus work={work} since={since} link={link} compact />
-      {work?.phase === "finished" && <span className="text-xs text-fg-muted">Once the agent syncs the library, the new version shows above with Upgrade.</span>}
+      {work?.phase === "finished" && landed === null && <span className="text-xs text-fg-muted">Once the agent syncs the library, the new version shows above with Upgrade.</span>}
     </div>
   );
 }
@@ -483,14 +495,17 @@ function ProposedRow({
   const promotion = proposed.promotion;
   const inSystem = proposed.inSystem;
   let status: ReactNode = null;
-  if (inSystem !== null) status = <span className="text-xs text-success">In v{inSystem}; upgrade to use it from the kit</span>;
+  // The agent's thread stays in view after its version lands, so its report's first line is read beside the result.
+  if (inSystem !== null && promotion?.state === "started")
+    status = <PromoteWork api={api} thread={promotion.thread} link={promotion.link} since={promotion.at} library={library} landed={inSystem} />;
+  else if (inSystem !== null) status = <span className="text-xs text-success">In v{inSystem}; upgrade to use it from the kit</span>;
   else if (promotion?.state === "starting") status = (
       <span className="flex items-center gap-1.5 text-xs text-fg-muted">
         <Spinner />
         Starting the thread…
       </span>
     );
-  else if (promotion?.state === "started") status = <PromoteWork api={api} thread={promotion.thread} link={promotion.link} since={promotion.at} library={library} />;
+  else if (promotion?.state === "started") status = <PromoteWork api={api} thread={promotion.thread} link={promotion.link} since={promotion.at} library={library} landed={null} />;
   else if (promotion?.state === "failed") status = <span className="text-xs text-danger">Couldn't start: {promotion.error}</span>;
   const button = (
     <Button variant="outline" size="xs" disabled={!canPromote || promotion?.state === "starting"} onClick={() => onPromote(proposed.name)} data-promote={proposed.name}>

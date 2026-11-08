@@ -15,25 +15,12 @@ export function importMessage(input: {
   readonly repair: { readonly id: string; readonly name: string; readonly issues: readonly Issue[] } | null;
 }): string {
   const { root, chosen, repair } = input;
-  const intro =
-    repair === null
-      ? [
-          `[brainstorm] import the design system from ${root}`,
-          "",
-          `Rob wants Brainstorm designs built from this project's own components, so a design can be built as drawn. Brainstorm syncs a design system from the project's files, every time they change, through an adapter at ${ADAPTER_FILE}. Your job is to write that adapter, and a story for each component that has none, then add the system.`,
-          ...(chosen === "" ? [] : ["", `Rob pointed Brainstorm at \`${chosen}\`, so start there; the system may also include components elsewhere in the project.`]),
-        ]
-      : [
-          `[brainstorm] repair the ${repair.name} design system (${repair.id})`,
-          "",
-          `Brainstorm syncs this project's design system through ${ADAPTER_FILE}, and the last sync failed:`,
-          "",
-          ...repair.issues.slice(0, 20).map((i) => `- ${issueLine(i)}`),
-          "",
-          "Find what in the project changed, such as a moved or renamed file, and fix the adapter or the stories so it syncs again. Change the project's components only if Rob asks.",
-        ];
+  if (repair !== null) return repairMessage(root, repair);
   return [
-    ...intro,
+    `[brainstorm] import the design system from ${root}`,
+    "",
+    `Rob wants Brainstorm designs built from this project's own components, so a design can be built as drawn. Brainstorm syncs a design system from the project's files, every time they change, through an adapter at ${ADAPTER_FILE}. Your job is to write that adapter, and a story for each component that has none, then add the system.`,
+    ...(chosen === "" ? [] : ["", `Rob pointed Brainstorm at \`${chosen}\`, so start there; the system may also include components elsewhere in the project.`]),
     "",
     "## What to decide",
     "",
@@ -86,13 +73,39 @@ export function importMessage(input: {
     "- **stories**: every component has a story that renders something.",
     "- **theme**: the stylesheet defines colour tokens.",
     "",
-    `Run it until every gate passes. Then run ${repair === null ? `\`brainstorm system add ${root}\`` : `\`brainstorm system sync ${repair.id}\``}.`,
+    `Run it until every gate passes. Then run \`brainstorm system add ${root}\`.`,
     "",
     "## Report",
     "",
     "End with a short report for Rob: the components you included under each tier, the ones you left out and why, any stubs you wrote, and any warning the check still shows. Don't change the project's components to make them pass; leave them out and say so.",
     "",
     "Rob then reviews the system in Brainstorm before any brainstorm can use it. If he moves components between tiers or notes a problem, his review comes back to this thread.",
+  ].join("\n");
+}
+
+/**
+ * The first turn of a thread that repairs a system whose sync failed. The system is already in use, so the brief is
+ * narrow: what failed, where to look, the check, and the sync that makes the next version.
+ */
+function repairMessage(root: string, repair: { readonly id: string; readonly name: string; readonly issues: readonly Issue[] }): string {
+  return [
+    `[brainstorm] repair the ${repair.name} design system (${repair.id})`,
+    "",
+    `Brainstorm syncs this project's design system through ${ADAPTER_FILE}, and the last sync failed:`,
+    "",
+    ...repair.issues.slice(0, 20).map((i) => `- ${issueLine(i)}`),
+    "",
+    "Brainstorms keep using the last version that synced, so nothing is broken for Rob yet. Find what in the project changed, such as a moved or renamed file, and fix the adapter or the stories so the system syncs again. Change the project's components only if Rob asks.",
+    "",
+    "## How to know it's done",
+    "",
+    fence("sh", `brainstorm system check ${root}`),
+    "",
+    `Run it until every gate passes (builds, boundary, stories, theme). Then run \`brainstorm system sync ${repair.id}\`, which makes the next version; Brainstorm offers it to each brainstorm as an upgrade.`,
+    "",
+    "## Report",
+    "",
+    "End with a short report for Rob: what had changed in the project, what you changed in the adapter or stories to follow it, and the version the sync made.",
   ].join("\n");
 }
 

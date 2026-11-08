@@ -134,8 +134,13 @@ export class Systems {
           const before = all.find((o) => o.n === v.n - 1);
           const changes =
             before === undefined
-              ? { added: [], removed: [], changed: [], tokens: [], retiered: [] }
-              : { ...componentChanges(before.manifest, v.manifest), ...renderChanges(before.manifest, v.manifest), retiered: tierChanges(before.manifest, v.manifest) };
+              ? { added: [], removed: [], changed: [], tokens: [], retiered: [], newStories: [] }
+              : {
+                  ...componentChanges(before.manifest, v.manifest),
+                  ...renderChanges(before.manifest, v.manifest),
+                  retiered: tierChanges(before.manifest, v.manifest),
+                  newStories: newStories(before.manifest, v.manifest),
+                };
           return { ...rest, sessions: using.get(v.n) ?? [], ...changes };
         });
       })(),
@@ -426,7 +431,7 @@ export class Systems {
       tiers: {},
       issues: [],
       thread,
-      sent: { at: this.#now(), notes: review.issues, moved },
+      sent: { at: this.#now(), notes: review.issues, moved, version: this.#store.latestSystemVersion(s.id)?.n ?? null },
     });
     this.#changed();
     return this.view(s.id);
@@ -567,6 +572,20 @@ function syncFailed(issues: readonly Issue[]): Failure {
 }
 
 /** The components both versions list whose tier changed, such as a review's move (ADR 008). */
+/** Stories a component has that it didn't in the version before, by name; a new component's stories come with it. */
+export function newStories(
+  before: Pick<SystemManifest, "catalog" | "stories">,
+  after: Pick<SystemManifest, "catalog" | "stories">,
+): { name: string; stories: string[] }[] {
+  const had = new Map(before.catalog.map((e) => [e.name, new Set(e.stories)]));
+  const names = new Map(after.stories.map((s) => [s.id, s.name]));
+  return after.catalog.flatMap((e) => {
+    const was = had.get(e.name);
+    const fresh = was === undefined || e.generated ? [] : e.stories.filter((id) => !was.has(id));
+    return fresh.length === 0 ? [] : [{ name: e.name, stories: fresh.map((id) => names.get(id) ?? id) }];
+  });
+}
+
 export function tierChanges(before: Pick<SystemManifest, "catalog">, after: Pick<SystemManifest, "catalog">): { name: string; from: Tier; to: Tier }[] {
   const was = new Map(before.catalog.filter((e) => !e.generated).map((e) => [e.name, e.tier ?? "primitive"]));
   return after.catalog.flatMap((e) => {

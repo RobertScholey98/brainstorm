@@ -153,8 +153,13 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     { sidebar: sidebarLimits.min, inspector: rail ? RAIL : INSPECTOR.min },
     useWindowWidth(),
   );
-  // A notice stays until Rob closes it or the next call he makes succeeds.
+  // A failure stays until Rob closes it or the next call he makes succeeds; a success says what it did and goes.
   const clearNotice = useCallback(() => setNotice(null), []);
+  useEffect(() => {
+    if (notice?.tone !== "success") return;
+    const timer = setTimeout(() => setNotice((now) => (now === notice ? null : now)), 5000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   // One link for the window's life, so a preview window keeps its place across brainstorms.
   const [link] = useState(() => new PreviewLink(prefs.preview.look));
@@ -291,7 +296,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     </AppSidebar>
   );
   const listing = sessions?.find((s) => s.id === sessionId);
-  const toast = notice !== null && <Toast heading={notice.title} message={notice.detail} onClose={clearNotice} />;
+  const toast = notice !== null && <Toast heading={notice.title} message={notice.detail} tone={notice.tone} onClose={clearNotice} />;
 
   return (
     <TooltipProvider>
