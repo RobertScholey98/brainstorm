@@ -289,12 +289,33 @@ function scanCandidates(base: string, pattern: string, into: Set<string>): void 
     const text = readFileSync(p, "utf8");
     // Classes such as `py-(--card-spacing)` and `[--gap:--spacing(4)]` hold parentheses and commas, so words split
     // only at quotes and whitespace count, and so do their pieces between parentheses for words like `cn(base`.
-    for (const words of [/[^\s"'`{}<>;\\]+/g, /[^\s"'`{}()<>;,\\]+/g]) {
-      for (const m of text.matchAll(words)) {
-        const token = m[0].replace(/^[=:]+|[.:]+$/g, "");
+    // Inside square brackets nothing but whitespace splits, since `has-[>svg]:px-3` and
+    // `*:[svg:not([class*='size-'])]:size-4` hold `>` and quotes there.
+    for (const separators of [`'{}<>;\\`, `'{}()<>;,\\`]) {
+      for (const word of bracketWords(text, separators)) {
+        const token = word.replace(/^[=:]+|[.:]+$/g, "");
         if (token.length > 0 && token.length < 200) into.add(token);
       }
     }
   };
   visit(start);
+}
+
+/** Splits text into words at whitespace, `"` and backticks, and at `separators` outside square brackets. */
+function* bracketWords(text: string, separators: string): Generator<string> {
+  let word = "";
+  let depth = 0;
+  for (const c of text) {
+    const breaks = /[\s"`]/.test(c) || (depth === 0 && separators.includes(c));
+    if (breaks) {
+      if (word !== "") yield word;
+      word = "";
+      depth = 0;
+      continue;
+    }
+    if (c === "[") depth++;
+    else if (c === "]" && depth > 0) depth--;
+    word += c;
+  }
+  if (word !== "") yield word;
 }

@@ -125,6 +125,8 @@ describe("a design system", () => {
     // Classes with parentheses, as shadcn's v4 components write them, reach the kit's CSS.
     const kit = data(await service.systems.kit(system, 1 as never));
     expect([kit.css.includes(".py-\\(--body-spacing\\)"), kit.css.includes("--body-spacing: calc(var(--spacing) * 2)")]).toEqual([true, true]);
+    // So do classes with `>` and quotes inside their brackets, which shadcn writes for icons in buttons and alerts.
+    expect([kit.css.includes(":has( > svg)"), kit.css.includes(":not([class*='size-'])")]).toEqual([true, true]);
   }, 120_000);
 
   test("syncing an unchanged library makes no new version", async () => {

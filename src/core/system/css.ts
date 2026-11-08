@@ -29,6 +29,12 @@ export function parseCss(css: string): CssNode[] {
     let depth = 0;
     while (i < text.length) {
       const c = text[i] as string;
+      // An escaped character, such as the \' and \[ in Tailwind's `.\*\:\[svg\:not\(\[class\*\=\'size-\'\]\)\]`, is
+      // part of the name, not a string or a bracket.
+      if (c === "\\") {
+        i += 2;
+        continue;
+      }
       if (c === '"' || c === "'") {
         const quote = c;
         i += 1;
