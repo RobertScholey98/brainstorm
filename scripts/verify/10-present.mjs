@@ -279,7 +279,7 @@ try {
   await window.click("[data-pick-toggle]");
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
-  check("a pick started here while the canvas is away waits in the preview window", [await window.textContent("[data-canvas-away] [data-slot=empty-title]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")], ["Click an element in the preview window", "Write it there; it lands in Feedback here. Press Esc to stop."]);
+  check("a pick started here while the canvas is away waits in the preview window", [await window.textContent("[data-canvas-away] [data-slot=empty-title]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")], ["Click an element in the preview window", "Add your comment there; it appears in Feedback here. Press Esc to stop."]);
   check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Click to pin");
   await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's pick chip reads Click to pin, with its close, and the region's title says to click an element there and where the comment goes");
   await window.keyboard.press("Escape");
