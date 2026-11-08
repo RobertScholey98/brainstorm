@@ -925,7 +925,7 @@ function CanvasAway({
   onDismiss: () => void;
 }) {
   const what = stuck === "vary" ? "vary an element" : "pin a comment";
-  const verb = stuck === "vary" ? "vary" : "pin";
+  const privately = stuck === "vary" ? "vary it" : "comment";
   const name = look === "clean" ? "Clean" : "Working";
   return (
     <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away={stuck !== null ? "stuck" : picking ? "picking" : ""}>
@@ -939,7 +939,7 @@ function CanvasAway({
           </EmptyTitle>
           <EmptyDescription>
             {stuck !== null
-              ? `The preview window is Clean, so viewers see only the design. Show the canvas here to ${verb} without changing that, or switch the preview to Working.`
+              ? `Clean shows only the design to your audience. Show the canvas here to ${privately} privately, or switch to Working to show tools and pins there.`
               : picking
                 ? "Esc or Cancel stops picking."
                 : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}

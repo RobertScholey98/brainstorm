@@ -90,7 +90,7 @@ function WindowMenu({ prefs, onPrefs }: { prefs: PreviewPrefs; onPrefs: (prefs: 
   const look = LOOKS.find((l) => l.value === prefs.look) ?? LOOKS[0];
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint name={`Preview window is open · ${look?.label}`} label="Change its look, bring it to front, make it full screen, or close it" side="bottom">
+      <Hint name={`Preview window · ${look?.label}`} label="Window options" side="bottom">
         <PopoverTrigger render={<Button variant="outline" aria-label={`Preview window, ${look?.label}`} data-preview-menu />}>
           <AppWindow data-icon="inline-start" aria-hidden />
           <span className="text-fg-muted data-collapsed:hidden" data-collapse={BAR_COLLAPSE.preview}>
