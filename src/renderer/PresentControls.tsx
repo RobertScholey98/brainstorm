@@ -60,7 +60,7 @@ function HoldButton({ hold, heldOn, onHold }: { hold: boolean; heldOn: string | 
       label={
         hold
           ? `It shows ${heldOn ?? "what it showed"}. Resume live sends your latest changes`
-          : "Keep it on what it shows now while you keep editing here"
+          : "Freeze the preview while you keep editing here"
       }
       side="bottom"
     >

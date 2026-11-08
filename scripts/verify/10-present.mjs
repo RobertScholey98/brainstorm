@@ -147,7 +147,7 @@ try {
   await window.hover("[data-hold]");
   await window.waitForSelector("[data-slot=tooltip-content], [role=tooltip]", { timeout: 3000 }).catch(() => {});
   await sleep(300);
-  await snap(window, "07b-hold-hint", "Hold's hint while the bar shows it as the bare word Hold: it names the whole action, Hold preview window, and says what it does");
+  await snap(window, "07b-hold-hint", "Hold's hint while the bar shows it as the bare word Hold: it names the whole action, Hold preview window, and says what it does: Freeze the preview while you keep editing here");
   await window.mouse.move(150, 860);
   await sleep(300);
 
@@ -255,7 +255,7 @@ try {
   await window.click("[data-pick-toggle]");
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
-  check("a pick started here while the canvas is away waits in the preview window", await window.textContent("[data-canvas-away] [data-slot=empty-description]"), "Click an element in the preview window. Press Esc or Cancel to stop.");
+  check("a pick started here while the canvas is away waits in the preview window", [await window.textContent("[data-canvas-away] [data-slot=empty-title]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")], ["Click an element in the preview window", "Press Esc or Cancel to stop."]);
   check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Click in previewCancel");
   await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's hint reads Click in preview, with Cancel, and the region's title says to click an element there");
   await window.keyboard.press("Escape");
