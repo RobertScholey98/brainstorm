@@ -1013,8 +1013,9 @@ function PresentHint({ several, poke, onLeave }: { several: boolean; poke: numbe
       <TooltipLabel>
         {several && (
           <span role="status" className="contents">
-            <span className="font-medium" aria-label="Left and right arrow keys">
-              ← →
+            <span className="flex items-center gap-0.5" aria-label="Left and right arrow keys">
+              <Kbd tone="inverse">←</Kbd>
+              <Kbd tone="inverse">→</Kbd>
             </span>
             change slot
           </span>

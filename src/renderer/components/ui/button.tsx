@@ -18,7 +18,8 @@ const buttonVariants = cva(
         caution:
           "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg data-warn:border-warning data-warn:bg-warning/15 aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-warning aria-pressed:bg-warning/20 aria-pressed:text-fg",
         // The action closing a status strip: the strip's whole height at its end, set off by a rule, not a box.
-        strip: "rounded-none border-0 bg-warning font-semibold text-card hover:bg-warning/85 focus-visible:ring-inset",
+        // Its hit area reaches past its fill to the strip's edges and a little beyond, so it clicks like a full-size control.
+        strip: "relative rounded-none border-0 bg-warning font-semibold text-card after:absolute after:inset-x-0 after:-inset-y-1 hover:bg-warning/85 focus-visible:ring-inset",
         ghost:
           "hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg aria-pressed:bg-selected aria-pressed:text-fg",
         destructive:

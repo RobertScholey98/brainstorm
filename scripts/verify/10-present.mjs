@@ -62,7 +62,7 @@ try {
     await window.evaluate(() => [...document.querySelectorAll("[data-canvas-bar] [data-present-controls] button")].map((b) => b.getAttribute("aria-label") ?? b.textContent)),
     ["Open preview window", "Present"],
   );
-  await snap(window, "01-canvas-bar", "The main window as a brainstorm opens: the canvas bar now ends, after the One slot / All slots switch and a divider, with Open preview window (window icon) then Present (full-screen icon) last, both icon buttons with hints");
+  await snap(window, "01-canvas-bar", "The main window as a brainstorm opens: the canvas bar now ends, after the One slot / All slots switch and a divider, with a Preview button (window icon and the word Preview, which opens the preview window) then Present (full-screen icon) last, each with a hint");
   await window.hover("[data-present]");
   await window.waitForSelector("[data-slot=tooltip-content], [role=tooltip]", { timeout: 3000 }).catch(() => {});
   await sleep(300);
@@ -176,7 +176,7 @@ try {
   check(
     "the main window says so under the canvas bar, naming the slot and variant held, and Hold preview is pressed",
     [await window.textContent("[data-held-bar]"), await window.getAttribute("[data-hold]", "aria-pressed")],
-    ["Preview heldThe preview window still shows The wheel · Slot reel.Resume live", "true"],
+    ["Preview heldThe preview window still shows The wheel · Slot reelResume live", "true"],
   );
   await window.mouse.move(150, 860);
   await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed amber, and, as a slim strip in the canvas's top inset above the frame caption so nothing moves or hides, a warning-toned bar under the canvas bar, Preview held · The preview window still shows The wheel · Slot reel, with a compact Resume live inside the strip; the main canvas has moved on to the result slot");

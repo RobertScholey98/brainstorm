@@ -80,8 +80,10 @@ function HoldButton({ hold, heldOn, onHold }: { hold: boolean; heldOn: string | 
 function OpenWindow() {
   return (
     <Hint name="Preview window" label="Mirror this canvas in a window of its own, to share or to put on another screen" side="bottom">
-      <Button variant="outline" size="icon" aria-label="Open preview window" onClick={() => previewWindow("open")} data-preview-open>
-        <AppWindow aria-hidden />
+      {/* Named, as the Preview menu that takes its place is, until the bar's width needs the room. */}
+      <Button variant="outline" aria-label="Open preview window" onClick={() => previewWindow("open")} className={COMPACT} data-collapse={BAR_COLLAPSE.hold} data-preview-open>
+        <AppWindow data-icon="inline-start" aria-hidden />
+        <span className={COMPACT_LABEL}>Preview</span>
       </Button>
     </Hint>
   );
@@ -150,7 +152,7 @@ function WindowMenu({
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
             <span className="text-sm">Hold preview</span>
-            <span className="text-xs text-fg-muted">Freeze the preview window while you try things here. Resume live shows your latest changes.</span>
+            <span className="text-xs text-fg-muted">Freeze the preview while you keep editing here. Resume live shows your latest changes.</span>
           </span>
           <Switch checked={hold} onCheckedChange={onHold} className="mt-0.5" data-preview-menu-hold />
         </label>
