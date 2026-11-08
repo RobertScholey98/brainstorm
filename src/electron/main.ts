@@ -1,5 +1,5 @@
-import { app, BrowserWindow, dialog, Menu, nativeTheme, session, shell, type BrowserWindowConstructorOptions } from "electron";
-import { readdirSync } from "node:fs";
+import { app, BrowserWindow, dialog, Menu, nativeTheme, screen, session, shell, type BrowserWindowConstructorOptions, type Rectangle, type WebContents } from "electron";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,6 +43,31 @@ const titleBar = (): Pick<BrowserWindowConstructorOptions, "titleBarStyle" | "ti
     ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: HEADER_HEIGHT / 2 - TRAFFIC_LIGHT_RADIUS } }
     : { titleBarStyle: "hidden", titleBarOverlay: overlay() };
 
+/** Where the preview window was last, and whether it was full screen, so it comes back on the screen Rob gave it. */
+const previewPlace = join(home, "electron", "preview-window.json");
+type Place = { readonly bounds: Rectangle; readonly fullScreen: boolean };
+
+function readPlace(): Place | null {
+  try {
+    const p = JSON.parse(readFileSync(previewPlace, "utf8")) as Place;
+    const { x, y, width, height } = p.bounds;
+    if (![x, y, width, height].every(Number.isFinite)) return null;
+    // A screen that has since gone would put the window out of reach, so it must still overlap one.
+    const seen = screen.getAllDisplays().some(({ workArea: a }) => x < a.x + a.width && x + width > a.x && y < a.y + a.height && y + height > a.y);
+    return seen ? { bounds: p.bounds, fullScreen: p.fullScreen === true } : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePlace(window: BrowserWindow): void {
+  try {
+    writeFileSync(previewPlace, JSON.stringify({ bounds: window.getNormalBounds(), fullScreen: window.isFullScreen() } satisfies Place));
+  } catch {
+    // Not keeping its place is no reason to interrupt Rob.
+  }
+}
+
 /** An installed app keeps ~/.claude/skills/use-brainstorm on the version it shipped with, so agents can drive it. */
 function installBundledSkill(): void {
   try {
@@ -59,6 +84,7 @@ else app.quit();
 
 async function run(): Promise<void> {
   let window: BrowserWindow | null = null;
+  let preview: BrowserWindow | null = null;
   app.on("second-instance", () => {
     if (window === null) return;
     if (window.isMinimized()) window.restore();
@@ -79,10 +105,15 @@ async function run(): Promise<void> {
     return;
   }
   const origin = new URL(server.url).origin;
-  // Copy phrase writes the clipboard from the window; the canvas frame and everything else stay denied.
+  // Copy phrase writes the clipboard, and Present fills the screen, from the window; the canvas frame and everything else
+  // stay denied.
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) =>
-    callback(permission === "clipboard-sanitized-write" && details.isMainFrame && new URL(details.requestingUrl).origin === origin),
+    callback(
+      (permission === "clipboard-sanitized-write" || permission === "fullscreen") && details.isMainFrame && new URL(details.requestingUrl).origin === origin,
+    ),
   );
+  // The preview window's page is the renderer's, told by its hash which window it is (ADR 007).
+  const previewUrl = `${server.url}&window=preview`;
 
   let closing = false;
   app.on("before-quit", (event) => {
@@ -110,6 +141,83 @@ async function run(): Promise<void> {
     shown.setBackgroundColor(theme()["app"] ?? "#000000");
   });
   const contents = window.webContents;
+  // The preview window lives and dies with the main one.
+  shown.on("close", () => preview?.close());
+
+  /**
+   * The rules both windows' pages live under. A link the page opens never opens a window: Show in folder and the
+   * preview window's commands are links the main process acts on, and anything else on the web goes to the browser.
+   * Neither page nor the canvas frame in it may leave the server's origin, and a page that loads again without its
+   * token goes back to the URL that carries it.
+   */
+  const guard = (contents: WebContents, url: string) => {
+    contents.setWindowOpenHandler(({ url: opened }) => {
+      const target = new URL(opened);
+      const command = target.origin === origin ? /^\/preview-window\/(open|close|fullscreen)$/.exec(target.pathname)?.[1] : undefined;
+      const file = target.origin === origin ? exported(target.pathname) : null;
+      if (command === "open") openPreview();
+      else if (command === "close") preview?.close();
+      else if (command === "fullscreen") {
+        const w = openPreview();
+        w.setFullScreen(!w.isFullScreen());
+      } else if (file) shell.showItemInFolder(join(exports, file));
+      else if (/^https?:$/.test(target.protocol) && target.origin !== origin) void shell.openExternal(opened);
+      return { action: "deny" };
+    });
+    // will-frame-navigate also covers the canvas iframe, which block code could otherwise point at any URL.
+    contents.on("will-frame-navigate", (event) => {
+      if (new URL(event.url).origin !== origin) event.preventDefault();
+    });
+    // The page keeps the UI token only in memory and wipes it from the URL, so a page that loads again (a reload, or a
+    // renderer brought back after a crash) would come up without it. Each such load goes back to the URL that carries it.
+    contents.on("did-navigate", (_event, at) => {
+      const target = new URL(at);
+      if (target.origin === origin && !target.hash.startsWith("#ui=")) void contents.loadURL(url);
+    });
+    contents.on("render-process-gone", (_event, details) => {
+      if (!closing && details.reason !== "clean-exit") void contents.loadURL(url);
+    });
+  };
+
+  /** Brings the preview window forward, opening it where it was last if it isn't open. */
+  const openPreview = (): BrowserWindow => {
+    if (preview !== null) {
+      if (preview.isMinimized()) preview.restore();
+      preview.show();
+      preview.focus();
+      return preview;
+    }
+    const place = readPlace();
+    const opened = new BrowserWindow({
+      ...(place?.bounds ?? { width: 1280, height: 800 }),
+      minWidth: 360,
+      minHeight: 360,
+      title: "Brainstorm preview",
+      autoHideMenuBar: true,
+      backgroundColor: theme()["app"],
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    });
+    preview = opened;
+    if (place?.fullScreen) opened.setFullScreen(true);
+    guard(opened.webContents, previewUrl);
+    // F11 fills the screen, as in a browser, and Escape leaves it, wherever focus is, the canvas frame included.
+    opened.webContents.on("before-input-event", (event, input) => {
+      if (input.type !== "keyDown") return;
+      if (input.key === "F11") {
+        event.preventDefault();
+        opened.setFullScreen(!opened.isFullScreen());
+      } else if (input.key === "Escape" && opened.isFullScreen()) opened.setFullScreen(false);
+    });
+    const repaint = () => opened.setBackgroundColor(theme()["app"] ?? "#000000");
+    nativeTheme.on("updated", repaint);
+    opened.on("close", () => writePlace(opened));
+    opened.on("closed", () => {
+      nativeTheme.off("updated", repaint);
+      if (preview === opened) preview = null;
+    });
+    void opened.loadURL(previewUrl);
+    return opened;
+  };
   // macOS hides the traffic lights in full screen, so the page gives their room back. The renderer has no preload, so
   // the main process marks the page itself.
   if (MAC) {
@@ -119,25 +227,6 @@ async function run(): Promise<void> {
     contents.on("did-finish-load", () => mark(shown.isFullScreen()));
   }
   // The renderer has no preload, so Show in folder is a link to /reveal-export/<file> that never opens a window.
-  contents.setWindowOpenHandler(({ url }) => {
-    const target = new URL(url);
-    const file = target.origin === origin ? exported(target.pathname) : null;
-    if (file) shell.showItemInFolder(join(exports, file));
-    else if (/^https?:$/.test(target.protocol) && target.origin !== origin) void shell.openExternal(url);
-    return { action: "deny" };
-  });
-  // will-frame-navigate also covers the canvas iframe, which block code could otherwise point at any URL.
-  contents.on("will-frame-navigate", (event) => {
-    if (new URL(event.url).origin !== origin) event.preventDefault();
-  });
-  // The page keeps the UI token only in memory and wipes it from the URL, so a page that loads again (a reload, or a
-  // renderer brought back after a crash) would come up without it. Each such load goes back to the URL that carries it.
-  contents.on("did-navigate", (_event, url) => {
-    const target = new URL(url);
-    if (target.origin === origin && !target.hash.startsWith("#ui=")) void contents.loadURL(server.url);
-  });
-  contents.on("render-process-gone", (_event, details) => {
-    if (!closing && details.reason !== "clean-exit") void contents.loadURL(server.url);
-  });
+  guard(contents, server.url);
   await window.loadURL(server.url);
 }

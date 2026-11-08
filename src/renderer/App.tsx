@@ -1,10 +1,12 @@
-import { Loader2 } from "lucide-react";
+import { AppWindow, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Button } from "@/components/ui/button";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Kbd } from "@/components/ui/kbd";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toast } from "@/components/ui/toast";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipLabel, TooltipProvider } from "@/components/ui/tooltip";
 import {
   blockIdOf,
   framesOf,
@@ -28,9 +30,10 @@ import {
   type SessionListing,
   type SessionView,
   type SlotId,
+  type SlotView,
   type VariantKey,
 } from "../core/types";
-import { applyPrefs, NO_PREFS, stripOpen, type CanvasLayout, type UiPrefs, type UiPrefsPatch } from "../core/prefs";
+import { applyPrefs, NO_PREFS, stripOpen, type CanvasLayout, type PreviewPrefs, type UiPrefs, type UiPrefsPatch } from "../core/prefs";
 import type { Api } from "./api";
 import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type FeedbackCue, type Placement } from "./CanvasHost";
@@ -40,8 +43,10 @@ import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
 import { fitPanes, usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
 import { Inspector, InspectorRail, InspectorSkeleton } from "./Inspector";
+import { previewWindow, PreviewLink, type MirrorScene, type ToMain } from "./mirror";
 import { failedTitle, type Notice } from "./notice";
 import { PendingOverrides } from "./overrides";
+import { PresentControls } from "./PresentControls";
 import { WAITING } from "./Preview";
 import { AppSidebar, HomePanel, SessionPanel } from "./Sidebar";
 import { RequestDetail } from "./Regenerate";
@@ -85,6 +90,18 @@ type CanvasInteraction =
 type Past = { readonly n: IterationN; readonly iteration: IterationView | null; readonly picks: Readonly<Record<string, VariantKey>> };
 
 const NO_PLACEMENT: Placement = { placed: new Set(), detached: new Set() };
+const NO_SLOTS: readonly SlotView[] = [];
+const NO_BLOCKS: readonly BlockView[] = [];
+const NO_PINS: readonly CanvasPin[] = [];
+
+/** The preview window as the open brainstorm sees it (ADR 007): the link to it, whether it is open, Hold, and its prefs. */
+type PreviewHandle = {
+  readonly link: PreviewLink;
+  readonly open: boolean;
+  readonly hold: boolean;
+  readonly prefs: PreviewPrefs;
+  readonly onPrefs: (prefs: PreviewPrefs) => void;
+};
 
 /** The window waits for the stored layout before its first paint, so a remembered width never jumps into place. */
 export function App({ api }: { api: Api }) {
@@ -120,6 +137,12 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
   );
   // A notice stays until Rob closes it or the next call he makes succeeds.
   const clearNotice = useCallback(() => setNotice(null), []);
+
+  // One link for the window's life, so a preview window keeps its place across brainstorms.
+  const [link] = useState(() => new PreviewLink(prefs.preview.look));
+  useEffect(() => () => link.close(), [link]);
+  useEffect(() => link.setLook(prefs.preview.look), [link, prefs.preview.look]);
+  const linked = useSyncExternalStore(link.subscribe, link.state);
 
   const sessionId = nav.kind === "brainstorm" ? nav.id : null;
   const current = useRef<SessionId | null>(null);
@@ -248,6 +271,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
               onChoose: (open) => savePrefs({ historyStrip: { session: nav.id, open } }),
             }}
             sidebar={sidebar}
+            preview={{ link, open: linked.open, hold: linked.hold, prefs: prefs.preview, onPrefs: (preview) => savePrefs({ preview }) }}
             homePanel={nav.panel === "home" ? homePanel : null}
             onHome={() => setNav({ kind: "brainstorm", id: nav.id, panel: "home" })}
             onOpen={(id) => (id === null ? setNav({ kind: "overview" }) : openSession(id))}
@@ -285,6 +309,7 @@ function SessionWorkspace({
   inspector,
   history,
   sidebar,
+  preview,
   homePanel,
   onHome,
   onOpen,
@@ -308,6 +333,7 @@ function SessionWorkspace({
    */
   history: { choice: boolean | undefined; latest: IterationN | null; onChoose: (open: boolean) => void };
   sidebar: (panel: ReactNode) => ReactNode;
+  preview: PreviewHandle;
   /** Shown in place of the session panel while Rob looks for another brainstorm. */
   homePanel: ReactNode | null;
   onHome: () => void;
@@ -332,6 +358,8 @@ function SessionWorkspace({
   const [zooms, setZooms] = useState<Readonly<Record<string, number>>>({});
   const [pulse, setPulse] = useState<FeedbackCue | null>(null);
   const canvasArea = useRef<HTMLElement>(null);
+  // Present (ADR 007): the canvas region fills the screen, and the slot on the stage fills it.
+  const [presenting, setPresenting] = useState(false);
 
   useEffect(() => {
     void api.view(sessionId).then((next) => (next.ok ? setView(next.data) : showNotice({ title: failedTitle("load"), detail: next.error.message })));
@@ -403,8 +431,8 @@ function SessionWorkspace({
     shown.current = iteration;
   }, [iteration]);
   const readOnly = past === null ? null : past.n;
-  const slots = iteration?.slots ?? [];
-  const blocks = iteration?.blocks ?? [];
+  const slots = iteration?.slots ?? NO_SLOTS;
+  const blocks = iteration?.blocks ?? NO_BLOCKS;
   blocksNow.current = blocks;
   const slot = slots.find((s) => s.id === selectedSlot) ?? slots[0] ?? null;
   const selectedBlock = slot === null ? null : (blocks.find((b) => b.id === blockIdOf(slot.id, slot.active)) ?? null);
@@ -446,7 +474,7 @@ function SessionWorkspace({
 
   const feedback = view?.feedback ?? [];
   // Pins belong to the latest iteration; the past shows its blocks as they were, unpinned.
-  const pins = useMemo<CanvasPin[]>(() => (past !== null ? [] : feedback.map((f) => ({ id: f.id, pin: f.pin, status: f.status.state }))), [feedback, past]);
+  const pins = useMemo<readonly CanvasPin[]>(() => (past !== null ? NO_PINS : feedback.map((f) => ({ id: f.id, pin: f.pin, status: f.status.state }))), [feedback, past]);
   const activeBlocks = useMemo(() => new Set(frames.map((f) => f.blockId)), [frames]);
 
   // A new variant counts as seen once it has been on the canvas for a moment: on the stage, or anywhere on the board.
@@ -458,6 +486,51 @@ function SessionWorkspace({
     const timer = setTimeout(() => void send({ kind: "mark_seen", blocks: [first, ...rest] }), SEEN_MS);
     return () => clearTimeout(timer);
   }, [unseenKey, send]);
+
+  const stepSlot = useCallback(
+    (by: -1 | 1) => {
+      const next = slots[slots.findIndex((s) => s.id === slot?.id) + by];
+      if (next !== undefined) setSelectedSlot(next.id);
+    },
+    [slots, slot?.id],
+  );
+
+  const present = useCallback(() => {
+    const area = canvasArea.current;
+    if (area === null || iteration === null || document.fullscreenElement !== null) return;
+    setInteraction({ kind: "view" });
+    area.requestFullscreen().catch((e: unknown) =>
+      showNotice({ title: "Couldn't present full screen", detail: e instanceof Error ? e.message : String(e) }),
+    );
+  }, [iteration, showNotice]);
+
+  useEffect(() => {
+    const onChange = () => setPresenting(document.fullscreenElement !== null && document.fullscreenElement === canvasArea.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  // While presenting, Escape and F5 leave and left and right step through the slots, before any other key handler, since
+  // nothing else on screen can take them. F5 presents from anywhere else.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (presenting) {
+        if (e.key === "Escape" || e.key === "F5") {
+          e.preventDefault();
+          void document.exitFullscreen().catch(() => {});
+        } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.shiftKey) {
+          e.preventDefault();
+          stepSlot(e.key === "ArrowLeft" ? -1 : 1);
+        }
+      } else if (e.key === "F5") {
+        e.preventDefault();
+        present();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [presenting, stepSlot, present]);
 
   // Escape backs out one layer at a time: an open popover closes itself, then a pick or a popover on the canvas, then
   // the past.
@@ -514,6 +587,62 @@ function SessionWorkspace({
           ? blockedMessage(view.regenerate.reason, view.request?.request.n)
           : null;
 
+  // The preview window mirrors this canvas (ADR 007).
+  const pinBlocked = iteration === null ? "There is nothing on the canvas to pin yet" : past !== null ? "Back to latest to pin a comment" : unrendered;
+  const picking = interaction.kind === "picking" ? interaction.for : null;
+  const scene = useMemo<MirrorScene>(
+    () => ({
+      session: sessionId,
+      title: view?.session.title ?? title,
+      slots,
+      frames,
+      props: frameProps,
+      selected: selectedBlock?.id ?? null,
+      slot: slot?.id ?? null,
+      view: shownView,
+      picking,
+      pins,
+      focused: focusedFeedback,
+      hovered: hoveredFeedback,
+      past: readOnly,
+      pinBlocked,
+    }),
+    [sessionId, view?.session.title, title, slots, frames, frameProps, selectedBlock?.id, slot?.id, shownView, picking, pins, focusedFeedback, hoveredFeedback, readOnly, pinBlocked],
+  );
+  const { link } = preview;
+  useEffect(() => link.blocks(blocks), [link, blocks]);
+  useEffect(() => link.scene(scene), [link, scene]);
+  useEffect(() => () => link.scene(null), [link]);
+  useEffect(() => {
+    if (pulse !== null) link.pulse(pulse.id, pulse.seq);
+  }, [link, pulse]);
+  const fromPreview = useRef<(m: ToMain) => void>(() => {});
+  fromPreview.current = (m) => {
+    switch (m.kind) {
+      case "select_block":
+        return onSelectBlock(m.blockId);
+      case "pin_clicked":
+        return onPinClicked(m.id);
+      case "pin_hovered":
+        return setHoveredPin(m.id);
+      case "pick":
+        if (m.for === null) return setInteraction((i) => (i.kind === "picking" ? { kind: "view" } : i));
+        if (m.for === "comment" ? pinBlocked !== null : varyBlocked !== null) return;
+        return setInteraction({ kind: "picking", for: m.for });
+      case "picked":
+        return setInteraction((i) => (i.kind === "picking" ? { kind: "view" } : i));
+      case "slot":
+        return setSelectedSlot(m.slot);
+      case "step":
+        return stepSlot(m.by);
+      case "view":
+        return setCanvasView(m.view);
+    }
+  };
+  useEffect(() => link.onMessage((m) => fromPreview.current(m)), [link]);
+  // With the canvas given to the preview window, this one keeps its frame under a cover, so pins still report placement.
+  const away = preview.open && !preview.prefs.here && !presenting;
+
   const fork = async (input: ForkInput): Promise<boolean> => {
     const result = await api.fork(sessionId, input);
     if (!result.ok) {
@@ -547,7 +676,6 @@ function SessionWorkspace({
   const stripShown = stripOpen(history.choice, view?.history.iterations.length ?? history.latest ?? 0);
   const historyToggle = { open: stripShown, onToggle: () => history.onChoose(!stripShown) };
   const strip = stripShown && view !== null && showing !== null && view.history.iterations.length > 0;
-  const picking = interaction.kind === "picking" ? interaction.for : null;
 
   return (
     <Shell
@@ -602,6 +730,16 @@ function SessionWorkspace({
             onSlot={setSelectedSlot}
             onView={setCanvasView}
             onCancelPick={() => setInteraction({ kind: "view" })}
+            trailing={
+              <PresentControls
+                onPresent={present}
+                open={preview.open}
+                hold={preview.hold}
+                onHold={(hold) => link.setHold(hold)}
+                prefs={preview.prefs}
+                onPrefs={preview.onPrefs}
+              />
+            }
           />
         )}
         {past !== null && <PastBar n={past.n} onLatest={showLatest} />}
@@ -613,6 +751,7 @@ function SessionWorkspace({
           data-canvas-view={iteration === null ? undefined : shownView}
           data-canvas-iteration={iteration?.n}
           data-canvas-past={readOnly ?? undefined}
+          data-presenting={presenting || undefined}
         >
         {iteration === null ? (
           <WaitingEmpty loading={view === null || past !== null} />
@@ -621,10 +760,11 @@ function SessionWorkspace({
             blocks={blocks}
             frames={frames}
             props={frameProps}
-            selected={selectedBlock?.id ?? null}
-            stage={stage}
-            mode={interaction.kind === "picking" ? "pin" : "view"}
-            pins={pins}
+            selected={presenting ? null : (selectedBlock?.id ?? null)}
+            stage={presenting ? (slot?.id ?? null) : stage}
+            present={presenting}
+            mode={interaction.kind === "picking" && !away ? "pin" : "view"}
+            pins={presenting ? NO_PINS : pins}
             focused={focusedFeedback}
             hovered={hoveredFeedback}
             pulse={pulse}
@@ -637,6 +777,10 @@ function SessionWorkspace({
             onZooms={setZooms}
           />
         )}
+        {away && iteration !== null && (
+          <CanvasAway onHere={() => preview.onPrefs({ ...preview.prefs, here: true })} picking={picking !== null} />
+        )}
+        {presenting && <PresentHint several={slots.length > 1} />}
         {interaction.kind === "composing" && (
           <PinComposer
             key={JSON.stringify(interaction)}
@@ -716,6 +860,64 @@ function SessionWorkspace({
         </Inspector>
       )}
     </Shell>
+  );
+}
+
+/**
+ * The canvas region while the preview window has the canvas. The frame stays mounted under it, so pins still report
+ * where they landed, and the slot bar above still chooses what the preview window shows.
+ */
+function CanvasAway({ onHere, picking }: { onHere: () => void; picking: boolean }) {
+  return (
+    <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away>
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <AppWindow aria-hidden />
+          </EmptyMedia>
+          <EmptyTitle>{picking ? "Click an element in the preview window" : "The canvas is in the preview window"}</EmptyTitle>
+          <EmptyDescription>
+            The slot tabs above choose what it shows, and settings and comments made here land there as you make them.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent className="flex-row justify-center">
+          <Button variant="outline" onClick={() => previewWindow("open")} data-away-front>
+            Bring it to front
+          </Button>
+          <Button variant="ghost" onClick={onHere} data-away-here>
+            Show the canvas here too
+          </Button>
+        </EmptyContent>
+      </Empty>
+    </div>
+  );
+}
+
+/** How to leave and step, shown as present starts and gone once Rob has read it. */
+function PresentHint({ several }: { several: boolean }) {
+  const [shown, setShown] = useState(true);
+  useEffect(() => {
+    const timer = setTimeout(() => setShown(false), 2500);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <div
+      role="status"
+      className="pointer-events-none absolute inset-x-0 top-4 z-toast flex justify-center transition-opacity duration-500 data-hidden:opacity-0"
+      data-hidden={shown ? undefined : ""}
+      data-present-hint
+    >
+      <TooltipLabel>
+        <Kbd>Esc</Kbd> to leave
+        {several && (
+          <>
+            <span aria-hidden>·</span>
+            <Kbd>←</Kbd>
+            <Kbd>→</Kbd> to change slot
+          </>
+        )}
+      </TooltipLabel>
+    </div>
   );
 }
 

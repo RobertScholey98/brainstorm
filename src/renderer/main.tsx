@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { createApi } from "./api";
 import { App } from "./App";
+import { PreviewWindow } from "./PreviewWindow";
 import "./styles.css";
 
 // Brainstorm's own window on macOS has the traffic lights over its top left (src/electron/main.ts), which styles.css
@@ -18,16 +19,22 @@ addEventListener("resize", () => {
   settle = requestAnimationFrame(() => (settle = requestAnimationFrame(() => delete document.body.dataset.windowResizing)));
 });
 
-/** The UI token from the hash, which is then wiped from the URL and history; the token is held in memory only. */
-function takeToken(): string | null {
-  const token = new URLSearchParams(location.hash.slice(1)).get("ui");
+/**
+ * The UI token from the hash, which is then wiped from the URL and history; the token is held in memory only. The hash
+ * also says which window this page is: the main window, or the preview window (ADR 007).
+ */
+function takeToken(): { token: string; preview: boolean } | null {
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const token = hash.get("ui");
   history.replaceState(null, "", location.pathname);
-  return token;
+  return token === null ? null : { token, preview: hash.get("window") === "preview" };
 }
 
 const root = createRoot(document.getElementById("root") as HTMLElement);
-const token = takeToken();
-if (token !== null) root.render(<App api={createApi(token)} />);
+const render = ({ token, preview }: { token: string; preview: boolean }) =>
+  root.render(preview ? <PreviewWindow api={createApi(token)} /> : <App api={createApi(token)} />);
+const taken = takeToken();
+if (taken !== null) render(taken);
 else {
   root.render(
     <div className="grid h-full place-items-center px-8 text-center text-sm text-fg-muted">
@@ -39,6 +46,6 @@ else {
     const late = takeToken();
     if (late === null) return;
     removeEventListener("hashchange", arrived);
-    root.render(<App api={createApi(late)} />);
+    render(late);
   });
 }

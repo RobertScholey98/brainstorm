@@ -179,5 +179,17 @@ function BlockedHint({
   )
 }
 
-export { BlockedHint, Hint, HintAnchor, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+/**
+ * A tooltip's look on a label no trigger owns, placed by its caller: present's opening line on how to leave. It reads as
+ * a label, as a tooltip does, so it never looks like a panel to act in.
+ */
+function TooltipLabel({ children }: { children: ReactNode }) {
+  return (
+    <span data-slot="tooltip-label" data-open="" className={cn(overlaySurface({ tone: "inverse" }), "flex items-center gap-2 px-3 py-1.5 text-sm")}>
+      {children}
+    </span>
+  )
+}
+
+export { BlockedHint, Hint, HintAnchor, Tooltip, TooltipLabel, TooltipTrigger, TooltipContent, TooltipProvider }
 export type { HintRow }

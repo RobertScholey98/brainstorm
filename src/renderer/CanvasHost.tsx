@@ -16,6 +16,7 @@ export function CanvasHost({
   props,
   selected,
   stage,
+  present = false,
   mode,
   pins,
   focused,
@@ -35,6 +36,8 @@ export function CanvasHost({
   selected: BlockId | null;
   /** The slot on the stage, or null for the board. */
   stage: SlotId | null;
+  /** The staged slot fills the frame with no canvas chrome (ADR 007). */
+  present?: boolean;
   mode: CanvasMode;
   pins: readonly CanvasPin[];
   /** The pin whose feedback row is open in the Inspector. */
@@ -111,6 +114,11 @@ export function CanvasHost({
     post({ kind: "modules", modules: fresh.map((b) => ({ blockId: b.id, hash: b.hash, compiled: b.compiled, css: b.css })) });
     for (const b of fresh) sent.current.set(b.id, b.hash);
   }, [readyCount, blocks]);
+
+  // Before the state, so a frame that comes up presenting never lays out its chrome first.
+  useEffect(() => {
+    if (readyCount > 0) post({ kind: "present", on: present });
+  }, [readyCount, present]);
 
   useEffect(() => {
     if (readyCount > 0) post({ kind: "state", frames, props, selected, stage });

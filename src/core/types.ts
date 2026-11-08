@@ -669,7 +669,12 @@ export type HostToFrame =
   /** Scrolls a pin into view and pulses it. */
   | { readonly kind: "pulse"; readonly id: FeedbackId }
   /** Export only: every variant of each slot, for the in-page switcher. Keyed by SlotId. */
-  | { readonly kind: "variants"; readonly slots: Readonly<Record<string, readonly CanvasVariant[]>> };
+  | { readonly kind: "variants"; readonly slots: Readonly<Record<string, readonly CanvasVariant[]>> }
+  /**
+   * Present: the slot on the stage fills the window with none of the canvas's own chrome (title, frame edge, selection,
+   * pins), as if the design were the app itself. Pick mode still works in it (ADR 007).
+   */
+  | { readonly kind: "present"; readonly on: boolean };
 
 export type CanvasVariant = { readonly blockId: BlockId; readonly title: string };
 

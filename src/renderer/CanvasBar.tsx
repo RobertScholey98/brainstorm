@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -30,6 +31,7 @@ export function CanvasBar({
   onSlot,
   onView,
   onCancelPick,
+  trailing,
 }: {
   slots: readonly SlotView[];
   current: SlotId | null;
@@ -41,6 +43,8 @@ export function CanvasBar({
   onSlot: (slot: SlotId) => void;
   onView: (view: CanvasLayout["view"]) => void;
   onCancelPick: () => void;
+  /** How the canvas is shown beyond this window, at the bar's right end: present, and the preview window. */
+  trailing?: ReactNode;
 }) {
   const at = slots.findIndex((s) => s.id === current);
   const step = (by: number) => {
@@ -94,6 +98,12 @@ export function CanvasBar({
           </Hint>
         )}
         {several && <Segmented fit value={view} onValueChange={onView} options={VIEWS} itemData="view-option" aria-label="View" />}
+        {trailing !== undefined && (
+          <>
+            {several && <Separator orientation="vertical" data-trailing-divider />}
+            {trailing}
+          </>
+        )}
       </div>
     </div>
   );
