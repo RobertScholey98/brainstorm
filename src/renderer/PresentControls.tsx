@@ -156,10 +156,12 @@ function WindowMenu({
           <Button variant="outline" onClick={() => run("open")} data-preview-front>
             Bring to front
           </Button>
-          <Button variant="outline" onClick={() => run("fullscreen")} data-preview-fullscreen>
-            Full screen window
-            <Kbd>F11</Kbd>
-          </Button>
+          <Hint label="Or press F11 with the preview window in front" side="bottom">
+            <Button variant="outline" onClick={() => run("fullscreen")} data-preview-fullscreen>
+              Full screen window
+              <Kbd>F11</Kbd>
+            </Button>
+          </Hint>
         </div>
         <PopoverFooter>
           <Button variant="ghost" onClick={() => run("close")} data-preview-close>
