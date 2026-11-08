@@ -167,6 +167,19 @@ try {
   const project = resolve(library, "..", "..");
   cli(["system", "add", library, "--thread", DEMO_THREAD]);
   const system = json(["system", "list"])[0];
+
+  // Rob reviews the newly added library before a brainstorm can build with it. It came from its package, so nothing
+  // sorted it into tiers; he confirms it as it is, which leaves it at v1 with no adapter.
+  await window.click("[data-nav-systems]");
+  await window.click(`[data-system-review="${system.id}"]`);
+  await window.waitForSelector("[data-system-review-callout]");
+  await window.waitForSelector('[data-gallery="true"]', { timeout: 60_000 });
+  await new Promise((r) => setTimeout(r, 2500));
+  await shot(window, "library-review", "Reviewing a library added from its package: the callout says nothing sorted it into tiers and offers Sort into tiers with an agent beside Confirm; the walk starts on its first component, 1 of 72, with the tier switch");
+  await window.click("[data-review-confirm]");
+  await window.waitForFunction(() => document.querySelector("[data-system-review-callout]") === null, null, { timeout: 60_000 });
+  await window.click("[data-overview]:not([data-nav-systems])");
+
   const session = cli(["session", "new", "--title", "Meal plan", "--brief", BRIEF, "--project", project, "--system", system.id]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
   if (session === undefined) throw new Error(`session new failed:\n${transcript.at(-1)}`);
   const work = join(home, "work");

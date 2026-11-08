@@ -4,10 +4,12 @@
 //
 // It drives the built app the way Rob and an agent would, on a copy of test/app-fixture (a small shadcn-style app with
 // a meal card): Rob adds the app's components folder, which isn't a library, and starts an agent import; the agent
-// writes the adapter and stories, runs the check until it passes, and adds the system. Rob opens a story in the
-// workbench and changes its args. Then the project changes under a brainstorm built with the system: auto-sync makes
-// v2 (what renders differently), v3 drops a component a block uses (the upgrade check says what breaks), and a broken
-// adapter fails the sync, which Rob repairs with an agent.
+// writes the adapter and stories, runs the check until it passes, and adds the system. Rob reviews the import: he
+// steps through the components, raises an issue, moves a layout out of the primitives and sends that to the agent,
+// with v2 synced from it, then confirms it. He opens a story in the workbench and changes its args. Then the
+// project changes under a brainstorm built with the system: auto-sync makes v3 (what renders differently), v4 drops a
+// component a block uses (the upgrade check says what breaks), and a broken adapter fails the sync, which Rob repairs
+// with an agent.
 //
 // Writes design-review/app-systems/round-<n>/<NN-name>.png and a manifest.json that names what each shot shows.
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -131,6 +133,13 @@ const adapter = (extra = {}) =>
     2,
   )}\n`;
 
+/** Changes the adapter as it stands, so the tiers the review wrote into it stay. */
+const editAdapter = (change) => {
+  const file = join(app, ".brainstorm", "system.json");
+  writeFileSync(file, `${JSON.stringify(change(JSON.parse(readFileSync(file, "utf8"))), null, 2)}
+`);
+};
+
 const STORIES = {
   ".brainstorm/stories/button.stories.tsx": `import { Button } from "../../src/components/ui/button";
 
@@ -155,7 +164,26 @@ export default { component: MealCard, tags: ["composite"] };
 export const Default = { args: { title: "Lentil soup", time: "35 min" } };
 export const Quick = { args: { title: "Halloumi wraps", time: "15 min" } };
 `,
+  ".brainstorm/stories/page-frame.stories.tsx": `import { PageFrame } from "../../src/components/ui/page-frame";
+
+export default { component: PageFrame };
+
+export const Week = { args: { title: "This week", children: "Dinners go here" } };
+`,
 };
+
+// The app keeps a page layout among its ui primitives, so the import's globs call it a primitive; Rob's review moves it.
+const PAGE_FRAME = `import type { ReactNode } from "react";
+
+export function PageFrame({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="grid gap-4 rounded-md border border-border bg-background p-4 text-foreground">
+      <h2 className="text-lg font-medium">{title}</h2>
+      <div className="grid gap-2">{children}</div>
+    </div>
+  );
+}
+`;
 
 const run = await launch(home, env);
 const { app: electron, window, errors } = run;
@@ -166,6 +194,7 @@ try {
   });
   await window.emulateMedia({ colorScheme: "light" });
 
+  write("src/components/ui/page-frame.tsx", PAGE_FRAME);
   // Brainstorm learns the app's T3 project from a brainstorm started in it.
   cli(["session", "new", "--title", "Sketch", "--brief", "A loose sketch.", "--project", app], { quiet: true });
 
@@ -193,11 +222,39 @@ try {
   const system = json(["system", "list"])[0];
   await window.waitForSelector(`[data-system="${system.id}"]`, { timeout: 30_000 });
   await window.waitForFunction(() => document.querySelector("[data-system-importing]") === null);
-  await shot(window, "app-system-list", "Once the agent adds the system, the import card is gone (no reload) and the app's system is listed with its counts");
-  await window.click(`[data-system="${system.id}"] button`);
+  await shot(window, "app-system-list", "Once the agent adds the system, the import card is gone (no reload) and the system is listed as awaiting Rob's review, with Review beside Sync");
+
+  // Rob reviews the import, Storybook-style, before any brainstorm can use it.
+  await window.click(`[data-system-review="${system.id}"]`);
+  await window.waitForSelector("[data-system-review-callout]");
+  await galleryFrame(window);
+  await window.waitForSelector('[data-review-strip="MealCard"]');
+  await new Promise((r) => setTimeout(r, 2000));
+  await shot(window, "review-start", "Opening a system that awaits review: the review callout above the tabs, and the walk starting on the first component (MealCard, a composite) with its stories live, its tier switch, Raise an issue, and Previous / Next with 1 of 4");
+  await window.click('[data-review-strip="MealCard"] [data-review-raise]');
+  await window.fill("[data-review-note]", "The time should be optional; the week view shows a dinner before anyone knows how long it takes");
+  await shot(window, "review-raise", "Raising an issue on MealCard: a note for the agent, which goes back with the rest of the review");
+  await window.click("[data-review-raise-confirm]");
+  await window.waitForSelector('[data-review-strip="MealCard"] [data-review-issue]');
+  for (let i = 0; i < 4 && (await window.$('[data-review-strip="PageFrame"]')) === null; i++) await window.click("[data-review-next]");
+  await window.click('[data-review-strip="PageFrame"] [data-review-tier="layout"]');
+  await window.waitForSelector('[data-catalog-tier="Layouts"] [data-entry="PageFrame"]');
+  await new Promise((r) => setTimeout(r, 1500));
+  await shot(window, "review-moved", "After stepping to PageFrame and moving it to Layout: the catalog lists it under Layouts marked moved, MealCard shows its issue, the strip says moved from primitive, and the callout offers Send 2 changes to the agent while Confirm waits on the open issue");
+  await window.click("[data-review-send]");
+  await window.waitForFunction(() => document.querySelector("[data-review-status]")?.textContent?.includes("Sent"), null, { timeout: 30_000 });
+  await shot(window, "review-sent", "After Send: Brainstorm wrote PageFrame's tier into the adapter and synced v2, so the catalog keeps it under Layouts; the issue and the move went to the import's thread, the callout says what was sent with Open thread, and Confirm is free again");
+  const reviewSent = t3.sent().at(-1);
+  await textShot(electron, "review-message", `What the review sent to the import's thread (${reviewSent?.thread})`, reviewSent?.message ?? "(nothing sent)", "The review's message to the import thread: Rob's note on MealCard, the tier move Brainstorm already wrote into the adapter's tiers, then check, sync and report");
+
+  // Send synced the adapter it wrote, so v2 has PageFrame as a layout. Rob confirms it.
+  await waitForSync(system.id, (s) => s.latest?.n === 2);
+  await window.click("[data-review-confirm]");
+  await window.waitForFunction(() => document.querySelector("[data-system-review-callout]") === null, null, { timeout: 30_000 });
+  await window.locator("[data-catalog]").getByText("All stories").click();
   await galleryFrame(window);
   await new Promise((r) => setTimeout(r, 2000));
-  await shot(window, "catalog-tiers", "The app's system: its adapter path and version hash in the header; the catalog grouped into Composites (MealCard) and Primitives (Badge, Button), then Brainstorm's generated layout primitives; every story live in the gallery");
+  await shot(window, "catalog-tiers", "After Rob confirms: no review callout; the catalog grouped into Layouts (PageFrame), Composites (MealCard) and Primitives (Badge, Button), then Brainstorm's generated primitives; every story live in the gallery");
 
   // Rob opens a story in the workbench.
   await window.click('[data-entry="Button"]');
@@ -215,7 +272,7 @@ try {
   await new Promise((r) => setTimeout(r, 600));
   await shot(window, "workbench-changed", "The workbench after two changes at 390px: the story re-renders as an outline button reading 'Plan next week', each changed control is marked with Reset 2 changes, and the Usage snippet follows");
 
-  // A brainstorm built with v1 of the system, whose blocks use Button and Badge.
+  // A brainstorm built with v2 of the system, whose blocks use Button and Badge.
   const session = cli(["session", "new", "--title", "Meal week", "--brief", "Plan the week's dinners.", "--project", app, "--system", system.id]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
   if (session === undefined) throw new Error(`session new failed:\n${transcript.at(-1)}`);
   const work = join(home, "work");
@@ -247,14 +304,14 @@ export default function Plan() {
   const committed = cli(["commit", session, "--from", work, "--note", "A week from the app's own components"]);
   if (committed.code !== 0) throw new Error(`commit failed:\n${transcript.at(-1)}`);
 
-  // The app's button gets roomier and its radius grows; auto-sync makes v2 within seconds, with no click.
+  // The app's button gets roomier and its radius grows; auto-sync makes v3 within seconds, with no click.
   const button = join(app, "src", "components", "ui", "button.tsx");
   writeFileSync(button, readFileSync(button, "utf8").replace("px-3 py-2", "px-4 py-2"));
   write("src/styles.css", readFileSync(join(app, "src", "styles.css"), "utf8").replace("--radius: 0.5rem;", "--radius: 0.75rem;"));
-  await waitForSync(system.id, (s) => s.latest?.n === 2);
+  await waitForSync(system.id, (s) => s.latest?.n === 3);
   await window.click('[data-system-tab="versions"]');
-  await window.waitForSelector('[data-version="2"]', { timeout: 30_000 });
-  await shot(window, "versions-changed", "The Versions tab after auto-sync noticed the edit: v2 with its short hash, the components that render differently (~Button, and ~MealCard, which renders a Button) and the token that changed (--radius 0.5rem → 0.75rem)");
+  await window.waitForSelector('[data-version="3"]', { timeout: 30_000 });
+  await shot(window, "versions-changed", "The Versions tab after auto-sync noticed the edit: v3 with its short hash, the components that render differently (~Button, and ~MealCard, which renders a Button) and the token that changed (--radius 0.5rem → 0.75rem)");
 
   await window.click(`[data-session="${session}"]`);
   await window.waitForSelector('[data-sidebar-panel="session"]');
@@ -262,26 +319,26 @@ export default function Plan() {
   await canvas.waitForSelector('div[data-bid="week/plan"] [data-part="week"]', { timeout: 60_000 });
   await window.waitForSelector('[data-upgrade-check="clean"]', { timeout: 60_000 });
   await window.locator("[data-system-panel]").scrollIntoViewIfNeeded();
-  await shot(window, "upgrade-clean", "The brainstorm on v1 offers v2, and has already checked it in the background: Nothing breaks, so Upgrade is safe");
+  await shot(window, "upgrade-clean", "The brainstorm on v2 offers v3, and has already checked it in the background: Nothing breaks, so Upgrade is safe");
 
-  // The app retires Badge from the system; v3 would break the block that uses it.
-  write(".brainstorm/system.json", adapter({ exclude: ["src/components/ui/user-chip.tsx", "src/components/ui/badge.tsx"] }));
+  // The app retires Badge from the system; v4 would break the block that uses it.
+  editAdapter((a) => ({ ...a, exclude: [...a.exclude, "src/components/ui/badge.tsx"] }));
   rmSync(join(app, ".brainstorm", "stories", "badge.stories.tsx"));
-  await waitForSync(system.id, (s) => s.latest?.n === 3);
+  await waitForSync(system.id, (s) => s.latest?.n === 4);
   await window.waitForSelector('[data-upgrade-check="breaks"]', { timeout: 60_000 });
   await window.locator("[data-system-panel]").scrollIntoViewIfNeeded();
-  await shot(window, "upgrade-breaks", "After v3 drops Badge: the Inspector's upgrade callout turns to a warning naming the block it breaks (week/plan) and its error count, and Upgrade is disabled");
+  await shot(window, "upgrade-breaks", "After v4 drops Badge: the Inspector's upgrade callout turns to a warning naming the block it breaks (week/plan) and its error count, and Upgrade is disabled");
 
   // Someone moves the stylesheet; the next sync fails and is kept on the system.
-  write(".brainstorm/system.json", adapter({ exclude: ["src/components/ui/user-chip.tsx", "src/components/ui/badge.tsx"], stylesheet: "src/theme.css" }));
+  editAdapter((a) => ({ ...a, stylesheet: "src/theme.css" }));
   await waitForSync(system.id, (s) => s.syncError !== null);
   await window.click("[data-back]");
   await window.click("[data-nav-systems]");
   await window.waitForSelector(`[data-system="${system.id}"][data-system-failing]`, { timeout: 30_000 });
-  await shot(window, "sync-error", "A sync that failed: the card keeps v3's counts, says why the last sync failed and when, and offers Repair with an agent beside Sync");
+  await shot(window, "sync-error", "A sync that failed: the card keeps v4's counts, says why the last sync failed and when, and offers Repair with an agent beside Sync");
   await window.click(`[data-system="${system.id}"] button`);
   await window.waitForSelector("[data-system-sync-failed]");
-  await shot(window, "sync-error-detail", "The system's page with the failed sync: a callout with the reason, that brainstorms stay on v3, and Repair with an agent");
+  await shot(window, "sync-error-detail", "The system's page with the failed sync: a callout with the reason, that brainstorms stay on v4, and Repair with an agent");
   await window.click(`[data-system-sync-failed] [data-system-repair]`);
   await window.waitForFunction(() => document.querySelector("[data-system-repair]")?.textContent?.includes("Repairing"), null, { timeout: 30_000 });
   const repair = t3.started().at(-1);
