@@ -767,6 +767,7 @@ describe("preview", () => {
       frame: { slot: "wheel", title: "The wheel", frame: FRAME, blockId: "wheel/reel" },
       module: { blockId: "wheel/reel", hash: reel?.hash, compiled: reel?.compiled, css: reel?.css },
       props: { headline: "Spin it" },
+      system: null,
     });
     expect(service.preview("s_nothere1" as SessionId).ok).toBe(false);
   });

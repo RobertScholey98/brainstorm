@@ -25,6 +25,8 @@ import {
   type SessionId,
   type SessionListing,
   type ThreadId,
+  type SystemListing,
+  type SystemView,
   type ValidateResult,
   type VaryScope,
 } from "../core/types";
@@ -40,13 +42,17 @@ const HEALTH_TIMEOUT_MS = 1500;
 const EXIT = { ok: 0, rejected: 1, usage: 2, unavailable: 3 } as const;
 
 const USAGE = `usage:
-  brainstorm session new     --title <t> [--brief -|<text>] [--thread <id>] [--project <path>]
+  brainstorm session new     --title <t> [--brief -|<text>] [--thread <id>] [--project <path>] [--system <id|name>]
   brainstorm session list    [--thread <id>]
   brainstorm session attach  <id|title> [--thread <id>]
   brainstorm context         <session> [--thread <id>]
   brainstorm pull            <session> [--out <dir>]
   brainstorm validate        <session> [--from <dir>] [--thread <id>]
   brainstorm commit          <session> [--from <dir>] [--thread <id>] [--addresses 4,7] [--note <text>]
+  brainstorm system list
+  brainstorm system add      <package folder> [--name <n>] [--frame <export>] [--thread <id>]
+  brainstorm system sync     <system>
+  brainstorm system show     <system>
 Every command takes --json. --thread defaults to $T3CODE_THREAD_ID; --out and --from default to .brainstorm/<session>.`;
 
 type Output = { readonly result: Result<unknown>; readonly lines: readonly string[] };
@@ -245,6 +251,11 @@ function contextLines(c: AgentContext): string[] {
           ...c.fork.baked.map((b) => `  baked default ${b.blockId} ${b.prop} = ${JSON.stringify(b.value)}`),
         ]),
     c.attached ? `attached: this thread (${c.attachedThread})` : `attached: thread ${c.attachedThread}, not this one`,
+    ...(c.system === null
+      ? []
+      : [
+          `design system: ${c.system.name} v${c.system.n}. Blocks compose only its kit (import from "kit"); pull writes system/CATALOG.md and its stories.`,
+        ]),
     `latest: ${c.latest === null ? "no iterations yet" : iterationText(c.latest)}`,
     ...(r === null
       ? ["request: none open"]
@@ -305,9 +316,83 @@ async function readStdin(): Promise<string> {
 
 const threadOption = { thread: { type: "string" } } as const;
 
+type SyncOutcome = { readonly system: SystemView; readonly created: boolean; readonly warnings: readonly Issue[] };
+
+const versionLine = (s: SystemListing) =>
+  s.latest === null
+    ? "never synced"
+    : `v${s.latest.n} · ${s.latest.components} components · ${s.latest.stories} stories${s.latest.failedStories > 0 ? ` (${s.latest.failedStories} failed)` : ""}`;
+
+function syncLines({ system, created, warnings }: SyncOutcome, verb: string): string[] {
+  return [
+    ...warnings.map(issueLine),
+    created ? `${verb} ${system.id} "${system.name}" ${versionLine(system)}` : `nothing changed; ${system.id} is still ${versionLine(system)}`,
+  ];
+}
+
+const systemRef = (raw: string | undefined) => encodeURIComponent(raw ?? "");
+
 const COMMANDS: Record<string, Command> = {
+  "system list": {
+    options: {},
+    positionals: [],
+    async run() {
+      const result = await call<SystemListing[]>("GET", "/v1/agent/systems");
+      return {
+        result,
+        lines: !result.ok
+          ? []
+          : result.data.length === 0
+            ? ["no design systems; add one with brainstorm system add <package folder>"]
+            : result.data.map((s) => `${s.id}  "${s.name}"  ${versionLine(s)}  ${s.root}`),
+      };
+    },
+  },
+  "system add": {
+    options: { name: { type: "string" }, frame: { type: "string" }, ...threadOption },
+    positionals: ["package folder"],
+    async run({ flags, positionals }) {
+      const thread = threadFrom(flags, { required: false });
+      if (isFailure(thread)) return failed(thread);
+      const result = await call<SyncOutcome>("POST", "/v1/agent/systems", {
+        path: resolve(positionals[0] ?? "."),
+        name: str(flags, "name") ?? null,
+        frame: str(flags, "frame") ?? null,
+        thread,
+      });
+      return { result, lines: result.ok ? [...syncLines(result.data, "added"), `next: brainstorm session new --title <t> --system ${result.data.system.id}`] : [] };
+    },
+  },
+  "system sync": {
+    options: {},
+    positionals: ["system"],
+    async run({ positionals }) {
+      const result = await call<SyncOutcome>("POST", `/v1/agent/systems/${systemRef(positionals[0])}/sync`);
+      return { result, lines: result.ok ? syncLines(result.data, "synced") : [] };
+    },
+  },
+  "system show": {
+    options: {},
+    positionals: ["system"],
+    async run({ positionals }) {
+      const result = await call<SystemView>("GET", `/v1/agent/systems/${systemRef(positionals[0])}`);
+      if (!result.ok) return { result, lines: [] };
+      const s = result.data;
+      return {
+        result,
+        lines: [
+          `${s.id} "${s.name}" ${versionLine(s)}`,
+          `source: ${s.source.entry}${s.source.css === null ? "" : ` · css ${s.source.css}`}${s.source.frame === null ? "" : ` · frame ${s.source.frame}`}`,
+          `components: ${(s.manifest?.catalog ?? []).map((e) => (e.generated ? `${e.name} (Brainstorm's)` : e.name)).join(", ")}`,
+          `theme axes: ${(s.manifest?.styles.axes ?? []).map((a) => `${a.attribute} = ${a.values.join("|")}`).join("; ") || "none"}`,
+          `saved themes: ${s.themes.map((t) => t.name).join(", ") || "none"}`,
+          ...(s.latest?.warnings ?? []).map(issueLine),
+        ],
+      };
+    },
+  },
   "session new": {
-    options: { title: { type: "string" }, brief: { type: "string" }, project: { type: "string" }, ...threadOption },
+    options: { title: { type: "string" }, brief: { type: "string" }, project: { type: "string" }, system: { type: "string" }, ...threadOption },
     positionals: [],
     async run({ flags }) {
       const title = str(flags, "title");
@@ -321,6 +406,7 @@ const COMMANDS: Record<string, Command> = {
         brief,
         thread,
         project: resolve(str(flags, "project") ?? "."),
+        system: str(flags, "system") ?? null,
       });
       return {
         result,
@@ -464,8 +550,9 @@ const exitFor = (result: Result<unknown>): number =>
   result.ok ? EXIT.ok : result.error.code === "usage" ? EXIT.usage : result.error.code === "unavailable" ? EXIT.unavailable : EXIT.rejected;
 
 async function main(argv: readonly string[]): Promise<number> {
-  const name = argv[0] === "session" ? `session ${argv[1] ?? ""}` : (argv[0] ?? "");
-  const rest = argv.slice(argv[0] === "session" ? 2 : 1);
+  const grouped = argv[0] === "session" || argv[0] === "system";
+  const name = grouped ? `${argv[0]} ${argv[1] ?? ""}` : (argv[0] ?? "");
+  const rest = argv.slice(grouped ? 2 : 1);
   const wantsJson = rest.includes("--json");
   const print = (output: Output): number => {
     if (wantsJson) process.stdout.write(JSON.stringify(output.result) + "\n");

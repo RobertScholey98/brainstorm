@@ -22,7 +22,7 @@ function exported(pathname: string): string | null {
   try {
     const file = decodeURIComponent(/^\/reveal-export\/([^/]+)$/.exec(pathname)?.[1] ?? "");
     const listed = readdirSync(exports, { withFileTypes: true }).some((entry) => entry.isFile() && entry.name === file);
-    return file.endsWith(".html") && listed ? file : null;
+    return /\.(?:html|css|json)$/.test(file) && listed ? file : null;
   } catch {
     return null;
   }

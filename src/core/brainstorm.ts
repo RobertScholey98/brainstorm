@@ -77,6 +77,7 @@ import {
   type ProposedView,
   type SessionSystemView,
   type SystemId,
+  type CanvasSystem,
   type ThemeExport,
   type ThemeState,
   type PropsSchema,
@@ -742,6 +743,14 @@ export class Brainstorm {
     });
   }
 
+/** The kit version, theme and proposed components a canvas frame loads for this session's iteration. */
+  #canvasSystem(id: SessionId, iteration: IterationView | null): CanvasSystem | null {
+    const ref = this.#store.sessionSystem(id);
+    if (ref === null) return null;
+    const proposed = (iteration?.proposed ?? []).map(({ name, hash, compiled, css }) => ({ name, hash, compiled, css }));
+    return { id: ref.id, n: ref.n, theme: this.#themeState(id), proposed };
+  }
+
   #agentSystem(id: SessionId): AgentContext["system"] {
     const ref = this.#store.sessionSystem(id);
     if (ref === null) return null;
@@ -1404,7 +1413,12 @@ export class Brainstorm {
     const frame = frames.find((f) => f.slot === at.slot) ?? frames[0];
     const block = frame === undefined ? undefined : iteration?.blocks.find((b) => b.id === frame.blockId);
     if (frame === undefined || block === undefined) return ok(null);
-    return ok({ frame, module: { blockId: block.id, hash: block.hash, compiled: block.compiled, css: block.css }, props: block.effectiveProps });
+    return ok({
+      frame,
+      module: { blockId: block.id, hash: block.hash, compiled: block.compiled, css: block.css },
+      props: block.effectiveProps,
+      system: this.#canvasSystem(id, iteration),
+    });
   }
 
   async exportHtml(id: SessionId): Promise<Result<ExportResult>> {
@@ -1416,7 +1430,10 @@ export class Brainstorm {
     const file = exportFileName(session.title, id, latest.n, new Date(this.#now()));
     const path = join(this.#exportsDir, file);
     mkdirSync(this.#exportsDir, { recursive: true });
-    writeFileSync(path, buildCanvasDocument(exportPayload(iteration), "export"));
+    const system = this.#canvasSystem(id, iteration);
+    const kit = system === null ? null : this.#systems.kit(system.id, system.n);
+    if (kit !== null && !kit.ok) return kit;
+    writeFileSync(path, buildCanvasDocument(exportPayload(iteration, kit === null || system === null ? null : { kit: kit.data, theme: system.theme }), "export"));
     return ok({ path, file });
   }
 

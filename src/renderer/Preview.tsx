@@ -4,6 +4,7 @@ import { cn } from "cn";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Truncate } from "@/components/ui/truncate";
 import type { FrameToHost, HostToFrame, Result, SessionId, SessionPreview } from "../core/types";
+import { kitFor } from "./kit";
 import { PREVIEW_FRAMES, PreviewTurns, StillCache, stillKey } from "./previewQueue";
 
 const turns = new PreviewTurns(PREVIEW_FRAMES);
@@ -196,8 +197,26 @@ function Still({
       const p = sent.current;
       const post = (m: HostToFrame) => frame.current?.contentWindow?.postMessage(m, "*");
       if (message.kind === "ready" && p !== null) {
-        post({ kind: "modules", modules: [p.module] });
-        post({ kind: "state", frames: [p.frame], props: { [p.frame.blockId]: p.props }, selected: null, stage: null, floor });
+        const draw = () => {
+          post({ kind: "modules", modules: [p.module] });
+          post({ kind: "state", frames: [p.frame], props: { [p.frame.blockId]: p.props }, selected: null, stage: null, floor });
+        };
+        const system = p.system;
+        if (system === null) draw();
+        else {
+          // The kit goes first, so the block finds it when it loads.
+          void kitFor(system.id, system.n).then((kit) => {
+            if (kit === null) {
+              failed = true;
+              keep({ kind: "failed", message: "The design system's kit didn't load." });
+              return;
+            }
+            post({ kind: "kit", kit });
+            post({ kind: "proposed", modules: system.proposed });
+            post({ kind: "theme", theme: system.theme });
+            draw();
+          });
+        }
       } else if (message.kind === "block_error") {
         failed = true;
         keep({ kind: "failed", message: message.message });

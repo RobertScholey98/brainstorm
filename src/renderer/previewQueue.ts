@@ -78,9 +78,11 @@ export class StillCache<T> {
 }
 
 /**
- * What a still is kept under: the block's content, Rob's settings, its frame width and the theme, and whether it is a
+ * What a still is kept under: the block's content, Rob's settings, its frame width, the theme, the design system's
+ * version and session theme, and whether it is a
  * strip thumbnail or a card, since a still is drawn at its box's size and a thumbnail blown up to a card is a blur.
  */
 export function stillKey(preview: SessionPreview, { dark, compact }: { readonly dark: boolean; readonly compact: boolean }): string {
-  return `${compact ? "thumb" : "card"}:${dark ? "dark" : "light"}:${preview.module.hash}:${preview.frame.frame.width}:${JSON.stringify(preview.props)}`;
+  const system = preview.system === null ? "" : `:${preview.system.id}@${preview.system.n}:${JSON.stringify(preview.system.theme)}:${preview.system.proposed.map((p) => p.hash).join(",")}`;
+  return `${compact ? "thumb" : "card"}:${dark ? "dark" : "light"}:${preview.module.hash}:${preview.frame.frame.width}:${JSON.stringify(preview.props)}${system}`;
 }

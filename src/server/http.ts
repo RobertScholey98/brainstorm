@@ -233,9 +233,15 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
   const withSystem =
     (fn: (id: SystemId, input: { params: string[]; query: URLSearchParams; body: unknown }) => Promise<Result<unknown>>) =>
     async ({ params, query, body }: { params: string[]; query: URLSearchParams; body: unknown }) => {
-      const id = parseSystemId(decodeSegment(params[0] ?? "") ?? "");
+      const raw = decodeSegment(params[0] ?? "");
+      if (raw === null) return usage(`"${params[0]}" is not a valid URL path segment`);
+      // The agent may name a system by its id or its name.
+      const id = parseSystemId(raw) ?? (() => {
+        const found = service.systems.find(raw);
+        return found.ok ? found.data.id : null;
+      })();
       return id === null
-        ? ({ ok: false, error: { code: "not_found", entity: "system", message: `"${params[0]}" is not a design system id` } } as const)
+        ? ({ ok: false, error: { code: "not_found", entity: "system", message: `no design system has the id or name "${raw}"` } } as const)
         : fn(id, { params, query, body });
     };
 

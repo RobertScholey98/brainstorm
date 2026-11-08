@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { builtFile } from "../core/packageRoot";
-import { blockIdOf, framesOf, type HostToFrame, type IterationView } from "../core/types";
+import { blockIdOf, framesOf, type HostToFrame, type IterationView, type KitPayload, type ThemeState } from "../core/types";
 
 /** Served as a header on /canvas and repeated as a meta tag, so an exported file carries the same policy off disk. */
 export const CANVAS_CSP =
@@ -16,10 +16,19 @@ export type CanvasDocumentMode = "live" | "export" | "preview";
 export type CanvasPayload = readonly HostToFrame[];
 
 /** Every variant's module goes in, not just the ones showing, so the in-page switcher can show any of them. */
-export function exportPayload(iteration: IterationView): CanvasPayload {
+export function exportPayload(iteration: IterationView, system: { readonly kit: KitPayload; readonly theme: ThemeState } | null = null): CanvasPayload {
   const variants = (slot: IterationView["slots"][number]) =>
     slot.variants.flatMap((v) => iteration.blocks.filter((b) => b.id === blockIdOf(slot.id, v)).map((b) => ({ blockId: b.id, title: b.title })));
+  const kit: HostToFrame[] =
+    system === null
+      ? []
+      : [
+          { kind: "kit", kit: system.kit },
+          { kind: "proposed", modules: iteration.proposed.map(({ name, hash, compiled, css }) => ({ name, hash, compiled, css })) },
+          { kind: "theme", theme: system.theme },
+        ];
   return [
+    ...kit,
     { kind: "modules", modules: iteration.blocks.map((b) => ({ blockId: b.id, hash: b.hash, compiled: b.compiled, css: b.css })) },
     { kind: "variants", slots: Object.fromEntries(iteration.slots.map((s) => [s.id, variants(s)])) },
     {

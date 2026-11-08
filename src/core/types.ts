@@ -1,5 +1,7 @@
 import type { SystemManifest, ThemeAxis, Token } from "./system/model";
 
+export type { CatalogEntry, SystemManifest, ThemeAxis, Token } from "./system/model";
+
 declare const brand: unique symbol;
 export type Brand<T, B extends string> = T & { readonly [brand]: B };
 
@@ -837,8 +839,8 @@ export type HostToFrame =
   | { readonly kind: "theme"; readonly theme: ThemeState }
   /** Proposed components that blocks import as `proposed/<name>`. */
   | { readonly kind: "proposed"; readonly modules: readonly ProposedModule[] }
-  /** The system page's gallery: every story of the loaded kit. */
-  | { readonly kind: "gallery" };
+  /** The system page's gallery: the loaded kit's stories with these ids, or every story when null. */
+  | { readonly kind: "gallery"; readonly stories: readonly string[] | null };
 
 export type CanvasVariant = { readonly blockId: BlockId; readonly title: string };
 
@@ -867,7 +869,20 @@ export type FrameToHost =
  * What a home card previews: the latest iteration's first slot, showing the variant Rob has selected, with his
  * settings applied. Null before the first iteration.
  */
-export type SessionPreview = { readonly frame: CanvasFrame; readonly module: CanvasModule; readonly props: Props };
+/** What a canvas frame needs for a session with a design system: the kit version to load, its theme and proposed components. */
+export type CanvasSystem = {
+  readonly id: SystemId;
+  readonly n: SystemVersionN;
+  readonly theme: ThemeState;
+  readonly proposed: readonly ProposedModule[];
+};
+
+export type SessionPreview = {
+  readonly frame: CanvasFrame;
+  readonly module: CanvasModule;
+  readonly props: Props;
+  readonly system: CanvasSystem | null;
+};
 
 /** A fork's source: an iteration of the parent, and the variant Rob picked per slot there. A slot left out keeps the one it shows. */
 export type ForkInput = {
