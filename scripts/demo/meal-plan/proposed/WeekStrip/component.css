@@ -1,0 +1,39 @@
+.week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.week-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--card-foreground);
+}
+.week-day[data-selected] {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.week-day[data-selected] * {
+  color: inherit;
+}
+.week-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 6px;
+  background: transparent;
+}
+.week-dot[data-planned] {
+  background: var(--primary);
+}
+.week-day[data-selected] .week-dot[data-planned] {
+  background: var(--primary-foreground);
+}

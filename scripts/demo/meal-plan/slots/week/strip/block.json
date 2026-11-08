@@ -1,0 +1,29 @@
+{
+  "title": "Week strip and day",
+  "props": {
+    "data": {
+      "week": {
+        "type": "data",
+        "description": "each day's dinner, and whether it is planned",
+        "sample": [
+          { "day": "Mon", "date": 10, "planned": true },
+          { "day": "Tue", "date": 11, "planned": true },
+          { "day": "Wed", "date": 12, "planned": true },
+          { "day": "Thu", "date": 13, "planned": false },
+          { "day": "Fri", "date": 14, "planned": false },
+          { "day": "Sat", "date": 15, "planned": true },
+          { "day": "Sun", "date": 16, "planned": false }
+        ]
+      },
+      "today": {
+        "type": "data",
+        "description": "the selected day's plan",
+        "sample": { "meal": "Lemon pancakes", "serves": 4, "minutes": 25, "cooks": ["RS", "MK"] }
+      }
+    },
+    "appearance": {
+      "selected": { "type": "enum", "label": "Selected day", "default": "Tue", "options": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] },
+      "headline": { "type": "text", "label": "Headline", "default": "Dinner plan" }
+    }
+  }
+}
