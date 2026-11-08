@@ -144,6 +144,12 @@ try {
     ["Hold", "Preview Clean"],
   );
   await snap(window, "07-main-window-open", "The main window while the preview window is open: Hold preview and a Preview menu button grow in to the left of Present, which keeps its place at the canvas bar's right end");
+  await window.hover("[data-hold]");
+  await window.waitForSelector("[data-slot=tooltip-content], [role=tooltip]", { timeout: 3000 }).catch(() => {});
+  await sleep(300);
+  await snap(window, "07b-hold-hint", "Hold's hint while the bar shows it as the bare word Hold: it names the whole action, Hold preview window, and says what it does");
+  await window.mouse.move(150, 860);
+  await sleep(300);
 
   // The clean look never takes a pick: it is the one an audience sees.
   await window.click("[data-pick-toggle]");
@@ -182,7 +188,7 @@ try {
   await window.click("[data-preview-menu]");
   await window.waitForSelector("[data-preview-popover]");
   await sleep(250);
-  await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show canvas in main window, Bring preview to front and Full screen preview, and in the footer F11 works in the preview window too, with Close preview");
+  await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show canvas in main window, Bring preview to front and Full screen preview, and in the footer Or press F11 in the preview window, with Close preview");
   await window.click('[data-preview-look="working"]');
   await sleep(250);
   await snap(window, "10b-preview-menu-working", "The Preview menu with Working chosen: its line under the switch now in full contrast, and the Preview button behind it in the warning tone (amber edge and fill, amber eye-off)", { keepFocus: true });
@@ -250,8 +256,8 @@ try {
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
   check("a pick started here while the canvas is away waits in the preview window", await window.textContent("[data-canvas-away] [data-slot=empty-description]"), "Click an element there. Esc or Cancel stops picking here.");
-  check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Click in the previewCancel");
-  await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's hint reads Click in the preview, with Cancel, and the region's title says to click an element there");
+  check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Click in previewCancel");
+  await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's hint reads Click in preview, with Cancel, and the region's title says to click an element there");
   await window.keyboard.press("Escape");
 
   // A clean preview window can't take a pick, so with the canvas away the main window says so and offers a way on.

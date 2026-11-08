@@ -156,7 +156,7 @@ function WindowMenu({
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
             <span className="text-sm">Show canvas in main window</span>
-            <span className="text-xs text-fg-muted">Turn off to use the canvas only in the preview window. Controls stay here.</span>
+            <span className="text-xs text-fg-muted">Turn off to show the canvas only in the preview window. This window keeps the controls.</span>
           </span>
           <Switch checked={prefs.here} onCheckedChange={(here) => onPrefs({ ...prefs, here })} className="mt-0.5" data-preview-here />
         </label>
@@ -168,7 +168,7 @@ function WindowMenu({
             Full screen preview
           </Button>
         </div>
-        <PopoverFooter hint="F11 works in the preview window too.">
+        <PopoverFooter hint="Or press F11 in the preview window.">
           <Button variant="ghost" onClick={() => run("close")} data-preview-close>
             Close preview
           </Button>
