@@ -105,8 +105,10 @@ function WindowMenu({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <Hint name={`Preview window · ${look?.label}`} label="Window options" side="bottom">
-        <PopoverTrigger render={<Button variant="outline" aria-label={`Preview window, ${look?.label}`} data-preview-menu />}>
-          {/* Working is the look that isn't for sharing, so it shows here in the warning tone, as Hold does when held. */}
+        <PopoverTrigger
+          render={<Button variant="caution" aria-label={`Preview window, ${look?.label}`} data-warn={prefs.look === "working" || undefined} data-preview-menu />}
+        >
+          {/* Working is the look that isn't for sharing, so the button takes the warning tone, as Hold does when held. */}
           {prefs.look === "working" ? (
             <EyeOff data-icon="inline-start" className="text-warning" aria-hidden />
           ) : (
@@ -116,7 +118,7 @@ function WindowMenu({
             Preview
           </span>
           {/* As wide as its widest look, so changing the look moves nothing in the bar. */}
-          <span className="grid justify-items-center" data-preview-menu-look>
+          <span className="grid justify-items-start" data-preview-menu-look>
             {LOOKS.map((l) => (
               <span key={l.value} className={l.value === prefs.look ? "col-start-1 row-start-1" : "invisible col-start-1 row-start-1"} aria-hidden={l.value !== prefs.look || undefined}>
                 {l.label}
@@ -145,7 +147,7 @@ function WindowMenu({
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
             <span className="text-sm">Hold preview</span>
-            <span className="text-xs text-fg-muted">Freeze it while you try things here. Resume live shows your latest changes.</span>
+            <span className="text-xs text-fg-muted">Freeze the preview window while you try things here. Resume live shows your latest changes.</span>
           </span>
           <Switch checked={hold} onCheckedChange={onHold} className="mt-0.5" data-preview-menu-hold />
         </label>

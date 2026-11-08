@@ -165,10 +165,10 @@ try {
   check(
     "the main window says so under the canvas bar, naming the slot and variant held, and Hold preview is pressed",
     [await window.textContent("[data-held-bar]"), await window.getAttribute("[data-hold]", "aria-pressed")],
-    ["Preview heldThe preview window keeps showing The wheel · Slot reel.Resume live", "true"],
+    ["Preview heldThe preview window still shows The wheel · Slot reel.Resume live", "true"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed amber, and, as a slim strip in the canvas's top inset above the frame caption so nothing moves or hides, a warning-toned bar under the canvas bar, Preview held · The preview window keeps showing The wheel · Slot reel, with Resume live; the main canvas has moved on to the result slot");
+  await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed amber, and, as a slim strip in the canvas's top inset above the frame caption so nothing moves or hides, a warning-toned bar under the canvas bar, Preview held · The preview window still shows The wheel · Slot reel, with a compact Resume live inside the strip; the main canvas has moved on to the result slot");
   await window.click("[data-held-release]");
   await settled(() => showing(mirror));
   check("releasing Hold sends it the latest", await showing(mirror), "result:result/card");
@@ -180,18 +180,18 @@ try {
   await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show canvas in main window, Bring to front and Full screen window, and in the footer F11 works in the preview window too, with Close window");
   await window.click('[data-preview-look="working"]');
   await sleep(250);
-  await snap(window, "10b-preview-menu-working", "The Preview menu with Working chosen: its line under the switch now in full contrast", { keepFocus: true });
+  await snap(window, "10b-preview-menu-working", "The Preview menu with Working chosen: its line under the switch now in full contrast, and the Preview button behind it in the warning tone (amber edge and fill, amber eye-off)", { keepFocus: true });
   await window.click('[data-preview-look="working"]');
   await preview.waitForSelector("[data-preview-window=working]");
   await window.keyboard.press("Escape");
   await mirror.waitForSelector("html:not([data-present])");
   await settled(() => showing(mirror));
   await preview.mouse.move(640, 790);
-  await snap(preview, "11-preview-working", "The preview window, Working look: the same canvas bar as the main window (slot tabs, view switch), then Not for sharing with Switch to Clean, and Pin comment at its right, over the canvas drawn as the main window draws it");
+  await snap(preview, "11-preview-working", "The preview window, Working look: the same canvas bar as the main window (slot tabs, view switch), then Not for sharing (amber eye-off and amber text) with Switch to Clean, and Pin comment at its right, over the canvas drawn as the main window draws it");
   await window.click("[data-hold]");
   await preview.waitForSelector("[data-held-bar]");
   await preview.mouse.move(640, 790);
-  await snap(preview, "11b-preview-working-held", "The Working preview window while Hold preview is on in the main window: the same warning-toned held bar as the main window's, under its canvas bar, This window keeps showing …, with Resume live");
+  await snap(preview, "11b-preview-working-held", "The Working preview window while Hold preview is on in the main window: the same warning-toned held bar as the main window's, in its canvas's top inset, This window still shows …, with a compact Resume live");
   await preview.click("[data-held-release]");
   await preview.waitForSelector("[data-held-bar]", { state: "detached" });
   check("Resume live in the working preview window ends Hold in the main window", await window.getAttribute("[data-hold]", "aria-pressed"), "false");
@@ -227,7 +227,7 @@ try {
   // The main window still pins.
   await window.click("[data-pick-toggle]");
   await window.mouse.move(150, 860);
-  await snap(window, "14b-main-picking-window-open", "The main window picking while the preview window is open (Working): the pick hint and Cancel (Esc in its hint) fill room the bar keeps for them, so the view switch, Hold, the Preview menu and Present are exactly where and as they were in 07");
+  await snap(window, "14b-main-picking-window-open", "The main window picking while the preview window is open (Working): the pick hint (an accent pointer glyph, words at full strength) and Cancel (Esc in its hint) fill room the bar keeps for them, so the view switch, Hold, the Preview menu and Present are exactly where and as they were in 07");
   await canvas.click(inBlock("result/card", "headline"));
   await window.waitForSelector("[data-composer]");
   check("the main window's canvas still pins while the preview window is open", await preview.$("[data-composer]"), null);
@@ -263,10 +263,10 @@ try {
       await mirror.evaluate(() => document.body.dataset.mode ?? "view"),
       await window.textContent("[data-canvas-away] [data-slot=empty-title]"),
     ],
-    [null, "view", "The Clean preview takes no pins"],
+    [null, "view", "The canvas is in the Clean preview"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says the Clean preview takes no pins and why, with Show canvas here (primary, which then starts the pick here), Switch preview to Working (outline), and Not now");
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says the canvas is in the Clean preview, which hides pins, in two short lines, with Show canvas here (primary, which then starts the pick here), Switch preview to Working (outline), and Not now");
   await window.click("[data-away-working]");
   await preview.waitForSelector("[data-preview-window=working]");
   await mirror.waitForSelector('body[data-mode="pin"]');

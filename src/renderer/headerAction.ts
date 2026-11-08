@@ -93,7 +93,10 @@ const barFits = (bar: HTMLElement): boolean => {
   if (ruler === null) return !overflows(hint);
   ruler.font = getComputedStyle(hint).font;
   const r = ruler;
-  return hint.getBoundingClientRect().width >= Math.max(...Object.values(PICK_HINTS).map((h) => r.measureText(h).width)) - SLACK;
+  // The hint's glyph and its gap take room the words can't have.
+  const glyph = hint.querySelector("svg");
+  const room = hint.getBoundingClientRect().width - (glyph === null ? 0 : glyph.getBoundingClientRect().width + (Number.parseFloat(getComputedStyle(hint).columnGap) || 0));
+  return room >= Math.max(...Object.values(PICK_HINTS).map((h) => r.measureText(h).width)) - SLACK;
 };
 
 /** Fits the canvas bar: its right end's labels give way, in `BAR_COLLAPSE` order, before the pick hint cuts. */

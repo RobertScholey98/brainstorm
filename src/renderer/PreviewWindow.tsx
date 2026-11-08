@@ -130,7 +130,7 @@ export function PreviewWindow({ api }: { api: Api }) {
             trailing={
               <>
                 {/* The working look is for Rob's own screen, so it says so, with the way back to the look an audience may see. */}
-                <span className="flex items-center gap-1.5 text-sm text-fg-muted" data-preview-private>
+                <span className="flex items-center gap-1.5 text-sm font-medium text-warning" data-preview-private>
                   <EyeOff aria-hidden className="size-3.5" />
                   Not for sharing
                 </span>

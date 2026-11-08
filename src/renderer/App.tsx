@@ -937,11 +937,11 @@ function CanvasAway({
             <AppWindow aria-hidden />
           </EmptyMedia>
           <EmptyTitle>
-            {stuck !== null ? (act === "pin" ? "The Clean preview takes no pins" : "The Clean preview can't vary an element") : picking ? "Click an element in the preview" : "The canvas is in the preview window"}
+            {stuck !== null ? "The canvas is in the Clean preview" : picking ? "Click an element in the preview" : "The canvas is in the preview window"}
           </EmptyTitle>
           <EmptyDescription>
             {stuck !== null
-              ? `Clean keeps pins and tools hidden from your audience. Show the canvas here to ${act}, or switch the preview to Working, which isn't for sharing.`
+              ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience. Show the canvas here to ${act === "pin" ? "pin" : "vary an element"}, or switch the preview to Working (not for sharing).`
               : picking
                 ? "Esc or Cancel stops picking."
                 : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
@@ -1001,7 +1001,7 @@ function PresentHint({ several, poke, onLeave }: { several: boolean; poke: numbe
   }, [shown, over, poke]);
   return (
     <div
-      className="absolute top-6 left-1/2 z-toast flex -translate-x-1/2 items-center gap-1 transition-opacity duration-300 data-hidden:pointer-events-none data-hidden:opacity-0"
+      className="absolute top-8 left-1/2 z-toast flex -translate-x-1/2 items-center gap-1 transition-opacity duration-300 data-hidden:pointer-events-none data-hidden:opacity-0"
       data-hidden={shown ? undefined : ""}
       onPointerEnter={() => setOver(true)}
       onPointerLeave={() => setOver(false)}

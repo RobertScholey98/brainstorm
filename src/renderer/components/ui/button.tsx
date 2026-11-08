@@ -14,8 +14,9 @@ const buttonVariants = cva(
         outline:
           "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
         // An outline toggle whose pressed state is a warning, as Hold preview's is: pressed, it leaves a shared window behind.
+        // A trigger marked `data-warn` takes the same tone, as the Preview menu does while its window isn't for sharing.
         caution:
-          "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-warning aria-pressed:bg-warning-subtle aria-pressed:text-fg",
+          "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg data-warn:border-warning data-warn:bg-warning-subtle aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-warning aria-pressed:bg-warning-subtle aria-pressed:text-fg",
         ghost:
           "hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg aria-pressed:bg-selected aria-pressed:text-fg",
         destructive:
@@ -26,6 +27,8 @@ const buttonVariants = cva(
         default: "h-7 gap-1.5 px-2 text-sm has-[[data-icon=inline-end]:not([data-collapsed])]:pr-1.5 has-[[data-icon=inline-start]:not([data-collapsed])]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         icon: "size-7",
         "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3.5",
+        // A 20 px action that names itself inside a 24 px strip, as the held strip's Resume live does.
+        "2xs": "h-5 gap-1 px-1.5 text-xs font-normal [&_svg:not([class*='size-'])]:size-3",
         // A 24 px action that names itself, as a list row's hover action does.
         xs: "h-6 gap-1 px-1.5 text-xs font-normal [&_svg:not([class*='size-'])]:size-3.5",
         // A glyph over its count, for a narrow rail with no room to set a corner count clear of the glyph.
