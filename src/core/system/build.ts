@@ -3,7 +3,8 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { issue, type Issue } from "../types";
 import { PRIMITIVES_SOURCE, primitivesCss } from "./primitives";
-import { matchFiles, type SystemSource } from "./source";
+import type { Tier } from "./model";
+import { globToRegExp, matchFiles, sourceFile, tiersOf, type SystemSource } from "./source";
 
 /**
  * Builds a design system from its source: one CommonJS bundle of the kit and its stories, and its stylesheet. Both run
@@ -15,6 +16,8 @@ export type BuiltSystem = {
   readonly css: string;
   /** Each story file's source, keyed by its path relative to the library's root, for the agent to read. */
   readonly storyFiles: Readonly<Record<string, string>>;
+  /** Every file the build read, absolute: what esbuild bundled, the stylesheets, and the files scanned for classes. */
+  readonly inputs: readonly string[];
   readonly warnings: readonly Issue[];
 };
 
@@ -51,15 +54,21 @@ export async function buildSystem(source: SystemSource): Promise<BuildResult> {
   if (storyPaths.length === 0) {
     warnings.push(issue("no_story", `no stories match ${source.stories.join(", ")}; the catalog will list exports with no examples`, { file: source.root }));
   }
-  const [bundle, css] = await Promise.all([bundleKit(source, storyPaths), compileCss(source)]);
+  const kitFiles = tierFiles(source);
+  if (source.entry === null && kitFiles.length === 0) {
+    return { ok: false, issues: [issue("invalid_adapter", "the tier globs match no component files", { file: sourceFile(source) })] };
+  }
+  const [bundle, css] = await Promise.all([bundleKit(source, storyPaths, kitFiles), compileCss(source)]);
   if (!bundle.ok || !css.ok) return { ok: false, issues: [...(bundle.ok ? [] : bundle.issues), ...(css.ok ? [] : css.issues)] };
+  const own = [source.adapter, path.join(source.root, "package.json")].filter((f): f is string => typeof f === "string" && existsSync(f));
   return {
     ok: true,
     value: {
-      bundle: bundle.value,
+      bundle: bundle.value.text,
       css: css.value.css,
       storyFiles: Object.fromEntries(storyPaths.map((p) => [p, readFileSync(path.join(source.root, p), "utf8").replace(/\r\n/g, "\n")])),
-      warnings: [...warnings, ...css.value.warnings],
+      inputs: [...new Set([...bundle.value.inputs, ...css.value.inputs, ...own])].sort(),
+      warnings: [...warnings, ...css.value.warnings, ...bundle.value.boundary],
     },
   };
 }
@@ -79,22 +88,84 @@ function esbuildBuild(options: BuildOptions): ReturnType<Esbuild["build"]> {
   return run as ReturnType<Esbuild["build"]>;
 }
 
-async function bundleKit(source: SystemSource, storyPaths: readonly string[]): Promise<{ ok: true; value: string } | { ok: false; issues: Issue[] }> {
-  const entry = [
-    `import * as lib from ${JSON.stringify(toPosix(source.entry))};`,
+/** A tier glob's files: the kit's components, minus `exclude`, stories and tests. Relative to the root, POSIX. */
+export type KitFile = { readonly file: string; readonly tier: Tier };
+
+const NOT_A_COMPONENT = /\.(stories|test|spec)\.[jt]sx?$|\.d\.ts$/;
+
+export function tierFiles(source: SystemSource): KitFile[] {
+  const tiers = tiersOf(source);
+  const exclude = (source.exclude ?? []).map(globToRegExp);
+  const seen = new Set<string>();
+  const out: KitFile[] = [];
+  for (const tier of ["primitive", "composite", "layout"] as const) {
+    for (const file of matchFiles(source.root, tiers[tier])) {
+      if (seen.has(file) || NOT_A_COMPONENT.test(file) || !/\.[jt]sx?$/.test(file) || exclude.some((r) => r.test(file))) continue;
+      seen.add(file);
+      out.push({ file, tier });
+    }
+  }
+  return out;
+}
+
+/** `page-header.tsx` → `PageHeader`: the name a file's default export joins the kit under. */
+const defaultName = (file: string) =>
+  (file.split("/").at(-1) ?? file)
+    .replace(/\.[jt]sx?$/, "")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((w) => w[0]?.toUpperCase() + w.slice(1))
+    .join("");
+
+/**
+ * The module the bundle starts from. It gathers the kit from the library's entry, or from the tier files when an
+ * adapter lists them (ADR 008), adds the primitives the kit lacks, and labels each export with the tier of the file
+ * that exports it. Labels go by identity, so a library entry that re-exports a tier file's component gets its tier.
+ */
+function entryModule(source: SystemSource, storyPaths: readonly string[], kitFiles: readonly KitFile[]): string {
+  const abs = (rel: string) => JSON.stringify(toPosix(path.join(source.root, rel)));
+  return [
+    source.entry === null ? "" : `import * as entry from ${JSON.stringify(toPosix(source.entry))};`,
     `import * as prims from "brainstorm:primitives";`,
+    ...kitFiles.map((f, i) => `import * as m${i} from ${abs(f.file)};`),
+    `const tierModules = [${kitFiles.map((f, i) => `[m${i}, ${JSON.stringify(f.tier)}, ${JSON.stringify(f.file)}, ${JSON.stringify(defaultName(f.file))}]`).join(", ")}];`,
+    `const duplicates = [];`,
+    source.entry !== null
+      ? `const lib = entry;`
+      : [
+          `const lib = {};`,
+          `for (const [m, , file, fallback] of tierModules) {`,
+          `  for (const k of Object.keys(m)) {`,
+          `    if (k === "default") continue;`,
+          `    if (k in lib) { if (lib[k] !== m[k]) duplicates.push(k + " (" + file + ")"); continue; }`,
+          `    lib[k] = m[k];`,
+          `  }`,
+          `  const d = m.default;`,
+          `  if ((typeof d === "function" || (typeof d === "object" && d !== null)) && !Object.values(lib).includes(d) && !(fallback in lib)) lib[fallback] = d;`,
+          `}`,
+        ].join("\n"),
     `const kit = {};`,
     `const generated = [];`,
     `for (const k of Object.keys(prims)) if (!(k in lib)) { kit[k] = prims[k]; generated.push(k); }`,
     `for (const k of Object.keys(lib)) if (k !== "default") kit[k] = lib[k];`,
-    `export { kit, generated };`,
+    `const tiers = {};`,
+    `for (const k of Object.keys(kit)) for (const [m, tier] of tierModules) if (Object.values(m).includes(kit[k])) { tiers[k] = tier; break; }`,
+    `export { kit, generated, tiers, duplicates };`,
     `export const frame = ${JSON.stringify(source.frame)};`,
     `export const stories = {`,
-    ...storyPaths.map((p) => `  ${JSON.stringify(p)}: () => require(${JSON.stringify(toPosix(path.join(source.root, p)))}),`),
+    ...storyPaths.map((p) => `  ${JSON.stringify(p)}: () => require(${abs(p)}),`),
     `};`,
-  ].join("\n");
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
 
+type Bundled = { readonly text: string; readonly inputs: readonly string[]; readonly boundary: readonly Issue[] };
+
+async function bundleKit(source: SystemSource, storyPaths: readonly string[], kitFiles: readonly KitFile[]): Promise<{ ok: true; value: Bundled } | { ok: false; issues: Issue[] }> {
+  const entry = entryModule(source, storyPaths, kitFiles);
   const stubs = source.stubs;
+  const aliases = Object.entries(source.aliases ?? {}).sort((a, b) => b[0].length - a[0].length);
   const plugin = {
     name: "brainstorm",
     setup(build: import("esbuild-wasm").PluginBuild) {
@@ -106,18 +177,30 @@ async function bundleKit(source: SystemSource, storyPaths: readonly string[]): P
         const filter = new RegExp(`^${spec.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}$`);
         build.onResolve({ filter }, () => ({ path: file }));
       }
+      // The app's tsconfig `paths`, as the adapter gives them: `@/lib/utils` is `<root>/src/renderer/lib/utils`.
+      for (const [prefix, dir] of aliases) {
+        const filter = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}`);
+        build.onResolve({ filter }, async (a) => {
+          if (a.pluginData === "aliased") return undefined;
+          const target = path.join(dir, a.path.slice(prefix.length));
+          const found = await build.resolve(toPosix(target), { kind: a.kind, resolveDir: a.resolveDir, importer: a.importer, pluginData: "aliased" });
+          return found.errors.length > 0 ? { errors: found.errors } : { path: found.path, namespace: found.namespace };
+        });
+      }
     },
   };
 
   try {
     const result = await esbuildBuild({
       stdin: { contents: entry, resolveDir: source.root, sourcefile: "brainstorm-kit-entry.ts", loader: "ts" },
+      absWorkingDir: source.root,
       bundle: true,
       format: "cjs",
       platform: "browser",
       target: "chrome120",
       write: false,
       minify: true,
+      metafile: true,
       legalComments: "none",
       jsx: "automatic",
       external: [...KIT_EXTERNALS],
@@ -127,16 +210,17 @@ async function bundleKit(source: SystemSource, storyPaths: readonly string[]): P
       logLevel: "silent",
     });
     const text = result.outputFiles?.[0]?.text;
-    if (text === undefined) return { ok: false, issues: [issue("system_bundle_failed", "esbuild produced no output", { file: source.entry })] };
-    return { ok: true, value: text };
+    if (text === undefined) return { ok: false, issues: [issue("system_bundle_failed", "esbuild produced no output", { file: sourceFile(source) })] };
+    const graph = inputGraph(source.root, result.metafile?.inputs ?? {});
+    return { ok: true, value: { text, inputs: [...graph.keys()], boundary: source.adapter == null ? [] : boundaryIssues(source, kitFiles, storyPaths, graph) } };
   } catch (e) {
     const errors = (e as { errors?: { text: string; location?: { file: string; line: number; column: number } | null }[] }).errors ?? [];
     const issues =
       errors.length === 0
-        ? [issue("system_bundle_failed", (e as Error).message, { file: source.entry })]
+        ? [issue("system_bundle_failed", (e as Error).message, { file: sourceFile(source) })]
         : errors.slice(0, 20).map((err) =>
             issue("system_bundle_failed", err.text, {
-              file: err.location?.file ?? source.entry,
+              file: err.location?.file ?? sourceFile(source),
               loc: err.location ? { line: err.location.line, column: err.location.column + 1 } : null,
             }),
           );
@@ -144,14 +228,65 @@ async function bundleKit(source: SystemSource, storyPaths: readonly string[]): P
   }
 }
 
+/** The metafile's real files, absolute, each with the real files it imports. Virtual modules are left out. */
+function inputGraph(root: string, inputs: Record<string, { imports: readonly { path: string; external?: boolean }[] }>): Map<string, string[]> {
+  // `<stdin>`, `<define:…>` and plugin namespaces such as `stub:storybook` are no files; externals are the canvas's.
+  const real = (p: string) => !p.startsWith("<") && !/^[a-z-]+:/.test(p);
+  const graph = new Map<string, string[]>();
+  for (const [key, input] of Object.entries(inputs)) {
+    if (!real(key)) continue;
+    graph.set(
+      path.resolve(root, key),
+      input.imports.filter((i) => i.external !== true && real(i.path)).map((i) => path.resolve(root, i.path)),
+    );
+  }
+  return graph;
+}
+
+/**
+ * Imports that cross out of the system (ADR 008): from a kit file, a shared file or the entry's folder, to a project
+ * file that is none of those, a story or a stub. Each is reported once, with the first file that imports it.
+ */
+function boundaryIssues(source: SystemSource, kitFiles: readonly KitFile[], storyPaths: readonly string[], graph: ReadonlyMap<string, readonly string[]>): Issue[] {
+  const rel = (abs: string) => toPosix(path.relative(source.root, abs));
+  const kit = new Set(kitFiles.map((f) => f.file));
+  const shared = (source.shared ?? []).map(globToRegExp);
+  const stories = new Set(storyPaths);
+  const stubs = new Set(Object.values(source.stubs).map((f) => path.resolve(f)));
+  const entryDir = source.entry === null ? null : path.dirname(source.entry);
+  const inside = (abs: string) => {
+    const r = rel(abs);
+    return kit.has(r) || shared.some((g) => g.test(r)) || (entryDir !== null && !path.relative(entryDir, abs).startsWith(".."));
+  };
+  const external = (abs: string) => /[\\/]node_modules[\\/]/.test(abs);
+  const issues: Issue[] = [];
+  const reported = new Set<string>();
+  for (const [from, imports] of graph) {
+    if (external(from) || !inside(from)) continue;
+    for (const to of imports) {
+      if (reported.has(to) || external(to) || inside(to) || stories.has(rel(to)) || stubs.has(path.resolve(to))) continue;
+      reported.add(to);
+      issues.push(
+        issue(
+          "outside_boundary",
+          `${rel(from)} imports ${rel(to)}, which isn't in the system; exclude ${rel(from)}, stub what it reads, or list ${rel(to)} in "shared" if it is a helper the kit needs`,
+          { file: from },
+        ),
+      );
+    }
+  }
+  return issues;
+}
+
 // --- CSS -------------------------------------------------------------------------------------------------------------
 
-type CssResult = { ok: true; value: { css: string; warnings: Issue[] } } | { ok: false; issues: Issue[] };
+type CssResult = { ok: true; value: { css: string; inputs: string[]; warnings: Issue[] } } | { ok: false; issues: Issue[] };
 
 async function compileCss(source: SystemSource): Promise<CssResult> {
-  if (source.css === null) return { ok: true, value: { css: primitivesCss(), warnings: [] } };
+  if (source.css === null) return { ok: true, value: { css: primitivesCss(), inputs: [], warnings: [] } };
   const warnings: Issue[] = [];
   const entryCss = source.css;
+  const inputs = [entryCss];
   try {
     const { compile } = await import("tailwindcss");
     const input = inlineUrls(readFileSync(entryCss, "utf8"), path.dirname(entryCss), warnings);
@@ -159,6 +294,7 @@ async function compileCss(source: SystemSource): Promise<CssResult> {
       base: path.dirname(entryCss),
       async loadStylesheet(id: string, base: string) {
         const file = resolveStylesheet(id, base);
+        inputs.push(file);
         return { path: file, base: path.dirname(file), content: inlineUrls(readFileSync(file, "utf8"), path.dirname(file), warnings) };
       },
       async loadModule(id: string, base: string) {
@@ -174,9 +310,9 @@ async function compileCss(source: SystemSource): Promise<CssResult> {
         : compiler.root === null
           ? [{ base: path.dirname(entryCss), pattern: "**/*" }]
           : [compiler.root];
-    for (const s of [...roots, ...compiler.sources.filter((s) => !s.negated)]) scanCandidates(s.base, s.pattern, candidates);
+    for (const s of [...roots, ...compiler.sources.filter((s) => !s.negated)]) scanCandidates(s.base, s.pattern, candidates, inputs);
     const css = compiler.build([...candidates]);
-    return { ok: true, value: { css: `${css}\n${primitivesCss()}`, warnings } };
+    return { ok: true, value: { css: `${css}\n${primitivesCss()}`, inputs, warnings } };
   } catch (e) {
     return { ok: false, issues: [issue("system_css_failed", (e as Error).message, { file: entryCss })] };
   }
@@ -276,7 +412,7 @@ const SCANNED = /\.(tsx?|jsx?|mjs|cjs|html|mdx|vue|svelte|astro)$/;
 const SKIP = new Set(["node_modules", ".git", "dist", "build", "storybook-static", ".turbo"]);
 
 /** Collects every word that could be a class. Tailwind ignores the ones that aren't, as its own scanner does. */
-function scanCandidates(base: string, pattern: string, into: Set<string>): void {
+function scanCandidates(base: string, pattern: string, into: Set<string>, files: string[]): void {
   const start = path.resolve(base, pattern.replace(/(^|\/)\*\*.*$/, "").replace(/\/[^/]*\*.*$/, "") || ".");
   if (!existsSync(start)) return;
   const visit = (p: string) => {
@@ -286,6 +422,7 @@ function scanCandidates(base: string, pattern: string, into: Set<string>): void 
       return;
     }
     if (!SCANNED.test(p) || s.size > 2_000_000) return;
+    files.push(p);
     const text = readFileSync(p, "utf8");
     // Classes such as `py-(--card-spacing)` and `[--gap:--spacing(4)]` hold parentheses and commas, so words split
     // only at quotes and whitespace count, and so do their pieces between parentheses for words like `cn(base`.

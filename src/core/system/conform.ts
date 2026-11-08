@@ -56,21 +56,29 @@ export function proposedImports(compiled: string): string[] {
   return unique([...compiled.matchAll(/\brequire\((['"])proposed\/([^'"]+)\1\)/g)].map((m) => m[2] ?? ""));
 }
 
-/** A block in a session with a design system composes the kit's components and the session's proposed ones, nothing else. */
+/**
+ * A block in a session with a design system composes the kit's components and the session's proposed ones, nothing
+ * else. So does a proposed composite or layout (ADR 008): only a primitive may write HTML.
+ */
 export function blockConformance(input: {
   readonly compiled: string;
   readonly file: string;
   readonly cssFile: string | null;
   readonly exports: ReadonlySet<string>;
   readonly proposed: ReadonlySet<string>;
+  /** What is being checked, when it isn't a block: a proposed component of a tier above primitive. */
+  readonly tier?: "composite" | "layout";
 }): Issue[] {
   const { compiled, file } = input;
   const issues: Issue[] = [];
+  const subject = input.tier === undefined ? "a block in a session with a design system" : `a proposed ${input.tier}`;
   for (const tag of rawTags(compiled)) {
     issues.push(
       issue(
         "raw_element",
-        `writes <${tag}>; a block in a session with a design system composes the kit's components (Stack, Grid, Box, Text, Heading and the library's own), or a proposed component when the kit has nothing that fits`,
+        input.tier === undefined
+          ? `writes <${tag}>; ${subject} composes the kit's components (Stack, Grid, Box, Text, Heading and the library's own), or a proposed component when the kit has nothing that fits`
+          : `writes <${tag}>; ${subject} composes the kit's components and other proposed ones; only a primitive writes HTML, so propose the missing piece as a primitive, or make this one a primitive`,
         { file },
       ),
     );
@@ -81,7 +89,15 @@ export function blockConformance(input: {
     );
   }
   if (input.cssFile !== null) {
-    issues.push(issue("css_in_system", "a block in a session with a design system has no block.css; its look comes from the kit, so delete the file", { file: input.cssFile }));
+    issues.push(
+      issue(
+        "css_in_system",
+        input.tier === undefined
+          ? "a block in a session with a design system has no block.css; its look comes from the kit, so delete the file"
+          : `${subject} has no component.css; its look comes from the components it composes, so delete the file`,
+        { file: input.cssFile },
+      ),
+    );
   }
   for (const name of kitNamesUsed(compiled)) {
     if (!input.exports.has(name)) {

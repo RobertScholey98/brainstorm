@@ -10,9 +10,9 @@ import * as React from "react";
 import * as JSX from "react/jsx-runtime";
 import * as ReactDOM from "react-dom";
 import { renderToStaticMarkup } from "react-dom/server.browser";
-import { listStories, storyElement, storyArgs, describeArgs } from "./src/core/system/story.ts";
+import { listStories, storyElement, storyArgs, describeArgs, storyArgTypes, storyTags } from "./src/core/system/story.ts";
 globalThis.__bs = { React, JSX, ReactDOM, renderToStaticMarkup };
-globalThis.__story = { listStories, storyElement, storyArgs, describeArgs };
+globalThis.__story = { listStories, storyElement, storyArgs, describeArgs, storyArgTypes, storyTags };
 `;
 
 async function checkWorker() {

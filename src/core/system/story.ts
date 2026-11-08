@@ -13,6 +13,8 @@ type Meta = {
   readonly title?: unknown;
   readonly component?: unknown;
   readonly args?: unknown;
+  readonly argTypes?: unknown;
+  readonly tags?: unknown;
   readonly render?: unknown;
   readonly decorators?: unknown;
 };
@@ -76,10 +78,49 @@ export function storyArgs(record: StoryRecord): Record<string, unknown> {
   return { ...asRecord(record.meta.args), ...asRecord(asRecord(record.story).args) };
 }
 
+/** Storybook `tags` from the meta and the story, such as `"composite"` (ADR 008). */
+export function storyTags(record: StoryRecord): string[] {
+  const tags = [...asArray(asRecord(record.meta).tags), ...asArray(asRecord(record.story).tags)].filter((t): t is string => typeof t === "string");
+  return [...new Set(tags)];
+}
+
+type ArgTypeOut = { control: "text" | "number" | "boolean" | "select" | null; options: (string | number | boolean)[] | null; description: string | null };
+
+/**
+ * A story's `argTypes`, from its meta and itself, as the controls the workbench draws. Storybook infers controls from
+ * TypeScript too; Brainstorm has only what the story says and the arg's own value, so the rest stay text or none.
+ */
+export function storyArgTypes(record: StoryRecord): Record<string, ArgTypeOut> {
+  const merged: Record<string, Record<string, unknown>> = {};
+  for (const source of [asRecord(asRecord(record.meta).argTypes), asRecord(asRecord(record.story).argTypes)]) {
+    for (const [name, value] of Object.entries(source)) merged[name] = { ...merged[name], ...asRecord(value) };
+  }
+  const out: Record<string, ArgTypeOut> = {};
+  for (const [name, t] of Object.entries(merged)) {
+    const options = Array.isArray(t.options) ? t.options.filter((o): o is string | number | boolean => ["string", "number", "boolean"].includes(typeof o)) : null;
+    const raw = t.control;
+    const kind = typeof raw === "string" ? raw : typeof raw === "object" && raw !== null ? asRecord(raw).type : raw === false ? "none" : undefined;
+    const control =
+      kind === "none"
+        ? null
+        : kind === "boolean"
+          ? "boolean"
+          : kind === "number" || kind === "range"
+            ? "number"
+            : kind === "select" || kind === "radio" || kind === "inline-radio" || (options !== null && options.length > 0)
+              ? "select"
+              : kind === "text"
+                ? "text"
+                : null;
+    out[name] = { control, options: options !== null && options.length > 0 ? options : null, description: typeof t.description === "string" ? t.description : null };
+  }
+  return out;
+}
+
 /** The element Storybook would render for a story: its render function, else meta's, else the component with args. */
-export function storyElement(React: ReactLike, record: StoryRecord): unknown {
+export function storyElement(React: ReactLike, record: StoryRecord, overrides: Record<string, unknown> = {}): unknown {
   const story = asRecord(record.story);
-  const args = storyArgs(record);
+  const args = { ...storyArgs(record), ...overrides };
   const context: StoryContext = { args, name: record.name, title: record.title };
   const render =
     typeof record.story === "function"

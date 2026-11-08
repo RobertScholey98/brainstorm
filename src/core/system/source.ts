@@ -1,14 +1,17 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { z } from "zod";
+import { parseWith } from "../parse";
 import { issue, type Issue, type Parsed } from "../types";
+import type { Tier } from "./model";
 
-/** Where a design system's library lives, as Brainstorm found it in the package folder. Paths are absolute. */
+/** Where a design system's library lives, as Brainstorm found it. Paths are absolute unless a field says otherwise. */
 export type SystemSource = {
-  /** The library's package folder. */
+  /** The library's package folder, or the project root that holds `.brainstorm/system.json`. */
   readonly root: string;
   readonly name: string;
-  /** The module whose exports are the kit. */
-  readonly entry: string;
+  /** The module whose exports are the kit, or null when Brainstorm generates it from the tier globs (ADR 008). */
+  readonly entry: string | null;
   /** The library's stylesheet, or null when it ships none. */
   readonly css: string | null;
   /** Story globs, relative to `root`. */
@@ -17,12 +20,28 @@ export type SystemSource = {
   readonly frame: string | null;
   /** Module specifier to a file that replaces it, for providers the canvas can't run (router, query client). */
   readonly stubs: Readonly<Record<string, string>>;
+  /** `.brainstorm/system.json`, or null for a package folder synced as ADR 007 describes. Missing in older rows. */
+  readonly adapter?: string | null;
+  /** Globs relative to `root` for each tier's files. Empty for a package folder. */
+  readonly tiers?: Readonly<Record<Tier, readonly string[]>>;
+  /** Globs relative to `root`: files in the tier globs that aren't the kit, and app files the kit may import. */
+  readonly exclude?: readonly string[];
+  readonly shared?: readonly string[];
+  /** Import prefix to an absolute folder, as tsconfig `paths` map `@/` to `src/`. */
+  readonly aliases?: Readonly<Record<string, string>>;
 };
 
 export type SourceOverrides = { readonly name?: string | null; readonly frame?: string | null; readonly stubs?: Readonly<Record<string, string>> };
 
+export const ADAPTER_FILE = ".brainstorm/system.json";
 const ENTRY_GUESSES = ["src/index.ts", "src/index.tsx", "index.ts", "index.tsx", "src/index.js", "index.js"];
 const STORY_FALLBACK = ["src/**/*.stories.tsx", "src/**/*.stories.ts", "src/**/*.stories.jsx"];
+export const ADAPTER_STORIES = ".brainstorm/stories/**/*.stories.@(tsx|ts|jsx)";
+const NO_TIERS: Readonly<Record<Tier, readonly string[]>> = { primitive: [], composite: [], layout: [] };
+
+/** The file an issue about the source as a whole points at. */
+export const sourceFile = (s: SystemSource): string => s.entry ?? s.adapter ?? s.root;
+export const tiersOf = (s: SystemSource): Readonly<Record<Tier, readonly string[]>> => s.tiers ?? NO_TIERS;
 
 type PackageJson = { name?: unknown; exports?: unknown; main?: unknown; module?: unknown; style?: unknown };
 
@@ -37,13 +56,41 @@ const firstString = (value: unknown, prefer: readonly string[]): string | null =
   return null;
 };
 
-/** Finds a library's entry, stylesheet and stories from its package folder (ADR 007). */
+const globs = z.array(z.string().min(1)).default([]);
+
+/** `.brainstorm/system.json` (ADR 008). Unknown keys are refused, so a typo can't silently drop a setting. */
+const adapterShape = z.strictObject({
+  $schema: z.string().optional(),
+  name: z.string().min(1).optional(),
+  entry: z.string().min(1).nullable().default(null),
+  primitives: globs,
+  composites: globs,
+  layouts: globs,
+  exclude: globs,
+  shared: globs,
+  stylesheet: z.string().min(1).nullable().default(null),
+  aliases: z.record(z.string().min(1), z.string()).default({}),
+  stories: z.array(z.string().min(1)).nullable().default(null),
+  frame: z.string().min(1).nullable().default(null),
+  stubs: z.record(z.string().min(1), z.string().min(1)).default({}),
+});
+
+export type Adapter = z.output<typeof adapterShape>;
+
+/**
+ * Finds a design system in a folder: from `.brainstorm/system.json` when the folder has one (ADR 008), else from the
+ * library's package (ADR 007). A folder with neither fails with `no_system`, which the window answers with an import.
+ */
 export function detectSource(dir: string, overrides: SourceOverrides = {}): Parsed<SystemSource> {
   const root = path.resolve(dir);
-  const fail = (message: string): Parsed<SystemSource> => ({ ok: false, issues: [issue("system_source", message, { file: root })] });
+  const fail = (message: string, code: "system_source" | "no_system" = "system_source"): Parsed<SystemSource> => ({ ok: false, issues: [issue(code, message, { file: root })] });
   if (!existsSync(root) || !statSync(root).isDirectory()) return fail(`${root} is not a folder`);
+  const adapterPath = path.join(root, ADAPTER_FILE);
+  if (existsSync(adapterPath)) return fromAdapter(root, adapterPath, overrides.name ?? null);
   const pkgPath = path.join(root, "package.json");
-  if (!existsSync(pkgPath)) return fail(`${root} has no package.json; point at the library's package folder`);
+  if (!existsSync(pkgPath)) {
+    return fail(`${root} has no package.json and no ${ADAPTER_FILE}; point at a library's package folder, or import the project's components with an agent`, "no_system");
+  }
   let pkg: PackageJson;
   try {
     pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as PackageJson;
@@ -60,7 +107,9 @@ export function detectSource(dir: string, overrides: SourceOverrides = {}): Pars
     ...ENTRY_GUESSES,
   ].filter((e): e is string => e !== null && /\.(tsx?|jsx?|mjs)$/.test(e));
   const entry = entryCandidates.map((e) => path.resolve(root, e)).find((e) => existsSync(e));
-  if (entry === undefined) return fail(`couldn't find the library's entry; package.json exports "." should name its index file`);
+  if (entry === undefined) {
+    return fail(`${root} has no library entry (package.json exports "." names none) and no ${ADAPTER_FILE}; if this is an app, import its components with an agent`, "no_system");
+  }
 
   const warnings: Issue[] = [];
   const css = findCss(root, exportsMap, pkg);
@@ -77,9 +126,83 @@ export function detectSource(dir: string, overrides: SourceOverrides = {}): Pars
       stories,
       frame: overrides.frame ?? null,
       stubs: Object.fromEntries(Object.entries(overrides.stubs ?? {}).map(([spec, file]) => [spec, path.resolve(root, file)])),
+      adapter: null,
+      tiers: NO_TIERS,
+      exclude: [],
+      shared: [],
+      aliases: {},
     },
     warnings,
   };
+}
+
+function fromAdapter(root: string, adapterPath: string, name: string | null): Parsed<SystemSource> {
+  const fail = (issues: Issue[]): Parsed<SystemSource> => ({ ok: false, issues });
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(adapterPath, "utf8"));
+  } catch (e) {
+    return fail([issue("invalid_adapter", `${ADAPTER_FILE} isn't JSON: ${(e as Error).message}`, { file: adapterPath })]);
+  }
+  const parsed = parseWith(adapterShape, raw, "invalid_adapter", { file: adapterPath });
+  if (!parsed.ok) return fail(parsed.issues);
+  const a = parsed.data;
+  const issues: Issue[] = [];
+  const warnings: Issue[] = [];
+  const tiers: Record<Tier, readonly string[]> = { primitive: a.primitives, composite: a.composites, layout: a.layouts };
+  const tierGlobs = [...a.primitives, ...a.composites, ...a.layouts];
+  if (a.entry === null && tierGlobs.length === 0) {
+    issues.push(issue("invalid_adapter", 'names no components; list their files in "primitives", "composites" or "layouts", or name the library\'s "entry"', { file: adapterPath }));
+  }
+  const entry = a.entry === null ? null : path.resolve(root, a.entry);
+  if (entry !== null && !existsSync(entry)) issues.push(issue("invalid_adapter", `"entry" ${a.entry} doesn't exist`, { file: adapterPath, pointer: "/entry" }));
+  for (const [key, list] of [["primitives", a.primitives], ["composites", a.composites], ["layouts", a.layouts], ["shared", a.shared]] as const) {
+    list.forEach((glob, i) => {
+      if (matchFiles(root, [glob]).length === 0) warnings.push(issue("empty_glob", `"${glob}" matches no files`, { file: adapterPath, pointer: `/${key}/${i}` }));
+    });
+  }
+  let css: string | null = null;
+  if (a.stylesheet !== null) {
+    css = path.resolve(root, a.stylesheet);
+    if (!existsSync(css)) issues.push(issue("invalid_adapter", `"stylesheet" ${a.stylesheet} doesn't exist`, { file: adapterPath, pointer: "/stylesheet" }));
+  } else {
+    css = findCss(root, null, {});
+    if (css === null) warnings.push(issue("system_source", 'names no "stylesheet" and none was found; the kit renders unstyled', { file: adapterPath }));
+  }
+  for (const [spec, file] of Object.entries(a.stubs)) {
+    if (!existsSync(path.resolve(root, file))) issues.push(issue("invalid_adapter", `the stub for "${spec}", ${file}, doesn't exist`, { file: adapterPath, pointer: `/stubs/${spec}` }));
+  }
+  if (issues.length > 0) return fail(issues);
+  return {
+    ok: true,
+    value: {
+      root,
+      name: name ?? a.name ?? path.basename(root),
+      entry,
+      css,
+      stories: a.stories ?? [ADAPTER_STORIES, ...storyGlobs(root)],
+      frame: a.frame,
+      stubs: Object.fromEntries(Object.entries(a.stubs).map(([spec, file]) => [spec, path.resolve(root, file)])),
+      adapter: adapterPath,
+      tiers,
+      exclude: a.exclude,
+      shared: a.shared,
+      aliases: Object.fromEntries(Object.entries(a.aliases).map(([prefix, dir]) => [prefix, path.resolve(root, dir)])),
+    },
+    warnings,
+  };
+}
+
+/**
+ * Where to run an import for a folder: the folder itself when it is a package, else the nearest folder above it that
+ * is, since the adapter lives at the project's root and a components folder sits somewhere inside it.
+ */
+export function projectRootOf(dir: string): string {
+  const start = path.resolve(dir);
+  for (let d = start; ; d = path.dirname(d)) {
+    if (existsSync(path.join(d, "package.json")) || existsSync(path.join(d, ADAPTER_FILE))) return d;
+    if (path.dirname(d) === d) return start;
+  }
 }
 
 function findCss(root: string, exportsMap: Record<string, unknown> | null, pkg: PackageJson): string | null {
@@ -88,12 +211,24 @@ function findCss(root: string, exportsMap: Record<string, unknown> | null, pkg: 
     .map(([, value]) => firstString(value, ["style", "default", "import"]))
     .filter((v): v is string => v !== null);
   const fromStorybook = storybookCssImports(root);
-  const candidates = [...fromStorybook, ...fromExports, ...(typeof pkg.style === "string" ? [pkg.style] : []), "src/styles.css", "src/index.css", "styles.css"];
+  const candidates = [...fromStorybook, ...fromExports, ...(typeof pkg.style === "string" ? [pkg.style] : []), ...shadcnCss(root), "src/styles.css", "src/index.css", "styles.css"];
   for (const c of candidates) {
     const p = path.resolve(root, c);
     if (existsSync(p)) return p;
   }
   return null;
+}
+
+/** shadcn's `components.json` names the stylesheet its components are themed by. */
+function shadcnCss(root: string): string[] {
+  const file = path.join(root, "components.json");
+  if (!existsSync(file)) return [];
+  try {
+    const css = (JSON.parse(readFileSync(file, "utf8")) as { tailwind?: { css?: unknown } }).tailwind?.css;
+    return typeof css === "string" && css.length > 0 ? [css] : [];
+  } catch {
+    return [];
+  }
 }
 
 /** `.storybook/preview.*` imports the stylesheet stories render with, so it's the most reliable pointer. */
@@ -164,4 +299,12 @@ export function matchFiles(root: string, globs: readonly string[]): string[] {
   };
   walk(root, "");
   return found.sort();
+}
+
+/** The folder a tier's first glob points into, such as `src/components/ui` for `src/components/ui/*.tsx`, or null. */
+export function tierFolder(source: SystemSource, tier: Tier): string | null {
+  const glob = tiersOf(source)[tier][0];
+  if (glob === undefined) return null;
+  const fixed = glob.split("/").filter((_, i, parts) => !parts.slice(0, i + 1).some((p) => /[*?{@]/.test(p)));
+  return fixed.length === 0 ? "." : fixed.join("/");
 }

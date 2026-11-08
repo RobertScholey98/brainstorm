@@ -76,7 +76,7 @@ export default function ChoreList({ items }) {
   );
 }
 `;
-const choreListJson = JSON.stringify({ title: "Chore list", description: "The week's chores, one row each", example: { items: ["Dishes"] } });
+const choreListJson = JSON.stringify({ title: "Chore list", description: "The week's chores, one row each", tier: "primitive", example: { items: ["Dishes"] } });
 
 beforeAll(async () => {
   const home = mkdtempSync(join(tmpdir(), "bs-systems-"));
@@ -100,6 +100,16 @@ afterAll(async () => {
 });
 
 let system: SystemId = SYS;
+
+/** The session's upgrade check, once the background check has finished. */
+async function upgradeCheck(): Promise<unknown> {
+  for (let i = 0; i < 200; i++) {
+    const check = data(await service.view(S)).system?.upgrade.check;
+    if (check?.state !== "checking") return check;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error("the upgrade check never finished");
+}
 
 describe("a design system", () => {
   test("syncs from a library's package folder: its kit, stories, theme and the primitives it lacks", async () => {
@@ -189,7 +199,7 @@ export default function Chores() {
     const view = data(await service.view(S));
     expect(view.iteration?.proposed.map((p) => [p.name, p.title, p.usedBy])).toEqual([["ChoreList", "Chore list", ["home/a"]]]);
     expect(view.system?.proposed).toEqual([
-      { name: "ChoreList", title: "Chore list", description: "The week's chores, one row each", usedBy: ["home/a"], promotion: null, inSystem: null, fromKit: false },
+      { name: "ChoreList", title: "Chore list", description: "The week's chores, one row each", tier: "primitive", usedBy: ["home/a"], promotion: null, inSystem: null, fromKit: false },
     ]);
   }, 120_000);
 
@@ -234,7 +244,9 @@ export default function Chores() {
     const before = data(await service.view(S)).system;
     expect([before?.n, before?.latest, before?.proposed[0]?.inSystem]).toEqual([1, 2, 2]);
     // The upgrade says what it brings, so Rob can tell why it's worth taking.
-    expect(before?.upgrade).toEqual({ added: ["ChoreList"], removed: [] });
+    expect(before?.upgrade).toMatchObject({ added: ["ChoreList"], removed: [] });
+    // Brainstorm checks the design against the new version in the background, so the offer can say nothing breaks.
+    expect(await upgradeCheck()).toEqual({ state: "clean" });
     data(await service.act(S, { kind: "upgrade_system" }));
     const upgraded = data(await service.view(S)).system;
     // The kit exports ChoreList now, so the blocks that import proposed/ChoreList get the kit's, untagged.
@@ -243,6 +255,7 @@ export default function Chores() {
     // Version 3 drops Card, which it does use.
     writeFileSync(join(lib, "src/index.ts"), 'export { Button } from "./Button";\nexport { CardBody, CardTitle } from "./Card";\n');
     data(await service.systems.sync(system));
+    expect(await upgradeCheck()).toEqual({ state: "breaks", errors: 2, where: ["home/a"] });
     const refused = await service.act(S, { kind: "upgrade_system" });
     expect(refused.ok ? null : refused.error.message).toBe("version 3 breaks this design in 2 places, so the session stays on version 2");
     expect(data(await service.view(S)).system?.n).toBe(2);
