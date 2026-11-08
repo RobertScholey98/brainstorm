@@ -350,6 +350,9 @@ try {
   await window.waitForSelector("[data-system-upgrade]", { timeout: 30_000 });
   await window.locator("[data-system-panel]").scrollIntoViewIfNeeded();
   await shot(window, "upgrade-offered", "Once the library is synced with WeekStrip, the open brainstorm offers version 2: Upgrade checks every block against it first");
+  await window.locator('[data-proposed="WeekStrip"]').evaluate((el) => el.scrollIntoView({ block: "end" }));
+  await shot(window, "promote-finished", "Further down the same Inspector: the WeekStrip row once the agent finished, with its report's last line, Open thread, and that it is in v2 once Rob upgrades above");
+  await window.locator("[data-system-panel]").scrollIntoViewIfNeeded();
   await window.click("[data-system-upgrade]");
   await window.waitForSelector('[data-system-version="2"]', { timeout: 60_000 });
   await window.locator("[data-proposed-list]").scrollIntoViewIfNeeded();

@@ -73,7 +73,7 @@ export function SystemSection({
             }
           >
             {/* A break is what Rob acts on, so it leads; what else the version changes follows it. */}
-            {check?.state !== "breaks" && upgradeChanges(system.upgrade) !== null && <p data-system-upgrade-changes>{upgradeChanges(system.upgrade)}</p>}
+            {check?.state !== "breaks" && upgradeChanges(system.upgrade) !== null && <p className="text-pretty" data-system-upgrade-changes>{upgradeChanges(system.upgrade)}</p>}
             {check === null || check.state === "checking" ? (
               <p className="flex items-center gap-1.5" data-upgrade-checking>
                 <Spinner />
@@ -91,7 +91,7 @@ export function SystemSection({
                   v{system.latest}; then you upgrade.
                 </p>
                 <UpgradeErrors issues={unexplained(check.issues)} more={check.errors - check.issues.length} placeTitle={placeTitle} />
-                {upgradeChanges(system.upgrade) !== null && <p data-system-upgrade-changes>{upgradeChanges(system.upgrade)}</p>}
+                {upgradeChanges(system.upgrade) !== null && <p className="text-pretty" data-system-upgrade-changes>{upgradeChanges(system.upgrade)}</p>}
               </>
             )}
           </Callout>

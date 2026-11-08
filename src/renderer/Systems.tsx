@@ -1217,6 +1217,7 @@ function ComponentsTab({
                             label={storyNames.get(id) ?? id}
                             detail={newStory.has(`${e.name}›${storyNames.get(id) ?? id}`) ? `new in v${newStory.get(`${e.name}›${storyNames.get(id) ?? id}`)}` : ""}
                             nested
+                            fresh={newStory.has(`${e.name}›${storyNames.get(id) ?? id}`)}
                             active={focus?.id === id}
                             onClick={() => openStory(id)}
                             data-entry-story={id}
@@ -1358,10 +1359,13 @@ function CatalogRow({
   detail,
   active,
   nested = false,
+  fresh = false,
   onClick,
   ...data
 }: {
   label: string;
+  /** The detail marks something new, such as "new in v3", in the colour Versions gives additions. */
+  fresh?: boolean;
   /** The search, marked where the label matches it. */
   match?: string;
   via?: string | undefined;
@@ -1394,7 +1398,7 @@ function CatalogRow({
             </span>
           )}
         </span>
-        <span className="shrink-0 text-xs text-fg-muted">{detail}</span>
+        <span className={cn("shrink-0 text-xs", fresh ? "text-success" : "text-fg-muted")}>{detail}</span>
       </button>
     </li>
   );
@@ -1613,9 +1617,7 @@ function Workbench({
                 {copied ? "Copied" : "Copy"}
               </Button>
             </h3>
-            <pre className="rounded-md bg-muted p-3 font-mono text-xs" data-workbench-snippet>
-              <CodeLines code={snippet} />
-            </pre>
+            <UsageCode code={snippet} />
             {source !== null && <p className="text-xs text-fg-muted">The story's own JSX, from its render.</p>}
           </section>
           <section className="grid gap-2" data-workbench-props>
@@ -1703,6 +1705,28 @@ function AxisPicker({ label, value, onChange, options }: { label: string; value:
  * Code in a narrow pane: each line keeps its indent, and one too long for the pane wraps under itself with a hanging
  * indent, so a wrapped line still reads as one line of code rather than a new one.
  */
+/** Usage's code, held to its first lines when it's long so Props stays in view; Copy always takes all of it. */
+function UsageCode({ code }: { code: string }) {
+  const [all, setAll] = useState(false);
+  const lines = code.split("\n");
+  const long = lines.length > USAGE_LINES + 2;
+  return (
+    <div className="grid gap-1">
+      <pre className="rounded-md bg-muted p-3 font-mono text-xs" data-workbench-snippet data-snippet-lines={lines.length}>
+        <CodeLines code={long && !all ? lines.slice(0, USAGE_LINES).join("\n") : code} />
+      </pre>
+      {long && (
+        <Button variant="ghost" size="xs" className="-ml-1.5 justify-self-start" onClick={() => setAll((a) => !a)} data-snippet-all>
+          {all ? "Show less" : `Show all ${lines.length} lines`}
+          <ChevronDown data-icon="inline-end" aria-hidden className={cn(all && "rotate-180")} />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+const USAGE_LINES = 12;
+
 function CodeLines({ code }: { code: string }) {
   return code.split("\n").map((line, i) => {
     const indent = line.length - line.trimStart().length;

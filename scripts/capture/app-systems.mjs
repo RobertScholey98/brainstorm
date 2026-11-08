@@ -301,7 +301,7 @@ try {
   await window.click('[data-workbench-width="390"]');
   await gallery.waitForFunction(() => document.querySelector("[data-story-focused]")?.textContent?.includes("Plan next week"));
   await new Promise((r) => setTimeout(r, 600));
-  await shot(window, "workbench-changed", "The workbench after two changes at 390px: the story re-renders as a primary button reading 'Plan next week', each changed control is marked with Reset 2 changes, and the Usage snippet follows");
+  await shot(window, "workbench-changed", "The workbench after two changes at 390px: the story re-renders as a primary button reading 'Plan next week', the changed controls are marked, with Reset beside them, and the Usage snippet follows");
 
   // A brainstorm built with v3 of the system, whose blocks use Button and Badge.
   const session = cli(["session", "new", "--title", "Meal week", "--brief", "Plan the week's dinners.", "--project", app, "--system", system.id]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
