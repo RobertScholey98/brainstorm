@@ -4,16 +4,20 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
 
 // Evaluated inside the check worker's vm context, where block code renders against it.
+// A design system's kit needs react-dom (portals), and its stories are read with the same module the canvas uses.
 const REACT_RUNTIME_ENTRY = `
 import * as React from "react";
 import * as JSX from "react/jsx-runtime";
+import * as ReactDOM from "react-dom";
 import { renderToStaticMarkup } from "react-dom/server.browser";
-globalThis.__bs = { React, JSX, renderToStaticMarkup };
+import { listStories, storyElement, storyArgs, describeArgs } from "./src/core/system/story.ts";
+globalThis.__bs = { React, JSX, ReactDOM, renderToStaticMarkup };
+globalThis.__story = { listStories, storyElement, storyArgs, describeArgs };
 `;
 
 async function checkWorker() {
   const runtime = await build({
-    stdin: { contents: REACT_RUNTIME_ENTRY, resolveDir: root, loader: "js" },
+    stdin: { contents: REACT_RUNTIME_ENTRY, resolveDir: root, loader: "ts" },
     bundle: true,
     format: "iife",
     platform: "browser",

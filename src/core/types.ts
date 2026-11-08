@@ -219,6 +219,27 @@ const ISSUE_SEVERITY = {
   out_of_scope: "warning",
   not_addressed: "warning",
   vary_mismatch: "warning",
+  // Design systems (ADR 007): syncing one, and holding a design in a session with one to it.
+  system_source: "error",
+  system_bundle_failed: "error",
+  system_css_failed: "error",
+  kit_load_failed: "error",
+  no_story: "warning",
+  story_failed: "warning",
+  theme_ignored: "warning",
+  off_scale: "warning",
+  remote_url: "warning",
+  frame_missing: "warning",
+  raw_element: "error",
+  style_prop: "error",
+  css_in_system: "error",
+  unknown_component: "error",
+  unknown_proposed: "error",
+  invalid_proposed: "error",
+  unknown_class: "error",
+  off_scale_value: "error",
+  dynamic_class: "warning",
+  unused_proposed: "warning",
 } as const satisfies Record<string, "error" | "warning">;
 
 export type IssueCode = keyof typeof ISSUE_SEVERITY;

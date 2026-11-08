@@ -93,7 +93,7 @@ describe("checkBlocks", () => {
     expect(await checkOne(tsx)).toEqual({
       kind: "failed",
       issues: [
-        error("disallowed_import", 'imports "canvas-confetti"; blocks may import only react and react/jsx-runtime', {
+        error("disallowed_import", 'imports "canvas-confetti"; this file may import only "react"', {
           line: 2,
           column: 22,
         }),
@@ -155,6 +155,7 @@ describe("checkBlocks", () => {
       kind: "ok",
       compiled: expect.any(String),
       parts: ["row"],
+      html: `<ul><li data-part="row">a</li><li data-part="row">b</li></ul>`,
       warnings: [
         {
           severity: "warning",
