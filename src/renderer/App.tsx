@@ -188,6 +188,8 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
   useEffect(() => void refreshList(), [refreshList]);
 
   const [update, setUpdate] = useState<AppUpdateState | null>(null);
+  /** Bumped when a design system or an import changes, such as an auto-sync, so the systems page reads them again. */
+  const [systemsRevision, setSystemsRevision] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     void api.events(
@@ -198,6 +200,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
           if (id === current.current) setRevision((r) => r + 1);
         },
         onUpdate: setUpdate,
+        onSystems: () => setSystemsRevision((r) => r + 1),
         onOpen: () => {
           void refreshList();
           setRevisions((m) => new Map([...m].map(([id, n]) => [id, n + 1])));
@@ -317,7 +320,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
         ) : nav.kind === "systems" ? (
           <Shell sidebar={sidebar(homePanel)} bar={<TopBar />}>
             <section className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Design systems" data-canvas-region>
-              <SystemsPage api={api} selected={nav.id} onSelect={(id) => setNav({ kind: "systems", id })} showNotice={setNotice} />
+              <SystemsPage api={api} revision={systemsRevision} selected={nav.id} onSelect={(id) => setNav({ kind: "systems", id })} showNotice={setNotice} />
               {toast}
             </section>
           </Shell>

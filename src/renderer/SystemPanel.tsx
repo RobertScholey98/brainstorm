@@ -34,6 +34,7 @@ export function SystemSection({
   exportTheme: () => Promise<ThemeExport | null>;
 }) {
   const behind = system.latest > system.n;
+  const check = system.upgrade.check;
   return (
     <section className="border-t" aria-label="Design system" data-system-panel={system.id}>
       <header className="flex items-center gap-2 py-3">
@@ -46,10 +47,11 @@ export function SystemSection({
       {behind && (
         <div className="pb-3">
           <Callout
-            tone="info"
+            tone={check?.state === "breaks" ? "warning" : "info"}
             heading={`Version ${system.latest} is out`}
+            data-upgrade-check={check?.state}
             actions={
-              <Button variant="outline" onClick={() => void send({ kind: "upgrade_system" })} data-system-upgrade>
+              <Button variant="outline" disabled={check?.state === "breaks"} onClick={() => void send({ kind: "upgrade_system" })} data-system-upgrade>
                 <ArrowUpCircle data-icon="inline-start" aria-hidden />
                 Upgrade to v{system.latest}
               </Button>
@@ -66,7 +68,21 @@ export function SystemSection({
                 .
               </p>
             )}
-            <p>Upgrading checks every block against it first, and stays on v{system.n} if any breaks.</p>
+            {check === null || check.state === "checking" ? (
+              <p className="flex items-center gap-1.5" data-upgrade-checking>
+                <Spinner />
+                Checking every block against it…
+              </p>
+            ) : check.state === "clean" ? (
+              <p className="flex items-center gap-1.5" data-upgrade-clean>
+                <Check aria-hidden className="size-3.5 shrink-0 text-success" />
+                Nothing breaks: every block builds with it.
+              </p>
+            ) : (
+              <p data-upgrade-breaks>
+                It breaks {list(check.where)}, with {check.errors === 1 ? "1 error" : `${check.errors} errors`}, so this brainstorm stays on v{system.n} for now.
+              </p>
+            )}
           </Callout>
         </div>
       )}
@@ -426,7 +442,10 @@ function ProposedRow({
           <span className="text-sm font-medium">
             <Truncate>{proposed.title}</Truncate>
           </span>
-          <span className="font-mono text-xs text-fg-muted">{proposed.name}</span>
+          <span className="flex items-center gap-1.5 text-xs text-fg-muted">
+            <span className="font-mono">{proposed.name}</span>
+            {proposed.tier !== null && <span data-proposed-tier={proposed.tier}>· {proposed.tier}</span>}
+          </span>
         </span>
         {inSystem !== null || promotion?.state === "started" ? null : canPromote ? (
           button
