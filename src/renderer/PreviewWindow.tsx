@@ -1,4 +1,4 @@
-import { AppWindow, MessageSquarePlus } from "lucide-react";
+import { AppWindow, EyeOff, MessageSquarePlus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -129,6 +129,16 @@ export function PreviewWindow({ api }: { api: Api }) {
             onCancelPick={() => tell({ kind: "pick", for: null })}
             trailing={
               <>
+                {/* The working look is for Rob's own screen, so it says so, with the way back to the look an audience may see. */}
+                <span className="flex items-center gap-1.5 text-sm text-fg-muted" data-preview-private>
+                  <EyeOff aria-hidden className="size-3.5" />
+                  Not for sharing
+                </span>
+                <Hint label="Show only the design in this window, as an audience should see it" side="bottom">
+                  <Button variant="outline" onClick={() => tell({ kind: "clean" })} data-preview-to-clean>
+                    Switch to Clean
+                  </Button>
+                </Hint>
                 <Hint label={scene.pinBlocked ?? "Click an element here to pin a comment to it"} side="bottom">
                   <span tabIndex={scene.pinBlocked === null ? -1 : 0} className="inline-flex">
                     <Button
@@ -139,7 +149,7 @@ export function PreviewWindow({ api }: { api: Api }) {
                       data-preview-pin
                     >
                       <MessageSquarePlus data-icon="inline-start" aria-hidden />
-                      Pin comment
+                      {picking === "comment" ? "Picking…" : "Pin comment"}
                     </Button>
                   </span>
                 </Hint>

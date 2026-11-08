@@ -55,8 +55,10 @@ export type ToMain =
   | { readonly kind: "slot"; readonly slot: SlotId }
   | { readonly kind: "step"; readonly by: -1 | 1 }
   | { readonly kind: "view"; readonly view: "stage" | "board" }
-  /** Resume live, from the working look's Held button. */
-  | { readonly kind: "resume" };
+  /** Resume live, from the working look's held bar. */
+  | { readonly kind: "resume" }
+  /** Switch the preview window to the clean look, from the working look's own bar, before sharing it. */
+  | { readonly kind: "clean" };
 
 /** The preview window is an Electron window the main process opens; a browser on the headless server has none. */
 export const canOpenPreviewWindow = () => /Electron\//.test(navigator.userAgent);

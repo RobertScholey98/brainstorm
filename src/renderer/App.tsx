@@ -649,6 +649,8 @@ function SessionWorkspace({
         return stepSlot(m.by);
       case "view":
         return setCanvasView(m.view);
+      case "clean":
+        return preview.onPrefs({ ...preview.prefs, look: "clean" });
     }
   };
   useEffect(() => link.onMessage((m) => fromPreview.current(m)), [link]);
@@ -939,7 +941,7 @@ function CanvasAway({
           </EmptyTitle>
           <EmptyDescription>
             {stuck !== null
-              ? `Your audience sees only the design. Show the canvas here to ${act}, or switch the preview to Working, which shows them your pins and tools.`
+              ? `Your audience sees only the design. Show the canvas here to ${act}. Or switch the preview to Working, which shows your audience your pins and tools.`
               : picking
                 ? "Esc or Cancel stops picking."
                 : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
@@ -951,11 +953,11 @@ function CanvasAway({
               <Button variant="accent" onClick={onHere} data-away-here>
                 Show canvas here
               </Button>
-              <Button variant="ghost" onClick={onWorking} data-away-working>
+              <Button variant="outline" onClick={onWorking} data-away-working>
                 Switch preview to Working
               </Button>
               <Button variant="ghost" onClick={onDismiss} data-away-dismiss>
-                Cancel
+                Not now
               </Button>
             </>
           ) : (

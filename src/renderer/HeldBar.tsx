@@ -12,7 +12,7 @@ export function HeldBar({ on, here, onRelease }: { on: string | null; here: "mai
   const subject = here === "main" ? "The preview window" : "This window";
   return (
     <div className="absolute inset-x-0 top-0 z-sticky bg-card">
-      <div role="status" className="flex h-10 items-center gap-2 border-b border-warning bg-warning/15 pr-2 pl-4 text-sm dark:bg-warning-subtle" data-tint data-held-bar>
+      <div role="status" className="flex h-10 items-center gap-2 border-b border-warning bg-warning/20 pr-1 pl-4 text-sm dark:bg-warning-subtle" data-tint data-held-bar>
       <CirclePause aria-hidden className="size-4 shrink-0 text-warning" />
       <span className="shrink-0 font-medium">Preview held</span>
       <Truncate className="w-0 flex-1 text-fg-muted">{on === null ? `${subject} keeps what it showed.` : `${subject} keeps showing ${on}.`}</Truncate>

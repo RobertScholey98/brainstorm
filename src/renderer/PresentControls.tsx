@@ -1,7 +1,6 @@
 import { AppWindow, ChevronDown, CirclePause, Maximize } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
@@ -156,10 +155,9 @@ function WindowMenu({
           <Button variant="outline" onClick={() => run("open")} data-preview-front>
             Bring to front
           </Button>
-          <Hint label="Or press F11 with the preview window in front" side="bottom">
+          <Hint label="Or press F11 in the preview window" side="bottom">
             <Button variant="outline" onClick={() => run("fullscreen")} data-preview-fullscreen>
               Full screen window
-              <Kbd>F11</Kbd>
             </Button>
           </Hint>
         </div>

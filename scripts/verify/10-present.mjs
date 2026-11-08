@@ -177,7 +177,7 @@ try {
   await window.click("[data-preview-menu]");
   await window.waitForSelector("[data-preview-popover]");
   await sleep(250);
-  await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show canvas in main window, Bring to front and Full screen (F11), and Close window alone in the footer");
+  await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show canvas in main window, Bring to front and Full screen window (its hint says F11 works in the preview window), and Close window alone in the footer");
   await window.click('[data-preview-look="working"]');
   await sleep(250);
   await snap(window, "10b-preview-menu-working", "The Preview menu with Working chosen: its line under the switch now in full contrast", { keepFocus: true });
@@ -187,7 +187,7 @@ try {
   await mirror.waitForSelector("html:not([data-present])");
   await settled(() => showing(mirror));
   await preview.mouse.move(640, 790);
-  await snap(preview, "11-preview-working", "The preview window, Working look: the same canvas bar as the main window (slot tabs, view switch), then Pin comment at its right, over the canvas drawn as the main window draws it");
+  await snap(preview, "11-preview-working", "The preview window, Working look: the same canvas bar as the main window (slot tabs, view switch), then Not for sharing with Switch to Clean, and Pin comment at its right, over the canvas drawn as the main window draws it");
   await window.click("[data-hold]");
   await preview.waitForSelector("[data-held-bar]");
   await preview.mouse.move(640, 790);
@@ -195,6 +195,14 @@ try {
   await preview.click("[data-held-release]");
   await preview.waitForSelector("[data-held-bar]", { state: "detached" });
   check("Resume live in the working preview window ends Hold in the main window", await window.getAttribute("[data-hold]", "aria-pressed"), "false");
+  await preview.click("[data-preview-to-clean]");
+  await preview.waitForSelector("[data-preview-window=clean]");
+  check("Switch to Clean in the working preview window sets the look in the main window", await window.getAttribute("[data-preview-menu]", "aria-label"), "Preview window, Clean");
+  await window.click("[data-preview-menu]");
+  await window.click('[data-preview-look="working"]');
+  await window.click("[data-preview-menu]");
+  await preview.waitForSelector("[data-preview-window=working]");
+  await mirror.waitForSelector("html:not([data-present])");
 
   // Pin from the preview window.
   await preview.click("[data-preview-pin]");
@@ -258,7 +266,7 @@ try {
     [null, "view", "The Clean preview takes no pins"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says the Clean preview takes no pins and why, with Show canvas here (primary, which then starts the pick here), then Switch preview to Working and Cancel as quiet text buttons");
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says the Clean preview takes no pins and why, with Show canvas here (primary, which then starts the pick here), Switch preview to Working (outline), and Not now");
   await window.click("[data-away-working]");
   await preview.waitForSelector("[data-preview-window=working]");
   await mirror.waitForSelector('body[data-mode="pin"]');
