@@ -1,6 +1,7 @@
 {
   "title": "Week strip",
   "description": "Seven day pills in a row; a dot marks a planned dinner and the selected day takes the primary colour.",
+  "tier": "primitive",
   "example": {
     "selected": "Tue",
     "days": [

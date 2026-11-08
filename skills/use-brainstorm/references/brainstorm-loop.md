@@ -14,6 +14,8 @@ brainstorm validate        <session> [--from <dir>]
 brainstorm commit          <session> [--from <dir>] [--thread <id>] [--addresses 4,7] [--note <text>]
 brainstorm system list                                     # design systems Brainstorm has synced
 brainstorm system sync     <system>                         # after the library changes
+brainstorm system check    <project root>                   # an import's gates, without saving
+brainstorm system add      <package folder|project root>    # once the check passes
 ```
 
 - `--thread` defaults to `$T3CODE_THREAD_ID`. Leave it off.
@@ -130,8 +132,11 @@ A session made with `--system` builds only with that design system, so every des
 
 - A block imports components from `"kit"` and composes them: `import { Card, Button, Stack, Text } from "kit"`. Lay out with `Stack`, `Grid` and `Box`, and write text with `Text` and `Heading`. Their spacing and size props take steps on the system's scale.
 - A block writes no HTML tags, no `className` or `style`, and no `block.css`. Pins need a `data-part`; pass it to the kit's primitives, which forward `data-*` props.
-- When the kit has nothing that fits, write a proposed component in `proposed/<Name>/`: `component.tsx` (default export), `component.json` (`{ "title", "description", "example" }`) and an optional `component.css`. A block imports it as `import ChoreList from "proposed/ChoreList"`. Rob sees it labelled "not in system" and can promote it into the library.
-- A proposed component may write HTML, but only with classes the kit's CSS defines, and in `component.css` only the kit's token variables and the values the catalog lists. Prefer the kit's components inside it.
+- The catalog lists the kit's layouts and composites before its primitives. Reuse a layout or composite that fits before composing primitives, and before proposing a component.
+- When the kit has nothing that fits, write a proposed component in `proposed/<Name>/`: `component.tsx` (default export), `component.json` (`{ "title", "description", "tier", "example" }`) and, for a primitive only, an optional `component.css`. A block imports it as `import ChoreList from "proposed/ChoreList"`. Rob sees it labelled "not in system" and can promote it into the library.
+- `tier` says what the component is. A `primitive` is a basic control or element, such as a chip. A `composite` is built from other components for one purpose, such as a meal card. A `layout` arranges other content around slots, such as a two-pane page.
+- A composite or a layout follows the block rules: it composes the kit's components and other proposed ones, with no HTML tags, no `className` or `style`, and no `component.css`.
+- A primitive may write HTML, but only with classes the kit's CSS defines, and in `component.css` only the kit's token variables and the values the catalog lists. Prefer the kit's components inside it.
 - Once the kit exports a component by a proposed component's name, after Rob upgrades the session to that version, import it from `"kit"` and delete the proposed folder.
 
 | Code | What to do |
@@ -144,6 +149,7 @@ A session made with `--system` builds only with that design system, so every des
 | `unknown_class`, `dynamic_class` | A proposed component uses a class the kit doesn't define, or builds one from an expression. Write literal kit classes, or a rule in `component.css`. |
 | `off_scale_value` | A value in `component.css` is off the kit's scales. Use the value the message suggests, or read a token. |
 | `unused_proposed` | No block imports the proposed component. Import it, or delete its folder. |
+| `missing_tier` | A new or changed proposed component's `component.json` has no `tier`. Add `"primitive"`, `"composite"` or `"layout"`. |
 
 ## Requests
 

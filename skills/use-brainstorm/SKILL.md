@@ -10,6 +10,7 @@ Design the shortest understandable path from a person's intent to a useful outco
 Pick the branch that matches the turn:
 
 - For a turn that starts with `[brainstorm] promote <Name> from session <id>`, follow **Promote a component**.
+- For a turn that starts with `[brainstorm] import the design system from <root>` or `[brainstorm] repair the <name> design system (<id>)`, follow **Import a design system**.
 - For a turn that starts with `[brainstorm] session <id> · request 1 · fork of <parent> iteration <n>`, follow **Start a fork**.
 - For any other turn that starts with `[brainstorm] session <id> · request <n>`, follow **Handle a request**.
 - For "pick up the brainstorm session titled X", follow **Take over a session**.
@@ -23,7 +24,7 @@ Every branch runs `brainstorm` commands. Read [the Brainstorm loop](references/b
 - Build on the user's accepted choices, corrections and scope. Earlier designs the user never accepted are not the baseline.
 - Improve the experience before its appearance: remove unnecessary decisions, infer safely, choose understandable defaults, sequence necessary questions, and give occasional controls a home.
 - Preserve necessary capabilities and safety boundaries. Name every proposed behavior change and its consequence. Leave permissions, ownership, destructive actions and review gates as they are unless the study is about them.
-- Every branch ends with a one-line reply: that line is the whole message, and the detail lives on the canvas and in the session brief.
+- Every branch except **Import a design system** ends with a one-line reply: that line is the whole message, and the detail lives on the canvas and in the session brief.
 - A study produces blocks on the canvas, not production changes, a PRD or tickets. Follow an explicit request for a different deliverable. When the user asks to discuss first, stay in discussion until they authorize the study.
 
 ## Start a study
@@ -63,6 +64,15 @@ Rob promoted a component a brainstorm proposed, so the design system's library g
 3. Run the library's own checks (typecheck, tests, Storybook build) as its project does.
 4. Run `brainstorm system sync <system>` with the id the message names, so the design system's next version has the component.
 5. Reply in one line naming the component and the new version. The whole reply looks like `Promoted ChoreList into @acme/ui; synced v4.`
+
+## Import a design system
+
+Rob pointed Brainstorm at an app project, so its own components can be a design system. This thread runs in that project. The message is the brief: it says what to decide, the adapter and stories to write, and the check that decides when they are right.
+
+1. Read the project's components, its stylesheet and its tsconfig `paths` before writing anything.
+2. Write `.brainstorm/system.json` and the missing stories as the message says. Change none of the project's own components. Leave out a component that can't pass, and say why in the report.
+3. Run `brainstorm system check <root>` until every gate passes, then the `system add` or `system sync` the message names.
+4. This branch ends with the short report the message asks for, not one line: the components under each tier, the ones left out and why, any stubs, and any warning left.
 
 ## Take over a session
 
