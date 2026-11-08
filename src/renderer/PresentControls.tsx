@@ -160,10 +160,10 @@ function WindowMenu({
         </label>
         <div className="grid grid-cols-2 gap-1.5">
           <Button variant="outline" onClick={() => run("open")} data-preview-front>
-            Bring to front
+            Bring preview to front
           </Button>
           <Button variant="outline" onClick={() => run("fullscreen")} data-preview-fullscreen>
-            Full screen window
+            Full screen preview
           </Button>
         </div>
         <PopoverFooter hint="F11 works in the preview window too.">
