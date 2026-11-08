@@ -86,8 +86,10 @@ Every component in a system has a tier, and the tier decides what it may contain
 | Composite | MealCard, WeekStrip | Kit components only. A proposed composite follows the block rules: no HTML, `className`, `style` or CSS. |
 | Layout | App shell, sidebar with content | Kit components arranged around slots (`children` or named props). A proposed layout follows the composite rules. |
 
-- **A component's tier** comes from its story's Storybook `tags` (`"primitive"`, `"composite"`, `"layout"`), then from
-  the adapter's tier globs, else it is a primitive. Brainstorm's generated `Stack`, `Grid`, `Box`, `Text` and `Heading`
+- **A component's tier** comes from the adapter's `tiers` map (`{ "MealCard": "composite" }`, by exported name), then
+  from its story's Storybook `tags` (`"primitive"`, `"composite"`, `"layout"`), then from the adapter's tier globs,
+  else it is a primitive. The map is how a library whose entry exports everything gets tiers: the agent fills it when
+  it imports the system, and Rob's changes in the review land there too. Brainstorm's generated `Stack`, `Grid`, `Box`, `Text` and `Heading`
   are primitives.
 - **Composites must be presentational.** A composite takes props and renders. The boundary gate holds the app's
   composites to this, since a composite that reads app state pulls in app files.
@@ -120,6 +122,29 @@ for a project with an adapter. It isn't retried until the fingerprint changes ag
 against the new version in the background, and the upgrade offer says either "Nothing breaks" or names the blocks
 that would fail the check.
 
+### Rob reviews an import before brainstorms use it
+
+An import is the agent's reading of the project, so Rob confirms it before any brainstorm builds with it. A newly
+added system is **awaiting review**. It opens on its Components tab, Storybook-style, with a review callout above the
+tabs.
+
+- **Going through it.** Rob steps through the components by tier, Layouts first, with Previous and Next. Each one shows
+  its stories live, and a tier switch beside them.
+- **Recategorising.** Moving a component to another tier is staged in the review. It shows at once in the catalog's
+  grouping, and is written into the adapter's `tiers` map when Rob sends or confirms the review. For a library with no
+  adapter yet, Brainstorm writes one with the library's `entry`, stylesheet and frame.
+- **Raising issues.** Rob notes a problem on a component ("the price badge doesn't render") or on the whole system
+  ("DatePicker is missing").
+- **Send to the agent.** Brainstorm writes the staged tiers into the adapter and sends the notes to the import's T3
+  thread, or starts a thread on the project when there isn't one. The agent fixes the adapter or the stories, checks
+  and syncs, and Rob reviews the new version. A library added straight from its package has no tiers, so the review
+  offers to have an agent sort it.
+- **Confirm.** Brainstorm writes any staged tiers, syncs, and marks the system confirmed at that version. Confirm waits
+  until no issue is open.
+- **Until then** `session new --system` refuses the system and says Rob hasn't confirmed it, and `system list` shows it
+  as awaiting review. Systems added before reviews existed count as confirmed. Versions synced after the confirmation
+  don't need another review: they're the project changing, which the Versions tab shows.
+
 ### The component workbench
 
 The Components tab grows from a gallery into a workbench, like Storybook's:
@@ -136,11 +161,12 @@ The workbench and the agent's catalog read the same manifest, so a prop the tabl
 
 ## Data
 
-Store migration 8 (`src/core/store.ts`):
+Store migrations 8 and 9 (`src/core/store.ts`):
 
 ```
 design_system         + inputs_json (the files and globs the last sync read), sync_error
 system_import         root -> project_id, thread_id, link, state, error, at
+design_system         + review_json (state, staged tiers, open issues, the agent's thread, last sent, confirmed)
 ```
 
 The manifest gains `tier` on catalog entries, and `tags`, `argTypes` and `htmlHash` on stories. Versions synced before
