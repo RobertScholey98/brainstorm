@@ -12,8 +12,8 @@ import { BAR_COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
 import { canOpenPreviewWindow, previewWindow } from "./mirror";
 
 const LOOKS: readonly { value: PreviewPrefs["look"]; label: string; about: string }[] = [
-  { value: "clean", label: "Clean", about: "Just the design, ready to share." },
-  { value: "working", label: "Working", about: "Canvas, slot tabs and pins. Not for sharing." },
+  { value: "clean", label: "Clean", about: "just the design, ready to share." },
+  { value: "working", label: "Working", about: "canvas and pins, not for sharing." },
 ];
 
 /**
@@ -159,10 +159,14 @@ function WindowMenu({
             itemData="preview-look"
             aria-label="Look"
           />
-          {/* The chosen look's one line; the other's risk shows on its glyph before the click. */}
-          <p className="text-xs text-fg-muted" data-preview-look-about>
-            {look?.about}
-          </p>
+          {/* A short line for each look, so Working's risk reads before the click; the chosen one at full contrast. */}
+          <ul className="grid gap-0.5 text-xs" data-preview-look-about>
+            {LOOKS.map((l) => (
+              <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted"}>
+                <span className="font-semibold">{l.label}:</span> {l.about}
+              </li>
+            ))}
+          </ul>
         </div>
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">

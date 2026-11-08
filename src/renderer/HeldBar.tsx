@@ -17,7 +17,7 @@ export function HeldBar({ on, onRelease }: { on: string | null; onRelease: () =>
         {on !== null ? (
           <span className="flex w-0 flex-1 items-center">
             <span className="shrink-0 whitespace-pre">
-              <span className="font-semibold">Preview held</span> on{" "}
+              <span className="font-medium">Preview held</span> on{" "}
             </span>
             <Truncate className="min-w-0 font-semibold">{on}</Truncate>
           </span>
