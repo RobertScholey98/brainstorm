@@ -1536,7 +1536,8 @@ function Workbench({
   // A story that renders its own JSX shows that, with what it imports, since its args alone would give a bare <Card />.
   const source = story.source ?? null;
   const imports = source === null ? [name] : [...new Set([...source.matchAll(/<([A-Z]\w*)/g)].map((m) => m[1]!))];
-  const snippet = `import { ${imports.join(", ")} } from "kit";\n\n${source ?? usageSnippet(name, current)}`;
+  const importLine = imports.length <= 2 ? `import { ${imports.join(", ")} } from "kit";` : `import {\n${imports.map((i) => `  ${i},`).join("\n")}\n} from "kit";`;
+  const snippet = `${importLine}\n\n${source ?? usageSnippet(name, current)}`;
   // A control starts at the story's value, or the prop's default for one the story leaves unset.
   const startOf = (key: string) => (key in base ? base[key] : rows.find((r) => r.name === key)?.value);
   // Setting a control back to where it started isn't a change, so it leaves the overrides and the count.
@@ -1594,7 +1595,8 @@ function Workbench({
                 {copied ? "Copied" : "Copy"}
               </Button>
             </h3>
-            <pre className="rounded-md bg-muted p-3 font-mono text-xs break-words whitespace-pre-wrap" data-workbench-snippet>
+            {/* A story's own JSX keeps its lines and scrolls sideways; wrapped mid-tag, it would read as broken code. */}
+            <pre className={cn("rounded-md bg-muted p-3 font-mono text-xs", source === null ? "break-words whitespace-pre-wrap" : "overflow-x-auto whitespace-pre")} data-workbench-snippet>
               {snippet}
             </pre>
             {source !== null && <p className="text-xs text-fg-muted">The story's own JSX, from its render.</p>}

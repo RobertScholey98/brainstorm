@@ -105,3 +105,34 @@ The findings log is `design-review/systems-climb/round-3/findings-log.md`.
 - **Proposed tag:** it is neutral, so amber means warning only.
 
 The findings log is `design-review/systems-climb/round-4/findings-log.md`.
+
+## Round 4 (app-systems round-4, library round-9)
+
+| Area | Claude Opus 5.5 | GPT-6.1 Sol | Claude Sonnet 5.5 |
+| --- | --- | --- | --- |
+| Library list and import | 9.5 | 9.5 | 9.5 |
+| Review | 9.5 | 9.0 | 9.4 |
+| Browsing | 9.5 | 9.5 | 9.4 |
+| Workbench | 9.5 | 9.0 | 9.4 |
+| Versions, Theme and Warnings | 9.5 | 9.5 | 9.3 |
+| In a brainstorm | 9.5 | 9.5 | 9.4 |
+| Agent hand-offs | 9.5 | 9.5 | 9.5 |
+| States | 9.5 | 9.5 | 9.4 |
+| Self-consistency | 9.5 | 9.5 | 9.4 |
+| Fitness for all-day use | 9.5 | 9.0 | 9.3 |
+| Completely happy | no | no | no |
+| Blockers / majors | 0 / 0 | 0 / 0 | 0 / 0 |
+| Sheets won against Storybook | 4 of 4 | 4 of 4 | 4 of 4 |
+| Agent hand-offs against Claude Code | Brainstorm | Brainstorm | Brainstorm |
+
+No blockers or majors. Opus scored 9.5 in every area. What kept the others below it: review chrome pushing the walk down, Usage below a long Props list, Card's Usage being a bare `<Card />`, and a stale "with the agent" note.
+
+**What round 5 addressed:**
+- **Review callout:** its actions sit beside the message. Once the agent has synced, the version line and what Rob sent share one line, and a note it answered reads "answered in v3". A story it added reads "new in v3".
+- **Upgrade breaks:** the callout leads with its cause.
+- **Versions:** they say what a change came through: "MealCard (renders Button)".
+- **Usage:** it sits above Props and shows a render story's own JSX. Prop choices are chips.
+- **Gallery bar:** a many-valued axis is a picker, so the bar is one row.
+- **Times and paths:** times in the same minute show seconds, and the library card shows the short path.
+
+The findings log is `design-review/systems-climb/round-5/findings-log.md`.
