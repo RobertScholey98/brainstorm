@@ -55,11 +55,11 @@ export function PresentControls({
 function HoldButton({ hold, heldOn, onHold }: { hold: boolean; heldOn: string | null; onHold: (hold: boolean) => void }) {
   return (
     <Hint
-      name={hold ? "Preview held" : "Hold preview"}
+      name={hold ? "Preview window held" : "Hold preview window"}
       label={
         hold
-          ? `It shows ${heldOn ?? "what it showed"} until you resume live`
-          : "Keep the preview window on what it shows now, while you try things here"
+          ? `It shows ${heldOn ?? "what it showed"}. Resume live sends your latest changes`
+          : "Keep it on what it shows now while you keep editing here"
       }
       side="bottom"
     >
@@ -141,7 +141,7 @@ function WindowMenu({
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
             <span className="text-sm">Hold preview</span>
-            <span className="text-xs text-fg-muted">Freeze it while you try things here.</span>
+            <span className="text-xs text-fg-muted">Freeze it while you try things here. Resume live shows your latest changes.</span>
           </span>
           <Switch checked={hold} onCheckedChange={onHold} className="mt-0.5" data-preview-menu-hold />
         </label>
