@@ -41,3 +41,34 @@ The reviews are in `design-review/systems-climb/round-<n>/`, which is gitignored
 - **Smaller fixes:** failed-sync times, Confirm's blocked reason, and keyboard reach.
 
 The findings log is `design-review/systems-climb/round-2/findings-log.md`.
+
+## Round 2 (app-systems round-2, library round-7)
+
+| Area | Claude Opus 5.5 | GPT-6.1 Sol | Claude Sonnet 5.5 |
+| --- | --- | --- | --- |
+| Library list and import | 9.0 | 9.0 | 9.0 |
+| Review | 8.5 | 8.0 | 8.6 |
+| Browsing | 9.0 | 8.5 | 8.8 |
+| Workbench | 9.0 | 9.0 | 8.8 |
+| Versions, Theme and Warnings | 8.5 | 8.5 | 8.8 |
+| In a brainstorm | 8.5 | 9.0 | 8.8 |
+| Agent hand-offs | 8.0 | 8.0 | 8.8 |
+| States | 8.5 | 8.5 | 9.0 |
+| Self-consistency | 8.0 | 9.0 | 8.8 |
+| Fitness for all-day use | 8.5 | 8.0 | 8.6 |
+| Completely happy | no | no | no |
+| Blockers / majors | 1 / 2 | 1 / 0 | 0 / 2 |
+| Sheets won against Storybook | 4 of 4 | 3 of 4 | 4 of 4 |
+| Agent hand-offs against Claude Code | Claude Code, narrowly | Claude Code | Brainstorm, narrowly |
+
+**Round 2's blocker, found by all three:** after the agent finished, the review pointed Rob at v2, which was Brainstorm's own tier write rather than the agent's change.
+
+**What round 3 addressed:**
+- **Review versions:** Send now records its version, so the callout names the agent's version and what it changed.
+- **Repair brief:** repair has its own short brief.
+- **Promote row:** it keeps the agent's finish and report line in view.
+- **Theme tab:** one column per mode, with a token filter.
+- **Header:** the system page's header is compact.
+- **Success notices:** Confirm and manual Sync show success in a success tone, not the failure style.
+
+The findings log is `design-review/systems-climb/round-3/findings-log.md`.

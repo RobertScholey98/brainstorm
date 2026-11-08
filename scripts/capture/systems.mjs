@@ -176,8 +176,16 @@ try {
   await window.waitForSelector('[data-gallery="true"]', { timeout: 60_000 });
   await new Promise((r) => setTimeout(r, 2500));
   await shot(window, "library-review", "Reviewing a library added from its package: the callout says nothing sorted it into tiers and offers Sort into tiers with an agent beside Confirm; the walk starts on its first component, 1 of 72, with the tier switch");
+  // Rob steps on with the arrow keys, then goes back to the first: Next unseen jumps past what he has seen.
+  for (let i = 0; i < 3; i++) await window.keyboard.press("ArrowRight");
+  await window.click('[data-entry="Accordion"]');
+  await window.waitForSelector("[data-review-next-unseen]");
+  await new Promise((r) => setTimeout(r, 1500));
+  await shot(window, "library-review-walk", "After stepping three components with → and going back to Accordion: the walk says 1 of 72 · 4 seen, and Next unseen sits beside Next to skip what he has seen");
   await window.click("[data-review-confirm]");
   await window.waitForFunction(() => document.querySelector("[data-system-review-callout]") === null, null, { timeout: 60_000 });
+  // The app capture shows Confirm's notice; here it would sit over the next shots until it clears.
+  if ((await window.$("[data-toast-close]")) !== null) await window.click("[data-toast-close]");
   await window.click("[data-overview]:not([data-nav-systems])");
 
   const session = cli(["session", "new", "--title", "Meal plan", "--brief", BRIEF, "--project", project, "--system", system.id]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
@@ -303,6 +311,8 @@ try {
   t3.startRun(started.thread);
   t3.reply(started.thread, "Moved WeekStrip into **components/ui/week-strip.tsx** and wrote its story. Running the library's check.");
   await window.waitForSelector('[data-promote-status] [data-agent-last-line]', { timeout: 30_000 });
+  // A few seconds in, so the row shows how long the agent has worked.
+  await new Promise((r) => setTimeout(r, 2500));
   await window.locator("[data-proposed-list]").scrollIntoViewIfNeeded();
   await shot(window, "promote-started", "After Promote: the WeekStrip row says the agent is adding it to robnet, with how long it has worked, its latest line and Open thread, and offers no second Promote while it runs");
   await textShot(
@@ -319,6 +329,7 @@ try {
     writeFileSync(join(library, p), text);
   }
   writeFileSync(indexPath, `${indexBefore.trimEnd()}\nexport * from './components/ui/week-strip';\n`);
+  t3.reply(started.thread, "It keeps the proposed look, written with the library's own variants.\n\nAdded WeekStrip to @robnet/ui as a primitive, with a story; the sync made v2.");
   t3.endRun(started.thread, "completed");
   cli(["system", "sync", system.id], { quiet: true });
   await window.waitForSelector("[data-system-upgrade]", { timeout: 30_000 });

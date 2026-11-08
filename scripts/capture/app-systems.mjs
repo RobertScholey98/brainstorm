@@ -6,8 +6,9 @@
 // a meal card): Rob adds the app's components folder, which isn't a library, and starts an agent import; the agent
 // writes the adapter and stories, runs the check until it passes, and adds the system. Rob reviews the import: he
 // steps through the components, raises an issue, moves a layout out of the primitives and sends that to the agent,
-// with v2 synced from it, then confirms it. He opens a story in the workbench and changes its args. Then the
-// project changes under a brainstorm built with the system: auto-sync makes v3 (what renders differently), v4 drops a
+// with v2 synced from it; the agent fixes the issue and syncs v3, which he confirms. He opens a story in the workbench
+// and changes its args. Then the project changes under a brainstorm built with the system: auto-sync makes v4 (what
+// renders differently), v5 drops a
 // component a block uses (the upgrade check says what breaks), and a broken adapter fails the sync, which Rob repairs
 // with an agent.
 //
@@ -248,24 +249,36 @@ try {
   await shot(window, "review-moved", "After stepping to PageFrame and moving it to Layout: the catalog lists it under Layouts marked moved, MealCard shows its issue, the strip says moved from primitive, and the callout offers Send 2 changes to the agent while Confirm waits on the open issue");
   await window.click("[data-review-send]");
   await window.waitForSelector("[data-review-sent]", { timeout: 30_000 });
-  await shot(window, "review-sent", "After Send: Brainstorm wrote PageFrame's tier into the adapter and synced v2, so the catalog keeps it under Layouts; the issue and the move went to the import's thread, the callout lists what was sent and that it waits for the agent, and Confirm is free again");
+  await new Promise((r) => setTimeout(r, 2500));
+  await shot(window, "review-sent", "After Send: Brainstorm wrote PageFrame's tier into the adapter and synced v2, so the catalog keeps it under Layouts; the issue and the move went to the import's thread, and the callout lists what was sent and that the agent's changes will come as v3. Confirm v2 is free but no longer the main action");
   const reviewThread = t3.sent().at(-1)?.thread;
   t3.startRun(reviewThread);
-  t3.reply(reviewThread, "Made MealCard's time optional and added a story without it. Check passes; syncing now.");
+  // The agent makes MealCard's time optional, adds a story without one, and syncs: v3 is the agent's.
+  const mealCard = join(app, "src", "components", "meal", "meal-card.tsx");
+  writeFileSync(
+    mealCard,
+    readFileSync(mealCard, "utf8")
+      .replace("{ title: string; time: string }", "{ title: string; time?: string }")
+      .replace("<Badge>{time}</Badge>", "{time !== undefined && <Badge>{time}</Badge>}"),
+  );
+  write(".brainstorm/stories/meal-card.stories.tsx", STORIES[".brainstorm/stories/meal-card.stories.tsx"] + 'export const NoTime = { args: { title: "Leftovers" } };\n');
+  cli(["system", "sync", system.id], { quiet: true });
+  await waitForSync(system.id, (s) => s.latest?.n === 3);
+  t3.reply(reviewThread, "Made MealCard's time optional and added a NoTime story. The check passes and the sync made v3.");
   t3.endRun(reviewThread, "completed");
   await window.waitForSelector('[data-review-status] [data-agent-work="finished"]', { timeout: 30_000 });
-  await shot(window, "review-agent-done", "When the agent's run ends: the sent box says Agent finished with its last line, and what to do next, check the new version and confirm");
+  await window.waitForSelector("[data-review-next][data-agent-synced]", { timeout: 30_000 });
+  await shot(window, "review-agent-done", "When the agent's run ends: the sent box says Agent finished with its last line, and that it synced v3, where MealCard renders differently; Confirm v3 is the main action again");
   const reviewSent = t3.sent().at(-1);
   await textShot(electron, "review-message", `What the review sent to the import's thread (${reviewSent?.thread})`, reviewSent?.message ?? "(nothing sent)", "The review's message to the import thread: Rob's note on MealCard, the tier move Brainstorm already wrote into the adapter's tiers, then check, sync and report");
 
-  // Send synced the adapter it wrote, so v2 has PageFrame as a layout. Rob confirms it.
-  await waitForSync(system.id, (s) => s.latest?.n === 2);
+  // v3 has PageFrame as a layout and the agent's MealCard. Rob confirms it.
   await window.click("[data-review-confirm]");
   await window.waitForFunction(() => document.querySelector("[data-system-review-callout]") === null, null, { timeout: 30_000 });
   await window.locator("[data-catalog]").getByText("All stories").click();
   await galleryFrame(window);
   await new Promise((r) => setTimeout(r, 2000));
-  await shot(window, "catalog-tiers", "After Rob confirms: no review callout; the catalog grouped into Layouts (PageFrame), Composites (MealCard) and Primitives (Badge, Button), then Brainstorm's generated primitives; every story live in the gallery");
+  await shot(window, "catalog-tiers", "After Rob confirms: a success notice says v3 is confirmed and brainstorms can use the system; no review callout; the catalog grouped into Layouts (PageFrame), Composites (MealCard) and Primitives (Badge, Button), then Brainstorm's generated primitives; every story live in the gallery");
 
   // Rob opens a story in the workbench.
   await window.click('[data-entry="Button"]');
@@ -283,7 +296,7 @@ try {
   await new Promise((r) => setTimeout(r, 600));
   await shot(window, "workbench-changed", "The workbench after two changes at 390px: the story re-renders as a primary button reading 'Plan next week', each changed control is marked with Reset 2 changes, and the Usage snippet follows");
 
-  // A brainstorm built with v2 of the system, whose blocks use Button and Badge.
+  // A brainstorm built with v3 of the system, whose blocks use Button and Badge.
   const session = cli(["session", "new", "--title", "Meal week", "--brief", "Plan the week's dinners.", "--project", app, "--system", system.id]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
   if (session === undefined) throw new Error(`session new failed:\n${transcript.at(-1)}`);
   const work = join(home, "work");
@@ -315,14 +328,14 @@ export default function Plan() {
   const committed = cli(["commit", session, "--from", work, "--note", "A week from the app's own components"]);
   if (committed.code !== 0) throw new Error(`commit failed:\n${transcript.at(-1)}`);
 
-  // The app's button gets roomier and its radius grows; auto-sync makes v3 within seconds, with no click.
+  // The app's button gets roomier and its radius grows; auto-sync makes v4 within seconds, with no click.
   const button = join(app, "src", "components", "ui", "button.tsx");
   writeFileSync(button, readFileSync(button, "utf8").replace("px-3 py-2", "px-4 py-2"));
   write("src/styles.css", readFileSync(join(app, "src", "styles.css"), "utf8").replace("--radius: 0.5rem;", "--radius: 0.75rem;"));
-  await waitForSync(system.id, (s) => s.latest?.n === 3);
+  await waitForSync(system.id, (s) => s.latest?.n === 4);
   await window.click('[data-system-tab="versions"]');
-  await window.waitForSelector('[data-version="3"]', { timeout: 30_000 });
-  await shot(window, "versions-changed", "The Versions tab after auto-sync noticed the edit: v3 with its short hash, the components that render differently (~Button, and ~MealCard, which renders a Button) and the token that changed (--radius 0.5rem → 0.75rem)");
+  await window.waitForSelector('[data-version="4"]', { timeout: 30_000 });
+  await shot(window, "versions-changed", "The Versions tab after auto-sync noticed the edit: v4 with its short hash, the components that render differently (Button, and MealCard, which renders a Button), the token that changed (--radius 0.5rem → 0.75rem), and v3 with the agent's MealCard and v2 with PageFrame's move to Layout");
 
   await window.click(`[data-session="${session}"]`);
   await window.waitForSelector('[data-sidebar-panel="session"]');
@@ -330,15 +343,15 @@ export default function Plan() {
   await canvas.waitForSelector('div[data-bid="week/plan"] [data-part="week"]', { timeout: 60_000 });
   await window.waitForSelector('[data-upgrade-check="clean"]', { timeout: 60_000 });
   await window.locator("[data-system-panel]").scrollIntoViewIfNeeded();
-  await shot(window, "upgrade-clean", "The brainstorm on v2 offers v3, and has already checked it in the background: Nothing breaks, so Upgrade is safe");
+  await shot(window, "upgrade-clean", "The brainstorm on v3 offers v4, says what renders differently in it, and has already checked it in the background: every block builds with it, so Upgrade is the main action");
 
-  // The app retires Badge from the system; v4 would break the block that uses it.
+  // The app retires Badge from the system; v5 would break the block that uses it.
   editAdapter((a) => ({ ...a, exclude: [...a.exclude, "src/components/ui/badge.tsx"] }));
   rmSync(join(app, ".brainstorm", "stories", "badge.stories.tsx"));
-  await waitForSync(system.id, (s) => s.latest?.n === 4);
+  await waitForSync(system.id, (s) => s.latest?.n === 5);
   await window.waitForSelector('[data-upgrade-check="breaks"]', { timeout: 60_000 });
   await window.locator("[data-system-panel]").scrollIntoViewIfNeeded();
-  await shot(window, "upgrade-breaks", "After v4 drops Badge: the Inspector's upgrade callout turns to a warning naming the block it breaks (week/plan) and its error count, and Upgrade is disabled");
+  await shot(window, "upgrade-breaks", "After v5 drops Badge: the Inspector's upgrade callout names the block it breaks by its titles with the cause, says the brainstorm stays on v3, and offers Ask the agent to fix it");
 
   // Someone moves the stylesheet; the next sync fails and is kept on the system.
   editAdapter((a) => ({ ...a, stylesheet: "src/theme.css" }));
@@ -346,10 +359,10 @@ export default function Plan() {
   await window.click("[data-back]");
   await window.click("[data-nav-systems]");
   await window.waitForSelector(`[data-system="${system.id}"][data-system-failing]`, { timeout: 30_000 });
-  await shot(window, "sync-error", "A sync that failed: the card keeps v4's counts, says why the last sync failed and when, and offers Repair with an agent beside Sync");
+  await shot(window, "sync-error", "A sync that failed: the card keeps v5's counts and its last good sync time, says when the sync failed and why, and offers Repair with an agent beside Sync");
   await window.click(`[data-system="${system.id}"] button`);
   await window.waitForSelector("[data-system-sync-failed]");
-  await shot(window, "sync-error-detail", "The system's page with the failed sync: a callout with the reason, that brainstorms stay on v4, and Repair with an agent");
+  await shot(window, "sync-error-detail", "The system's page with the failed sync: a callout with when and why, that each brainstorm stays on its version and v5 is still the newest, and Repair with an agent");
   const before = t3.started().length;
   await window.click(`[data-system-sync-failed] [data-system-repair]`);
   for (let i = 0; i < 100 && t3.started().length === before; i++) await new Promise((r) => setTimeout(r, 200));
