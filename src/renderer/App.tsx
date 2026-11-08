@@ -1009,7 +1009,7 @@ function PresentHint({ several, poke, onLeave }: { several: boolean; poke: numbe
       data-present-hint
     >
       {/* It lies over the design, never over the app, so a hairline in its own ink keeps it apart from a dark design or a light one. */}
-      <TooltipLabel className="ring-1 ring-inverse-fg/25">
+      <TooltipLabel className="ring-1 ring-inverse-fg/25 dark:ring-fg/25">
         {several && (
           <span role="status" className="contents">
             <span className="flex items-center gap-0.5" aria-label="Left and right arrow keys">

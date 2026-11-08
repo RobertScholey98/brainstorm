@@ -8,7 +8,7 @@ const kbdVariants = cva(
     variants: {
       tone: {
         default: chip,
-        inverse: "bg-inverse-fg/15 text-inverse-fg/80 dark:bg-fg/10 dark:text-fg-muted",
+        inverse: "bg-inverse-fg/15 text-inverse-fg/80 dark:bg-fg/10 dark:text-fg/80",
       },
     },
     defaultVariants: { tone: "default" },
