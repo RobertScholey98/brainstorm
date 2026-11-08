@@ -757,7 +757,8 @@ export type ThemeState = { readonly axes: Readonly<Record<string, string>>; read
 
 export type PromotionState =
   | { readonly state: "starting" }
-  | { readonly state: "started"; readonly thread: ThreadId }
+  /** `link` opens the thread in T3; null when T3 didn't show the thread right after starting it. */
+  | { readonly state: "started"; readonly thread: ThreadId; readonly link: string | null }
   | { readonly state: "failed"; readonly error: string };
 
 export type ProposedView = {

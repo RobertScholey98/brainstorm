@@ -122,6 +122,9 @@ describe("a design system", () => {
     expect(manifest.styles.axes).toEqual([{ attribute: "data-theme", values: ["dark"], default: null }]);
     expect(manifest.styles.tokens.find((t) => t.name === "--primary")).toMatchObject({ kind: "color", value: "#4f46e5", byAxis: { "data-theme=dark": "#818cf8" } });
     expect(manifest.styles.measured.radius).toContain("8px");
+    // Classes with parentheses, as shadcn's v4 components write them, reach the kit's CSS.
+    const kit = data(await service.systems.kit(system, 1 as never));
+    expect([kit.css.includes(".py-\\(--body-spacing\\)"), kit.css.includes("--body-spacing: calc(var(--spacing) * 2)")]).toEqual([true, true]);
   }, 120_000);
 
   test("syncing an unchanged library makes no new version", async () => {
@@ -173,7 +176,7 @@ export default function Chores() {
       ["off_scale_value", "proposed/ChoreList/component.css"],
       ["off_scale_value", "proposed/ChoreList/component.css"],
     ]);
-    expect(issues[1]?.message).toContain("padding: 13px is off the kit's spacing scale");
+    expect(issues[1]?.message).toMatch(/^padding: 13px is off the kit's spacing scale; use 12px, the nearest the kit uses, or another of /);
 
     const good = { ...offScale, "proposed/ChoreList/component.tsx": choreListTsx, "proposed/ChoreList/component.css": ".chore-list { display: flex; flex-direction: column; gap: 8px; }\n" };
     data(await service.commit({ session: S, thread: T1, files: copy(1, usesProposed, good), addresses: [], note: null }));
@@ -206,14 +209,20 @@ export default function Chores() {
     expect(started?.project).toBe("proj-a");
     expect(started?.message.split("\n")[0]).toBe(`[brainstorm] promote ChoreList from session ${S} ("Chores")`);
     expect(started?.message).toContain(choreListTsx.trimEnd());
-    expect(data(await service.view(S)).system?.proposed[0]?.promotion).toMatchObject({ state: "started" });
+    expect(data(await service.view(S)).system?.proposed[0]?.promotion).toMatchObject({ state: "started", link: `https://app.t3.codes/threads/p/${started?.thread}` });
   }, 120_000);
 
   test("upgrade moves to a new version only when the design still builds with it", async () => {
     // Version 2 drops CardBody, which the design doesn't use, and adds ChoreList.
     writeFileSync(join(lib, "src/index.ts"), 'export { Button } from "./Button";\nexport { Card, CardBody, CardTitle } from "./Card";\nexport function ChoreList() { return null; }\n');
+    const heard: string[] = [];
+    const stop = service.subscribe((session) => heard.push(session));
     const v2 = data(await service.systems.sync(system));
+    await new Promise((r) => setTimeout(r, 0));
+    stop();
     expect(v2.created).toBe(true);
+    // An open session hears of the version at once, so its Inspector can offer the upgrade.
+    expect(heard).toEqual([S]);
     const before = data(await service.view(S)).system;
     expect([before?.n, before?.latest, before?.proposed[0]?.inSystem]).toEqual([1, 2, 2]);
     data(await service.act(S, { kind: "upgrade_system" }));

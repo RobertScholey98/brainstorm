@@ -94,7 +94,7 @@ type KitModule = {
 let kit: { readonly hash: string; readonly module: KitModule | null; readonly error: string | null; readonly surface: KitPayload["surface"] } | null = null;
 let kitStyle: HTMLStyleElement | null = null;
 /** Proposed components, by name: their compiled source, and the module once a block first imports it. */
-const proposed = new Map<string, { readonly hash: string; readonly compiled: string; loaded: { readonly default: unknown } | null }>();
+const proposed = new Map<string, { readonly hash: string; readonly compiled: string; loaded: { readonly __esModule: true; readonly default: unknown } | null }>();
 const proposedStyles = new Map<string, HTMLStyleElement>();
 
 const kitRequire = (name: string): unknown => {
@@ -176,7 +176,12 @@ function requireProposed(name: string): unknown {
     const module = { exports: {} as { default?: unknown } };
     new Function("require", "module", "exports", entry.compiled)(blockRequire, module, module.exports);
     const inner = module.exports.default;
-    entry.loaded = { ...module.exports, default: typeof inner === "function" || typeof inner === "object" ? wrapProposed(name, inner as ComponentType<Props>) : inner };
+    // __esModule is set non-enumerable, so a spread drops it; without it a block's default import would get the whole module.
+    entry.loaded = {
+      ...module.exports,
+      __esModule: true,
+      default: typeof inner === "function" || typeof inner === "object" ? wrapProposed(name, inner as ComponentType<Props>) : inner,
+    };
   }
   return entry.loaded;
 }

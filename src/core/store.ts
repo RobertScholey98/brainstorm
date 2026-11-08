@@ -98,7 +98,7 @@ const MIGRATIONS: readonly Migration[] = [
   CREATE TABLE iteration_proposed(session_id TEXT NOT NULL, n INTEGER NOT NULL, name TEXT NOT NULL,
     hash TEXT NOT NULL REFERENCES proposed_content, PRIMARY KEY(session_id, n, name));
   CREATE TABLE promotion(session_id TEXT NOT NULL REFERENCES session, name TEXT NOT NULL, state TEXT NOT NULL,
-    thread_id TEXT, error TEXT, at TEXT NOT NULL, PRIMARY KEY(session_id, name));
+    thread_id TEXT, link TEXT, error TEXT, at TEXT NOT NULL, PRIMARY KEY(session_id, name));
   `,
 ];
 
@@ -900,6 +900,10 @@ export class Store {
     return num(this.#get("SELECT COUNT(*) AS c FROM session WHERE system_id = ? AND archived_at IS NULL", id)?.c);
   }
 
+  sessionsOn(id: SystemId): SessionId[] {
+    return this.#all("SELECT id FROM session WHERE system_id = ? AND archived_at IS NULL", id).map((r) => str(r.id) as SessionId);
+  }
+
   sessionSystem(session: SessionId): SessionSystem | null {
     const r = this.#get("SELECT system_id, system_n FROM session WHERE id = ?", session);
     return r === undefined || r.system_id === null ? null : { id: str(r.system_id) as SystemId, n: num(r.system_n) as SystemVersionN };
@@ -957,7 +961,7 @@ export class Store {
       const base = { name: str(r.name) as ProposedName, at: str(r.at) };
       const state = str(r.state);
       return state === "started"
-        ? { ...base, state, thread: str(r.thread_id) as ThreadId }
+        ? { ...base, state, thread: str(r.thread_id) as ThreadId, link: r.link === null ? null : str(r.link) }
         : state === "failed"
           ? { ...base, state, error: str(r.error) }
           : { ...base, state: "starting" as const };
@@ -966,12 +970,13 @@ export class Store {
 
   setPromotion(session: SessionId, name: ProposedName, state: PromotionState, at: string): void {
     this.#run(
-      `INSERT INTO promotion(session_id, name, state, thread_id, error, at) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(session_id, name) DO UPDATE SET state = excluded.state, thread_id = excluded.thread_id, error = excluded.error, at = excluded.at`,
+      `INSERT INTO promotion(session_id, name, state, thread_id, link, error, at) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(session_id, name) DO UPDATE SET state = excluded.state, thread_id = excluded.thread_id, link = excluded.link, error = excluded.error, at = excluded.at`,
       session,
       name,
       state.state,
       state.state === "started" ? state.thread : null,
+      state.state === "started" ? state.link : null,
       state.state === "failed" ? state.error : null,
       at,
     );

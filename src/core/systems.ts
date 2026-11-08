@@ -44,15 +44,18 @@ export class Systems {
   readonly #bridge: AgentBridge;
   readonly #now: () => string;
   readonly #newId: () => SystemId;
+  readonly #onVersion: (id: SystemId) => void;
   readonly #syncing = new Map<SystemId, Promise<Result<SyncOutcome>>>();
   readonly #docs = new Map<string, SystemDocs>();
 
-  constructor(input: { store: Store; checker: Checker; bridge: AgentBridge; now: () => string; newId?: () => SystemId }) {
+  /** `onVersion` hears of each version a sync creates, so the sessions on the system can offer the upgrade. */
+  constructor(input: { store: Store; checker: Checker; bridge: AgentBridge; now: () => string; newId?: () => SystemId; onVersion?: (id: SystemId) => void }) {
     this.#store = input.store;
     this.#checker = input.checker;
     this.#bridge = input.bridge;
     this.#now = input.now;
     this.#newId = input.newId ?? randomSystemId;
+    this.#onVersion = input.onVersion ?? (() => {});
   }
 
   list(): SystemListing[] {
@@ -137,6 +140,7 @@ export class Systems {
         this.#store.insertSystemVersion({ system: id, n: ((latest?.n ?? 0) + 1) as SystemVersionN, ...synced.value, syncedAt: this.#now() });
       }
     });
+    if (created) this.#onVersion(id);
     const view = this.view(id);
     if (!view.ok) return view;
     return ok({ system: view.data, created, warnings: synced.value.warnings });

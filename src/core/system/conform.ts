@@ -156,8 +156,28 @@ export function proposedConformance(input: {
 }
 
 const shown = (family: Family, values: readonly string[]) => {
-  const list = family === "color" ? values.slice(0, 6) : values.filter((v) => !v.startsWith("-")).slice(0, 14);
+  const list = family === "color" ? values.slice(0, 6) : values.filter((v) => !v.startsWith("-"));
   return list.length === 0 ? "nothing in this family" : list.join(", ");
+};
+
+/** The kit's value closest to an off-scale one, when both are plain numbers in one unit. */
+function nearest(normal: string, values: readonly string[]): string | null {
+  const unit = (v: string) => v.match(/^(-?[\d.]+)([a-z%]*)$/);
+  const m = unit(normal);
+  if (m === null) return null;
+  let best: [string, number] | null = null;
+  for (const v of values) {
+    const n = unit(v);
+    if (n === null || n[2] !== m[2]) continue;
+    const d = Math.abs(Number(n[1]) - Number(m[1]));
+    if (best === null || d < best[1]) best = [v, d];
+  }
+  return best?.[0] ?? null;
+}
+
+const offScale = (property: string, value: string, normal: string, family: Family, allowed: readonly string[]) => {
+  const near = nearest(normal, allowed);
+  return `${property}: ${value} is off the kit's ${FAMILY_LABEL[family]} scale${normal === value ? "" : ` (${normal})`}; ${near === null ? "" : `use ${near}, the nearest the kit uses, or another of `}${shown(family, allowed)}`;
 };
 
 /** Every value in a proposed component's CSS, against the kit's tokens and the values the kit uses. */
@@ -199,7 +219,7 @@ export function cssConformance(css: string, file: string, styles: SystemStyles):
       if (normal === "0px" || allowed.includes(normal)) continue;
       // Shorthands such as `padding: 8px 12px` normalize to null above; each single value is checked here.
       issues.push(
-        issue("off_scale_value", `${d.property}: ${d.value} is off the kit's ${FAMILY_LABEL[family]} scale (${normal}); the kit uses ${shown(family, allowed)}`, { file }),
+        issue("off_scale_value", offScale(d.property, d.value, normal, family, allowed), { file }),
       );
     }
   }
@@ -223,7 +243,7 @@ function shorthandIssues(css: string, file: string, styles: SystemStyles, vars: 
         const normal = normalizeValue(family, resolveVars(part, vars));
         if (normal === null || normal === "0px" || styles.measured[family].includes(normal)) continue;
         issues.push(
-          issue("off_scale_value", `${d.property}: ${part} is off the kit's ${FAMILY_LABEL[family]} scale (${normal}); the kit uses ${shown(family, styles.measured[family])}`, { file }),
+          issue("off_scale_value", offScale(d.property, part, normal, family, styles.measured[family]), { file }),
         );
       }
     }

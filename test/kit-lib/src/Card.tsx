@@ -9,5 +9,5 @@ export function CardTitle({ children }: { children: ReactNode }) {
 }
 
 export function CardBody({ children }: { children: ReactNode }) {
-  return <div className="mt-2 text-sm text-muted-foreground">{children}</div>;
+  return <div className="mt-2 py-(--body-spacing) text-sm text-muted-foreground [--body-spacing:--spacing(2)]">{children}</div>;
 }

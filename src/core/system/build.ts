@@ -286,9 +286,14 @@ function scanCandidates(base: string, pattern: string, into: Set<string>): void 
       return;
     }
     if (!SCANNED.test(p) || s.size > 2_000_000) return;
-    for (const m of readFileSync(p, "utf8").matchAll(/[^\s"'`{}()<>;,\\]+/g)) {
-      const token = m[0].replace(/^[=:]+|[.:]+$/g, "");
-      if (token.length > 0 && token.length < 200) into.add(token);
+    const text = readFileSync(p, "utf8");
+    // Classes such as `py-(--card-spacing)` and `[--gap:--spacing(4)]` hold parentheses and commas, so words split
+    // only at quotes and whitespace count, and so do their pieces between parentheses for words like `cn(base`.
+    for (const words of [/[^\s"'`{}<>;\\]+/g, /[^\s"'`{}()<>;,\\]+/g]) {
+      for (const m of text.matchAll(words)) {
+        const token = m[0].replace(/^[=:]+|[.:]+$/g, "");
+        if (token.length > 0 && token.length < 200) into.add(token);
+      }
     }
   };
   visit(start);

@@ -193,7 +193,13 @@ export class Brainstorm {
     this.#newSessionId = options.newSessionId ?? randomSessionId;
     this.#clockMs = options.clockMs ?? (() => performance.now());
     this.#agentHome = options.agentHome ?? null;
-    this.#systems = new Systems({ store: this.#store, checker: this.#checker, bridge: this.#bridge, now: this.#now });
+    this.#systems = new Systems({
+      store: this.#store,
+      checker: this.#checker,
+      bridge: this.#bridge,
+      now: this.#now,
+      onVersion: (id) => this.#store.sessionsOn(id).forEach((s) => this.#emit(s)),
+    });
   }
 
   /** Design systems themselves: add, sync, list, the kit a canvas loads. */
@@ -1141,12 +1147,13 @@ export class Brainstorm {
       title: `Promote ${name} into ${system.name}`,
       message: promoteMessage({ session, system: { id: system.id, name: system.name, root: system.source.root, entry: system.source.entry }, name, files, draft }),
     });
-    this.#store.setPromotion(
-      id,
-      name,
-      result.kind === "started" ? { state: "started", thread: result.thread } : { state: "failed", error: result.error },
-      this.#now(),
-    );
+    if (result.kind === "failed") {
+      this.#store.setPromotion(id, name, { state: "failed", error: result.error }, this.#now());
+      return null;
+    }
+    // `thread start` gives only the id; the thread's own view has the link Rob opens it with.
+    const shown = await this.#bridge.snapshot(result.thread, { messages: 0 });
+    this.#store.setPromotion(id, name, { state: "started", thread: result.thread, link: shown.kind === "found" ? shown.snapshot.thread.link : null }, this.#now());
     return null;
   }
 
