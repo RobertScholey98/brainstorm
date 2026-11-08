@@ -690,7 +690,7 @@ try {
   await canvas.waitForSelector(inBlock("wheel/neon", "spin-button"));
   await window.click("[data-vary-toggle]");
   await window.waitForSelector("[data-pick-hint]");
-  check("Vary element starts a pick, with its own hint", (await window.textContent("[data-pick-hint] span")).trim(), "Click to vary");
+  check("Vary element starts a pick, with its own hint", (await window.textContent("[data-pick-hint]")).trim(), "Click to vary");
   await window.keyboard.press("Escape");
   await window.waitForSelector("[data-pick-hint]", { state: "detached" });
   check("Escape ends the vary pick", await window.getAttribute("[data-vary-toggle]", "aria-pressed"), "false");

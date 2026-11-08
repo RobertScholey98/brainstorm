@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, MousePointer2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, MousePointer2, X } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,16 +87,21 @@ export function CanvasBar({
           className={cn("flex min-w-0 flex-1 items-center gap-1.5 text-sm", picking === null && "invisible")}
           {...(picking === null ? { "aria-hidden": true, inert: true } : { role: "status", "data-pick-hint": "" })}
         >
-          {/* A pointer glyph in the accent, and the words at full strength, so the hint reads as a mode, not a slot tab. */}
-          <span className="flex w-0 flex-1 items-center justify-end gap-1 text-fg" data-bar-hint>
-            <MousePointer2 aria-hidden className="size-3 shrink-0 text-accent" />
-            <Truncate className="min-w-0">{picking === "vary" ? PICK_HINTS.vary : PICK_HINTS.comment}</Truncate>
+          {/* One accent chip, pointer glyph, words and the way out together, so the pick reads as a mode and never as a
+              slot tab; the room around it is the longest hint's, kept whether or not a pick is on. */}
+          <span className="flex w-0 flex-1 items-center justify-end" data-bar-hint>
+            <span className="flex h-7 min-w-0 items-center gap-1 rounded-md border border-accent/40 bg-accent/10 pr-0.5 pl-2 text-fg" data-tint data-pick-chip>
+              <MousePointer2 aria-hidden className="size-3 shrink-0 text-accent" />
+              <Truncate className="min-w-0" data-bar-hint-words>
+                {picking === "vary" ? PICK_HINTS.vary : PICK_HINTS.comment}
+              </Truncate>
+              <Hint label="Stop picking" shortcut="Esc" side="bottom">
+                <Button variant="ghost" size="icon-xs" aria-label="Stop picking" onClick={onCancelPick} data-pick-cancel>
+                  <X aria-hidden />
+                </Button>
+              </Hint>
+            </span>
           </span>
-          <Hint label="Stop picking" shortcut="Esc" side="bottom">
-            <Button variant="ghost" onClick={onCancelPick}>
-              Cancel
-            </Button>
-          </Hint>
           {/* Pick mode's own controls, then the view's, as the header divides a request's actions from Regenerate. */}
           {several && <Separator orientation="vertical" {...(picking === null ? {} : { "data-pick-divider": "" })} />}
         </span>

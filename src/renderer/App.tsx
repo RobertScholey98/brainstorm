@@ -942,7 +942,7 @@ function CanvasAway({
             {stuck !== null
               ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience. Show the canvas here to ${act === "pin" ? "pin" : "vary an element"}, or switch the preview to Working (not for sharing).`
               : picking
-                ? "Your comment lands here in Feedback. Press Esc or Cancel to stop."
+                ? "Your comment lands here in Feedback. Press Esc to stop."
                 : hold
                   ? `It's held. It catches up with your edits here when you resume.`
                   : `It's live and follows your edits here.`}

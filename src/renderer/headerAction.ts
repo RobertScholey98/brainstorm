@@ -94,9 +94,11 @@ const barFits = (bar: HTMLElement): boolean => {
   if (ruler === null) return !overflows(hint);
   ruler.font = getComputedStyle(hint).font;
   const r = ruler;
-  // The hint's glyph and its gap take room the words can't have.
-  const glyph = hint.querySelector("svg");
-  const room = hint.getBoundingClientRect().width - (glyph === null ? 0 : glyph.getBoundingClientRect().width + (Number.parseFloat(getComputedStyle(hint).columnGap) || 0));
+  // The chip's glyph, padding and close button take room the words can't have.
+  const words = hint.querySelector("[data-bar-hint-words]");
+  const chip = words?.parentElement;
+  const chrome = words == null || chip == null ? 0 : chip.getBoundingClientRect().width - words.getBoundingClientRect().width;
+  const room = hint.getBoundingClientRect().width - chrome;
   return room >= Math.max(...Object.values(PICK_HINTS).map((h) => r.measureText(h).width)) - SLACK;
 };
 

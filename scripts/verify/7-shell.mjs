@@ -978,10 +978,10 @@ try {
   await window.click("[data-pick-toggle]");
   check("pick mode says so in the canvas bar, where it covers no frame", await window.$eval("[data-pick-hint]", (h) => h.closest("[data-canvas-bar]") !== null), true);
   check(
-    "a divider stands between pick mode's Cancel and the view switch, so the bar reads as two groups",
+    "a divider stands between pick mode's chip and the view switch, so the bar reads as two groups",
     await window.evaluate(() => {
       const r = (s) => document.querySelector(s)?.getBoundingClientRect();
-      const [cancel, divider, view] = [r("[data-pick-hint] button"), r("[data-pick-divider]"), r("[data-view-option]")];
+      const [cancel, divider, view] = [r("[data-pick-chip]"), r("[data-pick-divider]"), r("[data-view-option]")];
       return divider !== undefined && cancel.right < divider.left && divider.right < view.left;
     }),
     true,
