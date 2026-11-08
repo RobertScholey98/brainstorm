@@ -181,3 +181,36 @@ No blockers or majors. These kept scores below the bar:
   - "New story" is singular when there's one.
 
 The findings log is `design-review/systems-climb/round-6/findings-log.md`.
+
+## Round 6 (app-systems round-6, library round-11): the bar is met
+
+| Area | Claude Opus 5.5 | GPT-6.1 Sol | Claude Sonnet 5.5 |
+| --- | --- | --- | --- |
+| Library list and import | 10 | 9.5 | 9.7 |
+| Review | 10 | 9.5 | 9.5 |
+| Browsing | 10 | 9.5 | 9.6 |
+| Workbench | 9.5 | 9.5 | 9.6 |
+| Versions, Theme and Warnings | 10 | 9.5 | 9.5 |
+| In a brainstorm | 9.5 | 9.5 | 9.5 |
+| Agent hand-offs | 9.5 | 9.5 | 9.7 |
+| States | 10 | 9.5 | 9.6 |
+| Self-consistency | 9.5 | 9.5 | 9.6 |
+| Fitness for all-day use | 9.5 | 9.5 | 9.5 |
+| Completely happy | yes | yes | yes |
+| Blockers / majors | 0 / 0 | 0 / 0 | 0 / 0 |
+| Sheets won against Storybook | 4 of 4 | 4 of 4 | 4 of 4 |
+| Agent hand-offs against Claude Code | Brainstorm | Brainstorm | Brainstorm |
+
+All three reviewers scored every area 9.5 or higher and are completely happy. None found a blocker or a major. Each found Brainstorm better than Storybook on every sheet and better than Claude Code on hand-offs.
+
+**After round 6:** these nits were fixed and checked in a fresh capture (app round 7, library round 12), without another council:
+- **Upgrade callout:** a breaking upgrade leads with the block it breaks, and a token change holds together on one line.
+- **Usage:** a long snippet shows its first 12 lines, with Show all.
+- **Catalog:** "new in v3" is green there too.
+- **Captures:** a new shot shows the finished promote row.
+
+These remain open:
+- The workbench header is taller than Storybook's.
+- The export file names keep the session title's spaces, as the HTML export does.
+- In the narrow Inspector, Open thread sits on its own line under a promote.
+- t15 (tier more than one component at once) and t16 (answer the agent in place) stay open, the latter by design.
