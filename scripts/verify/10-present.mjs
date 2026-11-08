@@ -138,6 +138,11 @@ try {
     await window.evaluate(() => [...document.querySelectorAll("[data-present-controls] button")].map((b) => b.getAttribute("aria-label") ?? b.textContent.trim())),
     ["Hold preview", "Preview window, Clean", "Present"],
   );
+  check(
+    "at 1440 the bar keeps \"Hold\" and \"Preview Clean\" in words, with the pick hint's room still set aside",
+    await window.evaluate(() => [document.querySelector("[data-hold]")?.innerText.trim(), document.querySelector("[data-preview-menu]")?.innerText.replace(/\s+/g, " ").trim()]),
+    ["Hold", "Preview Clean"],
+  );
   await snap(window, "07-main-window-open", "The main window while the preview window is open: Hold preview and a Preview menu button grow in to the left of Present, which keeps its place at the canvas bar's right end");
 
   // The clean look never takes a pick: it is the one an audience sees.

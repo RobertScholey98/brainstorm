@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, MousePointerClick } from "lucide-react";
+import { ChevronLeft, ChevronRight, MousePointer2 } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,7 +92,7 @@ export function CanvasBar({
         >
           {/* A pointer glyph in the accent, and the words at full strength, so the hint reads as a mode, not a slot tab. */}
           <span className="flex w-0 flex-1 items-center justify-end gap-1.5 text-fg" data-bar-hint>
-            <MousePointerClick aria-hidden className="size-3.5 shrink-0 text-accent" />
+            <MousePointer2 aria-hidden className="size-3.5 shrink-0 text-accent" />
             <Truncate className="min-w-0">{pickHint ?? (picking === "vary" ? PICK_HINTS.vary : PICK_HINTS.comment)}</Truncate>
           </span>
           <Hint label="Stop picking" shortcut="Esc" side="bottom">

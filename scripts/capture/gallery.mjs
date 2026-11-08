@@ -110,7 +110,7 @@ const SHOTS = [
   ["fork-popover-latest", "history", "The Fork popover from the latest iteration: a variant per slot, the changed button text baked in as a default, the open pin, and Starts a new T3 thread"],
   ["fork-page", "history", "A fork just made: the breadcrumb's lineage, Forked from under its thread, one variant per slot, the strip's stub back to the parent, and request 1 queued in the new thread"],
   ["home-fork", "history", "Home with a fork: its card names the parent and the iteration it came from"],
-  ["vary-pick", "history", "Vary pick mode: Click an element to vary in the canvas bar, and the highlight on the hovered spin button"],
+  ["vary-pick", "history", "Vary pick mode: Click to vary in the canvas bar, and the highlight on the hovered spin button"],
   ["vary-popover", "history", "The vary popover on the spin button: how many, an optional direction, and the slot the variants land in"],
   ["vary-landed", "history", "Three spin button variants landed in the wheel slot, each marked new, and the strip names the vary and hangs the fork off iteration 3"],
 ].map(([name, scene, about], i) => ({ name, scene, about, file: `${String(i + 1).padStart(2, "0")}-${name}` }));
