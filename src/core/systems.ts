@@ -616,7 +616,7 @@ export function componentChanges(
 export function renderChanges(
   before: Pick<SystemManifest, "catalog" | "stories" | "styles">,
   after: Pick<SystemManifest, "catalog" | "stories" | "styles">,
-): { changed: { name: string; stories: number }[]; tokens: { name: string; before: string; after: string }[] } {
+): { changed: { name: string; stories: number; via: string[] }[]; tokens: { name: string; before: string; after: string }[] } {
   const old = new Map(before.stories.map((s) => [s.id, s.htmlHash]));
   const changed = after.catalog
     .filter((e) => !e.generated)
@@ -629,6 +629,10 @@ export function renderChanges(
       }).length,
     }))
     .filter((c) => c.stories > 0);
+  // A changed component that renders another changed one may have changed through it: MealCard through Button.
+  const names = new Set(changed.map((c) => c.name));
+  const uses = new Map(after.catalog.map((e) => [e.name, e.uses ?? []]));
+  const via = changed.map((c) => ({ ...c, via: (uses.get(c.name) ?? []).filter((u) => names.has(u)) }));
   type T = SystemManifest["styles"]["tokens"][number];
   const key = (t: T) => `${t.value}|${JSON.stringify(t.byAxis)}`;
   // The base value, or the first themed one for a token only a theme sets.
@@ -647,5 +651,5 @@ export function renderChanges(
         ? { name: t.name, before: shown(w), after: shown(t) }
         : { name: `${t.name} [${axis}]`, before: w.byAxis[axis] ?? "unset", after: t.byAxis[axis] ?? "unset" };
     });
-  return { changed, tokens };
+  return { changed: via, tokens };
 }

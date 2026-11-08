@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { componentProps } from "../src/core/system/props";
+import { componentProps, componentUses } from "../src/core/system/props";
 
 const BUTTON = `import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
@@ -156,5 +156,34 @@ describe("componentProps", () => {
       ["src/broken.tsx", "function Broken({ a = ("],
     ]);
     expect(componentProps(files, ["Select", "Broken", "Missing"])).toEqual({ Select: [], Broken: [], Missing: [] });
+  });
+});
+
+describe("componentUses", () => {
+  test("names the catalog components each component renders, by its own part of the file", () => {
+    const files = new Map([
+      [
+        "/lib/meal-card.tsx",
+        `import { Badge } from "./badge";
+import { Button } from "./button";
+
+export function MealCard({ title, time }: { title: string; time?: string }) {
+  return (
+    <div>
+      <h3>{title}</h3>
+      {time !== undefined && <Badge>{time}</Badge>}
+      <Button variant="outline">Cook this</Button>
+    </div>
+  );
+}
+
+export function MealList({ children }: { children: React.ReactNode }) {
+  return <ul>{children}</ul>;
+}
+`,
+      ],
+      ["/lib/button.tsx", `export function Button(props: { children: React.ReactNode }) {\n  return <button {...props} />;\n}\n`],
+    ]);
+    expect(componentUses(files, ["MealCard", "MealList", "Badge", "Button"])).toEqual({ MealCard: ["Badge", "Button"] });
   });
 });

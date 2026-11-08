@@ -86,10 +86,10 @@ export function SystemSection({
             ) : (
               <>
                 <p data-upgrade-breaks>
-                  {list(check.where.map(placeTitle))} wouldn't build with it, so this brainstorm stays on v{system.n}. The agent can change {check.where.length === 1 ? "it" : "them"} to build with v{system.n} and
-                  v{system.latest}, and then you upgrade.
+                  {breakage(check, system.latest, placeTitle)}, so this brainstorm stays on v{system.n}. The agent can change {check.where.length === 1 ? "it" : "them"} to build with v{system.n} and
+                  v{system.latest}; then you upgrade.
                 </p>
-                <UpgradeErrors issues={check.issues} more={check.errors - check.issues.length} latest={system.latest} placeTitle={placeTitle} />
+                <UpgradeErrors issues={unexplained(check.issues)} more={check.errors - check.issues.length} placeTitle={placeTitle} />
               </>
             )}
           </Callout>
@@ -163,30 +163,40 @@ function AxisControl({ label, value, onChange, options }: { label: string; value
 const capital = (s: string) => s.replace(/^\w/, (c) => c.toUpperCase());
 const MISSING_EXPORT = /^the kit has no export "([^"]+)"/;
 
+type CheckIssue = { readonly where: string; readonly message: string };
+
+/** What each block uses that the new version lacks, by block: the cause, in Rob's words. */
+function missingByBlock(issues: readonly CheckIssue[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const i of issues) {
+    const name = MISSING_EXPORT.exec(i.message)?.[1];
+    if (name !== undefined) out.set(i.where, [...(out.get(i.where) ?? []), name]);
+  }
+  return out;
+}
+
 /**
- * The upgrade check's errors, causes first and in Rob's words: a missing export reads as what the version removes, and
- * React's "element type is invalid" for the same block, only its symptom, is left out. A long one opens on request.
+ * Why the upgrade breaks, cause first: "The week / Plan uses Badge, which v5 doesn't have". A block whose error has no
+ * cause Brainstorm can name is listed as not building, with its error below.
  */
-function UpgradeErrors({
-  issues,
-  more,
-  latest,
-  placeTitle,
-}: {
-  issues: readonly { where: string; message: string }[];
-  more: number;
-  latest: number;
-  placeTitle: (where: string) => string;
-}) {
+function breakage(check: Extract<UpgradeCheck, { state: "breaks" }>, latest: number, placeTitle: (where: string) => string): string {
+  const missing = missingByBlock(check.issues);
+  const named = [...missing].map(([where, names]) => `${placeTitle(where)} uses ${list(names)}, which v${latest} doesn't have`);
+  const other = check.where.filter((w) => !missing.has(w)).map(placeTitle);
+  return [...named, ...(other.length === 0 ? [] : [`${list(other)} wouldn't build with it`])].join("; ");
+}
+
+/** The errors the sentence above doesn't explain: React's "element type is invalid" for a block with a named cause is its symptom. */
+const unexplained = (issues: readonly CheckIssue[]) => {
+  const caused = missingByBlock(issues);
+  return issues.filter((i) => !caused.has(i.where));
+};
+
+/** The upgrade check's errors that have no cause in Rob's words, each held to two lines until he opens them in full. */
+function UpgradeErrors({ issues, more, placeTitle }: { issues: readonly CheckIssue[]; more: number; placeTitle: (where: string) => string }) {
   const [full, setFull] = useState(false);
-  const caused = new Set(issues.filter((i) => MISSING_EXPORT.test(i.message)).map((i) => i.where));
-  const shown = issues
-    .filter((i) => !(caused.has(i.where) && /threw with/.test(i.message)))
-    .map((i) => {
-      const missing = MISSING_EXPORT.exec(i.message)?.[1];
-      return { where: i.where, message: missing === undefined ? i.message : `it uses ${missing}, which v${latest} doesn't have`, cause: missing !== undefined };
-    })
-    .sort((a, b) => Number(b.cause) - Number(a.cause));
+  if (issues.length === 0 && more === 0) return null;
+  const shown = issues;
   const long = shown.some((i) => i.message.length > 90);
   return (
     <ul className="grid gap-1" data-upgrade-errors>

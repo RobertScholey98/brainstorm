@@ -615,3 +615,24 @@ function matchBrackets(toks: readonly Tok[]): Int32Array {
   });
   return match;
 }
+
+/**
+ * The catalog components each component renders, read from its source: the JSX tags between its declaration and the
+ * next one in its file. It says why a component renders differently when only one it renders changed ("MealCard renders
+ * Button"). Approximate by design: a component its source never names as a tag isn't found.
+ */
+export function componentUses(files: ReadonlyMap<string, string>, names: readonly string[]): Readonly<Record<string, readonly string[]>> {
+  const known = new Set(names);
+  const uses: Record<string, string[]> = {};
+  for (const text of files.values()) {
+    const declared = [...text.matchAll(/(?:^|\n)\s*(?:export\s+)?(?:default\s+)?(?:function|const|let)\s+([A-Z]\w*)/g)]
+      .filter((m) => known.has(m[1]!))
+      .map((m) => ({ name: m[1]!, at: m.index }));
+    declared.forEach((d, i) => {
+      const body = text.slice(d.at, declared[i + 1]?.at ?? text.length);
+      const tags = new Set([...body.matchAll(/<([A-Z]\w*)[\s/>]/g)].map((m) => m[1]!).filter((t) => known.has(t) && t !== d.name));
+      if (tags.size > 0) uses[d.name] = [...new Set([...(uses[d.name] ?? []), ...tags])];
+    });
+  }
+  return uses;
+}

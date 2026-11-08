@@ -6,7 +6,7 @@ import { issue, type Issue } from "../types";
 import { buildSystem } from "./build";
 import { analyzeKitCss, flattenCss, htmlClasses, parseCss, readsColorToken } from "./css";
 import { isTier, type ArgType, type CatalogEntry, type KitExportInfo, type StoryInfo, type SystemManifest, type Tier } from "./model";
-import { componentProps } from "./props";
+import { componentProps, componentUses } from "./props";
 import { sourceFile, type SystemSource } from "./source";
 
 export type SyncedVersion = {
@@ -76,8 +76,11 @@ export async function syncSystem(source: SystemSource, checker: Checker): Promis
   }
   const tiers = Object.fromEntries(Object.entries(inspected.tiers).filter((e): e is [string, Tier] => isTier(e[1])));
   const listed = catalogOf(inspected.exports, stories, inspected.generated, tiers, source.componentTiers ?? {});
-  const props = componentProps(componentSources(source.root, built.value.inputs, storyFiles), listed.filter((e) => !e.generated).map((e) => e.name));
-  const catalog = listed.map((e) => (e.generated ? e : { ...e, props: props[e.name] ?? [] }));
+  const sources = componentSources(source.root, built.value.inputs, storyFiles);
+  const own = listed.filter((e) => !e.generated).map((e) => e.name);
+  const props = componentProps(sources, own);
+  const uses = componentUses(sources, own);
+  const catalog = listed.map((e) => (e.generated ? e : { ...e, props: props[e.name] ?? [], uses: uses[e.name] ?? [] }));
   const htmlById = new Map(inspected.stories.map((s) => [s.id, s.html]));
   const unthemed = catalog.filter((entry) => {
     const htmls = entry.stories.map((id) => htmlById.get(id)).filter((h): h is string => typeof h === "string");

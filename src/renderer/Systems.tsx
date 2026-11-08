@@ -1,5 +1,5 @@
-import { ArrowLeft, ArrowRight, Bot, Check, ChevronLeft, ChevronRight, ChevronsRight, Component, Copy, ExternalLink, Flag, FolderOpen, FolderPlus, ListChecks, RefreshCw, RotateCcw, Send, Wrench, X } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsRight, Component, Copy, ExternalLink, Flag, FolderOpen, FolderPlus, ListChecks, RefreshCw, RotateCcw, Send, Wrench, X } from "lucide-react";
+import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout, CalloutItem } from "@/components/ui/callout";
@@ -371,18 +371,18 @@ function SystemCard({
           <Truncate>{system.name}</Truncate>
           {latest !== null && <Badge>v{latest.n}</Badge>}
         </span>
-        <span className="flex min-w-0 font-mono text-xs text-fg-muted">
-          <Truncate>{system.root}</Truncate>
+        <span className="flex min-w-0 font-mono text-xs text-fg-muted" data-system-card-path={system.root}>
+          <Truncate>{shortPath(system.root)}</Truncate>
         </span>
         {latest !== null && (
           <span className="text-sm text-fg-muted" data-system-counts>
-            {latest.components} components · {latest.stories} stories · {system.sessions === 1 ? "1 brainstorm" : `${system.sessions} brainstorms`} · {error === null ? "synced" : "last good sync"} {at(latest.syncedAt, now)}
+            {latest.components} components · {latest.stories} stories · {system.sessions === 1 ? "1 brainstorm" : `${system.sessions} brainstorms`} · {error === null ? "synced" : "last good sync"} {at(latest.syncedAt, now, error?.at ?? null)}
             {warnings > 0 && <span className="text-warning"> · {warnings === 1 ? "1 warning" : `${warnings} warnings`}</span>}
           </span>
         )}
         {error !== null && (
           <span className="text-sm text-danger" data-system-sync-error>
-            {`The sync ${at(error.at, now)} failed: ${firstError(error)}`}
+            {`The sync ${at(error.at, now, latest?.syncedAt ?? null)} failed: ${firstError(error)}`}
           </span>
         )}
         {system.review?.state === "pending" && (
@@ -415,10 +415,16 @@ function SystemCard({
 
 const firstError = (error: NonNullable<SystemListing["syncError"]>) => error.issues.find((i) => i.severity === "error")?.message ?? error.message;
 
-/** When something happened, for a line that names it: "at 14:05" today, else "on 3 Nov". */
-const at = (iso: string, now: number) => {
+/**
+ * When something happened, for a line that names it: "at 14:05" today, else "on 3 Nov". Beside another time in the
+ * same minute it gives the seconds too, so the two read in order.
+ */
+const at = (iso: string, now: number, beside: string | null = null) => {
   const a = age(iso, now);
-  return /^(now|d+[mh])$/.test(a) ? `at ${new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : `on ${a}`;
+  const minute = (t: string) => Math.floor(Date.parse(t) / 60_000);
+  const seconds = beside !== null && minute(beside) === minute(iso);
+  const time = new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", ...(seconds ? { second: "2-digit" } : {}) });
+  return /^(now|\d+[mh])$/.test(a) ? `at ${time}` : `on ${a}`;
 };
 
 /** `age` as the end of a sentence: nothing for a moment ago, else " 5m ago" or " on 3 Nov". */
@@ -500,7 +506,7 @@ function SystemDetail({
         {error !== null && (
           <Callout
             tone="danger"
-            heading={`The sync ${at(error.at, now)} failed`}
+            heading={`The sync ${at(error.at, now, latest?.syncedAt ?? null)} failed`}
             data-system-sync-failed
             actions={
               view?.adapter === true ? (
@@ -566,10 +572,12 @@ function SystemDetail({
   );
 }
 
+const shortPath = (path: string) => path.split(/[\\/]/).filter(Boolean).slice(-2).join("/");
+
 /** A project folder by its last two names, which tell Rob which project it is; the hint and Copy give the full path. */
 function ProjectPath({ path }: { path: string }) {
   const [copied, setCopied] = useState(false);
-  const short = path.split(/[\\/]/).filter(Boolean).slice(-2).join("/");
+  const short = shortPath(path);
   return (
     <span className="flex min-w-0 items-center gap-1" data-system-path={path}>
       <Truncate>{short}</Truncate>
@@ -665,7 +673,7 @@ function ReviewCallout({
       }
     >
       {sent === null && (
-        <p>
+        <p className="max-w-sheet">
           Step through the components with <Kbd>←</Kbd> <Kbd>→</Kbd> and check how each renders. Move one to another tier, or raise an issue for the agent. Brainstorms can use the system once you confirm it.
         </p>
       )}
@@ -690,12 +698,16 @@ function ReviewCallout({
       {sent !== null && (
         <div className="grid gap-2 rounded-md bg-card p-3 ring-1 ring-border" data-review-status>
           <AgentWorkStatus work={work} since={sent.at} link={review.thread?.link ?? null} />
-          <SentItems sent={sent} folded={agentSynced || work?.phase === "finished"} />
-          {open === 0 && moves === 0 && agentSynced && (
-            <p className="text-sm text-fg-muted" data-review-next data-agent-synced>
-              {`v${n}: ${changeSummary(theirs)}. Check ${touched.length === 1 ? "it" : "them"} in the walk, then confirm v${n}.`}
-            </p>
-          )}
+          {/* Once the agent has synced, what it made and what Rob sent share one line; Show takes him to it. */}
+          <SentItems
+            sent={sent}
+            folded={agentSynced || work?.phase === "finished"}
+            lead={
+              open === 0 && moves === 0 && agentSynced ? (
+                <span className="text-fg" data-review-next data-agent-synced>{`v${n}: ${changeSummary(theirs)}.`}</span>
+              ) : null
+            }
+          />
           {open === 0 && moves === 0 && !agentSynced && (
             <p className="text-sm text-fg-muted" data-review-next>
               {work?.phase === "waiting"
@@ -729,11 +741,14 @@ function agentChanges(view: SystemView, review: SystemReview | null): ReadonlyMa
   return touched;
 }
 
+/** A component that renders differently, with the changed component it renders, if any: "MealCard (renders Button)". */
+const throughText = (c: SystemView["versions"][number]["changed"][number]) => (c.via.length === 0 ? c.name : `${c.name} (renders ${c.via.join(", ")})`);
+
 /** What the versions after a review changed, in one phrase: "MealCard renders differently; WeekStrip added". */
 function changeSummary(versions: SystemView["versions"]): string {
   const joined = (list: readonly string[]) => (list.length === 1 ? list[0] : `${list.slice(0, -1).join(", ")} and ${list.at(-1)}`);
   const each = (pick: (v: SystemView["versions"][number]) => readonly string[]) => [...new Set(versions.flatMap(pick))];
-  const changed = each((v) => v.changed.map((c) => c.name));
+  const changed = each((v) => v.changed.map(throughText));
   const added = each((v) => v.added);
   const removed = each((v) => v.removed);
   const moved = each((v) => v.retiered.map((r) => `${r.name} to ${TIER_LABEL[r.to].toLowerCase()}`));
@@ -749,23 +764,33 @@ function changeSummary(versions: SystemView["versions"]): string {
 }
 
 /** What the last Send handed the agent: Rob's notes, and the tier moves already in the adapter. */
-function SentItems({ sent, folded }: { sent: NonNullable<SystemReview["sent"]>; folded: boolean }) {
+function SentItems({ sent, folded, lead = null }: { sent: NonNullable<SystemReview["sent"]>; folded: boolean; lead?: ReactNode }) {
   const moved = Object.entries(sent.moved);
   // Once the agent has answered, what Rob sent folds to one line, so the walk keeps the room.
   const [open, setOpen] = useState(false);
-  if (sent.notes.length === 0 && moved.length === 0) return <p className="text-sm text-fg-muted">Sent: sort the components into tiers.</p>;
+  if (sent.notes.length === 0 && moved.length === 0)
+    return (
+      <p className="flex flex-wrap gap-x-2 text-sm text-fg-muted">
+        {lead}
+        <span>You sent: sort the components into tiers.</span>
+      </p>
+    );
   if (folded && !open) {
     const what = [sent.notes.length > 0 ? count(sent.notes.length, "note", "notes") : null, moved.length > 0 ? count(moved.length, "tier move", "tier moves") : null].filter((x) => x !== null).join(" and ");
     return (
-      <p className="flex items-center gap-2 text-sm text-fg-muted" data-review-sent-folded>
-        You sent {what}.
+      <div className="flex flex-wrap items-center gap-x-2 text-sm text-fg-muted" data-review-sent-folded>
+        {lead}
+        <span>You sent {what}.</span>
         <Button variant="ghost" size="xs" onClick={() => setOpen(true)} data-review-sent-show>
-          Show
+          Show what you sent
+          <ChevronDown data-icon="inline-end" aria-hidden />
         </Button>
-      </p>
+      </div>
     );
   }
   return (
+    <>
+    {lead !== null && <p className="text-sm">{lead}</p>}
     <ul className="grid gap-1 text-sm" data-review-sent>
       {sent.notes.map((n) => (
         <li key={`n${n.id}`} className="flex items-start gap-2" data-review-sent-note={n.id}>
@@ -784,6 +809,7 @@ function SentItems({ sent, folded }: { sent: NonNullable<SystemReview["sent"]>; 
         </li>
       ))}
     </ul>
+    </>
   );
 }
 
@@ -815,6 +841,7 @@ function ReviewStrip({
   next,
   position,
   nextUnseen,
+  answeredIn,
 }: {
   entry: CatalogEntry;
   tier: Tier;
@@ -829,6 +856,8 @@ function ReviewStrip({
   position: { n: number; of: number; seen: number } | null;
   /** Jumps past what Rob has seen, when the next unseen component isn't simply the next one. */
   nextUnseen: (() => void) | null;
+  /** The agent's version that changed this component since Rob sent his notes, if one has. */
+  answeredIn: number | null;
 }) {
   return (
     <div className="grid gap-2 border-b bg-card px-4 py-2" data-review-strip={entry.name}>
@@ -880,7 +909,7 @@ function ReviewStrip({
             <li key={`s${i.id}`} className="flex items-start gap-2 text-fg-muted" data-review-sent-issue={i.id}>
               <Send aria-hidden className="mt-0.5 size-3.5 shrink-0" />
               <span className="min-w-0 flex-1">
-                {i.note} <span className="text-xs">· with the agent</span>
+                {i.note} <span className="text-xs">· {answeredIn === null ? "with the agent" : `answered in v${answeredIn}`}</span>
               </span>
             </li>
           ))}
@@ -1192,13 +1221,7 @@ function ComponentsTab({
             {manifest.styles.axes.map((a) => (
               <div key={a.attribute} className="flex items-center gap-2 text-xs whitespace-nowrap text-fg-muted">
                 {axisLabel(a.attribute)}
-                <Segmented
-                  fit="content"
-                  aria-label={axisLabel(a.attribute)}
-                  value={axes[a.attribute] ?? DEFAULT_AXIS}
-                  onValueChange={(v) => setAxes((prev) => ({ ...prev, [a.attribute]: v }))}
-                  options={axisOptions(a, DEFAULT_AXIS)}
-                />
+                <AxisPicker label={axisLabel(a.attribute)} value={axes[a.attribute] ?? DEFAULT_AXIS} onChange={(v) => setAxes((prev) => ({ ...prev, [a.attribute]: v }))} options={axisOptions(a, DEFAULT_AXIS)} />
               </div>
             ))}
             {focus !== null && (
@@ -1229,6 +1252,7 @@ function ComponentsTab({
             next={at >= 0 && at < walk.length - 1 ? () => step(1) : null}
             position={at < 0 ? null : { n: at + 1, of: walk.length, seen: walk.filter((e) => seen(e.name)).length }}
             nextUnseen={unseen === null || unseen.name === walk[at + 1]?.name ? null : () => pick(unseen.name)}
+            answeredIn={touched.get(chosen.name) ?? null}
           />
         )}
         {focus === null && chosen !== null && chosen.stories.length === 0 && (
@@ -1376,6 +1400,8 @@ function propRows(stories: readonly StoryInfo[]): ArgRow[] {
 type PropRow = {
   readonly name: string;
   readonly type: string;
+  /** Its choices, shown one by one rather than as a union to read. */
+  readonly options: readonly string[] | null;
   readonly default: string | null;
   readonly required: boolean | null;
   readonly description: string | null;
@@ -1395,11 +1421,12 @@ function propTable(declared: readonly PropInfo[], stories: readonly ArgRow[]): P
     // Choices read plainer than a type that names them indirectly (keyof typeof VARIANTS), so they come first.
     const type =
       p.options !== null ? p.options.map((o) => JSON.stringify(o)).join(" | ") : s?.type?.options != null ? typeText(s) : (p.type ?? (s === undefined ? "—" : typeText(s)));
-    rows.push({ name: p.name, type, default: p.default, required: p.required, description: s?.type?.description ?? null, example: s === undefined ? null : exampleText(s.value) });
+    const options = p.options ?? s?.type?.options?.map(String) ?? null;
+    rows.push({ name: p.name, type, options, default: p.default, required: p.required, description: s?.type?.description ?? null, example: s === undefined ? null : exampleText(s.value) });
   }
   for (const s of stories) {
     if (declared.some((p) => p.name === s.name)) continue;
-    rows.push({ name: s.name, type: typeText(s), default: null, required: null, description: s.type?.description ?? null, example: exampleText(s.value) });
+    rows.push({ name: s.name, type: typeText(s), options: s.type?.options?.map(String) ?? null, default: null, required: null, description: s.type?.description ?? null, example: exampleText(s.value) });
   }
   return rows;
 }
@@ -1544,10 +1571,20 @@ function Workbench({
                           required
                         </span>
                       )}
-                      {row.type.length <= 24 && <span className="ml-auto min-w-0 font-mono text-xs break-words text-fg-muted">{row.type}</span>}
+                      {row.options === null && row.type.length <= 24 && <span className="ml-auto min-w-0 font-mono text-xs break-words text-fg-muted">{row.type}</span>}
                     </span>
-                    {/* A long union reads better as its own line than wrapped against the right edge. */}
-                    {row.type.length > 24 && <span className="font-mono text-xs break-words text-fg-muted">{row.type}</span>}
+                    {/* Choices read one by one, the default marked; a long type gets its own line. */}
+                    {row.options !== null ? (
+                      <span className="flex flex-wrap gap-1" data-prop-options>
+                        {row.options.map((o) => (
+                          <span key={o} data-tint className={cn("rounded-sm px-1.5 font-mono text-xs ring-1", literal(row.default) === o ? "bg-selected text-fg ring-accent/40" : "text-fg-muted ring-border")}>
+                            {o}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      row.type.length > 24 && <span className="font-mono text-xs break-words text-fg-muted">{row.type}</span>
+                    )}
                     {row.description !== null && <span className="text-xs text-fg-muted">{row.description}</span>}
                     {(row.default !== null || row.example !== null) && (
                       <span className="flex flex-wrap gap-x-3 text-xs text-fg-muted">
@@ -1599,6 +1636,27 @@ function Workbench({
         </div>
       </ScrollPane>
     </aside>
+  );
+}
+
+/** A theme axis in the gallery's bar: a switch for a few values, a picker for more, so the bar stays one row. */
+function AxisPicker({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: readonly { value: string; label: string }[] }) {
+  if (options.length <= 4) return <Segmented fit="content" aria-label={label} value={value} onValueChange={onChange} options={options} />;
+  return (
+    <Select items={options} value={value} onValueChange={(v) => v !== null && onChange(v)}>
+      <SelectTrigger aria-label={label} data-axis-select={label}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -1830,10 +1888,10 @@ function VersionsTab({ view }: { view: SystemView }) {
                   {v.added.length > 0 && <ChangeLine label="Added" names={v.added} className="text-success" />}
                   {v.removed.length > 0 && <ChangeLine label="Removed" names={v.removed} className="text-danger" />}
                   {v.changed.length > 0 && (
-                    <ChangeLine label="Renders differently" names={v.changed.map((c) => c.name)} className="text-fg" data="version-changed" />
+                    <ChangeLine label="Renders differently" names={v.changed.map(throughText)} className="text-fg" data="version-changed" />
                   )}
                   {v.newStories.length > 0 && (
-                    <ChangeLine label="New stories" names={v.newStories.flatMap((c) => c.stories.map((s) => `${c.name} › ${s}`))} className="text-fg" />
+                    <ChangeLine label="New stories" names={v.newStories.flatMap((c) => c.stories.map((s) => `${c.name} › ${s}`))} className="text-success" />
                   )}
                   {v.retiered.length > 0 && (
                     <ChangeLine label="Tier" names={v.retiered.map((r) => `${r.name} ${TIER_LABEL[r.from].toLowerCase()} → ${TIER_LABEL[r.to].toLowerCase()}`)} className="text-fg" />

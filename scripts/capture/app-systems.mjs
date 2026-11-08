@@ -285,6 +285,8 @@ try {
   await new Promise((r) => setTimeout(r, 2000));
   await shot(window, "catalog-tiers", "After Rob confirms: a success notice says v3 is confirmed and brainstorms can use the system; no review callout; the catalog grouped into Layouts (PageFrame), Composites (MealCard) and Primitives (Badge, Button), then Brainstorm's generated primitives; every story live in the gallery");
 
+  // The notice has said its piece; Rob closes it rather than waiting out its five seconds.
+  if ((await window.$("[data-toast-close]")) !== null) await window.click("[data-toast-close]");
   // Rob opens a story in the workbench.
   await window.click('[data-entry="Button"]');
   const gallery = await galleryFrame(window);

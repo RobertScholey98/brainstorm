@@ -55,6 +55,8 @@ export type CatalogEntry = {
    * sets. Missing on generated entries and in versions synced before it was read; empty when the source couldn't be read.
    */
   readonly props?: readonly PropInfo[];
+  /** The catalog components its source renders, so a render change can say which one it came through. */
+  readonly uses?: readonly string[];
 };
 
 export type SystemStyles = {

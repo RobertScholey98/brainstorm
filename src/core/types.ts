@@ -813,7 +813,7 @@ export type SystemView = SystemListing & {
     readonly added: readonly string[];
     readonly removed: readonly string[];
     /** Components whose stories render differently from the version before, with how many did. */
-    readonly changed: readonly { readonly name: string; readonly stories: number }[];
+    readonly changed: readonly { readonly name: string; readonly stories: number; readonly via: readonly string[] }[];
     /** Tokens whose value changed from the version before. */
     readonly tokens: readonly { readonly name: string; readonly before: string; readonly after: string }[];
     /** Components that moved to another tier since the version before. */
