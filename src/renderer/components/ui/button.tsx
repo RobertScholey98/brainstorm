@@ -32,7 +32,7 @@ const buttonVariants = cva(
         icon: "size-7",
         "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3.5",
         // As tall as the strip it ends, as the held strip's Resume live is.
-        strip: "h-full gap-1 px-4 text-xs [&_svg:not([class*='size-'])]:size-3",
+        strip: "h-full gap-1.5 px-4 text-sm [&_svg:not([class*='size-'])]:size-3",
         // A 24 px action that names itself, as a list row's hover action does.
         xs: "h-6 gap-1 px-1.5 text-xs font-normal [&_svg:not([class*='size-'])]:size-3.5",
         // A glyph over its count, for a narrow rail with no room to set a corner count clear of the glyph.

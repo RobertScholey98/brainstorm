@@ -178,7 +178,7 @@ function WindowMenu({
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
             <span className="text-sm">Show canvas in main window</span>
-            <span className="text-xs text-fg-muted">Off: the canvas shows only in the preview window.</span>
+            <span className="text-xs text-fg-muted">Turn off to show the canvas only in the preview window.</span>
           </span>
           <Switch checked={prefs.here} onCheckedChange={(here) => onPrefs({ ...prefs, here })} className="mt-0.5" data-preview-here />
         </label>
