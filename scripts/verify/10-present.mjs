@@ -168,7 +168,7 @@ try {
     ["Preview heldThe preview window keeps showing The wheel · Slot reel.Resume live", "true"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed amber, and, lying over the canvas's top edge so nothing below moves, a warning-toned bar under the canvas bar, Preview held · The preview window keeps showing The wheel · Slot reel, with Resume live; the main canvas has moved on to the result slot");
+  await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed amber, and, as a slim strip in the canvas's top inset above the frame caption so nothing moves or hides, a warning-toned bar under the canvas bar, Preview held · The preview window keeps showing The wheel · Slot reel, with Resume live; the main canvas has moved on to the result slot");
   await window.click("[data-held-release]");
   await settled(() => showing(mirror));
   check("releasing Hold sends it the latest", await showing(mirror), "result:result/card");
@@ -177,7 +177,7 @@ try {
   await window.click("[data-preview-menu]");
   await window.waitForSelector("[data-preview-popover]");
   await sleep(250);
-  await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show canvas in main window, Bring to front and Full screen window (its hint says F11 works in the preview window), and Close window alone in the footer");
+  await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show canvas in main window, Bring to front and Full screen window, and in the footer F11 works in the preview window too, with Close window");
   await window.click('[data-preview-look="working"]');
   await sleep(250);
   await snap(window, "10b-preview-menu-working", "The Preview menu with Working chosen: its line under the switch now in full contrast", { keepFocus: true });

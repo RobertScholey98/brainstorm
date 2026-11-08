@@ -149,7 +149,15 @@ export function PreviewWindow({ api }: { api: Api }) {
                       data-preview-pin
                     >
                       <MessageSquarePlus data-icon="inline-start" aria-hidden />
-                      {picking === "comment" ? "Picking…" : "Pin comment"}
+                      {/* As wide as its wider label, so a pick moves nothing in this bar either. */}
+                      <span className="grid justify-items-center">
+                        <span className={picking === "comment" ? "invisible col-start-1 row-start-1" : "col-start-1 row-start-1"} aria-hidden={picking === "comment" || undefined}>
+                          Pin comment
+                        </span>
+                        <span className={picking === "comment" ? "col-start-1 row-start-1" : "invisible col-start-1 row-start-1"} aria-hidden={picking !== "comment" || undefined}>
+                          Picking…
+                        </span>
+                      </span>
                     </Button>
                   </span>
                 </Hint>

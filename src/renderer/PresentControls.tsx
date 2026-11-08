@@ -1,4 +1,4 @@
-import { AppWindow, ChevronDown, CirclePause, Maximize } from "lucide-react";
+import { AppWindow, ChevronDown, CirclePause, EyeOff, Maximize } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
@@ -106,7 +106,12 @@ function WindowMenu({
     <Popover open={open} onOpenChange={setOpen}>
       <Hint name={`Preview window · ${look?.label}`} label="Window options" side="bottom">
         <PopoverTrigger render={<Button variant="outline" aria-label={`Preview window, ${look?.label}`} data-preview-menu />}>
-          <AppWindow data-icon="inline-start" aria-hidden />
+          {/* Working is the look that isn't for sharing, so it shows here in the warning tone, as Hold does when held. */}
+          {prefs.look === "working" ? (
+            <EyeOff data-icon="inline-start" className="text-warning" aria-hidden />
+          ) : (
+            <AppWindow data-icon="inline-start" aria-hidden />
+          )}
           <span className="text-fg-muted data-collapsed:hidden" data-collapse={BAR_COLLAPSE.preview}>
             Preview
           </span>
@@ -155,13 +160,11 @@ function WindowMenu({
           <Button variant="outline" onClick={() => run("open")} data-preview-front>
             Bring to front
           </Button>
-          <Hint label="Or press F11 in the preview window" side="bottom">
-            <Button variant="outline" onClick={() => run("fullscreen")} data-preview-fullscreen>
-              Full screen window
-            </Button>
-          </Hint>
+          <Button variant="outline" onClick={() => run("fullscreen")} data-preview-fullscreen>
+            Full screen window
+          </Button>
         </div>
-        <PopoverFooter>
+        <PopoverFooter hint="F11 works in the preview window too.">
           <Button variant="ghost" onClick={() => run("close")} data-preview-close>
             Close window
           </Button>
