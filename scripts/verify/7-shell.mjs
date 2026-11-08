@@ -1587,6 +1587,24 @@ try {
     { overlay: true, clear: true },
   );
   check("the window logged no errors or warnings at its real size", errors, []);
+
+  // The UI token lives only in the page's memory, so a page loaded again would come up without it.
+  const recovers = async (how, act) => {
+    await app.evaluate(act);
+    // Asked through the main process: Playwright's page doesn't come back from a crashed renderer.
+    const topbar = () =>
+      app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0].webContents.executeJavaScript("document.querySelector('[data-topbar]') !== null").catch(() => false),
+      );
+    let shown = false;
+    for (const deadline = Date.now() + 10_000; !shown && Date.now() < deadline; ) {
+      await new Promise((r) => setTimeout(r, 250));
+      shown = await topbar();
+    }
+    check(`after ${how}, the window shows the app again, not the missing-token notice`, shown, true);
+  };
+  await recovers("a reload", ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.reload());
+  await recovers("a renderer crash", ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.forcefullyCrashRenderer());
 } finally {
   await app.close();
 }
