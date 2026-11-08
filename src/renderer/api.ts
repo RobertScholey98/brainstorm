@@ -2,6 +2,8 @@ import type { AppAbout, SkillInstall } from "../core/about";
 import type { AppUpdateState } from "../core/appUpdate";
 import type { UiPrefs, UiPrefsPatch } from "../core/prefs";
 import type {
+  AgentWork,
+  ThreadId,
   ExportResult,
   ReviewAction,
   Issue,
@@ -55,6 +57,8 @@ export type Api = {
   systemImports(): Promise<Result<SystemImport[]>>;
   dismissImport(path: string): Promise<Result<null>>;
   reviewSystem(id: SystemId, action: ReviewAction): Promise<Result<SystemView>>;
+  /** What the agent in a thread is doing with the work Brainstorm handed it. */
+  agentWork(thread: ThreadId): Promise<Result<AgentWork>>;
   kit(id: SystemId, n: SystemVersionN): Promise<Result<KitPayload>>;
   prefs(): Promise<Result<UiPrefs>>;
   setPrefs(patch: UiPrefsPatch): Promise<Result<UiPrefs>>;
@@ -150,6 +154,7 @@ export function createApi(token: string): Api {
     systemImports: () => call("GET", "/v1/ui/system-imports"),
     dismissImport: (path) => call("POST", "/v1/ui/system-imports/dismiss", { path }),
     reviewSystem: (id, action) => call("POST", `/v1/ui/systems/${id}/review`, action),
+    agentWork: (thread) => call("GET", `/v1/ui/threads/${encodeURIComponent(thread)}/work`),
     kit: (id, n) => call("GET", `/v1/ui/systems/${id}/kit/${n}`),
     prefs: () => call("GET", "/v1/ui/prefs"),
     setPrefs: (patch) => call("POST", "/v1/ui/prefs", patch),

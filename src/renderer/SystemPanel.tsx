@@ -1,8 +1,8 @@
-import { ArrowUpCircle, Check, ChevronRight, Download, ExternalLink, Palette, RotateCcw, Send } from "lucide-react";
+import { ArrowUpCircle, Check, ChevronRight, Download, ExternalLink, Paintbrush, Palette, RotateCcw, Send, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Callout } from "@/components/ui/callout";
+import { Callout, CalloutItem } from "@/components/ui/callout";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Count } from "@/components/ui/count";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,10 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Spinner } from "@/components/ui/spinner";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
-import type { ProposedName, ProposedView, RobAction, SessionSystemView, ThemeExport, Token } from "../core/types";
+import type { BlockId, ProposedName, ProposedView, RobAction, SessionSystemView, ThemeExport, ThreadId, Token, UpgradeCheck } from "../core/types";
+import { AgentWorkStatus, useAgentWork } from "./AgentWork";
+import type { Api } from "./api";
+import { axisLabel, axisOptions } from "./axes";
 import { ExportPath } from "./Export";
 
 const DEFAULT = "__default";
@@ -26,12 +29,17 @@ export function SystemSection({
   readOnly,
   send,
   exportTheme,
+  placeTitle = (where) => where,
+  api,
 }: {
+  api: Api;
   system: SessionSystemView;
   /** A past iteration is on the canvas, so the theme shows but doesn't change. */
   readOnly: boolean;
   send: (action: RobAction) => Promise<unknown>;
   exportTheme: () => Promise<ThemeExport | null>;
+  /** A block's name as the canvas shows it, "The week / Plan", for an upgrade that breaks it. */
+  placeTitle?: (where: string) => string;
 }) {
   const behind = system.latest > system.n;
   const check = system.upgrade.check;
@@ -51,23 +59,20 @@ export function SystemSection({
             heading={`Version ${system.latest} is out`}
             data-upgrade-check={check?.state}
             actions={
-              <Button variant="outline" disabled={check?.state === "breaks"} onClick={() => void send({ kind: "upgrade_system" })} data-system-upgrade>
-                <ArrowUpCircle data-icon="inline-start" aria-hidden />
-                Upgrade to v{system.latest}
-              </Button>
+              check?.state === "breaks" ? (
+                <Button variant="accent" disabled={readOnly} onClick={() => void send(fixRequest(system, check, placeTitle))} data-system-upgrade-fix>
+                  <Wrench data-icon="inline-start" aria-hidden />
+                  Ask the agent to fix {check.where.length === 1 ? "it" : "them"}
+                </Button>
+              ) : (
+                <Button variant={check?.state === "clean" ? "accent" : "outline"} disabled={check?.state !== "clean"} onClick={() => void send({ kind: "upgrade_system" })} data-system-upgrade>
+                  <ArrowUpCircle data-icon="inline-start" aria-hidden />
+                  Upgrade to v{system.latest}
+                </Button>
+              )
             }
           >
-            {(system.upgrade.added.length > 0 || system.upgrade.removed.length > 0) && (
-              <p data-system-upgrade-changes>
-                {[
-                  system.upgrade.added.length > 0 && `It adds ${list(system.upgrade.added)}`,
-                  system.upgrade.removed.length > 0 && `${system.upgrade.added.length > 0 ? "and removes" : "It removes"} ${list(system.upgrade.removed)}`,
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                .
-              </p>
-            )}
+            {upgradeChanges(system.upgrade) !== null && <p data-system-upgrade-changes>{upgradeChanges(system.upgrade)}</p>}
             {check === null || check.state === "checking" ? (
               <p className="flex items-center gap-1.5" data-upgrade-checking>
                 <Spinner />
@@ -76,23 +81,34 @@ export function SystemSection({
             ) : check.state === "clean" ? (
               <p className="flex items-center gap-1.5" data-upgrade-clean>
                 <Check aria-hidden className="size-3.5 shrink-0 text-success" />
-                Nothing breaks: every block builds with it.
+                Every block builds with it.
               </p>
             ) : (
-              <p data-upgrade-breaks>
-                It breaks {list(check.where)}, with {check.errors === 1 ? "1 error" : `${check.errors} errors`}, so this brainstorm stays on v{system.n} for now.
-              </p>
+              <>
+                <p data-upgrade-breaks>
+                  {list(check.where.map(placeTitle))} wouldn't build with it, so this brainstorm stays on v{system.n}. The agent can change {check.where.length === 1 ? "it" : "them"} to build with both, and
+                  then you upgrade.
+                </p>
+                <ul className="grid gap-1" data-upgrade-errors>
+                  {check.issues.map((i, n) => (
+                    <CalloutItem key={n}>
+                      <span className="font-medium">{placeTitle(i.where)}:</span> {i.message}
+                    </CalloutItem>
+                  ))}
+                  {check.errors > check.issues.length && <CalloutItem>and {check.errors - check.issues.length} more</CalloutItem>}
+                </ul>
+              </>
             )}
           </Callout>
         </div>
       )}
-      {system.proposed.length > 0 && <ProposedList system={system} send={send} />}
+      {system.proposed.length > 0 && <ProposedList api={api} system={system} send={send} />}
       <ThemeEditor system={system} readOnly={readOnly} send={send} exportTheme={exportTheme} />
     </section>
   );
 }
 
-function ThemeEditor({ system, readOnly, send, exportTheme }: Parameters<typeof SystemSection>[0]) {
+function ThemeEditor({ system, readOnly, send, exportTheme }: Omit<Parameters<typeof SystemSection>[0], "api">) {
   const { theme } = system;
   const colours = useMemo(() => system.tokens.filter((t) => t.origin === "system" && t.kind === "color"), [system.tokens]);
   const others = useMemo(() => system.tokens.filter((t) => t.origin === "system" && t.kind !== "color" && t.kind !== "other"), [system.tokens]);
@@ -114,7 +130,7 @@ function ThemeEditor({ system, readOnly, send, exportTheme }: Parameters<typeof 
             label={axisLabel(axis.attribute)}
             value={theme.axes[axis.attribute] ?? DEFAULT}
             onChange={(value) => void send({ kind: "set_theme_axis", axis: axis.attribute, value: value === DEFAULT ? null : value })}
-            options={[{ value: DEFAULT, label: capital(axis.default ?? "Default") }, ...axis.values.filter((v) => v !== axis.default).map((v) => ({ value: v, label: capital(v) }))]}
+            options={axisOptions(axis, DEFAULT)}
           />
         </label>
       ))}
@@ -156,8 +172,30 @@ function AxisControl({ label, value, onChange, options }: { label: string; value
 }
 
 const capital = (s: string) => s.replace(/^\w/, (c) => c.toUpperCase());
-const axisLabel = (attribute: string) => (attribute === "class" ? "Theme class" : attribute === "data-theme" ? "Mode" : capital(attribute.replace(/^data-/, "")));
 const list = (names: readonly string[]) => (names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
+
+/** What the newest version changes, in a sentence or two, or null when it changes nothing a block would notice. */
+function upgradeChanges(upgrade: SessionSystemView["upgrade"]): string | null {
+  const parts = [
+    upgrade.added.length > 0 && `It adds ${list(upgrade.added)}`,
+    upgrade.removed.length > 0 && `${upgrade.added.length > 0 ? "and removes" : "It removes"} ${list(upgrade.removed)}`,
+  ].filter((p): p is string => typeof p === "string");
+  const changed = upgrade.changed.length > 0 ? `${list(upgrade.changed)} ${upgrade.changed.length === 1 ? "renders" : "render"} differently.` : null;
+  const head = parts.length > 0 ? `${parts.join(" ")}.` : null;
+  return head === null && changed === null ? null : [head, changed].filter((p) => p !== null).join(" ");
+}
+
+/** A request for the agent to make the broken blocks build with both versions, so Rob can upgrade after it. */
+function fixRequest(system: SessionSystemView, check: Extract<UpgradeCheck, { state: "breaks" }>, placeTitle: (where: string) => string): RobAction {
+  const blocks = check.where.filter((w) => !w.startsWith("proposed/") && w.includes("/")) as BlockId[];
+  const errors = check.issues.map((i) => `- ${placeTitle(i.where)}: ${i.message}`).join("\n");
+  const freetext = `Version ${system.latest} of ${system.name} breaks ${list(check.where.map(placeTitle))}:
+${errors}
+
+Change ${check.where.length === 1 ? "it" : "them"} so ${check.where.length === 1 ? "it builds" : "they build"} with both v${system.n} and v${system.latest}, keeping the design, so Rob can upgrade.`;
+  const [first, ...rest] = blocks;
+  return first === undefined ? { kind: "regenerate", scope: { kind: "described" }, freetext } : { kind: "regenerate", scope: { kind: "blocks", blocks: [first, ...rest] }, freetext };
+}
 
 /** The value a token takes under the session's axes: the axis value's own, else the root's. */
 function baseValue(token: Token, axes: Readonly<Record<string, string>>): string {
@@ -253,10 +291,17 @@ function Swatch({ value }: { value: string }) {
 function SaveTheme({ disabled, onSave }: { disabled: boolean; onSave: (name: string) => Promise<unknown> }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => {
+    if (saved === null) return;
+    const timer = setTimeout(() => setSaved(null), 4000);
+    return () => clearTimeout(timer);
+  }, [saved]);
   const save = async () => {
     if (name.trim() === "") return;
     await onSave(name.trim());
     setOpen(false);
+    setSaved(name.trim());
     setName("");
   };
   const trigger = (
@@ -266,6 +311,7 @@ function SaveTheme({ disabled, onSave }: { disabled: boolean; onSave: (name: str
     </PopoverTrigger>
   );
   return (
+    <>
     <Popover open={open} onOpenChange={setOpen}>
       {disabled ? (
         <BlockedHint label="Tweak the theme first" side="top">
@@ -287,6 +333,13 @@ function SaveTheme({ disabled, onSave }: { disabled: boolean; onSave: (name: str
         </PopoverFooter>
       </PopoverContent>
     </Popover>
+    {saved !== null && (
+      <span role="status" className="flex items-center gap-1 text-xs text-fg-muted" data-theme-saved-note>
+        <Check aria-hidden className="size-3.5 shrink-0 text-success" />
+        Saved “{saved}”
+      </span>
+    )}
+    </>
   );
 }
 
@@ -294,7 +347,10 @@ function SavedThemes({ names, onApply }: { names: readonly string[]; onApply: (n
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button variant="outline" data-theme-saved />}>Apply saved theme…</PopoverTrigger>
+      <PopoverTrigger render={<Button variant="outline" data-theme-saved />}>
+        <Paintbrush data-icon="inline-start" aria-hidden />
+        Apply a saved theme
+      </PopoverTrigger>
       <PopoverContent size="sm" align="start">
         <PopoverHeader heading="Saved themes" description="Applying one replaces this brainstorm's tweaks." />
         <ul className="grid gap-1">
@@ -363,7 +419,7 @@ function ThemeExportButton({ exportTheme }: { exportTheme: () => Promise<ThemeEx
   );
 }
 
-function ProposedList({ system, send }: { system: SessionSystemView; send: (action: RobAction) => Promise<unknown> }) {
+function ProposedList({ api, system, send }: { api: Api; system: SessionSystemView; send: (action: RobAction) => Promise<unknown> }) {
   const pending = system.proposed.filter((p) => !p.fromKit);
   const adopted = system.proposed.filter((p) => p.fromKit);
   return (
@@ -374,7 +430,7 @@ function ProposedList({ system, send }: { system: SessionSystemView; send: (acti
           <p className="text-xs/relaxed text-fg-muted">The kit had nothing that fit, so the design proposes these. Promote one to add it to the library.</p>
           <ul className="grid gap-2">
             {pending.map((p) => (
-              <ProposedRow key={p.name} proposed={p} library={system.name} canPromote={system.canPromote} onPromote={(name) => void send({ kind: "promote", name })} />
+              <ProposedRow key={p.name} api={api} proposed={p} library={system.name} canPromote={system.canPromote} onPromote={(name) => void send({ kind: "promote", name })} />
             ))}
           </ul>
         </>
@@ -399,12 +455,26 @@ function ProposedList({ system, send }: { system: SessionSystemView; send: (acti
   );
 }
 
+/** A promotion under way: what the agent adding the component to the library is doing, as the import card shows it. */
+function PromoteWork({ api, thread, link, since, library }: { api: Api; thread: ThreadId; link: string | null; since: string; library: string }) {
+  const work = useAgentWork(api, thread);
+  return (
+    <div className="grid min-w-0 grid-cols-1 gap-1 rounded-sm bg-muted px-2 py-1.5" data-promote-status>
+      <span className="text-xs text-fg-muted">Adding it to {library}</span>
+      <AgentWorkStatus work={work} since={since} link={link} compact />
+      {work?.phase === "finished" && <span className="text-xs text-fg-muted">Once the agent syncs the library, the new version shows above with Upgrade.</span>}
+    </div>
+  );
+}
+
 function ProposedRow({
+  api,
   proposed,
   library,
   canPromote,
   onPromote,
 }: {
+  api: Api;
   proposed: ProposedView;
   library: string;
   canPromote: boolean;
@@ -414,20 +484,13 @@ function ProposedRow({
   const inSystem = proposed.inSystem;
   let status: ReactNode = null;
   if (inSystem !== null) status = <span className="text-xs text-success">In v{inSystem}; upgrade to use it from the kit</span>;
-  else if (promotion?.state === "starting") status = <span className="text-xs text-fg-muted">Starting the thread…</span>;
-  else if (promotion?.state === "started") {
-    status = (
-      <span className="flex items-center gap-2 text-xs text-fg-muted" data-promote-status>
-        <span className="min-w-0">Adding to {library} in a T3 thread</span>
-        {promotion.link !== null && (
-          <Button variant="ghost" size="xs" className="ml-auto shrink-0" nativeButton={false} render={<a href={promotion.link} target="_blank" rel="noreferrer" />} data-promote-thread>
-            <ExternalLink data-icon="inline-start" aria-hidden />
-            Open thread
-          </Button>
-        )}
+  else if (promotion?.state === "starting") status = (
+      <span className="flex items-center gap-1.5 text-xs text-fg-muted">
+        <Spinner />
+        Starting the thread…
       </span>
     );
-  }
+  else if (promotion?.state === "started") status = <PromoteWork api={api} thread={promotion.thread} link={promotion.link} since={promotion.at} library={library} />;
   else if (promotion?.state === "failed") status = <span className="text-xs text-danger">Couldn't start: {promotion.error}</span>;
   const button = (
     <Button variant="outline" size="xs" disabled={!canPromote || promotion?.state === "starting"} onClick={() => onPromote(proposed.name)} data-promote={proposed.name}>

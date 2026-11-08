@@ -333,7 +333,7 @@ function syncLines({ system, created, warnings }: SyncOutcome, verb: string): st
     // Files read best from the library's root, as its author knows them.
     ...warnings.map((w) => issueLine(w.file === null ? w : { ...w, file: relative(system.root, w.file).split(sep).join("/") })),
     created ? `${verb} ${system.id} "${system.name}" ${versionLine(system)}` : `nothing changed; ${system.id} is still ${versionLine(system)}`,
-    ...(system.review?.state === "pending" ? ["Rob reviews it on Brainstorm's Design systems page; brainstorms can use it once he confirms it"] : []),
+    ...(system.review?.state === "pending" ? ["Rob reviews it on Brainstorm's Design systems page; brainstorms can use it once Rob confirms it"] : []),
   ];
 }
 
@@ -367,7 +367,11 @@ const COMMANDS: Record<string, Command> = {
         frame: str(flags, "frame") ?? null,
         thread,
       });
-      return { result, lines: result.ok ? [...syncLines(result.data, "added"), `next: brainstorm session new --title <t> --system ${result.data.system.id}`] : [] };
+      const next =
+        result.ok && result.data.system.review?.state === "pending"
+          ? "next: report to Rob and wait; Rob's review may send changes back to this thread"
+          : `next: brainstorm session new --title <t> --system ${result.ok ? result.data.system.id : ""}`;
+      return { result, lines: result.ok ? [...syncLines(result.data, "added"), next] : [] };
     },
   },
   "system sync": {
@@ -392,7 +396,7 @@ const COMMANDS: Record<string, Command> = {
         result,
         exit: c.passed ? EXIT.ok : EXIT.rejected,
         lines: [
-          ...c.gates.flatMap((g) => [`${g.passed ? "pass" : "FAIL"}  ${g.gate}`, ...g.issues.map((i) => `      ${rel(i)}`)]),
+          ...c.gates.flatMap((g) => [`${g.passed ? "pass" : "FAIL"}  ${g.gate}`, ...g.issues.map((i) => `      ${rel(g.passed ? i : { ...i, severity: "error" })}`)]),
           ...(c.warnings.length === 0 ? [] : ["warnings:", ...c.warnings.map((w) => `      ${rel(w)}`)]),
           ...tiers.flatMap((t) => {
             const list = c.components.filter((x) => x.tier === t);

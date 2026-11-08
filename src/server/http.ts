@@ -395,6 +395,17 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
         return b.ok ? service.systems.review(id, b.data) : b;
       }),
     },
+    // What an agent Brainstorm handed work to is doing in its thread, for the cards that wait on it.
+    {
+      method: "GET",
+      path: /^\/v1\/ui\/threads\/([^/]+)\/work$/,
+      auth: "ui",
+      handle: async ({ params }) => {
+        const raw = decodeSegment(params[0] ?? "");
+        const thread = raw === null ? null : parseThreadId(raw);
+        return thread === null ? usage(`"${params[0]}" is not a T3 thread id`) : service.systems.work(thread);
+      },
+    },
     { method: "POST", path: /^\/v1\/ui\/sessions\/([^/]+)\/theme-export$/, auth: "ui", handle: withSession(async (id) => service.exportTheme(id)) },
     { method: "GET", path: /^\/v1\/ui\/sessions$/, auth: "ui", handle: () => service.listSessions(null) },
     { method: "GET", path: /^\/v1\/ui\/sessions\/([^/]+)$/, auth: "ui", handle: withSession((id) => service.view(id)) },

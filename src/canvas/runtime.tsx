@@ -623,8 +623,10 @@ function Gallery({ ids, focus }: { ids: readonly string[] | null; focus: Gallery
     const record = kitStories().stories.find((r) => r.id === focus.id);
     return record === undefined ? <BlockFailure message={`no story ${focus.id} in this version`} /> : <FocusedStory record={record} focus={focus} />;
   }
-  const wanted = ids === null ? null : new Set(ids);
-  const records = kitStories().stories.filter((r) => wanted === null || wanted.has(r.id));
+  // The host's order, which follows its catalog: tiers, or a search's best matches first.
+  const all = kitStories().stories;
+  const byId = new Map(all.map((r) => [r.id, r]));
+  const records = ids === null ? all : ids.flatMap((id) => byId.get(id) ?? []);
   return <GalleryStories key={JSON.stringify(ids)} records={records} />;
 }
 
@@ -643,6 +645,9 @@ function GalleryStories({ records }: { records: ReturnType<typeof kitStories>["s
             <button type="button" className="bs-story-open" onClick={() => post({ kind: "open_story", id: r.id })} data-open-story={r.id}>
               <span>{r.title.split("/").at(-1)}</span>
               <span className="bs-frame-size">{r.name}</span>
+            </button>
+            <button type="button" className="bs-story-cue" tabIndex={-1} aria-hidden onClick={() => post({ kind: "open_story", id: r.id })}>
+              Open
             </button>
           </header>
           <div className="bs-frame-body bs-story-body" style={surfaceStyle()}>
@@ -1131,11 +1136,11 @@ html[data-present] .bs-frame-body { min-height: 100vh; border-radius: 0; box-sha
 html[data-present] .bs-frame-body > [data-bid] > * { min-height: 100vh; box-sizing: border-box; }
 /* A proposed component: dashed, and tagged "not in system" at its root's top left. */
 .bs-proposed > :not(.bs-proposed-anchor) { outline: 1px dashed var(--bs-warning, #d97706); outline-offset: 2px; }
-/* The tag straddles the outline's top-right corner, so it marks the component without covering the design above it,
-   and fades while the pointer is over the component so what it covers can be read. */
+/* The tag sits on the outline's top edge at its right end, outside the component, so it never covers what is being
+   reviewed; it fades while the pointer is over the component so the design above it can be read. */
 .bs-proposed-anchor {
   position: absolute; z-index: 2147482000; pointer-events: none;
-  right: anchor(right); top: anchor(top); translate: 6px -50%;
+  right: anchor(right); bottom: anchor(top); translate: 2px -3px;
   transition: opacity 120ms ease-out;
 }
 .bs-proposed:hover .bs-proposed-anchor { opacity: 0.15; }
@@ -1153,6 +1158,8 @@ html[data-present] .bs-frame-body > [data-bid] > * { min-height: 100vh; box-sizi
 .bs-story-open { all: unset; display: flex; gap: inherit; align-items: baseline; cursor: pointer; border-radius: 3px; }
 .bs-story-open:hover > span:first-child { text-decoration: underline; }
 .bs-story-open:focus-visible { outline: 2px solid var(--bs-accent, #0d9488); outline-offset: 2px; }
+.bs-story-cue { all: unset; margin-left: auto; cursor: pointer; font-weight: 400; opacity: 0.7; }
+.bs-story:hover .bs-story-cue { opacity: 1; color: var(--bs-accent, #0d9488); }
 /* contain: a story that pins itself to the viewport, such as a sidebar, stays inside its own frame. */
 .bs-story-body { padding: 24px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; contain: layout paint; }
 body:has(.bs-gallery) #canvas { display: block; }

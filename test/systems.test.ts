@@ -267,7 +267,13 @@ export default function Chores() {
     // Version 3 drops Card, which it does use.
     writeFileSync(join(lib, "src/index.ts"), 'export { Button } from "./Button";\nexport { CardBody, CardTitle } from "./Card";\n');
     data(await service.systems.sync(system));
-    expect(await upgradeCheck()).toEqual({ state: "breaks", errors: 2, where: ["home/a"] });
+    // The check keeps the first errors, so the Inspector can say what breaks, not only where.
+    expect(await upgradeCheck()).toMatchObject({
+      state: "breaks",
+      errors: 2,
+      where: ["home/a"],
+      issues: expect.arrayContaining([{ where: "home/a", message: 'the kit has no export "Card"; system/CATALOG.md lists what it has' }]),
+    });
     const refused = await service.act(S, { kind: "upgrade_system" });
     expect(refused.ok ? null : refused.error.message).toBe("version 3 breaks this design in 2 places, so the session stays on version 2");
     expect(data(await service.view(S)).system?.n).toBe(2);

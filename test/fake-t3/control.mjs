@@ -35,6 +35,12 @@ export function fakeT3(statePath) {
         t.messages = (t.messages ?? []).map((m) => (m.runId === null ? { ...m, runId } : m));
         Object.assign(t, { status: "running", activeRunId: runId, latestRunId: runId, pendingRequestCount: 0 });
       }),
+    /** The agent's reply, in the thread's latest run. */
+    reply: (id, text) =>
+      update((s) => {
+        const t = thread(s, id);
+        t.messages = [...(t.messages ?? []), { role: "assistant", runId: t.latestRunId, text }];
+      }),
     /** The running agent waits for an answer (`--wait` would exit 2). */
     ask: (id) => update((s) => void (thread(s, id).pendingRequestCount = 1)),
     endRun: (id, status) => update((s) => void Object.assign(thread(s, id), { status, activeRunId: null, pendingRequestCount: 0 })),

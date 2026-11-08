@@ -764,7 +764,8 @@ export type SystemReview = {
   readonly issues: readonly ReviewIssue[];
   /** The T3 thread the import ran in, or that the review was last sent to. */
   readonly thread: { readonly id: ThreadId; readonly link: string | null } | null;
-  readonly sent: { readonly at: string; readonly issues: number; readonly tiers: number } | null;
+  /** The last review sent to the agent: Rob's notes and the tier moves Brainstorm wrote into the adapter. */
+  readonly sent: { readonly at: string; readonly notes: readonly ReviewIssue[]; readonly moved: Readonly<Record<string, Tier>> } | null;
   readonly confirmed: { readonly at: string; readonly n: SystemVersionN } | null;
 };
 
@@ -807,6 +808,8 @@ export type SystemView = SystemListing & {
     readonly changed: readonly { readonly name: string; readonly stories: number }[];
     /** Tokens whose value changed from the version before. */
     readonly tokens: readonly { readonly name: string; readonly before: string; readonly after: string }[];
+    /** Components that moved to another tier since the version before. */
+    readonly retiered: readonly { readonly name: string; readonly from: Tier; readonly to: Tier }[];
   })[];
   /** The latest version's manifest, without its story sources. */
   readonly manifest: Omit<SystemManifest, "storyFiles"> | null;
@@ -824,6 +827,16 @@ export type KitPayload = {
 
 /** A session's theme as the canvas applies it: attribute values on the root, and token values over the system's own. */
 export type ThemeState = { readonly axes: Readonly<Record<string, string>>; readonly tokens: Readonly<Record<string, string>> };
+
+/**
+ * What an agent Brainstorm handed work to is doing in its T3 thread, as T3 shows it: waiting for its turn, working,
+ * asking Rob something, finished or failed, or the thread is gone. `lastLine` is the end of the agent's latest reply.
+ */
+export type AgentWork = {
+  readonly phase: "waiting" | "working" | "asking" | "finished" | "failed" | "missing";
+  readonly lastLine: string | null;
+  readonly link: string | null;
+};
 
 export type PromotionState =
   | { readonly state: "starting" }
@@ -860,14 +873,26 @@ export type SessionSystemView = {
   /** Whether a T3 project is known for the system's source, so Promote can start a thread there. */
   readonly canPromote: boolean;
   /** What the newest version changes against the session's, by exported component name; empty when they're the same. */
-  readonly upgrade: { readonly added: readonly string[]; readonly removed: readonly string[]; readonly check: UpgradeCheck | null };
+  readonly upgrade: {
+    readonly added: readonly string[];
+    readonly removed: readonly string[];
+    /** Components whose stories render differently in the newest version. */
+    readonly changed: readonly string[];
+    readonly check: UpgradeCheck | null;
+  };
 };
 
 /** Whether the newest version would break the session's design (ADR 008); `where` names the blocks, as `home/a`. */
 export type UpgradeCheck =
   | { readonly state: "checking" }
   | { readonly state: "clean" }
-  | { readonly state: "breaks"; readonly errors: number; readonly where: readonly string[] };
+  | {
+      readonly state: "breaks";
+      readonly errors: number;
+      readonly where: readonly string[];
+      /** The first few errors, each with the block or proposed component it's in. */
+      readonly issues: readonly { readonly where: string; readonly message: string }[];
+    };
 
 export type ThemeExport = { readonly css: ExportResult; readonly json: ExportResult };
 

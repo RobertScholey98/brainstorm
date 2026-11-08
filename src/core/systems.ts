@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { basename, relative, resolve } from "node:path";
+import { observeWork } from "./agentWork";
 import { PLAIN_ENV, type CheckEnv, type Checker } from "./check";
 import type { Store, SessionSystem, StoredSystem, StoredSystemVersion } from "./store";
 import { catalogMarkdown } from "./system/catalog";
@@ -11,6 +12,7 @@ import { syncSystem } from "./system/sync";
 import {
   isError,
   type AgentBridge,
+  type AgentWork,
   type Failure,
   type Issue,
   type IssueCode,
@@ -29,7 +31,7 @@ import {
   type ThreadId,
 } from "./types";
 import type { SystemDocs } from "./workingCopy";
-import type { SystemManifest } from "./system/model";
+import type { SystemManifest, Tier } from "./system/model";
 
 const ok = <T>(data: T): Result<T> => ({ ok: true, data });
 const fail = (error: Failure): { ok: false; error: Failure } => ({ ok: false, error });
@@ -130,7 +132,10 @@ export class Systems {
         return all.map((v) => {
           const { warnings: _w, ...rest } = summary({ ...v, system: id, warnings: [] });
           const before = all.find((o) => o.n === v.n - 1);
-          const changes = before === undefined ? { added: [], removed: [], changed: [], tokens: [] } : { ...componentChanges(before.manifest, v.manifest), ...renderChanges(before.manifest, v.manifest) };
+          const changes =
+            before === undefined
+              ? { added: [], removed: [], changed: [], tokens: [], retiered: [] }
+              : { ...componentChanges(before.manifest, v.manifest), ...renderChanges(before.manifest, v.manifest), retiered: tierChanges(before.manifest, v.manifest) };
           return { ...rest, sessions: using.get(v.n) ?? [], ...changes };
         });
       })(),
@@ -421,7 +426,7 @@ export class Systems {
       tiers: {},
       issues: [],
       thread,
-      sent: { at: this.#now(), issues: review.issues.length, tiers: Object.keys(moved).length },
+      sent: { at: this.#now(), notes: review.issues, moved },
     });
     this.#changed();
     return this.view(s.id);
@@ -449,6 +454,14 @@ export class Systems {
     this.#store.setReview(s.id, { ...review, tiers: {}, state: "confirmed", confirmed: { at: this.#now(), n: latest.n } });
     this.#changed();
     return this.view(s.id);
+  }
+
+  /** What the agent in `thread` is doing with the work Brainstorm handed it: an import, a review, a repair or a promotion. */
+  async work(thread: ThreadId): Promise<Result<AgentWork>> {
+    const shown = await this.#bridge.snapshot(thread, { messages: 12 });
+    if (shown.kind === "missing") return ok({ phase: "missing", lastLine: null, link: null });
+    if (shown.kind === "failed") return fail({ code: "unavailable", message: `T3 didn't show the thread: ${shown.error}` });
+    return ok({ ...observeWork(shown.snapshot), link: shown.snapshot.thread.link });
   }
 
   async #projectOf(root: string, thread: ThreadId | null): Promise<ProjectId | null> {
@@ -551,6 +564,16 @@ const samePath = (a: string, b: string) => resolve(a).toLowerCase() === resolve(
 function syncFailed(issues: readonly Issue[]): Failure {
   const errors = issues.filter(isError).length;
   return { code: "validation_failed", message: `the design system didn't sync (${errors} error${errors === 1 ? "" : "s"}); nothing was saved`, issues };
+}
+
+/** The components both versions list whose tier changed, such as a review's move (ADR 008). */
+export function tierChanges(before: Pick<SystemManifest, "catalog">, after: Pick<SystemManifest, "catalog">): { name: string; from: Tier; to: Tier }[] {
+  const was = new Map(before.catalog.filter((e) => !e.generated).map((e) => [e.name, e.tier ?? "primitive"]));
+  return after.catalog.flatMap((e) => {
+    const from = was.get(e.name);
+    const to = e.tier ?? "primitive";
+    return e.generated || from === undefined || from === to ? [] : [{ name: e.name, from, to }];
+  });
 }
 
 /**

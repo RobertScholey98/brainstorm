@@ -198,7 +198,7 @@ describe("a design system from an app project", () => {
     data(await review({ kind: "drop_issue", issue: 2 }));
 
     const sent = data(await review({ kind: "send" }));
-    expect(sent.review).toMatchObject({ state: "pending", tiers: {}, issues: [], sent: { issues: 1, tiers: 1 } });
+    expect(sent.review).toMatchObject({ state: "pending", tiers: {}, issues: [], sent: { notes: [{ name: "MealCard" }], moved: { Badge: "composite" } } });
     const message = bridge.sent.at(-1);
     expect(message?.thread).toBe(importThread);
     expect(message?.message.split("\n")[0]).toBe(`[brainstorm] review of the Fixture app design system (${system})`);

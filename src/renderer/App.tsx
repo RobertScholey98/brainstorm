@@ -1004,9 +1004,15 @@ function SessionWorkspace({
           />
           {view.system !== null && (
             <SystemSection
+              api={api}
               system={view.system}
               readOnly={past !== null}
               send={send}
+              placeTitle={(where) => {
+                const block = view.iteration?.blocks.find((b) => b.id === where);
+                const slot = block === undefined ? undefined : view.iteration?.slots.find((s) => s.id === block.slot);
+                return block === undefined ? where : `${slot?.title ?? block.slot} / ${block.title}`;
+              }}
               exportTheme={async () => {
                 const r = await api.exportTheme(sessionId);
                 if (r.ok) return r.data;

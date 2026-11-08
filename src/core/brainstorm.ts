@@ -35,7 +35,7 @@ import {
 import { blockConformance, compiledForConformance, proposedConformance, proposedImports } from "./system/conform";
 import { tierFolder } from "./system/source";
 import type { CheckEnv } from "./check";
-import { Systems, componentChanges } from "./systems";
+import { Systems, componentChanges, renderChanges } from "./systems";
 import {
   blockIdOf,
   framesOf,
@@ -835,7 +835,11 @@ export class Brainstorm {
       themes: this.#store.themes(ref.id),
       proposed,
       canPromote: system?.projectId != null,
-      upgrade: { ...componentChanges(version.manifest, newest.manifest), check: newest.n > ref.n ? this.#upgradeCheck(id, ref, newest.n) : null },
+      upgrade: {
+        ...componentChanges(version.manifest, newest.manifest),
+        changed: newest.n > ref.n ? renderChanges(version.manifest, newest.manifest).changed.map((c) => c.name) : [],
+        check: newest.n > ref.n ? this.#upgradeCheck(id, ref, newest.n) : null,
+      },
     };
   }
 
@@ -853,9 +857,10 @@ export class Brainstorm {
     void this.#upgradeIssues(id, { id: ref.id, n })
       .then((errors) => {
         const where = [...new Set(errors.map((e) => placeOf(e.file)))];
-        this.#upgradeChecks.set(key, errors.length === 0 ? { state: "clean" } : { state: "breaks", errors: errors.length, where });
+        const issues = errors.slice(0, 3).map((e) => ({ where: placeOf(e.file), message: e.message }));
+        this.#upgradeChecks.set(key, errors.length === 0 ? { state: "clean" } : { state: "breaks", errors: errors.length, where, issues });
       })
-      .catch((e: unknown) => this.#upgradeChecks.set(key, { state: "breaks", errors: 1, where: [String(e)] }))
+      .catch((e: unknown) => this.#upgradeChecks.set(key, { state: "breaks", errors: 1, where: [], issues: [{ where: "the design", message: String(e) }] }))
       .finally(() => this.#emit(id));
     return checking;
   }
@@ -1823,6 +1828,7 @@ function promoteMessage(input: {
       ? `- Write a story for it in .brainstorm/stories/${draft === null ? "" : ` with these args: ${JSON.stringify(draft.example)}`}${draft?.tier == null || draft.tier === "primitive" ? "" : `, with \`tags: ["${draft.tier}"]\` in its meta if its file isn't under the adapter's ${draft.tier}s`}.`
       : `- Export it from the library's entry, and write a story for it${draft === null ? "" : ` with these args: ${JSON.stringify(draft.example)}`}.`,
     `- Then run \`brainstorm system sync ${system.id}\`, so the design system's next version has it. Brainstorm then offers the upgrade in the session, and after it the design uses the library's component.`,
+    "- End with a short report. Its first line says what you added and which version the sync made; Brainstorm shows that line beside the promotion. Then say where you departed from the proposed files, and why.",
     "",
     "The proposed files:",
     "",

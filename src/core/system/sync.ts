@@ -85,7 +85,7 @@ export async function syncSystem(source: SystemSource, checker: Checker): Promis
   const storyless = catalog.filter((e) => e.stories.length === 0 && !e.generated).map((e) => e.name);
   if (storyless.length > 0) {
     warnings.push(
-      issue("no_story", `${storyless.length} component${storyless.length === 1 ? " has" : "s have"} no story: ${list(storyless, 12)}`, {
+      issue("no_story", `${storyless.length} component${storyless.length === 1 ? " has" : "s have"} no story: ${list(storyless, 40)}`, {
         file: source.entry,
       }),
     );
@@ -95,7 +95,7 @@ export async function syncSystem(source: SystemSource, checker: Checker): Promis
   }
   if (styles.offScale.length > 0) {
     const shown = styles.offScale.map((o) => `${o.className} (${o.property} ${o.value})`);
-    warnings.push(issue("off_scale", `the kit writes ${shown.length} value${shown.length === 1 ? "" : "s"} off its token scales: ${list(shown, 8)}`, { file: source.css }));
+    warnings.push(issue("off_scale", `the kit writes ${shown.length} value${shown.length === 1 ? "" : "s"} off its token scales: ${list(shown, 40)}`, { file: source.css }));
   }
 
   // The adapter's tiers change the catalog without changing the bundle, so they're part of the version too. A system
