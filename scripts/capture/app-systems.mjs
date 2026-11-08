@@ -264,11 +264,16 @@ try {
   write(".brainstorm/stories/meal-card.stories.tsx", STORIES[".brainstorm/stories/meal-card.stories.tsx"] + 'export const NoTime = { args: { title: "Leftovers" } };\n');
   cli(["system", "sync", system.id], { quiet: true });
   await waitForSync(system.id, (s) => s.latest?.n === 3);
-  t3.reply(reviewThread, "Made MealCard's time optional and added a NoTime story. The check passes and the sync made v3.");
+  t3.reply(reviewThread, "Made MealCard's time optional and added a No Time story. The check passes and the sync made v3.");
   t3.endRun(reviewThread, "completed");
   await window.waitForSelector('[data-review-status] [data-agent-work="finished"]', { timeout: 30_000 });
   await window.waitForSelector("[data-review-next][data-agent-synced]", { timeout: 30_000 });
-  await shot(window, "review-agent-done", "When the agent's run ends: the sent box says Agent finished with its last line, and that it synced v3, where MealCard renders differently; Confirm v3 is the main action again");
+  await shot(window, "review-agent-done", "When the agent's run ends: the sent box says Agent finished with its last line and folds what Rob sent to one line; the walk counts MealCard unseen again, since v3 changed it; the callout says v3 added the story MealCard › No Time, offers Show MealCard, and Confirm v3 is the main action again");
+  await window.click("[data-review-show]");
+  await window.waitForSelector('[data-review-strip="MealCard"]', { timeout: 10_000 });
+  await galleryFrame(window);
+  await new Promise((r) => setTimeout(r, 1500));
+  await shot(window, "review-agent-show", "After Show MealCard: the walk is on MealCard, its catalog row says changed in v3, and the gallery renders all three of its stories, No Time among them");
   const reviewSent = t3.sent().at(-1);
   await textShot(electron, "review-message", `What the review sent to the import's thread (${reviewSent?.thread})`, reviewSent?.message ?? "(nothing sent)", "The review's message to the import thread: Rob's note on MealCard, the tier move Brainstorm already wrote into the adapter's tiers, then check, sync and report");
 

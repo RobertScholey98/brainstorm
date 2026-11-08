@@ -29,12 +29,12 @@ const SHEETS = [
   {
     name: "vs-storybook-canvas",
     exemplar: ["Storybook · one component's story", storybook("canvas-card")],
-    app: ["Brainstorm · one component's stories (Card)", brainstorm("library", "system-gallery-card")],
+    app: ["Brainstorm · picking Card opens its story", brainstorm("library", "system-gallery-card")],
   },
   {
     name: "vs-storybook-controls",
     exemplar: ["Storybook · a story with a control changed", storybook("controls-changed")],
-    app: ["Brainstorm · the workbench with two controls changed", brainstorm("app", "workbench-changed")],
+    app: ["Brainstorm · the same Button story retitled at 390px", brainstorm("library", "system-workbench")],
   },
   {
     name: "vs-storybook-search",
