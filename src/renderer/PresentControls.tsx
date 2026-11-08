@@ -174,7 +174,7 @@ function WindowMenu({
             <span className="text-sm">Hold preview</span>
             <span className="text-xs text-fg-muted">Freeze it while you keep editing here.</span>
           </span>
-          <Switch checked={hold} onCheckedChange={onHold} className="mt-0.5" data-preview-menu-hold />
+          <Switch checked={hold} onCheckedChange={onHold} tone="warning" className="mt-0.5" data-preview-menu-hold />
         </label>
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">

@@ -185,6 +185,13 @@ try {
   );
   await window.mouse.move(150, 860);
   await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed amber, and, as a slim strip in the canvas's top inset above the frame caption so nothing moves or hides, a warning-toned bar under the canvas bar, Preview held on The wheel · Slot reel (the names in semibold), with a compact Resume live inside the strip; the main canvas has moved on to the result slot");
+  await window.click("[data-preview-menu]");
+  await window.waitForSelector("[data-preview-popover]");
+  check("while held, the menu's header says what it's held on", await window.textContent("[data-preview-popover] [data-slot=popover-description]"), "Held on The wheel · Slot reel.");
+  await sleep(250);
+  await snap(window, "10c-preview-menu-held", "The Preview menu while held: its header says Held on The wheel · Slot reel, and the Hold preview switch is on in the warning tone (amber), as the pressed Hold button and the strip are", { keepFocus: true });
+  await window.click("[data-preview-menu]");
+  await window.waitForSelector("[data-preview-popover]", { state: "detached" });
   await window.click("[data-held-release]");
   await settled(() => showing(mirror));
   check("releasing Hold sends it the latest", await showing(mirror), "result:result/card");
@@ -263,10 +270,10 @@ try {
   check(
     "held with the canvas away, the held strip still lies along the region's top and the placeholder says it's held",
     [await window.textContent("[data-held-bar]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")],
-    ["Preview held on The result · Assignment cardResume live", "The preview is held. It catches up when you resume."],
+    ["Preview held on The result · Assignment cardResume live", "The preview is held, so your edits show nowhere until you resume."],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "15b-canvas-away-held", "Canvas away while Hold preview is on: the held strip along the region's top, Preview held on the slot and variant, with Resume live; under it the placeholder says the canvas is in the Working preview, and that the preview is held and catches up when resumed");
+  await snap(window, "15b-canvas-away-held", "Canvas away while Hold preview is on: the held strip along the region's top, Preview held on the slot and variant, with Resume live; under it the placeholder says the canvas is in the Working preview and that, held, Rob's edits show nowhere until he resumes, with Show canvas here now the primary and Bring preview to front the outline");
   await window.click("[data-held-release]");
   await window.waitForSelector("[data-held-bar]", { state: "detached" });
   await window.click("[data-pick-toggle]");
@@ -291,10 +298,10 @@ try {
       await mirror.evaluate(() => document.body.dataset.mode ?? "view"),
       await window.textContent("[data-canvas-away] [data-slot=empty-title]"),
     ],
-    [null, "view", "The canvas is in the Clean preview"],
+    [null, "view", "Pins don't show in the Clean preview"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar has no pick chip); the Inspector's Pin comment takes an accent edge only (no fill, short of pressed) while the region asks, so the click shows where it was made; the region says the canvas is in the Clean preview, which hides pins from the audience and Working shows them, with Show here and pin (primary: it shows the canvas here and starts the pick), Switch preview to Working (an outline with only an amber edge, lighter than the primary), and Not now");
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar has no pick chip); the Inspector's Pin comment takes an accent edge only (no fill, short of pressed) while the region asks, so the click shows where it was made; the region's title answers the click, Pins don't show in the Clean preview, and its line says they show only in Working, which isn't for sharing, with Show here and pin (primary: it shows the canvas here and starts the pick), Switch preview to Working (an outline with only an amber edge, lighter than the primary), and Not now");
   await window.click("[data-away-working]");
   await preview.waitForSelector("[data-preview-window=working]");
   await mirror.waitForSelector('body[data-mode="pin"]');

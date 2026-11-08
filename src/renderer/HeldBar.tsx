@@ -16,7 +16,7 @@ export function HeldBar({ on, onRelease }: { on: string | null; onRelease: () =>
         {/* It names what the audience still sees, the slot and variant set apart in semibold. */}
         {on !== null ? (
           <span className="flex w-0 flex-1 items-center">
-            <span className="shrink-0 whitespace-pre">
+            <span className="shrink-0 whitespace-pre text-fg/80">
               Preview held on{" "}
             </span>
             <Truncate className="min-w-0 font-semibold">{on}</Truncate>

@@ -144,6 +144,7 @@ export function PreviewWindow({ api }: { api: Api }) {
                     <Button
                       variant="outline"
                       aria-pressed={picking === "comment"}
+                      aria-expanded={composing?.for === "comment"}
                       disabled={scene.pinBlocked !== null}
                       onClick={() => tell({ kind: "pick", for: picking === "comment" ? null : "comment" })}
                       data-preview-pin

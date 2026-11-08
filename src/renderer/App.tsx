@@ -937,17 +937,23 @@ function CanvasAway({
             <AppWindow aria-hidden />
           </EmptyMedia>
           <EmptyTitle>
-            {stuck !== null ? "The canvas is in the Clean preview" : picking ? "Click an element in the preview window" : `The canvas is in the ${name} preview`}
+            {stuck !== null
+              ? act === "pin"
+                ? "Pins don't show in the Clean preview"
+                : "Vary can't pick in the Clean preview"
+              : picking
+                ? "Click an element in the preview window"
+                : `The canvas is in the ${name} preview`}
           </EmptyTitle>
           {/* Two lines' room whatever it says, so starting or ending a pick moves nothing in the region; a one-line body
               sits under its title and leaves the spare line above the buttons. */}
           <EmptyDescription className="min-h-10">
             {stuck !== null
-              ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience; Working shows them.`
+              ? `${act === "pin" ? "They show" : "It picks"} only in Working, which isn't for sharing.`
               : picking
                 ? "Write it there; it lands in Feedback here. Press Esc to stop."
                 : hold
-                  ? `The preview is held. It catches up when you resume.`
+                  ? `The preview is held, so your edits show nowhere until you resume.`
                   : `It's live and follows your edits here.`}
           </EmptyDescription>
         </EmptyHeader>
@@ -963,6 +969,16 @@ function CanvasAway({
               </Button>
               <Button variant="ghost" onClick={onDismiss} data-away-dismiss>
                 Not now
+              </Button>
+            </>
+          ) : hold ? (
+            <>
+              {/* Held, the preview shows none of Rob's edits, so seeing them again here is the way on. */}
+              <Button variant="accent" onClick={onHere} data-away-here>
+                Show canvas here
+              </Button>
+              <Button variant="outline" onClick={() => previewWindow("open")} data-away-front>
+                Bring preview to front
               </Button>
             </>
           ) : (
