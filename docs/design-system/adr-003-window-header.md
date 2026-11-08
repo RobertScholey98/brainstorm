@@ -12,7 +12,7 @@ T3 Code has no system title bar. Its top row is the app's own: the sidebar toggl
 
 ### Frameless, with the native buttons kept
 
-The window uses `titleBarStyle: "hidden"` and `titleBarOverlay`, so Windows still draws its own minimise, maximise and close buttons, with their snap layouts and keyboard behaviour, over the right end of the app's header. The overlay is 48 px tall, the header's height. Its colour is the `app` token and its symbols the `fg` token for the current theme, read from `solidColours()` in `src/core/design.ts`, the same source as every other colour.
+The window uses `titleBarStyle: "hidden"` and `titleBarOverlay`, so Windows still draws its own minimise, maximise and close buttons, with their snap layouts and keyboard behaviour, over the right end of the app's header. The overlay is 40 px tall, 8 px short of the header. Amended 2026-11-08: at the header's full 48 px it drew over the inset card's top edge and rounded corner, which start right under the header. The 8 px left clear matches the card's gutter at the window's right and bottom. Its colour is the `app` token and its symbols the `fg` token for the current theme, read from `solidColours()` in `src/core/design.ts`, the same source as every other colour.
 
 When the OS theme changes, `nativeTheme` emits `updated` and the main process calls `setTitleBarOverlay` with the other theme's tokens. The page follows `prefers-color-scheme`, which Electron ties to the same setting, so theme sync needs no IPC and the renderer keeps its no-preload rule.
 

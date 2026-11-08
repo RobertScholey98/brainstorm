@@ -30,14 +30,17 @@ function exported(pathname: string): string | null {
 
 /**
  * The app draws its own header. On Windows and Linux the native buttons overlay its right end in the header's own
- * colours. On macOS the traffic lights sit at its left end, 16 px in and centred on it, as T3 Code places them, and the
- * page leaves them room (styles.css, data-traffic-lights).
+ * colours, 8 px shorter than the header: the inset card starts right under the header, and a full-height overlay drew
+ * over the card's top edge and corner. The 8 px matches the card's gutter at the window's right and bottom. On macOS
+ * the traffic lights sit at the header's left end, 16 px in and centred on it, as T3 Code places them, and the page
+ * leaves them room (styles.css, data-traffic-lights).
  */
 const HEADER_HEIGHT = 48;
+const OVERLAY_HEIGHT = HEADER_HEIGHT - 8;
 const MAC = process.platform === "darwin";
 const TRAFFIC_LIGHT_RADIUS = 7;
 const theme = () => solidColours(nativeTheme.shouldUseDarkColors ? "dark" : "light");
-const overlay = () => ({ color: theme()["app"], symbolColor: theme()["fg"], height: HEADER_HEIGHT });
+const overlay = () => ({ color: theme()["app"], symbolColor: theme()["fg"], height: OVERLAY_HEIGHT });
 const titleBar = (): Pick<BrowserWindowConstructorOptions, "titleBarStyle" | "titleBarOverlay" | "trafficLightPosition"> =>
   MAC
     ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: HEADER_HEIGHT / 2 - TRAFFIC_LIGHT_RADIUS } }
