@@ -17,6 +17,8 @@ export type UiPrefs = {
   readonly home: HomeQuery;
   /** How the preview window shows the canvas, and whether the main window keeps its own while it is open (ADR 007). */
   readonly preview: PreviewPrefs;
+  /** What Rob chose in Settings. */
+  readonly settings: AppSettings;
 };
 
 /**
@@ -36,6 +38,42 @@ export const DEFAULT_HOME: HomeQuery = { status: "active", projects: [], sort: "
 /** The stage shows one slot at a time; the board shows every slot side by side. */
 export type CanvasLayout = { readonly view: "stage" | "board"; readonly slot: SlotId | null };
 
+/** `system` follows the OS, as the app did before it had a choice. */
+export type ThemeChoice = "system" | "light" | "dark";
+/** System alerts for a brainstorm that moved while the window was in the background, as T3 Code's thread notifications are. */
+export type NotifyChoice = "off" | "silent" | "sound";
+/** `auto` is the strip's first rule: shut until a second iteration lands. */
+export type StripChoice = "auto" | "open" | "closed";
+
+/**
+ * The choices Settings holds. The main process acts on `theme`, `autoUpdate` and `skillUpdate`, since it owns the
+ * native theme, the updater and the skill copy; the window acts on the rest.
+ */
+export type AppSettings = {
+  readonly theme: ThemeChoice;
+  readonly notifications: NotifyChoice;
+  /** The canvas view a brainstorm opens on before Rob has picked one in it. */
+  readonly canvasView: CanvasLayout["view"];
+  /** Whether a brainstorm's history strip starts open before Rob has opened or shut it there. */
+  readonly historyStrip: StripChoice;
+  /** How many variants Vary asks for until Rob changes it in the popover. */
+  readonly varyCount: number;
+  /** Download a newer release as soon as a check finds one. Off, a check only says there is one. */
+  readonly autoUpdate: boolean;
+  /** Copy the bundled /use-brainstorm skill to ~/.claude each time the app starts. */
+  readonly skillUpdate: boolean;
+};
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  theme: "system",
+  notifications: "sound",
+  canvasView: "stage",
+  historyStrip: "auto",
+  varyCount: 3,
+  autoUpdate: true,
+  skillUpdate: true,
+};
+
 export type UiPrefsPatch = {
   readonly panes?: { readonly sidebar?: number; readonly inspector?: number };
   readonly inspectorRail?: boolean;
@@ -43,6 +81,7 @@ export type UiPrefsPatch = {
   readonly canvas?: { readonly session: SessionId; readonly layout: CanvasLayout };
   readonly home?: HomeQuery;
   readonly preview?: PreviewPrefs;
+  readonly settings?: Partial<AppSettings>;
 };
 
 export const NO_PREFS: UiPrefs = {
@@ -52,11 +91,18 @@ export const NO_PREFS: UiPrefs = {
   canvas: {},
   home: DEFAULT_HOME,
   preview: DEFAULT_PREVIEW,
+  settings: DEFAULT_SETTINGS,
 };
 
-/** A strip Rob hasn't set in this brainstorm stays shut while there is one iteration, and opens once a second lands. */
-export function stripOpen(choice: boolean | undefined, iterations: number): boolean {
-  return choice ?? iterations >= 2;
+/** What Restore defaults puts back: Settings, and the window choices Settings shows. Pane widths and each brainstorm's own views stay. */
+export const RESTORE_DEFAULTS: UiPrefsPatch = { settings: DEFAULT_SETTINGS, preview: DEFAULT_PREVIEW, inspectorRail: false };
+
+/**
+ * Whether a brainstorm's history strip shows. Rob's choice in that brainstorm wins; without one, Settings decides, and
+ * its `auto` keeps the strip shut while there is one iteration and opens it once a second lands.
+ */
+export function stripOpen(choice: boolean | undefined, iterations: number, fallback: StripChoice = "auto"): boolean {
+  return choice ?? (fallback === "auto" ? iterations >= 2 : fallback === "open");
 }
 
 const sessionId = zBranded(z.string(), parseSessionId, "session id");
@@ -70,6 +116,18 @@ const home: z.ZodType<HomeQuery> = z.strictObject({
 });
 const preview: z.ZodType<PreviewPrefs> = z.strictObject({ look: z.enum(["clean", "working"]), here: z.boolean() });
 
+/** One schema per setting, so each stored row reads back on its own and a bad one costs only itself. */
+const SETTING = {
+  theme: z.enum(["system", "light", "dark"]),
+  notifications: z.enum(["off", "silent", "sound"]),
+  canvasView: z.enum(["stage", "board"]),
+  historyStrip: z.enum(["auto", "open", "closed"]),
+  varyCount: z.number().int().min(1).max(6),
+  autoUpdate: z.boolean(),
+  skillUpdate: z.boolean(),
+} satisfies { [K in keyof AppSettings]: z.ZodType<AppSettings[K]> };
+const isSetting = (name: string): name is keyof AppSettings => Object.hasOwn(SETTING, name);
+
 export const uiPrefsPatch: z.ZodType<UiPrefsPatch> = z.strictObject({
   panes: z.strictObject({ sidebar: width.optional(), inspector: width.optional() }).optional(),
   inspectorRail: z.boolean().optional(),
@@ -77,7 +135,12 @@ export const uiPrefsPatch: z.ZodType<UiPrefsPatch> = z.strictObject({
   canvas: z.strictObject({ session: sessionId, layout }).optional(),
   home: home.optional(),
   preview: preview.optional(),
+  settings: z.strictObject(SETTING).partial().optional(),
 });
+
+/** The settings `patch` names, without the ones it leaves out. */
+const namedSettings = (patch: Partial<AppSettings> | undefined): [keyof AppSettings, unknown][] =>
+  Object.entries(patch ?? {}).filter(([name, value]) => isSetting(name) && value !== undefined) as [keyof AppSettings, unknown][];
 
 /** One stored row per preference, so changing one never rewrites another. */
 export function prefRows(patch: UiPrefsPatch): [key: string, value: unknown][] {
@@ -89,6 +152,7 @@ export function prefRows(patch: UiPrefsPatch): [key: string, value: unknown][] {
   if (patch.canvas !== undefined) rows.push([`canvas.${patch.canvas.session}`, patch.canvas.layout]);
   if (patch.home !== undefined) rows.push(["home.query", patch.home]);
   if (patch.preview !== undefined) rows.push(["preview.window", patch.preview]);
+  for (const [name, value] of namedSettings(patch.settings)) rows.push([`setting.${name}`, value]);
   return rows;
 }
 
@@ -115,6 +179,10 @@ export function readPrefs(rows: readonly { readonly key: string; readonly json: 
     } else if (key === "preview.window") {
       const p = preview.safeParse(value);
       if (p.success) prefs = { ...prefs, preview: p.data };
+    } else if (key.startsWith("setting.")) {
+      const name = key.slice(8);
+      const s = isSetting(name) ? SETTING[name].safeParse(value) : null;
+      if (s?.success) prefs = { ...prefs, settings: { ...prefs.settings, [name]: s.data } };
     } else if (key.startsWith("canvas.")) {
       const l = layout.safeParse(value);
       if (l.success) prefs = { ...prefs, canvas: { ...prefs.canvas, [key.slice(7)]: l.data } };
@@ -132,5 +200,6 @@ export function applyPrefs(prefs: UiPrefs, patch: UiPrefsPatch): UiPrefs {
     canvas: patch.canvas === undefined ? prefs.canvas : { ...prefs.canvas, [patch.canvas.session]: patch.canvas.layout },
     home: patch.home ?? prefs.home,
     preview: patch.preview ?? prefs.preview,
+    settings: { ...prefs.settings, ...Object.fromEntries(namedSettings(patch.settings)) },
   };
 }

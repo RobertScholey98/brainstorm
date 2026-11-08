@@ -12,8 +12,6 @@ import type { BlockView, CanvasRect, Pin, SlotView } from "../core/types";
 import { POPOVER_WIDTH } from "./placement";
 import { useComposerPlace } from "./useComposerPlace";
 
-const DEFAULT_COUNT = 3;
-
 /**
  * The Inspector's Vary row, above Feedback and its Pin comment: a pick mode of its own on the same machinery. `blocked`
  * says why it can't start: before the first iteration, in the past, or while a request is open.
@@ -68,6 +66,7 @@ export function VaryComposer({
   block,
   slot,
   bounds,
+  initialCount,
   onSend,
   onCancel,
 }: {
@@ -77,11 +76,13 @@ export function VaryComposer({
   block: BlockView | null;
   slot: SlotView | null;
   bounds: { width: number; height: number };
+  /** How many it starts on, Settings' Vary count. */
+  initialCount: number;
   onSend: (count: number, direction: string | null) => Promise<void>;
   onCancel: () => void;
 }) {
   const { ref, left, top } = useComposerPlace(at, rect, bounds, POPOVER_WIDTH.md);
-  const [count, setCount] = useState(DEFAULT_COUNT);
+  const [count, setCount] = useState(() => Math.min(VARY_MAX, Math.max(1, initialCount)));
   const [direction, setDirection] = useState("");
   const [busy, setBusy] = useState(false);
   const field = useRef<HTMLInputElement>(null);

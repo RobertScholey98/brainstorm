@@ -3,9 +3,9 @@ import { join, relative } from "node:path";
 
 export const SKILL_NAME = "use-brainstorm";
 
-export type SkillInstall =
-  | { readonly kind: "current"; readonly target: string }
-  | { readonly kind: "installed"; readonly target: string; readonly backup: string | null };
+import type { SkillInstall } from "./about";
+
+export type { SkillInstall };
 
 function readTree(root: string): Map<string, Buffer> {
   const files = new Map<string, Buffer>();

@@ -4,9 +4,12 @@ import type { BlockView, RobAction } from "../core/types";
 export type Notice = { readonly title: string; readonly detail: string };
 
 /** The step that failed, named as Rob took it, so a notice that came while he looked elsewhere still says what was lost. */
-export function failedTitle(action: RobAction | "export" | "list" | "load" | "settle" | "unsettle" | "discard" | "fork" | "history" | "update", blocks: readonly BlockView[] = []): string {
+export function failedTitle(action: RobAction | "export" | "list" | "load" | "settle" | "unsettle" | "discard" | "fork" | "history" | "update" | "check" | "download" | "skill", blocks: readonly BlockView[] = []): string {
   if (typeof action === "string") {
     if (action === "update") return "Couldn't restart into the update";
+    if (action === "check") return "Couldn't check for updates";
+    if (action === "download") return "Couldn't download the update";
+    if (action === "skill") return "Couldn't reinstall the skill";
     if (action === "export") return "Couldn't export the brainstorm";
     if (action === "list") return "Couldn't refresh the brainstorms";
     if (action === "settle") return "Couldn't settle the brainstorm";

@@ -31,7 +31,7 @@ import type { PaneLimits } from "./hooks/use-pane-width";
 import { useRowFit } from "./headerAction";
 import { Mark } from "./Mark";
 import { TakeoverPhrase } from "./Regenerate";
-import { UpdateFooter } from "./Update";
+import { SidebarFoot } from "./Update";
 import type { AppUpdateState } from "../core/appUpdate";
 import { Elapsed, PhaseDot, SessionStatus } from "./SessionStatus";
 import { echoTone, loudestPhase, PHASE, sessionPhase } from "./status";
@@ -44,14 +44,13 @@ export function AppSidebar({
   limits,
   onWidth,
   update,
-  onInstallUpdate,
   children,
 }: {
   width: number;
   limits: PaneLimits;
   onWidth: (width: number) => void;
-  update: AppUpdateState | null;
-  onInstallUpdate: () => void;
+  /** Where updating stands, and what Settings and the update button beside it do. */
+  update: { state: AppUpdateState | null; onSettings: () => void; onCheck: () => void; onDownload: () => void; onInstall: () => void };
   children: ReactNode;
 }) {
   const { isMobile } = useSidebar();
@@ -64,7 +63,7 @@ export function AppSidebar({
         <span className="text-sm font-semibold">Brainstorm</span>
       </SidebarHeader>
       {children}
-      <UpdateFooter state={update} onInstall={onInstallUpdate} />
+      <SidebarFoot {...update} />
       {!isMobile && (
         <ResizeHandle edge="right" value={width} min={limits.min} max={limits.max} reset={limits.fallback} onValueChange={onWidth} aria-label="Sidebar width" />
       )}

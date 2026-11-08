@@ -2,13 +2,17 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { installable, nextUpdateState, type AppUpdateEvent, type AppUpdates, type AppUpdateState } from "../src/core/appUpdate";
+import { canCheck, installable, nextUpdateState, type AppUpdateEvent, type AppUpdates, type AppUpdateState } from "../src/core/appUpdate";
 import { startServer, type RunningServer } from "../src/server/index";
 import { FakeBridge } from "./fakeBridge";
 
-/** The updater's contract without electron-updater: events move the state, and install takes a ready download. */
+/**
+ * The updater's contract without electron-updater: events move the state, a check starts one, a download takes an
+ * offered update, and install takes a ready download.
+ */
 function fakeUpdates() {
   let state: AppUpdateState = { kind: "idle", checkedAt: null };
+  let auto = true;
   const listeners = new Set<(s: AppUpdateState) => void>();
   const emit = (event: AppUpdateEvent) => {
     state = nextUpdateState(state, event);
@@ -17,13 +21,24 @@ function fakeUpdates() {
   const updates: AppUpdates = {
     state: () => state,
     subscribe: (l) => (listeners.add(l), () => listeners.delete(l)),
+    check: () => {
+      if (!canCheck(state)) return false;
+      emit({ kind: "checking" });
+      return true;
+    },
+    download: () => {
+      if (state.kind !== "available") return false;
+      emit({ kind: "found", version: state.version, download: true });
+      return true;
+    },
+    setAutoDownload: (on) => void (auto = on),
     install: () => {
       if (installable(state) === null) return false;
       emit({ kind: "install" });
       return true;
     },
   };
-  return { updates, emit };
+  return { updates, emit, auto: () => auto };
 }
 
 const fake = fakeUpdates();
@@ -50,7 +65,7 @@ describe("update routes", () => {
     const res = await fetch(`http://127.0.0.1:${server.port}/v1/ui/events`, { headers: { authorization: `Bearer ${server.uiToken}` }, signal: controller.signal });
     const reader = res.body!.getReader();
     await reader.read(); // ": connected"
-    fake.emit({ kind: "found", version: "0.2.0" });
+    fake.emit({ kind: "found", version: "0.2.0", download: true });
     fake.emit({ kind: "downloaded", version: "0.2.0" });
     let text = "";
     while (!text.includes('"ready"')) text += new TextDecoder().decode((await reader.read()).value);
