@@ -11,7 +11,7 @@ import { cn } from "cn";
 import { Hint } from "@/components/ui/tooltip";
 import type { CanvasLayout } from "../core/prefs";
 import type { SlotId, SlotView } from "../core/types";
-import { useBarFit } from "./headerAction";
+import { PICK_HINTS, useBarFit } from "./headerAction";
 
 const VIEWS: readonly { value: CanvasLayout["view"]; label: string }[] = [
   { value: "stage", label: "One slot" },
@@ -92,7 +92,7 @@ export function CanvasBar({
           {...(picking === null ? { "aria-hidden": true, inert: true } : { role: "status", "data-pick-hint": "" })}
         >
           <Truncate className="w-0 flex-1 text-right" data-bar-hint>
-            {pickHint ?? (picking === "vary" ? "Click an element to vary" : "Click an element to pin a comment")}
+            {pickHint ?? (picking === "vary" ? PICK_HINTS.vary : PICK_HINTS.comment)}
           </Truncate>
           <Kbd>Esc</Kbd>
           <Button variant="ghost" onClick={onCancelPick}>

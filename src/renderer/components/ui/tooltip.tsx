@@ -198,7 +198,7 @@ function TooltipAction({ className, ...props }: Omit<ComponentProps<"button">, "
       type="button"
       data-slot="tooltip-action"
       className={cn(
-        "-my-1 -mr-2 ml-1 rounded-sm border-l border-inverse-fg/20 px-2 py-1 font-medium outline-none hover:bg-inverse-fg/15 focus-visible:ring-2 focus-visible:ring-ring dark:border-fg/15 dark:hover:bg-fg/10",
+        "-my-1 -mr-2 ml-1 flex items-center gap-1.5 rounded-sm border-l border-inverse-fg/20 px-2 py-1 font-medium outline-none hover:bg-inverse-fg/15 focus-visible:ring-2 focus-visible:ring-ring dark:border-fg/15 dark:hover:bg-fg/10",
         className,
       )}
       {...props}

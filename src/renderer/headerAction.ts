@@ -84,7 +84,7 @@ export const BAR_COLLAPSE = { hold: 0, preview: 1 } as const;
  * The bar sets aside the room its longest pick hint needs, picking or not, here or away, so the labels depend on the
  * bar's width alone and nothing in it moves when a pick starts or the canvas leaves for the preview window.
  */
-const LONGEST_HINT = "Click an element to pin a comment";
+export const PICK_HINTS = { comment: "Click an element to pin", vary: "Click an element to vary", away: "Pick in preview window" } as const;
 let ruler: CanvasRenderingContext2D | null = null;
 const barFits = (bar: HTMLElement): boolean => {
   const hint = bar.querySelector("[data-bar-hint]");
@@ -92,7 +92,8 @@ const barFits = (bar: HTMLElement): boolean => {
   ruler ??= document.createElement("canvas").getContext("2d");
   if (ruler === null) return !overflows(hint);
   ruler.font = getComputedStyle(hint).font;
-  return hint.getBoundingClientRect().width >= ruler.measureText(LONGEST_HINT).width - SLACK;
+  const r = ruler;
+  return hint.getBoundingClientRect().width >= Math.max(...Object.values(PICK_HINTS).map((h) => r.measureText(h).width)) - SLACK;
 };
 
 /** Fits the canvas bar: its right end's labels give way, in `BAR_COLLAPSE` order, before the pick hint cuts. */

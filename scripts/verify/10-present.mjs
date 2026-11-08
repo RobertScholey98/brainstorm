@@ -237,7 +237,7 @@ try {
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
   check("a pick started here while the canvas is away waits in the preview window", await window.textContent("[data-canvas-away] [data-slot=empty-title]"), "Pick an element in the preview window");
-  check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Pick in the preview windowEscCancel");
+  check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Pick in preview windowEscCancel");
   await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's hint reads Pick in the preview window with Esc and Cancel, and the region's title says to click an element there");
   await window.keyboard.press("Escape");
 

@@ -41,6 +41,7 @@ import { CanvasHost, type FeedbackCue, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { Filmstrip, FilmstripSkeleton, PastBar } from "./History";
 import { HeldBar } from "./HeldBar";
+import { PICK_HINTS } from "./headerAction";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
 import { fitPanes, usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
@@ -747,7 +748,7 @@ function SessionWorkspace({
             onSlot={setSelectedSlot}
             onView={setCanvasView}
             onCancelPick={() => setInteraction({ kind: "view" })}
-            {...(away ? { pickHint: "Pick in the preview window" } : {})}
+            {...(away ? { pickHint: PICK_HINTS.away } : {})}
             trailing={
               <PresentControls
                 onPresent={present}
@@ -925,7 +926,7 @@ function CanvasAway({
   onDismiss: () => void;
 }) {
   const what = stuck === "vary" ? "vary an element" : "pin a comment";
-  const privately = stuck === "vary" ? "vary it" : "comment";
+  const privately = stuck === "vary" ? "vary it" : "pin it";
   const name = look === "clean" ? "Clean" : "Working";
   return (
     <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away={stuck !== null ? "stuck" : picking ? "picking" : ""}>
@@ -939,7 +940,7 @@ function CanvasAway({
           </EmptyTitle>
           <EmptyDescription>
             {stuck !== null
-              ? `Clean shows only the design to your audience. Show the canvas here to ${privately} privately, or switch to Working to show tools and pins there.`
+              ? `Clean shows your audience only the design. Show the canvas here to ${privately} privately.`
               : picking
                 ? "Esc or Cancel stops picking."
                 : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
@@ -952,7 +953,7 @@ function CanvasAway({
                 Show the canvas here
               </Button>
               <Button variant="outline" onClick={onWorking} data-away-working>
-                Switch preview to Working
+                Switch to Working (viewers see tools)
               </Button>
               <Button variant="ghost" onClick={onDismiss} data-away-dismiss>
                 Cancel
@@ -960,8 +961,8 @@ function CanvasAway({
             </>
           ) : (
             <>
-              {/* While a pick waits there, the way on is the other window; at rest, either is. */}
-              <Button variant={picking ? "accent" : "outline"} onClick={() => previewWindow("open")} data-away-front>
+              {/* The canvas is in the other window, so that is the way on; bringing it back is the alternative. */}
+              <Button variant="accent" onClick={() => previewWindow("open")} data-away-front>
                 Bring the window to front
               </Button>
               <Button variant="outline" onClick={onHere} data-away-here>
@@ -979,8 +980,9 @@ function CanvasAway({
 let presentTaught = false;
 
 /**
- * How to leave and step, in the top right corner. It shows as present starts the first time, and after that only while
- * the pointer is near the top edge, as slideshow tools keep theirs, so pointing at the design leaves the screen clean.
+ * How to leave and step, at the top centre, clear of what a design keeps in its corners. It shows as present starts the
+ * first time, and after that only while the pointer is near the top edge, as slideshow tools keep theirs, so pointing
+ * at the design leaves the screen clean.
  */
 function PresentHint({ several, poke, onLeave }: { several: boolean; poke: number; onLeave: () => void }) {
   const [shown, setShown] = useState(() => !presentTaught);
@@ -998,7 +1000,7 @@ function PresentHint({ several, poke, onLeave }: { several: boolean; poke: numbe
   }, [shown, over, poke]);
   return (
     <div
-      className="absolute top-4 right-4 z-toast flex items-center gap-1 transition-opacity duration-300 data-hidden:pointer-events-none data-hidden:opacity-0"
+      className="absolute top-4 left-1/2 z-toast flex -translate-x-1/2 items-center gap-1 transition-opacity duration-300 data-hidden:pointer-events-none data-hidden:opacity-0"
       data-hidden={shown ? undefined : ""}
       onPointerEnter={() => setOver(true)}
       onPointerLeave={() => setOver(false)}
@@ -1006,18 +1008,16 @@ function PresentHint({ several, poke, onLeave }: { several: boolean; poke: numbe
       data-present-hint
     >
       <TooltipLabel>
-        <span role="status" className="contents">
-          <Kbd tone="inverse">Esc</Kbd> to leave
-          {several && (
-            <>
-              <span aria-hidden>·</span>
-              <Kbd tone="inverse">←</Kbd>
-              <Kbd tone="inverse">→</Kbd> to change slot
-            </>
-          )}
-        </span>
-        <TooltipAction onClick={onLeave} data-present-leave>
-          Exit
+        {several && (
+          <span role="status" className="contents">
+            <span className="font-medium" aria-label="Left and right arrow keys">
+              ← →
+            </span>
+            change slot
+          </span>
+        )}
+        <TooltipAction onClick={onLeave} aria-label="Exit present (Esc)" data-present-leave>
+          Exit <Kbd tone="inverse">Esc</Kbd>
         </TooltipAction>
       </TooltipLabel>
     </div>

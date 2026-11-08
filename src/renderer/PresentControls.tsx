@@ -41,7 +41,7 @@ export function PresentControls({
   return (
     <span className="flex shrink-0 items-center gap-1" data-present-controls>
       {windowed && open && <HoldButton hold={hold} heldOn={heldOn} onHold={onHold} />}
-      {windowed && (open ? <WindowMenu prefs={prefs} onPrefs={onPrefs} /> : <OpenWindow />)}
+      {windowed && (open ? <WindowMenu prefs={prefs} onPrefs={onPrefs} hold={hold} onHold={onHold} /> : <OpenWindow />)}
       <Hint name="Present" label="Fill the screen with this slot, as the app would look" shortcut="F5" side="bottom">
         <Button variant="outline" size="icon" aria-label="Present" onClick={onPresent} data-present>
           <Maximize aria-hidden />
@@ -81,7 +81,17 @@ function OpenWindow() {
   );
 }
 
-function WindowMenu({ prefs, onPrefs }: { prefs: PreviewPrefs; onPrefs: (prefs: PreviewPrefs) => void }) {
+function WindowMenu({
+  prefs,
+  onPrefs,
+  hold,
+  onHold,
+}: {
+  prefs: PreviewPrefs;
+  onPrefs: (prefs: PreviewPrefs) => void;
+  hold: boolean;
+  onHold: (hold: boolean) => void;
+}) {
   const [open, setOpen] = useState(false);
   const run = (command: "open" | "close" | "fullscreen") => {
     setOpen(false);
@@ -94,28 +104,42 @@ function WindowMenu({ prefs, onPrefs }: { prefs: PreviewPrefs; onPrefs: (prefs: 
         <PopoverTrigger render={<Button variant="outline" aria-label={`Preview window, ${look?.label}`} data-preview-menu />}>
           <AppWindow data-icon="inline-start" aria-hidden />
           <span className="text-fg-muted data-collapsed:hidden" data-collapse={BAR_COLLAPSE.preview}>
-            Preview ·
+            Preview
           </span>
-          <span data-preview-menu-look>{look?.label}</span>
+          {/* As wide as its widest look, so changing the look moves nothing in the bar. */}
+          <span className="grid" data-preview-menu-look>
+            {LOOKS.map((l) => (
+              <span key={l.value} className={l.value === prefs.look ? "col-start-1 row-start-1" : "invisible col-start-1 row-start-1"} aria-hidden={l.value !== prefs.look || undefined}>
+                {l.label}
+              </span>
+            ))}
+          </span>
           <ChevronDown data-icon="inline-end" aria-hidden />
         </PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="end" data-preview-popover>
         <PopoverHeader
           heading="Preview window"
-          description="Mirrors this canvas live. Hold preview freezes it while you try things."
+          description="Mirrors this canvas live, for sharing or another screen."
         />
         <div className="grid gap-1.5">
           <span className="text-xs font-medium text-fg-muted">Look</span>
           <Segmented value={prefs.look} onValueChange={(next) => onPrefs({ ...prefs, look: next })} options={LOOKS} itemData="preview-look" aria-label="Look" />
           <ul className="grid gap-0.5 text-xs" data-preview-look-about>
             {LOOKS.map((l) => (
-              <li key={l.value} className={l.value === prefs.look ? "font-medium text-fg" : "text-fg-muted"} data-chosen={l.value === prefs.look || undefined}>
+              <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted"} data-chosen={l.value === prefs.look || undefined}>
                 <span className="font-semibold">{l.label}:</span> {l.about}
               </li>
             ))}
           </ul>
         </div>
+        <label className="flex items-start justify-between gap-3">
+          <span className="grid gap-0.5">
+            <span className="text-sm">Hold preview</span>
+            <span className="text-xs text-fg-muted">Freeze it on what it shows now while you try things here.</span>
+          </span>
+          <Switch checked={hold} onCheckedChange={onHold} className="mt-0.5" data-preview-menu-hold />
+        </label>
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
             <span className="text-sm">Show canvas in main window</span>
@@ -132,7 +156,7 @@ function WindowMenu({ prefs, onPrefs }: { prefs: PreviewPrefs; onPrefs: (prefs: 
             <Kbd>F11</Kbd>
           </Button>
         </div>
-        <PopoverFooter hint="Closes when Brainstorm quits.">
+        <PopoverFooter>
           <Button variant="ghost" onClick={() => run("close")} data-preview-close>
             Close window
           </Button>
