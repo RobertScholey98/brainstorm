@@ -20,6 +20,8 @@ export type ServerOptions = {
   readonly trackerMs?: number;
   /** The installed app's updater; the headless server has none. */
   readonly updates?: AppUpdates;
+  /** The installed app's native folder dialog, resolving to the chosen folder or null when cancelled; the headless server has none. */
+  readonly pickFolder?: () => Promise<string | null>;
 };
 
 export type RunningServer = {
@@ -55,7 +57,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
 
   let port = 0;
   const updates = options.updates ?? updatesOff("The headless server has no app to update.");
-  const http = createHttpHandler({ service, agentToken, uiToken, version, updates }, () => port);
+  const http = createHttpHandler({ service, agentToken, uiToken, version, updates, pickFolder: options.pickFolder ?? null },() => port);
   const server: Server = createServer(http.listener);
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);

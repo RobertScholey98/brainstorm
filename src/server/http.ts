@@ -211,6 +211,8 @@ export type HttpOptions = {
   readonly uiToken: string;
   readonly version: string;
   readonly updates: AppUpdates;
+  /** The window's native folder dialog, or null where there's no window to show one. */
+  readonly pickFolder: (() => Promise<string | null>) | null;
 };
 
 export function createHttpHandler(options: HttpOptions, port: () => number) {
@@ -393,6 +395,16 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       }),
     },
     { method: "POST", path: /^\/v1\/ui\/sessions\/([^/]+)\/discard$/, auth: "ui", handle: withSession(async (id) => service.discard(id)) },
+    {
+      method: "POST",
+      path: /^\/v1\/ui\/pick-folder$/,
+      auth: "ui",
+      handle: async () => {
+        const pick = options.pickFolder;
+        if (pick === null) return { ok: false, error: { code: "unavailable", message: "Only the Brainstorm app can open a folder dialog. Paste the folder's path instead." } };
+        return { ok: true, data: { path: await pick() } };
+      },
+    },
     { method: "GET", path: /^\/v1\/ui\/update$/, auth: "ui", handle: async () => ({ ok: true, data: updates.state() }) },
     {
       method: "POST",

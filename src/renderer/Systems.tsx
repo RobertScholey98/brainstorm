@@ -1,4 +1,4 @@
-import { ArrowLeft, Component, FolderPlus, RefreshCw } from "lucide-react";
+import { ArrowLeft, Component, FolderOpen, FolderPlus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,8 @@ export function SystemsPage({
                 onSelect(r.data.system.id);
                 return true;
               }}
+              onPick={() => api.pickFolder()}
+              showNotice={showNotice}
             />
           </div>
         }
@@ -111,15 +113,36 @@ function issuesText(error: { message: string; issues?: readonly Issue[] }): stri
   return first === undefined ? error.message : `${error.message}: ${first.message}`;
 }
 
-function AddSystem({ onAdd }: { onAdd: (path: string) => Promise<boolean> }) {
+/** Only the app's window has a native folder dialog to open; the headless server's page takes a pasted path. */
+const HAS_FOLDER_DIALOG = /Electron\//.test(navigator.userAgent);
+
+function AddSystem({
+  onAdd,
+  onPick,
+  showNotice,
+}: {
+  onAdd: (path: string) => Promise<boolean>;
+  onPick: () => ReturnType<Api["pickFolder"]>;
+  showNotice: (notice: Notice) => void;
+}) {
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
-  const add = async () => {
-    if (path.trim() === "" || busy) return;
+  const add = async (folder: string) => {
+    if (folder === "" || busy) return;
     setBusy(true);
-    const added = await onAdd(path.trim());
+    const added = await onAdd(folder);
     setBusy(false);
     if (added) setPath("");
+  };
+  // A folder chosen in the dialog, whose button reads Add design system, is added at once. It stays in the field when
+  // the add fails, so Rob can correct it.
+  const browse = async () => {
+    if (busy) return;
+    const r = await onPick();
+    if (!r.ok) return showNotice({ title: "Couldn't open the folder dialog", detail: r.error.message });
+    if (r.data.path === null) return;
+    setPath(r.data.path);
+    await add(r.data.path);
   };
   return (
     <div className="flex items-center gap-2" data-system-add>
@@ -130,9 +153,15 @@ function AddSystem({ onAdd }: { onAdd: (path: string) => Promise<boolean> }) {
         value={path}
         disabled={busy}
         onChange={(e) => setPath(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && void add()}
+        onKeyDown={(e) => e.key === "Enter" && void add(path.trim())}
       />
-      <Button variant="accent" disabled={path.trim() === "" || busy} onClick={() => void add()} data-system-add-button>
+      {HAS_FOLDER_DIALOG && (
+        <Button disabled={busy} onClick={() => void browse()} data-system-browse>
+          <FolderOpen data-icon="inline-start" aria-hidden />
+          Browse…
+        </Button>
+      )}
+      <Button variant="accent" disabled={path.trim() === "" || busy} onClick={() => void add(path.trim())} data-system-add-button>
         {busy ? <Spinner data-icon="inline-start" /> : <FolderPlus data-icon="inline-start" aria-hidden />}
         {busy ? "Syncing…" : "Add design system"}
       </Button>

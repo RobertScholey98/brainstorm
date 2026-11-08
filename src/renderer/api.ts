@@ -44,6 +44,8 @@ export type Api = {
   systems(): Promise<Result<SystemListing[]>>;
   system(id: SystemId): Promise<Result<SystemView>>;
   addSystem(path: string): Promise<Result<SyncOutcome>>;
+  /** Opens the app's native folder dialog; `path` is null when Rob cancels it. */
+  pickFolder(): Promise<Result<{ readonly path: string | null }>>;
   syncSystem(id: SystemId): Promise<Result<SyncOutcome>>;
   kit(id: SystemId, n: SystemVersionN): Promise<Result<KitPayload>>;
   prefs(): Promise<Result<UiPrefs>>;
@@ -122,6 +124,7 @@ export function createApi(token: string): Api {
     systems: () => call("GET", "/v1/ui/systems"),
     system: (id) => call("GET", `/v1/ui/systems/${id}`),
     addSystem: (path) => call("POST", "/v1/ui/systems", { path }),
+    pickFolder: () => call("POST", "/v1/ui/pick-folder"),
     syncSystem: (id) => call("POST", `/v1/ui/systems/${id}/sync`),
     kit: (id, n) => call("GET", `/v1/ui/systems/${id}/kit/${n}`),
     prefs: () => call("GET", "/v1/ui/prefs"),

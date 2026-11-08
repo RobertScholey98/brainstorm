@@ -98,7 +98,13 @@ async function run(): Promise<void> {
 
   let server: RunningServer;
   try {
-    server = await startServer({ home, updates: createUpdater() });
+    // The renderer has no preload, so the window asks for a folder through the server, which opens the dialog here.
+    const pickFolder = async (): Promise<string | null> => {
+      const options = { title: "Add a design system", buttonLabel: "Add design system", properties: ["openDirectory" as const] };
+      const picked = window === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(window, options);
+      return picked.canceled ? null : (picked.filePaths[0] ?? null);
+    };
+    server = await startServer({ home, updates: createUpdater(), pickFolder });
   } catch (e) {
     dialog.showErrorBox("Brainstorm couldn't start", e instanceof Error ? e.message : String(e));
     app.exit(1);
