@@ -81,7 +81,8 @@ type Sent = { readonly blocks: readonly BlockView[]; readonly scene: MirrorScene
 export type LinkState = { readonly open: boolean; readonly hold: boolean; readonly heldOn: string | null };
 
 /** "The wheel · Slot reel": the slot the preview window shows and its variant's title, or the slot alone. */
-function describe({ blocks, scene }: Sent): string | null {
+/** What a window shows, such as "The wheel · Slot reel", for the held bar. */
+export function describe({ blocks, scene }: Sent): string | null {
   const slot = scene?.slots.find((s) => s.id === scene.slot);
   if (slot === undefined) return null;
   const block = blocks.find((b) => b.id === blockIdOf(slot.id, slot.active));

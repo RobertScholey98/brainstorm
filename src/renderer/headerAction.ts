@@ -1,5 +1,5 @@
 import { useLayoutEffect, type RefObject } from "react";
-import { overflows, shows } from "@/components/ui/ink";
+import { overflows, shows, SLACK } from "@/components/ui/ink";
 import type { RequestPhaseAction } from "../core/types";
 
 /**
@@ -75,14 +75,24 @@ const rowFits = (row: HTMLElement): boolean => {
 
 /**
  * The order the canvas bar's right end gives up its labels when the bar runs short: Hold preview's (its pressed state and
- * the held bar say it), then the preview menu's look, then its name. The room is measured with the pick hint's always
- * set aside, so the labels depend on the bar's width alone and a pick never moves a control.
+ * the held bar say it), then the preview menu's "Preview", leaving its look and chevron, which never go: whether a shared
+ * window is Clean is what Rob checks before he shares it.
  */
-export const BAR_COLLAPSE = { hold: 0, look: 1, preview: 2 } as const;
+export const BAR_COLLAPSE = { hold: 0, preview: 1 } as const;
 
+/**
+ * The bar sets aside the room its longest pick hint needs, picking or not, here or away, so the labels depend on the
+ * bar's width alone and nothing in it moves when a pick starts or the canvas leaves for the preview window.
+ */
+const LONGEST_HINT = "Click an element to pin a comment";
+let ruler: CanvasRenderingContext2D | null = null;
 const barFits = (bar: HTMLElement): boolean => {
   const hint = bar.querySelector("[data-bar-hint]");
-  return hint === null || !overflows(hint);
+  if (hint === null) return true;
+  ruler ??= document.createElement("canvas").getContext("2d");
+  if (ruler === null) return !overflows(hint);
+  ruler.font = getComputedStyle(hint).font;
+  return hint.getBoundingClientRect().width >= ruler.measureText(LONGEST_HINT).width - SLACK;
 };
 
 /** Fits the canvas bar: its right end's labels give way, in `BAR_COLLAPSE` order, before the pick hint cuts. */

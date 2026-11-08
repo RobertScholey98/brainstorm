@@ -1,4 +1,4 @@
-import { AppWindow, ChevronDown, Maximize, Pause } from "lucide-react";
+import { AppWindow, ChevronDown, CirclePause, Maximize } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -63,8 +63,8 @@ function HoldButton({ hold, heldOn, onHold }: { hold: boolean; heldOn: string | 
       }
       side="bottom"
     >
-      <Button variant="outline" aria-pressed={hold} onClick={() => onHold(!hold)} className={COMPACT} data-collapse={BAR_COLLAPSE.hold} data-hold>
-        <Pause data-icon="inline-start" className={hold ? "text-warning" : undefined} aria-hidden />
+      <Button variant="caution" aria-pressed={hold} onClick={() => onHold(!hold)} className={COMPACT} data-collapse={BAR_COLLAPSE.hold} data-hold>
+        <CirclePause data-icon="inline-start" className={hold ? "text-warning" : undefined} aria-hidden />
         <span className={COMPACT_LABEL}>Hold preview</span>
       </Button>
     </Hint>
@@ -91,16 +91,13 @@ function WindowMenu({ prefs, onPrefs }: { prefs: PreviewPrefs; onPrefs: (prefs: 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <Hint name={`Preview window is open · ${look?.label}`} label="Change its look, bring it to front, make it full screen, or close it" side="bottom">
-        <PopoverTrigger render={<Button variant="outline" className={COMPACT} data-collapse={BAR_COLLAPSE.preview} data-preview-menu />}>
+        <PopoverTrigger render={<Button variant="outline" aria-label={`Preview window, ${look?.label}`} data-preview-menu />}>
           <AppWindow data-icon="inline-start" aria-hidden />
-          <span className={COMPACT_LABEL}>
-            Preview
-            <span className="text-fg-muted data-collapsed:hidden" data-collapse={BAR_COLLAPSE.look} data-preview-menu-look>
-              {" · "}
-              {look?.label}
-            </span>
+          <span className="text-fg-muted data-collapsed:hidden" data-collapse={BAR_COLLAPSE.preview}>
+            Preview ·
           </span>
-          <ChevronDown data-icon="inline-end" className="in-data-collapsed:hidden" aria-hidden />
+          <span data-preview-menu-look>{look?.label}</span>
+          <ChevronDown data-icon="inline-end" aria-hidden />
         </PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="end" data-preview-popover>

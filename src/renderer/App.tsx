@@ -1,4 +1,4 @@
-import { AppWindow, Loader2, Pause } from "lucide-react";
+import { AppWindow, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -40,6 +40,7 @@ import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type FeedbackCue, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
 import { Filmstrip, FilmstripSkeleton, PastBar } from "./History";
+import { HeldBar } from "./HeldBar";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
 import { fitPanes, usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
@@ -760,7 +761,7 @@ function SessionWorkspace({
             }
           />
         )}
-        {preview.open && preview.hold && <HeldBar on={preview.heldOn} onRelease={() => link.setHold(false)} />}
+        {preview.open && preview.hold && <HeldBar on={preview.heldOn} here="main" onRelease={() => link.setHold(false)} />}
         {past !== null && <PastBar n={past.n} onLatest={showLatest} />}
         <section
           ref={canvasArea}
@@ -924,6 +925,7 @@ function CanvasAway({
   onDismiss: () => void;
 }) {
   const what = stuck === "vary" ? "vary an element" : "pin a comment";
+  const verb = stuck === "vary" ? "vary" : "pin";
   const name = look === "clean" ? "Clean" : "Working";
   return (
     <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away={stuck !== null ? "stuck" : picking ? "picking" : ""}>
@@ -933,12 +935,14 @@ function CanvasAway({
             <AppWindow aria-hidden />
           </EmptyMedia>
           <EmptyTitle>
-            {stuck !== null ? `To ${what}, bring the canvas back here` : picking ? "Click an element in the preview window" : "The canvas is in the preview window"}
+            {stuck !== null ? `To ${what}, show the canvas here` : picking ? "Pick an element in the preview window" : "The canvas is in the preview window"}
           </EmptyTitle>
           <EmptyDescription>
             {stuck !== null
-              ? "The preview window is Clean, so whoever watches it sees only the design. Showing the canvas here leaves it as it is; Working would put the canvas bar and pins on it."
-              : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
+              ? `The preview window is Clean, so viewers see only the design. Show the canvas here to ${verb} without changing that, or switch the preview to Working.`
+              : picking
+                ? "Esc or Cancel stops picking."
+                : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row justify-center">
@@ -956,35 +960,17 @@ function CanvasAway({
             </>
           ) : (
             <>
+              {/* While a pick waits there, the way on is the other window; at rest, either is. */}
+              <Button variant={picking ? "accent" : "outline"} onClick={() => previewWindow("open")} data-away-front>
+                Bring the window to front
+              </Button>
               <Button variant="outline" onClick={onHere} data-away-here>
                 Show the canvas here
-              </Button>
-              <Button variant="outline" onClick={() => previewWindow("open")} data-away-front>
-                Bring the window to front
               </Button>
             </>
           )}
         </EmptyContent>
       </Empty>
-    </div>
-  );
-}
-
-/**
- * The bar under the canvas bar while the preview window is held, in the warning tone, as the past's bar is in the info
- * tone: whoever watches that window sees something this one no longer shows, which Rob must not lose sight of on a call.
- */
-function HeldBar({ on, onRelease }: { on: string | null; onRelease: () => void }) {
-  return (
-    <div role="status" className="flex h-10 shrink-0 items-center gap-2 border-b border-warning/40 bg-warning-subtle pr-2 pl-4 text-sm" data-tint data-held-bar>
-      <Pause aria-hidden className="size-3.5 shrink-0 text-warning" />
-      <span className="shrink-0 font-medium">Preview held</span>
-      <Truncate className="w-0 flex-1 text-fg-muted">
-        {on === null ? "The preview window keeps what it showed." : `The preview window keeps showing ${on}.`}
-      </Truncate>
-      <Button variant="outline" onClick={onRelease} data-held-release>
-        Resume live
-      </Button>
     </div>
   );
 }

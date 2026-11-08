@@ -13,6 +13,9 @@ const buttonVariants = cva(
         // On a tinted surface, marked `data-tint`, the card fill would punch a hole in the tint, so the edge alone draws it.
         outline:
           "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-accent aria-pressed:bg-selected aria-pressed:text-fg",
+        // An outline toggle whose pressed state is a warning, as Hold preview's is: pressed, it leaves a shared window behind.
+        caution:
+          "border-border-strong bg-card in-data-tint:not-hover:bg-transparent hover:bg-hover hover:text-fg aria-expanded:border-accent aria-expanded:bg-selected aria-expanded:text-fg aria-pressed:border-warning aria-pressed:bg-warning-subtle aria-pressed:text-fg",
         ghost:
           "hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg aria-pressed:bg-selected aria-pressed:text-fg",
         destructive:

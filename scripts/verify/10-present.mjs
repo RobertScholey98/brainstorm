@@ -136,7 +136,7 @@ try {
   check(
     "with the window open, the bar offers Hold and the Preview menu, and Present stays last",
     await window.evaluate(() => [...document.querySelectorAll("[data-present-controls] button")].map((b) => b.getAttribute("aria-label") ?? b.textContent.trim())),
-    ["Hold preview", "Preview · Clean", "Present"],
+    ["Hold preview", "Preview window, Clean", "Present"],
   );
   await snap(window, "07-main-window-open", "The main window while the preview window is open: Hold preview and a Preview menu button grow in to the left of Present, which keeps its place at the canvas bar's right end");
 
@@ -189,11 +189,11 @@ try {
   await preview.mouse.move(640, 790);
   await snap(preview, "11-preview-working", "The preview window, Working look: the same canvas bar as the main window (slot tabs, view switch), then Pin comment at its right, over the canvas drawn as the main window draws it");
   await window.click("[data-hold]");
-  await preview.waitForSelector("[data-held-badge]");
+  await preview.waitForSelector("[data-held-bar]");
   await preview.mouse.move(640, 790);
-  await snap(preview, "11b-preview-working-held", "The Working preview window while Hold preview is on in the main window: Held · Resume live in its canvas bar, before Pin comment");
-  await preview.click("[data-held-badge]");
-  await preview.waitForSelector("[data-held-badge]", { state: "detached" });
+  await snap(preview, "11b-preview-working-held", "The Working preview window while Hold preview is on in the main window: the same warning-toned held bar as the main window's, under its canvas bar, This window keeps showing …, with Resume live");
+  await preview.click("[data-held-release]");
+  await preview.waitForSelector("[data-held-bar]", { state: "detached" });
   check("Resume live in the working preview window ends Hold in the main window", await window.getAttribute("[data-hold]", "aria-pressed"), "false");
 
   // Pin from the preview window.
@@ -236,7 +236,7 @@ try {
   await window.click("[data-pick-toggle]");
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
-  check("a pick started here while the canvas is away waits in the preview window", await window.textContent("[data-canvas-away] [data-slot=empty-title]"), "Click an element in the preview window");
+  check("a pick started here while the canvas is away waits in the preview window", await window.textContent("[data-canvas-away] [data-slot=empty-title]"), "Pick an element in the preview window");
   check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Pick in the preview windowEscCancel");
   await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's hint reads Pick in the preview window with Esc and Cancel, and the region's title says to click an element there");
   await window.keyboard.press("Escape");
@@ -255,7 +255,7 @@ try {
       await mirror.evaluate(() => document.body.dataset.mode ?? "view"),
       await window.textContent("[data-canvas-away] [data-slot=empty-title]"),
     ],
-    [null, "view", "To pin a comment, bring the canvas back here"],
+    [null, "view", "To pin a comment, show the canvas here"],
   );
   await window.mouse.move(150, 860);
   await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says to pin a comment, bring the canvas back here, and why, with Show the canvas here (primary, which then starts the pick here), Switch preview to Working, and Cancel");

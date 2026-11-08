@@ -1,4 +1,4 @@
-import { AppWindow, MessageSquarePlus, Pause } from "lucide-react";
+import { AppWindow, MessageSquarePlus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -9,7 +9,8 @@ import type { Api } from "./api";
 import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type FeedbackCue } from "./CanvasHost";
 import { PinComposer } from "./Feedback";
-import { openChannel, type MirrorScene, type PreviewSettings, type ToMain, type ToPreview } from "./mirror";
+import { HeldBar } from "./HeldBar";
+import { describe, openChannel, type MirrorScene, type PreviewSettings, type ToMain, type ToPreview } from "./mirror";
 import { failedTitle, type Notice } from "./notice";
 import { VaryComposer } from "./Vary";
 
@@ -128,14 +129,6 @@ export function PreviewWindow({ api }: { api: Api }) {
             onCancelPick={() => tell({ kind: "pick", for: null })}
             trailing={
               <>
-                {settings.hold && (
-                  <Hint name="Preview held" label="Hold preview is on in the main window, so this window keeps what it showed. Resume live to catch up" side="bottom">
-                    <Button variant="outline" onClick={() => tell({ kind: "resume" })} data-held-badge>
-                      <Pause data-icon="inline-start" className="text-warning" aria-hidden />
-                      Held · Resume live
-                    </Button>
-                  </Hint>
-                )}
                 <Hint label={scene.pinBlocked ?? "Click an element here to pin a comment to it"} side="bottom">
                   <span tabIndex={scene.pinBlocked === null ? -1 : 0} className="inline-flex">
                     <Button
@@ -154,6 +147,7 @@ export function PreviewWindow({ api }: { api: Api }) {
             }
           />
         )}
+        {!clean && settings.hold && <HeldBar on={describe({ blocks, scene })} here="preview" onRelease={() => tell({ kind: "resume" })} />}
         <section ref={area} className="relative min-h-0 flex-1 overflow-hidden bg-canvas" aria-label="Preview" data-canvas-region>
           <CanvasHost
             blocks={blocks}
