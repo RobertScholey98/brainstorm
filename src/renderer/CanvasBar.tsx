@@ -31,6 +31,7 @@ export function CanvasBar({
   onSlot,
   onView,
   onCancelPick,
+  pickHint,
   trailing,
 }: {
   slots: readonly SlotView[];
@@ -43,6 +44,8 @@ export function CanvasBar({
   onSlot: (slot: SlotId) => void;
   onView: (view: CanvasLayout["view"]) => void;
   onCancelPick: () => void;
+  /** What the pick hint says, when it isn't this window's canvas that takes the pick. */
+  pickHint?: string;
   /** How the canvas is shown beyond this window, at the bar's right end: present, and the preview window. */
   trailing?: ReactNode;
 }) {
@@ -81,7 +84,7 @@ export function CanvasBar({
       <div className="flex flex-1 items-center justify-end gap-2 pl-2">
         {picking !== null && (
           <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-fg-muted" role="status" data-pick-hint>
-            <Truncate className="w-0 flex-1 text-right">{picking === "vary" ? "Click an element to vary" : "Click an element to pin a comment"}</Truncate>
+            <Truncate className="w-0 flex-1 text-right">{pickHint ?? (picking === "vary" ? "Click an element to vary" : "Click an element to pin a comment")}</Truncate>
             <Kbd>Esc</Kbd>
             <Button variant="ghost" onClick={onCancelPick}>
               Cancel
@@ -98,7 +101,8 @@ export function CanvasBar({
           </Hint>
         )}
         {several && <Segmented fit value={view} onValueChange={onView} options={VIEWS} itemData="view-option" aria-label="View" />}
-        {trailing !== undefined && (
+        {/* A pick gives the hint the room: Present and the preview window wait, and Hold's own bar still says it is on. */}
+        {trailing !== undefined && picking === null && (
           <>
             {several && <Separator orientation="vertical" data-trailing-divider />}
             {trailing}

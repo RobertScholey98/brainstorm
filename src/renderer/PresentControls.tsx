@@ -1,6 +1,7 @@
-import { AppWindow, ChevronDown, Pause, Presentation } from "lucide-react";
+import { AppWindow, ChevronDown, Maximize, Pause } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
@@ -8,20 +9,20 @@ import { Hint } from "@/components/ui/tooltip";
 import type { PreviewPrefs } from "../core/prefs";
 import { canOpenPreviewWindow, previewWindow } from "./mirror";
 
-const LOOKS: readonly { value: PreviewPrefs["look"]; label: string; hint: string }[] = [
-  { value: "clean", label: "Clean", hint: "The design alone, filling the window, for whoever is watching" },
-  { value: "working", label: "Working", hint: "The canvas as it is here, with the slot bar and pins, for your own screen" },
+const LOOKS: readonly { value: PreviewPrefs["look"]; label: string; about: string }[] = [
+  { value: "clean", label: "Clean", about: "The design alone, filling the window. Safe to share." },
+  { value: "working", label: "Working", about: "The canvas as it is here, with slot tabs, pins and Pin comment. For your own screen." },
 ];
 
 /**
- * The canvas bar's right end (ADR 007): Present fills the screen with the slot on the stage, and the preview window
- * mirrors this canvas in a window of its own. While that window is open, Hold keeps it on what it shows, and its menu
- * holds the look, whether this window keeps its canvas, and the window's own commands.
+ * The canvas bar's right end (ADR 007). Present sits last and never moves; the preview window's controls grow to its
+ * left: the window's button while it is shut, then Hold and the window's menu while it is open.
  */
 export function PresentControls({
   onPresent,
   open,
   hold,
+  heldOn,
   onHold,
   prefs,
   onPrefs,
@@ -29,6 +30,8 @@ export function PresentControls({
   onPresent: () => void;
   open: boolean;
   hold: boolean;
+  /** What the preview window is held on, such as "The wheel · Slot reel". */
+  heldOn: string | null;
   onHold: (hold: boolean) => void;
   prefs: PreviewPrefs;
   onPrefs: (prefs: PreviewPrefs) => void;
@@ -36,24 +39,34 @@ export function PresentControls({
   const windowed = canOpenPreviewWindow();
   return (
     <span className="flex shrink-0 items-center gap-1" data-present-controls>
-      {open && (
-        <Hint
-          label={hold ? "The preview window keeps what it shows. Release to send it your changes" : "Keep the preview window on what it shows while you change things here"}
-          side="bottom"
-        >
-          <Button variant="outline" aria-pressed={hold} onClick={() => onHold(!hold)} data-hold>
-            <Pause data-icon="inline-start" aria-hidden />
-            {hold ? "Held" : "Hold"}
-          </Button>
-        </Hint>
-      )}
+      {windowed && open && <HoldButton hold={hold} heldOn={heldOn} onHold={onHold} />}
+      {windowed && (open ? <WindowMenu prefs={prefs} onPrefs={onPrefs} /> : <OpenWindow />)}
       <Hint name="Present" label="Fill the screen with this slot, as the app would look" shortcut="F5" side="bottom">
         <Button variant="ghost" size="icon" aria-label="Present" onClick={onPresent} data-present>
-          <Presentation aria-hidden />
+          <Maximize aria-hidden />
         </Button>
       </Hint>
-      {windowed && (open ? <WindowMenu prefs={prefs} onPrefs={onPrefs} /> : <OpenWindow />)}
     </span>
+  );
+}
+
+/** Pressed while held. The bar under the canvas bar names what the window is held on and offers Release, so the button stays short. */
+function HoldButton({ hold, heldOn, onHold }: { hold: boolean; heldOn: string | null; onHold: (hold: boolean) => void }) {
+  return (
+    <Hint
+      name={hold ? "Preview held" : "Hold preview"}
+      label={
+        hold
+          ? `It shows ${heldOn ?? "what it showed"} until you resume live`
+          : "Keep the preview window on what it shows now, while you try things here"
+      }
+      side="bottom"
+    >
+      <Button variant="outline" aria-pressed={hold} onClick={() => onHold(!hold)} data-hold>
+        <Pause data-icon="inline-start" aria-hidden />
+        {hold ? "Preview held" : "Hold preview"}
+      </Button>
+    </Hint>
   );
 }
 
@@ -73,9 +86,10 @@ function WindowMenu({ prefs, onPrefs }: { prefs: PreviewPrefs; onPrefs: (prefs: 
     setOpen(false);
     previewWindow(command);
   };
+  const look = LOOKS.find((l) => l.value === prefs.look) ?? LOOKS[0];
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint name="Preview window" label="Open. Its look, and whether this window keeps the canvas" side="bottom">
+      <Hint name="Preview window" label={`Open, in the ${look?.label} look. Change its look, or move or close it`} side="bottom">
         <PopoverTrigger render={<Button variant="outline" data-preview-menu />}>
           <AppWindow data-icon="inline-start" aria-hidden />
           Preview
@@ -83,35 +97,41 @@ function WindowMenu({ prefs, onPrefs }: { prefs: PreviewPrefs; onPrefs: (prefs: 
         </PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="end" data-preview-popover>
-        <PopoverHeader heading="Preview window" description="Mirrors this canvas as you work. Drag it to the screen you share, or to a screen of its own." />
+        <PopoverHeader
+          heading="Preview window"
+          description="Mirrors this canvas as you work. Hold preview, beside this menu, keeps it still while you try things."
+        />
         <div className="grid gap-1.5">
-          <span className="text-xs font-medium text-fg-muted" id="preview-look">
-            Look
-          </span>
-          <Segmented value={prefs.look} onValueChange={(look) => onPrefs({ ...prefs, look })} options={LOOKS} itemData="preview-look" aria-label="Look" />
-          <p className="text-xs text-fg-muted" data-preview-look-about>
-            {LOOKS.find((l) => l.value === prefs.look)?.hint}
-          </p>
+          <span className="text-xs font-medium text-fg-muted">Look</span>
+          <Segmented value={prefs.look} onValueChange={(next) => onPrefs({ ...prefs, look: next })} options={LOOKS} itemData="preview-look" aria-label="Look" />
+          <ul className="grid gap-0.5 text-xs" data-preview-look-about>
+            {LOOKS.map((l) => (
+              <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted"} data-chosen={l.value === prefs.look || undefined}>
+                <span className="font-medium">{l.label}:</span> {l.about}
+              </li>
+            ))}
+          </ul>
         </div>
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
-            <span className="text-sm">Keep the canvas here too</span>
-            <span className="text-xs text-fg-muted">Off gives the canvas to the preview window; slots and controls stay here</span>
+            <span className="text-sm">Show the canvas in this window</span>
+            <span className="text-xs text-fg-muted">Off moves it to the preview window. Slots and controls stay here.</span>
           </span>
           <Switch checked={prefs.here} onCheckedChange={(here) => onPrefs({ ...prefs, here })} className="mt-0.5" data-preview-here />
         </label>
-        <PopoverFooter>
-          <Button variant="ghost" onClick={() => run("close")} data-preview-close>
-            Close window
-          </Button>
+        <div className="grid grid-cols-2 gap-1.5">
           <Button variant="outline" onClick={() => run("open")} data-preview-front>
             Bring to front
           </Button>
-          <Hint label="Fill the screen it is on. F11 in the window does the same, and Escape leaves" side="bottom">
-            <Button variant="outline" onClick={() => run("fullscreen")} data-preview-fullscreen>
-              Full screen
-            </Button>
-          </Hint>
+          <Button variant="outline" onClick={() => run("fullscreen")} data-preview-fullscreen>
+            Full screen
+            <Kbd>F11</Kbd>
+          </Button>
+        </div>
+        <PopoverFooter hint="It closes with Brainstorm, too.">
+          <Button variant="ghost" onClick={() => run("close")} data-preview-close>
+            Close window
+          </Button>
         </PopoverFooter>
       </PopoverContent>
     </Popover>

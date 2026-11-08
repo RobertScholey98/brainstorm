@@ -1,5 +1,5 @@
 import type { PreviewPrefs } from "../core/prefs";
-import type { BlockId, BlockView, CanvasFrame, CanvasPin, FeedbackId, IterationN, Props, SessionId, SlotId, SlotView } from "../core/types";
+import { blockIdOf, type BlockId, type BlockView, type CanvasFrame, type CanvasPin, type FeedbackId, type IterationN, type Props, type SessionId, type SlotId, type SlotView } from "../core/types";
 
 /**
  * The preview window mirrors the main window's canvas (ADR 007). The two are pages of one origin in one Electron
@@ -75,6 +75,17 @@ export function openChannel<In>(onMessage: (message: In) => void): { post: (mess
 
 type Sent = { readonly blocks: readonly BlockView[]; readonly scene: MirrorScene | null };
 
+/** Whether the preview window is open, and while it is held, the slot and variant it is held on, in Rob's words. */
+export type LinkState = { readonly open: boolean; readonly hold: boolean; readonly heldOn: string | null };
+
+/** "The wheel · Slot reel": the slot the preview window shows and its variant's title, or the slot alone. */
+function describe({ blocks, scene }: Sent): string | null {
+  const slot = scene?.slots.find((s) => s.id === scene.slot);
+  if (slot === undefined) return null;
+  const block = blocks.find((b) => b.id === blockIdOf(slot.id, slot.active));
+  return block === undefined ? slot.title : `${slot.title} · ${block.title}`;
+}
+
 /**
  * The main window's end. It keeps the latest scene and blocks, and what the preview window was last sent: under Hold
  * the two part, and releasing Hold sends the latest. A preview window that (re)loads gets what it last had, so Hold
@@ -86,13 +97,13 @@ export class PreviewLink {
   private shown: Sent = this.latest;
   private open = false;
   private settings: PreviewSettings;
-  private snapshot: { readonly open: boolean; readonly hold: boolean };
+  private snapshot: LinkState;
   private readonly listeners = new Set<() => void>();
   private readonly handlers = new Set<(m: ToMain) => void>();
 
   constructor(look: PreviewSettings["look"]) {
     this.settings = { look, hold: false };
-    this.snapshot = { open: false, hold: false };
+    this.snapshot = { open: false, hold: false, heldOn: null };
     this.channel.post({ kind: "main" } satisfies ToPreview);
   }
 
@@ -181,7 +192,7 @@ export class PreviewLink {
   }
 
   private changed(): void {
-    this.snapshot = { open: this.open, hold: this.settings.hold };
+    this.snapshot = { open: this.open, hold: this.settings.hold, heldOn: this.settings.hold ? describe(this.shown) : null };
     for (const l of this.listeners) l();
   }
 }

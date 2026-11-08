@@ -55,19 +55,19 @@ try {
   const { session } = seedDemo(home, env);
   const canvas = await openSession(window, session);
   await canvas.waitForSelector(inBlock("wheel/neon", "spin"), { state: "attached" }).catch(() => canvas.waitForSelector('[data-bid="wheel/neon"]'));
-  await window.mouse.move(700, 880);
+  await window.mouse.move(150, 860);
 
   check(
-    "the canvas bar ends with Present and the preview window, after the view switch",
+    "the canvas bar ends with the preview window, then Present last, after the view switch",
     await window.evaluate(() => [...document.querySelectorAll("[data-canvas-bar] [data-present-controls] button")].map((b) => b.getAttribute("aria-label") ?? b.textContent)),
-    ["Present", "Open preview window"],
+    ["Open preview window", "Present"],
   );
-  await snap(window, "01-canvas-bar", "The main window as a brainstorm opens: the canvas bar now ends, after the One slot / All slots switch and a divider, with Present (presentation icon) and Open preview window (window icon), both icon buttons with hints");
+  await snap(window, "01-canvas-bar", "The main window as a brainstorm opens: the canvas bar now ends, after the One slot / All slots switch and a divider, with Open preview window (window icon) then Present (full-screen icon) last, both icon buttons with hints");
   await window.hover("[data-present]");
   await window.waitForSelector("[data-slot=tooltip-content], [role=tooltip]", { timeout: 3000 }).catch(() => {});
   await sleep(300);
   await snap(window, "02-present-hint", "The Present button's hint: Present · Fill the screen with this slot, as the app would look, and its F5 key");
-  await window.mouse.move(700, 880);
+  await window.mouse.move(150, 860);
 
   // Present in place.
   await window.click("[data-present]");
@@ -83,13 +83,13 @@ try {
     };
   });
   check("present stretches the slot to the screen's width from its top, with no title or pins", fills, { width: true, top: 0, chrome: 0 });
-  await snap(window, "03-present-start", "Present, just started from the wheel slot: the 390 px wheel stretched to fill the screen, no canvas chrome, and the opening label at the top, Esc to leave · ← → to change slot, which fades after 2.5 s");
-  await sleep(2800);
+  await snap(window, "03-present-start", "Present, just started from the wheel slot: the 390 px wheel stretched to fill the screen, no canvas chrome, and the opening label near the bottom, Esc to leave · ← → to change slot, which fades after 3.5 s");
+  await sleep(3800);
   await snap(window, "04-present", "Present once the label has faded: nothing on screen but the design, as if it were the app");
   await window.keyboard.press("ArrowRight");
   await settled(() => showing(canvas));
   check("right steps to the next slot while presenting", await showing(canvas), "result:result/card");
-  await snap(window, "05-present-next-slot", "Present after pressing right: the result slot's assignment card, stretched to the screen");
+  await snap(window, "05-present-next-slot", "Present after pressing right: the result slot's assignment card (an auto-height slot), stretched to the screen, its own background running to the bottom edge");
   await window.keyboard.press("Escape");
   await window.waitForSelector("[data-presenting]", { state: "detached" });
   check("Escape leaves present, and the canvas keeps the slot it stepped to", await showing(canvas), "result:result/card");
@@ -112,15 +112,23 @@ try {
   await mirror.waitForSelector("html[data-present]");
   await settled(() => showing(mirror));
   check("the preview window opens clean, on the slot the main window shows", await showing(mirror), "result:result/card");
-  check("its title names the brainstorm", await preview.title(), "Chore roulette · Brainstorm preview");
-  await snap(preview, "06-preview-clean", "The preview window (1280×800), Clean look: the result slot alone, filling the window, nothing of Brainstorm's chrome; this is what stakeholders see when it is shared");
-  await window.mouse.move(700, 880);
+  check("in the clean look its title is the design's alone", await preview.title(), "Chore roulette");
+  await snap(preview, "06-preview-clean", "The preview window (1280×800), Clean look: the result slot alone, filling the window, nothing of Brainstorm's chrome; this is what stakeholders see when it is shared. Its OS title bar (not in the shot) reads only Chore roulette");
+  await window.mouse.move(150, 860);
   check(
-    "with the window open, the bar offers Hold, Present and the Preview menu",
+    "with the window open, the bar offers Hold and the Preview menu, and Present stays last",
     await window.evaluate(() => [...document.querySelectorAll("[data-present-controls] button")].map((b) => b.getAttribute("aria-label") ?? b.textContent.trim())),
-    ["Hold", "Present", "Preview"],
+    ["Hold preview", "Preview", "Present"],
   );
-  await snap(window, "07-main-window-open", "The main window while the preview window is open: Hold, Present and a Preview menu button at the canvas bar's right end");
+  await snap(window, "07-main-window-open", "The main window while the preview window is open: Hold preview and a Preview menu button grow in to the left of Present, which keeps its place at the canvas bar's right end");
+
+  // The clean look never takes a pick: it is the one an audience sees.
+  await window.click("[data-pick-toggle]");
+  await canvas.waitForSelector('body[data-mode="pin"]');
+  await sleep(300);
+  check("a pick started in the main window leaves the clean preview window as it was", await mirror.evaluate(() => document.body.dataset.mode ?? "view"), "view");
+  await window.keyboard.press("Escape");
+  await canvas.waitForSelector('body[data-mode="view"]');
 
   // It follows the main window: slot, variant.
   await window.click('[data-slot-tab="wheel"]');
@@ -136,9 +144,14 @@ try {
   await window.click('[data-slot-tab="result"]');
   await sleep(600);
   check("under Hold the preview window keeps what it showed", await showing(mirror), "wheel:wheel/reel");
-  await window.mouse.move(700, 880);
-  await snap(window, "09-main-held", "The main window with Hold on: the Hold button pressed and reading Held, while the main canvas has moved on to the result slot");
-  await window.click("[data-hold]");
+  check(
+    "the main window says so under the canvas bar, naming the slot and variant held, and the button reads Preview held",
+    [await window.textContent("[data-held-bar]"), await window.textContent("[data-hold]")],
+    ["Preview heldThe preview window keeps showing The wheel · Slot reel.Resume live", "Preview held"],
+  );
+  await window.mouse.move(150, 860);
+  await snap(window, "09-main-held", "The main window with Hold preview on: the button pressed and reading Preview held, and a warning-toned bar under the canvas bar, Preview held · The preview window keeps showing The wheel · Slot reel, with Resume live; the main canvas has moved on to the result slot");
+  await window.click("[data-held-release]");
   await settled(() => showing(mirror));
   check("releasing Hold sends it the latest", await showing(mirror), "result:result/card");
 
@@ -146,7 +159,10 @@ try {
   await window.click("[data-preview-menu]");
   await window.waitForSelector("[data-preview-popover]");
   await sleep(250);
-  await snap(window, "10-preview-menu", "The Preview menu: what the window is for, the Look switch (Clean or Working) with a line on the chosen look, Keep the canvas here too, and Close window, Bring to front and Full screen, with F11 named");
+  await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show the canvas in this window, Bring to front and Full screen (F11), and Close window alone in the footer");
+  await window.click('[data-preview-look="working"]');
+  await sleep(250);
+  await snap(window, "10b-preview-menu-working", "The Preview menu with Working chosen: its line under the switch now in full contrast", { keepFocus: true });
   await window.click('[data-preview-look="working"]');
   await preview.waitForSelector("[data-preview-window=working]");
   await window.keyboard.press("Escape");
@@ -177,6 +193,8 @@ try {
 
   // The main window still pins.
   await window.click("[data-pick-toggle]");
+  await window.mouse.move(150, 860);
+  await snap(window, "14b-main-picking-window-open", "The main window picking while the preview window is open (Working): the pick hint, Esc and Cancel in the canvas bar, which sets Hold preview, Preview and Present aside until the pick ends");
   await canvas.click(inBlock("result/card", "headline"));
   await window.waitForSelector("[data-composer]");
   check("the main window's canvas still pins while the preview window is open", await preview.$("[data-composer]"), null);
@@ -188,13 +206,34 @@ try {
   await window.click("[data-preview-here]");
   await window.keyboard.press("Escape");
   await window.waitForSelector("[data-canvas-away]");
-  await window.mouse.move(700, 880);
-  await snap(window, "15-canvas-away", "The main window with Keep the canvas here too off: the canvas region says the canvas is in the preview window, with Bring it to front and Show the canvas here too; the slot bar, sidebar and Inspector stay");
+  await window.mouse.move(150, 860);
+  await snap(window, "15-canvas-away", "The main window with Show the canvas in this window off: the canvas region says the canvas is in the preview window, with Show the canvas here and Bring the window to front; the slot bar, sidebar and Inspector stay");
   await window.click("[data-pick-toggle]");
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
   check("a pick started here while the canvas is away waits in the preview window", await window.textContent("[data-canvas-away] [data-slot=empty-title]"), "Click an element in the preview window");
-  await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's pick hint and the region's title both point to the preview window");
+  check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Pick in the preview windowEscCancel");
+  await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's hint reads Pick in the preview window with Esc and Cancel, and the region's title says to click an element there");
+  await window.keyboard.press("Escape");
+
+  // A clean preview window can't take a pick, so with the canvas away the main window says so and offers a way on.
+  await window.click("[data-preview-menu]");
+  await window.click('[data-preview-look="clean"]');
+  await window.click("[data-preview-menu]");
+  await preview.waitForSelector("[data-preview-window=clean]");
+  await window.click("[data-pick-toggle]");
+  await window.waitForSelector('[data-canvas-away="stuck"]');
+  check(
+    "with the canvas away and the preview window clean, a pick says it has nowhere to go",
+    [await window.textContent("[data-pick-hint]"), await mirror.evaluate(() => document.body.dataset.mode ?? "view")],
+    ["Clean preview can't take a pickEscCancel", "view"],
+  );
+  await window.mouse.move(150, 860);
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, Pin comment pressed: the region says the Clean window can't take a pick and why, with Switch preview to Working and Show the canvas here; the bar's hint reads Clean preview can't take a pick");
+  await window.click("[data-away-working]");
+  await preview.waitForSelector("[data-preview-window=working]");
+  await mirror.waitForSelector('body[data-mode="pin"]');
+  check("Switch preview to Working hands the pick to the preview window", await window.getAttribute("[data-canvas-away]", "data-canvas-away"), "picking");
   await window.keyboard.press("Escape");
   await window.click("[data-away-here]");
   await window.waitForSelector("[data-canvas-away]", { state: "detached" });

@@ -65,15 +65,21 @@ export function PreviewWindow({ api }: { api: Api }) {
   }, []);
 
   useEffect(() => {
-    document.title = scene === null ? "Brainstorm preview" : `${scene.title} · Brainstorm preview`;
-  }, [scene?.title, scene === null]);
+    // A shared window's title bar is on screen too, so the clean look's names the design alone.
+    document.title = scene === null ? "Brainstorm preview" : settings.look === "clean" ? scene.title : `${scene.title} · Brainstorm preview`;
+  }, [scene?.title, scene === null, settings.look]);
 
   // A composer belongs to the brainstorm it was opened on.
   const session = scene?.session ?? null;
   useEffect(() => setComposing(null), [session]);
 
   const clean = settings.look === "clean";
-  const picking = scene?.picking ?? null;
+  // The clean look is the one an audience sees, so it never takes a pick or shows a composer: editing stays in the
+  // main window, or in the working look.
+  const picking = clean ? null : (scene?.picking ?? null);
+  useEffect(() => {
+    if (clean) setComposing(null);
+  }, [clean]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

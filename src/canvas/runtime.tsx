@@ -804,6 +804,8 @@ html[data-present] body, html[data-present] .bs-frame-body { background: var(--b
 html[data-present] #canvas { display: block; padding: 0; }
 html[data-present] .bs-frame-title, html[data-present] .bs-switch, html[data-present] .bs-pin { display: none !important; }
 html[data-present] .bs-frame-body { min-height: 100vh; border-radius: 0; box-shadow: none !important; transition: none; }
+/* The block's own root reaches the window's foot, so its background, pattern and all, runs to the bottom edge as a page's would. */
+html[data-present] .bs-frame-body > [data-bid] > * { min-height: 100vh; box-sizing: border-box; }
 body[data-mode="pin"] .bs-pin { cursor: pointer !important; }
 ${
   preview

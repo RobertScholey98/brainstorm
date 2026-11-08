@@ -1,4 +1,4 @@
-import { AppWindow, Loader2 } from "lucide-react";
+import { AppWindow, Loader2, Pause } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -7,6 +7,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toast } from "@/components/ui/toast";
 import { TooltipLabel, TooltipProvider } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import {
   blockIdOf,
   framesOf,
@@ -99,6 +100,8 @@ type PreviewHandle = {
   readonly link: PreviewLink;
   readonly open: boolean;
   readonly hold: boolean;
+  /** What the preview window is held on, such as "The wheel · Slot reel", while it is held. */
+  readonly heldOn: string | null;
   readonly prefs: PreviewPrefs;
   readonly onPrefs: (prefs: PreviewPrefs) => void;
 };
@@ -271,7 +274,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
               onChoose: (open) => savePrefs({ historyStrip: { session: nav.id, open } }),
             }}
             sidebar={sidebar}
-            preview={{ link, open: linked.open, hold: linked.hold, prefs: prefs.preview, onPrefs: (preview) => savePrefs({ preview }) }}
+            preview={{ link, open: linked.open, hold: linked.hold, heldOn: linked.heldOn, prefs: prefs.preview, onPrefs: (preview) => savePrefs({ preview }) }}
             homePanel={nav.panel === "home" ? homePanel : null}
             onHome={() => setNav({ kind: "brainstorm", id: nav.id, panel: "home" })}
             onOpen={(id) => (id === null ? setNav({ kind: "overview" }) : openSession(id))}
@@ -730,11 +733,13 @@ function SessionWorkspace({
             onSlot={setSelectedSlot}
             onView={setCanvasView}
             onCancelPick={() => setInteraction({ kind: "view" })}
+            {...(away ? { pickHint: preview.prefs.look === "working" ? "Pick in the preview window" : "Clean preview can't take a pick" } : {})}
             trailing={
               <PresentControls
                 onPresent={present}
                 open={preview.open}
                 hold={preview.hold}
+                heldOn={preview.heldOn}
                 onHold={(hold) => link.setHold(hold)}
                 prefs={preview.prefs}
                 onPrefs={preview.onPrefs}
@@ -742,6 +747,7 @@ function SessionWorkspace({
             }
           />
         )}
+        {preview.open && preview.hold && <HeldBar on={preview.heldOn} onRelease={() => link.setHold(false)} />}
         {past !== null && <PastBar n={past.n} onLatest={showLatest} />}
         <section
           ref={canvasArea}
@@ -778,7 +784,12 @@ function SessionWorkspace({
           />
         )}
         {away && iteration !== null && (
-          <CanvasAway onHere={() => preview.onPrefs({ ...preview.prefs, here: true })} picking={picking !== null} />
+          <CanvasAway
+            look={preview.prefs.look}
+            picking={picking !== null}
+            onHere={() => preview.onPrefs({ ...preview.prefs, here: true })}
+            onWorking={() => preview.onPrefs({ ...preview.prefs, look: "working" })}
+          />
         )}
         {presenting && <PresentHint several={slots.length > 1} />}
         {interaction.kind === "composing" && (
@@ -867,28 +878,70 @@ function SessionWorkspace({
  * The canvas region while the preview window has the canvas. The frame stays mounted under it, so pins still report
  * where they landed, and the slot bar above still chooses what the preview window shows.
  */
-function CanvasAway({ onHere, picking }: { onHere: () => void; picking: boolean }) {
+function CanvasAway({
+  look,
+  picking,
+  onHere,
+  onWorking,
+}: {
+  look: PreviewPrefs["look"];
+  picking: boolean;
+  onHere: () => void;
+  onWorking: () => void;
+}) {
+  // A clean preview window never takes a pick, since an audience may be watching it, so a pick needs one of the other two.
+  const stuck = picking && look === "clean";
   return (
-    <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away>
+    <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away={stuck ? "stuck" : picking ? "picking" : ""}>
       <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <AppWindow aria-hidden />
           </EmptyMedia>
-          <EmptyTitle>{picking ? "Click an element in the preview window" : "The canvas is in the preview window"}</EmptyTitle>
+          <EmptyTitle>
+            {stuck ? "The preview window is Clean, so it can't take a pick" : picking ? "Click an element in the preview window" : "The canvas is in the preview window"}
+          </EmptyTitle>
           <EmptyDescription>
-            The slot tabs above choose what it shows, and settings and comments made here land there as you make them.
+            {stuck
+              ? "Clean keeps editing off a shared screen. Switch it to Working to pick there, or show the canvas here."
+              : "Slot tabs, settings and comments here update it as you make them."}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row justify-center">
-          <Button variant="outline" onClick={() => previewWindow("open")} data-away-front>
-            Bring it to front
+          {stuck && (
+            <Button variant="outline" onClick={onWorking} data-away-working>
+              Switch preview to Working
+            </Button>
+          )}
+          <Button variant="outline" onClick={onHere} data-away-here>
+            Show the canvas here
           </Button>
-          <Button variant="ghost" onClick={onHere} data-away-here>
-            Show the canvas here too
-          </Button>
+          {!stuck && (
+            <Button variant="outline" onClick={() => previewWindow("open")} data-away-front>
+              Bring the window to front
+            </Button>
+          )}
         </EmptyContent>
       </Empty>
+    </div>
+  );
+}
+
+/**
+ * The bar under the canvas bar while the preview window is held, in the warning tone, as the past's bar is in the info
+ * tone: whoever watches that window sees something this one no longer shows, which Rob must not lose sight of on a call.
+ */
+function HeldBar({ on, onRelease }: { on: string | null; onRelease: () => void }) {
+  return (
+    <div role="status" className="flex h-10 shrink-0 items-center gap-2 border-b border-warning/40 bg-warning-subtle pr-2 pl-4 text-sm" data-tint data-held-bar>
+      <Pause aria-hidden className="size-3.5 shrink-0 text-warning" />
+      <span className="shrink-0 font-medium">Preview held</span>
+      <Truncate className="w-0 flex-1 text-fg-muted">
+        {on === null ? "The preview window keeps what it showed." : `The preview window keeps showing ${on}.`}
+      </Truncate>
+      <Button variant="outline" onClick={onRelease} data-held-release>
+        Resume live
+      </Button>
     </div>
   );
 }
@@ -897,13 +950,13 @@ function CanvasAway({ onHere, picking }: { onHere: () => void; picking: boolean 
 function PresentHint({ several }: { several: boolean }) {
   const [shown, setShown] = useState(true);
   useEffect(() => {
-    const timer = setTimeout(() => setShown(false), 2500);
+    const timer = setTimeout(() => setShown(false), 3500);
     return () => clearTimeout(timer);
   }, []);
   return (
     <div
       role="status"
-      className="pointer-events-none absolute inset-x-0 top-4 z-toast flex justify-center transition-opacity duration-500 data-hidden:opacity-0"
+      className="pointer-events-none absolute inset-x-0 bottom-6 z-toast flex justify-center transition-opacity duration-500 data-hidden:opacity-0"
       data-hidden={shown ? undefined : ""}
       data-present-hint
     >
