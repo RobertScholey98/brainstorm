@@ -1059,7 +1059,8 @@ body[data-mode="pin"], body[data-mode="pin"] * { cursor: crosshair !important; }
   display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; align-items: start; width: 100%;
 }
 .bs-story { width: auto; }
-.bs-story-body { padding: 24px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+/* contain: a story that pins itself to the viewport, such as a sidebar, stays inside its own frame. */
+.bs-story-body { padding: 24px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; contain: layout paint; }
 body:has(.bs-gallery) #canvas { display: block; }
 body[data-mode="pin"] .bs-pin { cursor: pointer !important; }
 ${

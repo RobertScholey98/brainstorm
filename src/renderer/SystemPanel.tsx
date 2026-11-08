@@ -85,7 +85,7 @@ function ThemeEditor({ system, readOnly, send, exportTheme }: Parameters<typeof 
     <div className="grid grid-cols-1 gap-3 border-t py-3" inert={readOnly} data-theme-editor data-tweaks={tweaked}>
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-medium">Theme</h3>
-        {tweaked > 0 && <span className="text-xs text-fg-muted">{tweaked === 1 ? "1 tweak" : `${tweaked} tweaks`} in this brainstorm</span>}
+        {tweaked > 0 && <span className="text-xs text-fg-muted">{tweaked === 1 ? "1 tweak" : `${tweaked} tweaks`} here</span>}
         <Button variant="ghost" size="xs" className="ml-auto" disabled={tweaked === 0} onClick={() => void send({ kind: "reset_theme" })} data-theme-reset>
           <RotateCcw data-icon="inline-start" aria-hidden />
           Reset
@@ -204,7 +204,7 @@ function TokenRow({ token, value, base, send }: { token: Token; value: string | 
       </span>
       <Input
         aria-label={token.name}
-        className="h-7 w-menu shrink-0 font-mono text-xs"
+        className="h-7 w-1/2 shrink-0 font-mono text-xs"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
@@ -399,9 +399,7 @@ function ProposedRow({
   else if (promotion?.state === "started") {
     status = (
       <span className="flex items-center gap-2 text-xs text-fg-muted" data-promote-status>
-        <span className="flex min-w-0">
-          <Truncate>{`Adding to ${library} in a T3 thread`}</Truncate>
-        </span>
+        <span className="min-w-0">Adding to {library} in a T3 thread</span>
         {promotion.link !== null && (
           <Button variant="ghost" size="xs" className="ml-auto shrink-0" nativeButton={false} render={<a href={promotion.link} target="_blank" rel="noreferrer" />} data-promote-thread>
             <ExternalLink data-icon="inline-start" aria-hidden />
@@ -419,7 +417,7 @@ function ProposedRow({
     </Button>
   );
   return (
-    <li className="grid gap-1 rounded-md p-2 inset-ring inset-ring-border" data-proposed={proposed.name} data-promotion={promotion?.state}>
+    <li className="grid grid-cols-1 gap-1 rounded-md p-2 inset-ring inset-ring-border" data-proposed={proposed.name} data-promotion={promotion?.state}>
       <div className="flex items-center gap-2">
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-sm font-medium">
