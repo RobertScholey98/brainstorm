@@ -85,6 +85,8 @@ const addSystemBody = z.strictObject({
   stubs: z.record(z.string(), z.string()).optional(),
   thread: threadId.nullable().default(null),
 });
+const folderBody = z.strictObject({ path: z.string().trim().min(1) });
+const importBody = z.strictObject({ path: z.string().trim().min(1), repair: z.string().trim().min(1).nullable().default(null) });
 const themeName = z.string().trim().min(1).max(60);
 const cssName = z.string().regex(/^--[\w-]+$/, "a custom property, such as --primary");
 const attachBody = z.strictObject({ ref: z.string().trim().min(1), thread: threadId });
@@ -333,6 +335,38 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       },
       { method: "GET", path: new RegExp(`^/v1/${auth}/systems/([^/]+)$`), auth, handle: withSystem(async (id) => service.systems.view(id)) },
       { method: "POST", path: new RegExp(`^/v1/${auth}/systems/([^/]+)/sync$`), auth, handle: withSystem((id) => service.systems.sync(id)) },
+      // Importing a project's system with an agent (ADR 008): the gates it loops on, and the imports under way.
+      {
+        method: "POST",
+        path: new RegExp(`^/v1/${auth}/system-check$`),
+        auth,
+        handle: async ({ body }) => {
+          const b = parseBody(folderBody, body);
+          return b.ok ? service.systems.check(b.data.path) : b;
+        },
+      },
+      { method: "GET", path: new RegExp(`^/v1/${auth}/system-imports$`), auth, handle: async () => ({ ok: true, data: service.systems.imports() }) },
+      {
+        method: "POST",
+        path: new RegExp(`^/v1/${auth}/system-imports$`),
+        auth,
+        handle: async ({ body }) => {
+          const b = parseBody(importBody, body);
+          if (!b.ok) return b;
+          const repair = b.data.repair === null ? null : parseSystemId(b.data.repair);
+          if (b.data.repair !== null && repair === null) return usage(`"${b.data.repair}" is not a design system id`);
+          return service.systems.importProject({ path: b.data.path, repair });
+        },
+      },
+      {
+        method: "POST",
+        path: new RegExp(`^/v1/${auth}/system-imports/dismiss$`),
+        auth,
+        handle: async ({ body }) => {
+          const b = parseBody(folderBody, body);
+          return b.ok ? service.systems.dismissImport(b.data.path) : b;
+        },
+      },
     ]),
     {
       method: "GET",
@@ -512,11 +546,13 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
     streams.add(res);
     const unsubscribe = service.subscribe((session) => res.write(`event: session\ndata: ${JSON.stringify({ session })}\n\n`));
     const unsubscribeUpdates = updates.subscribe((state) => res.write(`event: update\ndata: ${JSON.stringify(state)}\n\n`));
+    const unsubscribeSystems = service.systems.subscribe(() => res.write("event: systems\ndata: {}\n\n"));
     const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), HEARTBEAT_MS);
     req.on("close", () => {
       clearInterval(heartbeat);
       unsubscribe();
       unsubscribeUpdates();
+      unsubscribeSystems();
       streams.delete(res);
     });
   };

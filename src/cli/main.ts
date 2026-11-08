@@ -25,6 +25,8 @@ import {
   type SessionId,
   type SessionListing,
   type ThreadId,
+  type SystemCheck,
+  type SystemImport,
   type SystemListing,
   type SystemView,
   type ValidateResult,
@@ -50,12 +52,15 @@ const USAGE = `usage:
   brainstorm validate        <session> [--from <dir>] [--thread <id>]
   brainstorm commit          <session> [--from <dir>] [--thread <id>] [--addresses 4,7] [--note <text>]
   brainstorm system list
-  brainstorm system add      <package folder> [--name <n>] [--frame <export>] [--thread <id>]
+  brainstorm system add      <package folder|project root> [--name <n>] [--frame <export>] [--thread <id>]
   brainstorm system sync     <system>
   brainstorm system show     <system>
+  brainstorm system check    <project root>
+  brainstorm system import   <folder>
 Every command takes --json. --thread defaults to $T3CODE_THREAD_ID; --out and --from default to .brainstorm/<session>.`;
 
-type Output = { readonly result: Result<unknown>; readonly lines: readonly string[] };
+/** `exit` overrides the code the result gives, for a command that succeeds in reporting a failure, like `system check`. */
+type Output = { readonly result: Result<unknown>; readonly lines: readonly string[]; readonly exit?: number };
 
 const usage = (message: string): Failure => ({ code: "usage", message });
 const failed = (error: Failure): Output => ({ result: { ok: false, error }, lines: [] });
@@ -372,6 +377,45 @@ const COMMANDS: Record<string, Command> = {
       return { result, lines: result.ok ? syncLines(result.data, "synced") : [] };
     },
   },
+  "system check": {
+    options: {},
+    positionals: ["project root"],
+    async run({ positionals }) {
+      const root = resolve(positionals[0] ?? ".");
+      const result = await call<SystemCheck>("POST", "/v1/agent/system-check", { path: root });
+      if (!result.ok) return { result, lines: [] };
+      const c = result.data;
+      const rel = (i: Issue) => issueLine(i.file === null ? i : { ...i, file: relative(c.root, i.file).split(sep).join("/") || "." });
+      const tiers = ["layout", "composite", "primitive"] as const;
+      return {
+        result,
+        exit: c.passed ? EXIT.ok : EXIT.rejected,
+        lines: [
+          ...c.gates.flatMap((g) => [`${g.passed ? "pass" : "FAIL"}  ${g.gate}`, ...g.issues.map((i) => `      ${rel(i)}`)]),
+          ...(c.warnings.length === 0 ? [] : ["warnings:", ...c.warnings.map((w) => `      ${rel(w)}`)]),
+          ...tiers.flatMap((t) => {
+            const list = c.components.filter((x) => x.tier === t);
+            return list.length === 0 ? [] : [`${t}s: ${list.map((x) => (x.stories === 0 ? `${x.name} (no story)` : x.name)).join(", ")}`];
+          }),
+          c.passed ? `every gate passes; next: brainstorm system add ${c.root}` : "fix the failing gates, then run the check again",
+        ],
+      };
+    },
+  },
+  "system import": {
+    options: {},
+    positionals: ["folder"],
+    async run({ positionals }) {
+      const result = await call<SystemImport>("POST", "/v1/agent/system-imports", { path: resolve(positionals[0] ?? ".") });
+      if (!result.ok) return { result, lines: [] };
+      const i = result.data;
+      return {
+        result,
+        lines: [i.state === "started" ? `importing ${i.root} in thread ${i.thread}${i.link === null ? "" : ` (${i.link})`}` : i.state === "failed" ? `couldn't start the import: ${i.error}` : `starting the import of ${i.root}`],
+        ...(i.state === "failed" ? { exit: EXIT.rejected } : {}),
+      };
+    },
+  },
   "system show": {
     options: {},
     positionals: ["system"],
@@ -383,7 +427,7 @@ const COMMANDS: Record<string, Command> = {
         result,
         lines: [
           `${s.id} "${s.name}" ${versionLine(s)}`,
-          `source: ${s.source.entry}${s.source.css === null ? "" : ` · css ${s.source.css}`}${s.source.frame === null ? "" : ` · frame ${s.source.frame}`}`,
+          `source: ${s.source.adapter ?? s.source.entry ?? s.root}${s.source.css === null ? "" : ` · css ${s.source.css}`}${s.source.frame === null ? "" : ` · frame ${s.source.frame}`}`,
           `components: ${(s.manifest?.catalog ?? []).map((e) => (e.generated ? `${e.name} (Brainstorm's)` : e.name)).join(", ")}`,
           `theme axes: ${(s.manifest?.styles.axes ?? []).map((a) => `${a.attribute} = ${a.values.join("|")}`).join("; ") || "none"}`,
           `saved themes: ${s.themes.map((t) => t.name).join(", ") || "none"}`,
@@ -559,7 +603,7 @@ async function main(argv: readonly string[]): Promise<number> {
     if (wantsJson) process.stdout.write(JSON.stringify(output.result) + "\n");
     else if (output.result.ok) process.stdout.write(output.lines.map((l) => l + "\n").join(""));
     else process.stderr.write(failureLines(output.result.error).map((l) => l + "\n").join(""));
-    return exitFor(output.result);
+    return output.exit ?? exitFor(output.result);
   };
 
   if (name === "" || name === "--help" || name === "help") {

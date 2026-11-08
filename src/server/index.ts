@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { updatesOff, type AppUpdates } from "../core/appUpdate";
 import { createT3Bridge } from "../core/bridge/t3";
 import { Brainstorm } from "../core/brainstorm";
+import { AUTO_SYNC_MS } from "../core/systems";
 import { createChecker } from "../core/check";
 import type { AgentBridge } from "../core/types";
 import type { SkillHost } from "../core/about";
@@ -20,6 +21,8 @@ export type ServerOptions = {
   readonly home?: string;
   readonly bridge?: AgentBridge;
   readonly trackerMs?: number;
+  /** How often design systems are checked for changes in their projects (ADR 008); 0 turns auto-sync off. */
+  readonly autoSyncMs?: number;
   /** The installed app's updater; the headless server has none. */
   readonly updates?: AppUpdates;
   /** The installed app's native folder dialog, resolving to the chosen folder or null when cancelled; the headless server has none. */
@@ -78,12 +81,15 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   writeApi(home, { port, agentToken, pid: process.pid, version, startedAt: new Date().toISOString() });
 
   const tracker = setInterval(() => void service.tick(), options.trackerMs ?? TRACKER_MS);
+  const autoSyncMs = options.autoSyncMs ?? AUTO_SYNC_MS;
+  const stopAutoSync = autoSyncMs > 0 ? service.systems.startAutoSync(autoSyncMs) : () => {};
   return {
     url: `http://127.0.0.1:${port}/#ui=${uiToken}`,
     port,
     uiToken,
     async close() {
       clearInterval(tracker);
+      stopAutoSync();
       http.closeStreams();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await checker.close();
