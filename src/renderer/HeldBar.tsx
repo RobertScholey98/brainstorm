@@ -10,7 +10,7 @@ import { Truncate } from "@/components/ui/truncate";
 export function HeldBar({ on, here, onRelease }: { on: string | null; here: "main" | "preview"; onRelease: () => void }) {
   const subject = here === "main" ? "The preview window" : "This window";
   return (
-    <div role="status" className="flex h-10 shrink-0 items-center gap-2 border-b border-warning bg-warning-subtle pr-2 pl-4 text-sm" data-tint data-held-bar>
+    <div role="status" className="flex h-10 shrink-0 items-center gap-2 border-b border-warning bg-warning/15 dark:bg-warning-subtle pr-2 pl-4 text-sm" data-tint data-held-bar>
       <CirclePause aria-hidden className="size-4 shrink-0 text-warning" />
       <span className="shrink-0 font-medium">Preview held</span>
       <Truncate className="w-0 flex-1 text-fg-muted">{on === null ? `${subject} keeps what it showed.` : `${subject} keeps showing ${on}.`}</Truncate>

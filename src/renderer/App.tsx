@@ -935,11 +935,11 @@ function CanvasAway({
             <AppWindow aria-hidden />
           </EmptyMedia>
           <EmptyTitle>
-            {stuck !== null ? "Your audience sees only the design" : picking ? "Pick an element in the preview window" : "The canvas is in the preview window"}
+            {stuck !== null ? `${act === "pin" ? "Pin" : "Vary"} here, not in the Clean preview` : picking ? "Pick an element in the preview window" : "The canvas is in the preview window"}
           </EmptyTitle>
           <EmptyDescription>
             {stuck !== null
-              ? `The preview window is Clean. ${act === "pin" ? "Pin" : "Vary"} here, or switch the preview to Working, which shows viewers the canvas tools.`
+              ? `Clean shows your audience only the design. Show the canvas here to ${act}; Working would show them your pins and tools.`
               : picking
                 ? "Esc or Cancel stops picking."
                 : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
@@ -949,7 +949,7 @@ function CanvasAway({
           {stuck !== null ? (
             <>
               <Button variant="accent" onClick={onHere} data-away-here>
-                Show canvas here and {act}
+                Show canvas here
               </Button>
               <Button variant="outline" onClick={onWorking} data-away-working>
                 Switch preview to Working

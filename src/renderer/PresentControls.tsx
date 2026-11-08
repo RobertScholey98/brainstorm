@@ -12,7 +12,7 @@ import { canOpenPreviewWindow, previewWindow } from "./mirror";
 
 const LOOKS: readonly { value: PreviewPrefs["look"]; label: string; about: string }[] = [
   { value: "clean", label: "Clean", about: "just the design, ready to share." },
-  { value: "working", label: "Working", about: "canvas, slot tabs and comment tools, for your own screen." },
+  { value: "working", label: "Working", about: "canvas, slot tabs and pins. Not for sharing." },
 ];
 
 /**
@@ -112,7 +112,7 @@ function WindowMenu({
             Preview
           </span>
           {/* As wide as its widest look, so changing the look moves nothing in the bar. */}
-          <span className="grid" data-preview-menu-look>
+          <span className="grid justify-items-center" data-preview-menu-look>
             {LOOKS.map((l) => (
               <span key={l.value} className={l.value === prefs.look ? "col-start-1 row-start-1" : "invisible col-start-1 row-start-1"} aria-hidden={l.value !== prefs.look || undefined}>
                 {l.label}
@@ -132,8 +132,8 @@ function WindowMenu({
           <Segmented value={prefs.look} onValueChange={(next) => onPrefs({ ...prefs, look: next })} options={LOOKS} itemData="preview-look" aria-label="Look" />
           <ul className="grid gap-0.5 text-xs" data-preview-look-about>
             {LOOKS.map((l) => (
-              <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted/70"} data-chosen={l.value === prefs.look || undefined}>
-                <span className="font-semibold">{l.label}:</span> {l.about}
+              <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted"} data-chosen={l.value === prefs.look || undefined}>
+                <span className={l.value === prefs.look ? "font-semibold" : "font-medium"}>{l.label}:</span> {l.about}
               </li>
             ))}
           </ul>
@@ -157,7 +157,7 @@ function WindowMenu({
             Bring to front
           </Button>
           <Button variant="outline" onClick={() => run("fullscreen")} data-preview-fullscreen>
-            Full screen
+            Full screen window
             <Kbd>F11</Kbd>
           </Button>
         </div>

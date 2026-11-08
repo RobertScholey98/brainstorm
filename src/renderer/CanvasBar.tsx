@@ -2,7 +2,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
 import { Segmented } from "@/components/ui/segmented";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
@@ -94,10 +93,11 @@ export function CanvasBar({
           <Truncate className="w-0 flex-1 text-right" data-bar-hint>
             {pickHint ?? (picking === "vary" ? PICK_HINTS.vary : PICK_HINTS.comment)}
           </Truncate>
-          <Kbd>Esc</Kbd>
-          <Button variant="ghost" onClick={onCancelPick}>
-            Cancel
-          </Button>
+          <Hint label="Stop picking" shortcut="Esc" side="bottom">
+            <Button variant="ghost" onClick={onCancelPick}>
+              Cancel
+            </Button>
+          </Hint>
           {/* Pick mode's own controls, then the view's, as the header divides a request's actions from Regenerate. */}
           {several && <Separator orientation="vertical" {...(picking === null ? {} : { "data-pick-divider": "" })} />}
         </span>
