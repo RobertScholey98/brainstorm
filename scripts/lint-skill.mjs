@@ -41,7 +41,7 @@ for (const file of mdFiles) {
     if (/^https?:/.test(target)) continue;
     expect(existsSync(resolve(dirname(file), target)), `${file}: link ${target} resolves`);
   }
-  for (const m of text.matchAll(/brainstorm (session (?:new|list|attach)|system (?:list|add|sync|show)|context|pull|validate|commit)\b([^\n`]*)/g)) {
+  for (const m of text.matchAll(/brainstorm (session (?:new|list|attach)|system (?:list|add|sync|show|check|import)|context|pull|validate|commit)\b([^\n`]*)/g)) {
     const flags = [...m[2].matchAll(/--[a-z]+/g)].map((f) => f[0]);
     if (!used.has(m[1])) used.set(m[1], new Set());
     flags.forEach((f) => used.get(m[1]).add(f));

@@ -167,6 +167,27 @@ try {
   const project = resolve(library, "..", "..");
   cli(["system", "add", library, "--thread", DEMO_THREAD]);
   const system = json(["system", "list"])[0];
+
+  // Rob reviews the newly added library before a brainstorm can build with it. It came from its package, so nothing
+  // sorted it into tiers; he confirms it as it is, which leaves it at v1 with no adapter.
+  await window.click("[data-nav-systems]");
+  await window.click(`[data-system-review="${system.id}"]`);
+  await window.waitForSelector("[data-system-review-callout]");
+  await window.waitForSelector('[data-gallery="true"]', { timeout: 60_000 });
+  await new Promise((r) => setTimeout(r, 2500));
+  await shot(window, "library-review", "Reviewing a library added from its package: the callout says nothing sorted it into tiers and offers Sort into tiers with an agent beside Confirm; the walk starts on its first component, 1 of 72, with the tier switch");
+  // Rob steps on with the arrow keys, then goes back to the first: Next unseen jumps past what he has seen.
+  for (let i = 0; i < 3; i++) await window.keyboard.press("ArrowRight");
+  await window.click('[data-entry="Accordion"]');
+  await window.waitForSelector("[data-review-next-unseen]");
+  await new Promise((r) => setTimeout(r, 1500));
+  await shot(window, "library-review-walk", "After stepping three components with → and going back to Accordion: the walk says 1 of 72 · 4 seen, and Next unseen sits beside Next to skip what he has seen");
+  await window.click("[data-review-confirm]");
+  await window.waitForFunction(() => document.querySelector("[data-system-review-callout]") === null, null, { timeout: 60_000 });
+  // The app capture shows Confirm's notice; here it would sit over the next shots until it clears.
+  if ((await window.$("[data-toast-close]")) !== null) await window.click("[data-toast-close]");
+  await window.click("[data-overview]:not([data-nav-systems])");
+
   const session = cli(["session", "new", "--title", "Meal plan", "--brief", BRIEF, "--project", project, "--system", system.id]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
   if (session === undefined) throw new Error(`session new failed:\n${transcript.at(-1)}`);
   const work = join(home, "work");
@@ -214,13 +235,28 @@ try {
   await new Promise((r) => setTimeout(r, 2500));
   await shot(window, "system-gallery", "A design system's Components tab: the searchable catalog down the left, every story rendered live from the synced kit in the gallery, the theme axes (data-theme, data-accent) above it");
   await window.click('[data-entry="Card"]');
-  await window.waitForSelector('[data-gallery="true"]', { timeout: 60_000 });
+  await window.waitForSelector("[data-workbench]");
+  await window.frameLocator('iframe[title="Stories"]').locator("[data-story-focused]").waitFor({ timeout: 60_000 });
   await new Promise((r) => setTimeout(r, 1500));
-  await shot(window, "system-gallery-card", "The gallery narrowed to one component, Card, rendering its story from the library");
+  await shot(window, "system-gallery-card", "Picking Card, which has one story: it opens straight in the workbench, the story at full width with its Controls, Props and Usage beside it, and the catalog nests Card's story under it");
+  await window.click("[data-workbench-back]");
+  await window.locator("[data-catalog]").getByText("All stories").click();
   await window.fill("[data-catalog-search]", "st");
   await window.waitForSelector('[data-entry="Stack"]');
-  await shot(window, "system-catalog-search", "The catalog filtered by 'st': names that start with it first, so Stack, the layout primitive Brainstorm generated because the library has none and marked as Brainstorm's, leads; the gallery narrows to the matches' stories");
+  await new Promise((r) => setTimeout(r, 1500));
+  await shot(window, "system-catalog-search", "The catalog filtered by 'st': names that start with it first, so Stack, the layout primitive Brainstorm generated because the library has none and marked as Brainstorm's, leads; the gallery narrows to the matches, Stack's frame showing Brainstorm's example of it");
   await window.fill("[data-catalog-search]", "");
+  // The same story Storybook's controls exemplar shows: robnet's Button, Default, retitled at a phone width.
+  await window.click('[data-entry="Button"]');
+  await window.click('[data-entry-story$="button.stories.tsx#Default"]');
+  await window.waitForSelector("[data-workbench]");
+  await window.fill('[data-control="children"] input', "Plan next week");
+  await window.click('[data-workbench-width="390"]');
+  const libraryGallery = window.frameLocator('iframe[title="Stories"]');
+  await libraryGallery.locator("[data-story-focused]", { hasText: "Plan next week" }).waitFor({ timeout: 30_000 });
+  await new Promise((r) => setTimeout(r, 600));
+  await shot(window, "system-workbench", "robnet's Button › Default in the workbench, retitled 'Plan next week' at 390px: Controls from its args and props, Props with each prop's type, choices and default as the library's source declares them, and Usage that follows");
+  await window.click("[data-workbench-back]");
   await window.click('[data-system-tab="theme"]');
   await window.waitForSelector("[data-system-theme]");
   await shot(window, "system-theme", "The Theme tab: the library's theme axes and its tokens with their values per axis");
@@ -286,8 +322,14 @@ try {
   await window.click('[data-promote="WeekStrip"]');
   await window.waitForSelector('[data-proposed="WeekStrip"][data-promotion="started"]', { timeout: 30_000 });
   await window.locator("[data-proposed-list]").scrollIntoViewIfNeeded();
-  await shot(window, "promote-started", "After Promote: the WeekStrip row says a thread on robnet's project is adding it to the library, with Open thread, and offers no second Promote while it runs");
   const started = t3.started().at(-1);
+  t3.startRun(started.thread);
+  t3.reply(started.thread, "Moved WeekStrip into **components/ui/week-strip.tsx** and wrote its story. Running the library's check.");
+  await window.waitForSelector('[data-promote-status] [data-agent-last-line]', { timeout: 30_000 });
+  // A few seconds in, so the row shows how long the agent has worked.
+  await new Promise((r) => setTimeout(r, 2500));
+  await window.locator("[data-proposed-list]").scrollIntoViewIfNeeded();
+  await shot(window, "promote-started", "After Promote: the WeekStrip row says the agent is adding it to robnet, with how long it has worked, its latest line and Open thread, and offers no second Promote while it runs");
   await textShot(
     app,
     "promote-message",
@@ -302,10 +344,15 @@ try {
     writeFileSync(join(library, p), text);
   }
   writeFileSync(indexPath, `${indexBefore.trimEnd()}\nexport * from './components/ui/week-strip';\n`);
+  t3.reply(started.thread, "It keeps the proposed look, written with the library's own variants.\n\nAdded WeekStrip to @robnet/ui as a primitive, with a story; the sync made v2.");
+  t3.endRun(started.thread, "completed");
   cli(["system", "sync", system.id], { quiet: true });
   await window.waitForSelector("[data-system-upgrade]", { timeout: 30_000 });
   await window.locator("[data-system-panel]").scrollIntoViewIfNeeded();
   await shot(window, "upgrade-offered", "Once the library is synced with WeekStrip, the open brainstorm offers version 2: Upgrade checks every block against it first");
+  await window.locator('[data-proposed="WeekStrip"]').evaluate((el) => el.scrollIntoView({ block: "end" }));
+  await shot(window, "promote-finished", "Further down the same Inspector: the WeekStrip row once the agent finished, with its report's last line, Open thread, and that it is in v2 once Rob upgrades above");
+  await window.locator("[data-system-panel]").scrollIntoViewIfNeeded();
   await window.click("[data-system-upgrade]");
   await window.waitForSelector('[data-system-version="2"]', { timeout: 60_000 });
   await window.locator("[data-proposed-list]").scrollIntoViewIfNeeded();

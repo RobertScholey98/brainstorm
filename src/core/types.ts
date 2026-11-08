@@ -1,6 +1,6 @@
-import type { SystemManifest, ThemeAxis, Token } from "./system/model";
+import type { SystemManifest, ThemeAxis, Tier, Token } from "./system/model";
 
-export type { CatalogEntry, SystemManifest, ThemeAxis, Token } from "./system/model";
+export type { ArgType, CatalogEntry, PropInfo, StoryInfo, SystemManifest, ThemeAxis, Tier, Token } from "./system/model";
 
 declare const brand: unique symbol;
 export type Brand<T, B extends string> = T & { readonly [brand]: B };
@@ -210,6 +210,8 @@ export type ProposedDraft = {
   readonly title: string;
   readonly description: string;
   readonly example: Readonly<Record<string, Json>>;
+  /** Null for one committed before tiers (ADR 008); it counts as a primitive. */
+  readonly tier: Tier | null;
 };
 
 export type WorkingCopyDraft = {
@@ -277,6 +279,15 @@ const ISSUE_SEVERITY = {
   dynamic_class: "warning",
   unused_proposed: "warning",
   proposed_in_kit: "warning",
+  // Systems from app projects (ADR 008).
+  no_system: "error",
+  invalid_adapter: "error",
+  empty_glob: "warning",
+  duplicate_export: "warning",
+  outside_boundary: "warning",
+  story_empty: "warning",
+  no_tokens: "warning",
+  missing_tier: "error",
 } as const satisfies Record<string, "error" | "warning">;
 
 export type IssueCode = keyof typeof ISSUE_SEVERITY;
@@ -658,7 +669,7 @@ export type SlotView = {
 export type ProposedModule = { readonly name: ProposedName; readonly hash: ContentHash; readonly compiled: string; readonly css: string | null };
 
 export type IterationView = Omit<IterationSummary, "slots" | "blocks"> & {
-  readonly proposed: readonly (ProposedModule & { readonly title: string; readonly description: string; readonly usedBy: readonly BlockId[] })[];
+  readonly proposed: readonly (ProposedModule & { readonly title: string; readonly description: string; readonly tier: Tier | null; readonly usedBy: readonly BlockId[] })[];
   readonly slots: readonly SlotView[];
   readonly blocks: readonly BlockView[];
 };
@@ -703,11 +714,15 @@ export type SessionView = {
 
 export type SystemSourceView = {
   readonly root: string;
-  readonly entry: string;
+  /** Null when Brainstorm generates the entry from the adapter's tier globs (ADR 008). */
+  readonly entry: string | null;
   readonly css: string | null;
   readonly stories: readonly string[];
   readonly frame: string | null;
   readonly stubs: Readonly<Record<string, string>>;
+  /** The project's `.brainstorm/system.json`, or null for a package folder. */
+  readonly adapter: string | null;
+  readonly tiers: Readonly<Record<Tier, readonly string[]>>;
 };
 
 export type SystemVersionSummary = {
@@ -728,6 +743,58 @@ export type SystemListing = {
   readonly latest: SystemVersionSummary | null;
   /** Sessions that use any version of it. */
   readonly sessions: number;
+  /** Why the last sync failed, or null. Auto-sync tries again when the project changes (ADR 008). */
+  readonly syncError: { readonly message: string; readonly issues: readonly Issue[]; readonly at: string } | null;
+  /** The project has `.brainstorm/system.json`, so an agent can repair a failed sync. */
+  readonly adapter: boolean;
+  /** Rob's review of the import (ADR 008). A system added before reviews existed has none, and counts as confirmed. */
+  readonly review: SystemReview | null;
+};
+
+/** A note Rob raised in a review: on one component, or on the whole system when `name` is null. */
+export type ReviewIssue = { readonly id: number; readonly name: string | null; readonly note: string; readonly at: string };
+
+/**
+ * Rob's review of an imported system (ADR 008). Brainstorms can't use it while it's pending. Tier moves wait here until
+ * Rob sends the review to the agent or confirms it, when Brainstorm writes them into the adapter's `tiers`.
+ */
+export type SystemReview = {
+  readonly state: "pending" | "confirmed";
+  readonly tiers: Readonly<Record<string, Tier>>;
+  readonly issues: readonly ReviewIssue[];
+  /** The T3 thread the import ran in, or that the review was last sent to. */
+  readonly thread: { readonly id: ThreadId; readonly link: string | null } | null;
+  /**
+   * The last review sent to the agent: Rob's notes, the tier moves Brainstorm wrote into the adapter, and the version
+   * that was newest once they were written, so a later one is the agent's.
+   */
+  readonly sent: {
+    readonly at: string;
+    readonly notes: readonly ReviewIssue[];
+    readonly moved: Readonly<Record<string, Tier>>;
+    readonly version: number | null;
+  } | null;
+  readonly confirmed: { readonly at: string; readonly n: SystemVersionN } | null;
+};
+
+export type ReviewAction =
+  | { readonly kind: "tier"; readonly name: string; readonly tier: Tier }
+  | { readonly kind: "issue"; readonly name: string | null; readonly note: string }
+  | { readonly kind: "drop_issue"; readonly issue: number }
+  | { readonly kind: "send" }
+  | { readonly kind: "confirm" };
+
+/** An agent importing a project's design system in a T3 thread (ADR 008). */
+export type SystemImport = { readonly root: string; readonly projectId: ProjectId; readonly at: string } & PromotionState;
+
+/** What `brainstorm system check` decides: every gate an agent import must pass before `system add`. */
+export type SystemCheck = {
+  readonly root: string;
+  readonly passed: boolean;
+  readonly gates: readonly { readonly gate: "builds" | "boundary" | "stories" | "theme"; readonly passed: boolean; readonly issues: readonly Issue[] }[];
+  /** Warnings that don't hold the import back. */
+  readonly warnings: readonly Issue[];
+  readonly components: readonly { readonly name: string; readonly tier: Tier; readonly stories: number }[];
 };
 
 export type SavedTheme = {
@@ -745,6 +812,14 @@ export type SystemView = SystemListing & {
     /** Components it exports that the version before didn't, and ones it dropped. */
     readonly added: readonly string[];
     readonly removed: readonly string[];
+    /** Components whose stories render differently from the version before, with how many did. */
+    readonly changed: readonly { readonly name: string; readonly stories: number; readonly via: readonly string[] }[];
+    /** Tokens whose value changed from the version before. */
+    readonly tokens: readonly { readonly name: string; readonly before: string; readonly after: string }[];
+    /** Components that moved to another tier since the version before. */
+    readonly retiered: readonly { readonly name: string; readonly from: Tier; readonly to: Tier }[];
+    /** Stories a component already in the version before gained, by story name. */
+    readonly newStories: readonly { readonly name: string; readonly stories: readonly string[] }[];
   })[];
   /** The latest version's manifest, without its story sources. */
   readonly manifest: Omit<SystemManifest, "storyFiles"> | null;
@@ -763,6 +838,16 @@ export type KitPayload = {
 /** A session's theme as the canvas applies it: attribute values on the root, and token values over the system's own. */
 export type ThemeState = { readonly axes: Readonly<Record<string, string>>; readonly tokens: Readonly<Record<string, string>> };
 
+/**
+ * What an agent Brainstorm handed work to is doing in its T3 thread, as T3 shows it: waiting for its turn, working,
+ * asking Rob something, finished or failed, or the thread is gone. `lastLine` is the end of the agent's latest reply.
+ */
+export type AgentWork = {
+  readonly phase: "waiting" | "working" | "asking" | "finished" | "failed" | "missing";
+  readonly lastLine: string | null;
+  readonly link: string | null;
+};
+
 export type PromotionState =
   | { readonly state: "starting" }
   /** `link` opens the thread in T3; null when T3 didn't show the thread right after starting it. */
@@ -773,6 +858,8 @@ export type ProposedView = {
   readonly name: ProposedName;
   readonly title: string;
   readonly description: string;
+  /** What the agent said the component is: a primitive, a composite or a layout (ADR 008); null for one made before tiers. */
+  readonly tier: Tier | null;
   readonly usedBy: readonly BlockId[];
   readonly promotion: (PromotionState & { readonly at: string }) | null;
   /** The newest version of the system that exports a component by this name, or null. */
@@ -796,8 +883,28 @@ export type SessionSystemView = {
   /** Whether a T3 project is known for the system's source, so Promote can start a thread there. */
   readonly canPromote: boolean;
   /** What the newest version changes against the session's, by exported component name; empty when they're the same. */
-  readonly upgrade: { readonly added: readonly string[]; readonly removed: readonly string[] };
+  readonly upgrade: {
+    readonly added: readonly string[];
+    readonly removed: readonly string[];
+    /** Components whose stories render differently in the newest version. */
+    readonly changed: readonly string[];
+    /** Tokens whose value the newest version changes, the usual reason those components render differently. */
+    readonly tokens: readonly { readonly name: string; readonly before: string; readonly after: string }[];
+    readonly check: UpgradeCheck | null;
+  };
 };
+
+/** Whether the newest version would break the session's design (ADR 008); `where` names the blocks, as `home/a`. */
+export type UpgradeCheck =
+  | { readonly state: "checking" }
+  | { readonly state: "clean" }
+  | {
+      readonly state: "breaks";
+      readonly errors: number;
+      readonly where: readonly string[];
+      /** The first few errors, each with the block or proposed component it's in. */
+      readonly issues: readonly { readonly where: string; readonly message: string }[];
+    };
 
 export type ThemeExport = { readonly css: ExportResult; readonly json: ExportResult };
 
@@ -858,7 +965,18 @@ export type HostToFrame =
   /** Proposed components that blocks import as `proposed/<name>`. */
   | { readonly kind: "proposed"; readonly modules: readonly ProposedModule[] }
   /** The system page's gallery: the loaded kit's stories with these ids, or every story when null. */
-  | { readonly kind: "gallery"; readonly stories: readonly string[] | null };
+  | {
+      readonly kind: "gallery";
+      readonly stories: readonly string[] | null;
+      readonly focus?: GalleryFocus | null;
+      /** Each story's component, by story id, so a frame is labelled as the catalog names it, not by its story title. */
+      readonly components?: Readonly<Record<string, string>>;
+      /** A word beside a story's label, by story id, such as "new in v3" for one the agent added during a review. */
+      readonly notes?: Readonly<Record<string, string>>;
+    };
+
+/** The workbench's one story (ADR 008): Rob's args over the story's own, at a width in pixels or filling the frame. */
+export type GalleryFocus = { readonly id: string; readonly args: Readonly<Record<string, Json>>; readonly width: number | null };
 
 export type CanvasVariant = { readonly blockId: BlockId; readonly title: string };
 
@@ -883,7 +1001,9 @@ export type FrameToHost =
   /** In present, the pointer moved near the frame's top edge, at most every few hundred ms, so the host can show how to leave. */
   | { readonly kind: "pointer" }
   /** A preview frame has painted its block: a still of it as a PNG data URL, or null when it couldn't take one. */
-  | { readonly kind: "painted"; readonly image: string | null };
+  | { readonly kind: "painted"; readonly image: string | null }
+  /** Rob clicked a story's title in the system page's gallery, to open it in the workbench. */
+  | { readonly kind: "open_story"; readonly id: string };
 
 /**
  * What a home card previews: the latest iteration's first slot, showing the variant Rob has selected, with his

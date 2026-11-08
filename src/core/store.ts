@@ -17,6 +17,7 @@ import type {
   ProposedName,
   SavedTheme,
   SystemId,
+  SystemReview,
   SystemVersionN,
   ProjectId,
   PropName,
@@ -100,6 +101,17 @@ const MIGRATIONS: readonly Migration[] = [
   CREATE TABLE promotion(session_id TEXT NOT NULL REFERENCES session, name TEXT NOT NULL, state TEXT NOT NULL,
     thread_id TEXT, link TEXT, error TEXT, at TEXT NOT NULL, PRIMARY KEY(session_id, name));
   `,
+  // Systems from app projects (ADR 008): what the last sync read, why it failed, and imports an agent is running.
+  `
+  ALTER TABLE design_system ADD COLUMN inputs_json TEXT;
+  ALTER TABLE design_system ADD COLUMN sync_error_json TEXT;
+  CREATE TABLE system_import(root TEXT PRIMARY KEY, project_id TEXT NOT NULL, state TEXT NOT NULL, thread_id TEXT, link TEXT,
+    error TEXT, at TEXT NOT NULL);
+  `,
+  // Rob reviews an imported system before brainstorms use it (ADR 008).
+  `
+  ALTER TABLE design_system ADD COLUMN review_json TEXT;
+  `,
 ];
 
 /**
@@ -161,7 +173,18 @@ export type StoredSystem = {
   /** The T3 project its source belongs to, when Brainstorm knows it, so Promote can start a thread there. */
   readonly projectId: ProjectId | null;
   readonly createdAt: string;
+  /** What the last sync read, so auto-sync can tell when the project changed (ADR 008). Null before the first. */
+  readonly inputs: SystemInputs | null;
+  /** Why the last sync failed, or null when it succeeded. */
+  readonly syncError: SyncError | null;
+  /** Rob's review of the import; null for a system added before reviews existed. */
+  readonly review: SystemReview | null;
 };
+
+export type { SystemInputs } from "./system/inputs";
+import type { SystemInputs } from "./system/inputs";
+export type SyncError = { readonly message: string; readonly issues: readonly Issue[]; readonly at: string };
+export type StoredImport = { readonly root: string; readonly projectId: ProjectId; readonly at: string } & PromotionState;
 
 export type StoredSystemVersion = {
   readonly system: SystemId;
@@ -301,6 +324,9 @@ const toSystem = (r: Row): StoredSystem => ({
   source: JSON.parse(str(r.source_json)) as SystemSource,
   projectId: r.project_id === null ? null : (str(r.project_id) as ProjectId),
   createdAt: str(r.created_at),
+  inputs: r.inputs_json == null ? null : (JSON.parse(str(r.inputs_json)) as SystemInputs),
+  syncError: r.sync_error_json == null ? null : (JSON.parse(str(r.sync_error_json)) as SyncError),
+  review: r.review_json == null ? null : (JSON.parse(str(r.review_json)) as SystemReview),
 });
 
 const toSystemVersion = (r: Row): StoredSystemVersion => ({
@@ -845,6 +871,48 @@ export class Store {
 
   updateSystem(id: SystemId, change: { source: SystemSource; name: string; projectId: ProjectId | null }): void {
     this.#run("UPDATE design_system SET source_json = ?, name = ?, project_id = COALESCE(?, project_id) WHERE id = ?", JSON.stringify(change.source), change.name, change.projectId, id);
+  }
+
+  setSystemInputs(id: SystemId, inputs: SystemInputs): void {
+    this.#run("UPDATE design_system SET inputs_json = ? WHERE id = ?", JSON.stringify(inputs), id);
+  }
+
+  setReview(id: SystemId, review: SystemReview | null): void {
+    this.#run("UPDATE design_system SET review_json = ? WHERE id = ?", review === null ? null : JSON.stringify(review), id);
+  }
+
+  setSyncError(id: SystemId, error: SyncError | null): void {
+    this.#run("UPDATE design_system SET sync_error_json = ? WHERE id = ?", error === null ? null : JSON.stringify(error), id);
+  }
+
+  imports(): StoredImport[] {
+    return this.#all("SELECT * FROM system_import ORDER BY at").map((r) => {
+      const base = { root: str(r.root), projectId: str(r.project_id) as ProjectId, at: str(r.at) };
+      const state = str(r.state);
+      return state === "started"
+        ? { ...base, state, thread: str(r.thread_id) as ThreadId, link: r.link === null ? null : str(r.link) }
+        : state === "failed"
+          ? { ...base, state, error: str(r.error) }
+          : { ...base, state: "starting" as const };
+    });
+  }
+
+  setImport(root: string, projectId: ProjectId, state: PromotionState, at: string): void {
+    this.#run(
+      `INSERT INTO system_import(root, project_id, state, thread_id, link, error, at) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(root) DO UPDATE SET project_id = excluded.project_id, state = excluded.state, thread_id = excluded.thread_id, link = excluded.link, error = excluded.error, at = excluded.at`,
+      root,
+      projectId,
+      state.state,
+      state.state === "started" ? state.thread : null,
+      state.state === "started" ? state.link : null,
+      state.state === "failed" ? state.error : null,
+      at,
+    );
+  }
+
+  deleteImport(root: string): void {
+    this.#run("DELETE FROM system_import WHERE root = ?", root);
   }
 
   systems(): StoredSystem[] {

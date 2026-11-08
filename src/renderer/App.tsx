@@ -153,8 +153,13 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     { sidebar: sidebarLimits.min, inspector: rail ? RAIL : INSPECTOR.min },
     useWindowWidth(),
   );
-  // A notice stays until Rob closes it or the next call he makes succeeds.
+  // A failure stays until Rob closes it or the next call he makes succeeds; a success says what it did and goes.
   const clearNotice = useCallback(() => setNotice(null), []);
+  useEffect(() => {
+    if (notice?.tone !== "success") return;
+    const timer = setTimeout(() => setNotice((now) => (now === notice ? null : now)), 5000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   // One link for the window's life, so a preview window keeps its place across brainstorms.
   const [link] = useState(() => new PreviewLink(prefs.preview.look));
@@ -188,6 +193,8 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
   useEffect(() => void refreshList(), [refreshList]);
 
   const [update, setUpdate] = useState<AppUpdateState | null>(null);
+  /** Bumped when a design system or an import changes, such as an auto-sync, so the systems page reads them again. */
+  const [systemsRevision, setSystemsRevision] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     void api.events(
@@ -198,6 +205,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
           if (id === current.current) setRevision((r) => r + 1);
         },
         onUpdate: setUpdate,
+        onSystems: () => setSystemsRevision((r) => r + 1),
         onOpen: () => {
           void refreshList();
           setRevisions((m) => new Map([...m].map(([id, n]) => [id, n + 1])));
@@ -288,7 +296,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     </AppSidebar>
   );
   const listing = sessions?.find((s) => s.id === sessionId);
-  const toast = notice !== null && <Toast heading={notice.title} message={notice.detail} onClose={clearNotice} />;
+  const toast = notice !== null && <Toast heading={notice.title} message={notice.detail} tone={notice.tone} onClose={clearNotice} />;
 
   return (
     <TooltipProvider>
@@ -317,7 +325,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
         ) : nav.kind === "systems" ? (
           <Shell sidebar={sidebar(homePanel)} bar={<TopBar />}>
             <section className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Design systems" data-canvas-region>
-              <SystemsPage api={api} selected={nav.id} onSelect={(id) => setNav({ kind: "systems", id })} showNotice={setNotice} />
+              <SystemsPage api={api} revision={systemsRevision} selected={nav.id} onSelect={(id) => setNav({ kind: "systems", id })} showNotice={setNotice} />
               {toast}
             </section>
           </Shell>
@@ -1001,9 +1009,15 @@ function SessionWorkspace({
           />
           {view.system !== null && (
             <SystemSection
+              api={api}
               system={view.system}
               readOnly={past !== null}
               send={send}
+              placeTitle={(where) => {
+                const block = view.iteration?.blocks.find((b) => b.id === where);
+                const slot = block === undefined ? undefined : view.iteration?.slots.find((s) => s.id === block.slot);
+                return block === undefined ? where : `${slot?.title ?? block.slot} / ${block.title}`;
+              }}
               exportTheme={async () => {
                 const r = await api.exportTheme(sessionId);
                 if (r.ok) return r.data;

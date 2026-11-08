@@ -46,7 +46,7 @@ const SYSTEM_DIR = "system/";
 // Key order here is the canonical file order for a proposed component's content hash.
 const PROPOSED_FILES = {
   "component.tsx": { key: "tsx", required: true, about: "the component, default-exported; it may import react, kit and other proposed components" },
-  "component.json": { key: "json", required: true, about: '`{ "title": "Chore list", "description": "…", "example": { …props } }`' },
+  "component.json": { key: "json", required: true, about: '`{ "title": "Chore list", "description": "…", "tier": "composite", "example": { …props } }`' },
   "component.css": { key: "css", required: false, about: 'styles, served wrapped in `@scope ([data-proposed="<Name>"])`; only values the kit uses' },
 } as const satisfies Record<string, { key: keyof ProposedFiles; required: boolean; about: string }>;
 
@@ -57,6 +57,8 @@ const isProposedFileName = (name: string): name is ProposedFileName => Object.ha
 const proposedJsonShape = z.strictObject({
   title: z.string().min(1),
   description: z.string().min(1),
+  // Required of a new or changed component by the commit check (ADR 008); one committed before tiers has none.
+  tier: z.enum(["primitive", "composite", "layout"]).optional(),
   example: z.record(z.string(), z.json()).default({}),
 });
 
@@ -385,6 +387,7 @@ function parseProposed(name: ProposedName, files: Partial<Record<ProposedFileNam
     title: shape.data.title,
     description: shape.data.description,
     example: shape.data.example as ProposedDraft["example"],
+    tier: shape.data.tier ?? null,
   };
 }
 
@@ -496,9 +499,12 @@ function systemGuide(system: SystemDocs): string[] {
     "",
     '- A block imports components from `"kit"` (`import { Card, Button, Stack, Text } from "kit"`) and composes them. It writes no HTML tags, no `className` or `style` props, and no `block.css`; commit refuses each one.',
     "- Lay out with the kit's `Stack`, `Grid` and `Box`, and write text with `Text` and `Heading`. Their spacing and size props take steps on the system's scales.",
+    "- The catalog lists the kit's layouts and composites first. Reuse one that fits before composing primitives or proposing a component.",
     '- When the kit has nothing that fits, write a **proposed component** in `proposed/<Name>/` and import it in a block as `import ChoreList from "proposed/ChoreList"`. Rob sees it labelled "not in system", and can promote it into the library.',
     ...PROPOSED_FILE_NAMES.map((name) => `  - \`${name}\` (${PROPOSED_FILES[name].required ? "required" : "optional"}): ${PROPOSED_FILES[name].about}.`),
-    "  - It may write HTML, using only classes the kit's CSS defines and, in `component.css`, only the token variables and values the kit uses. Commit names any value off the kit's scales. No `style` prop.",
+    '  - Its `tier` is required. A `"primitive"` is a basic control or element, a `"composite"` is built from other components for one purpose, and a `"layout"` arranges other content around slots.',
+    "  - A composite or layout follows the block rules: kit and proposed components only, no HTML tags, no `className` or `style`, no `component.css`.",
+    "  - A primitive may write HTML, using only classes the kit's CSS defines and, in `component.css`, only the token variables and values the kit uses. Commit names any value off the kit's scales. No `style` prop.",
     "  - Prefer the kit's components inside it. Its `example` props must render it, as a story would.",
     "",
   ];

@@ -2,7 +2,10 @@ import type { AppAbout, SkillInstall } from "../core/about";
 import type { AppUpdateState } from "../core/appUpdate";
 import type { UiPrefs, UiPrefsPatch } from "../core/prefs";
 import type {
+  AgentWork,
+  ThreadId,
   ExportResult,
+  ReviewAction,
   Issue,
   ForkInput,
   IterationN,
@@ -16,6 +19,7 @@ import type {
   SessionView,
   SlotId,
   SystemId,
+  SystemImport,
   SystemListing,
   SystemVersionN,
   SystemView,
@@ -48,6 +52,13 @@ export type Api = {
   /** Opens the app's native folder dialog; `path` is null when Rob cancels it. */
   pickFolder(): Promise<Result<{ readonly path: string | null }>>;
   syncSystem(id: SystemId): Promise<Result<SyncOutcome>>;
+  /** Imports the design system in a project with an agent, or repairs one that stopped syncing (ADR 008). */
+  importSystem(path: string, repair?: SystemId | null): Promise<Result<SystemImport>>;
+  systemImports(): Promise<Result<SystemImport[]>>;
+  dismissImport(path: string): Promise<Result<null>>;
+  reviewSystem(id: SystemId, action: ReviewAction): Promise<Result<SystemView>>;
+  /** What the agent in a thread is doing with the work Brainstorm handed it. */
+  agentWork(thread: ThreadId): Promise<Result<AgentWork>>;
   kit(id: SystemId, n: SystemVersionN): Promise<Result<KitPayload>>;
   prefs(): Promise<Result<UiPrefs>>;
   setPrefs(patch: UiPrefsPatch): Promise<Result<UiPrefs>>;
@@ -64,7 +75,10 @@ export type Api = {
   /** Copies the bundled /use-brainstorm skill to ~/.claude now. */
   installSkill(): Promise<Result<SkillInstall>>;
   /** Calls `onSession` with each changed session id, and `onUpdate` with each update state, until `signal` aborts, reconnecting after a drop. */
-  events(on: { onSession: (id: SessionId) => void; onUpdate: (state: AppUpdateState) => void; onOpen: () => void }, signal: AbortSignal): Promise<void>;
+  events(
+    on: { onSession: (id: SessionId) => void; onUpdate: (state: AppUpdateState) => void; onSystems?: () => void; onOpen: () => void },
+    signal: AbortSignal,
+  ): Promise<void>;
 };
 
 const RECONNECT_MS = 1000;
@@ -82,7 +96,7 @@ export function createApi(token: string): Api {
     }
   }
 
-  async function events({ onSession, onUpdate, onOpen }: Parameters<Api["events"]>[0], signal: AbortSignal): Promise<void> {
+  async function events({ onSession, onUpdate, onSystems, onOpen }: Parameters<Api["events"]>[0], signal: AbortSignal): Promise<void> {
     while (!signal.aborted) {
       try {
         // EventSource can't send the bearer header, so the stream is read with fetch.
@@ -104,6 +118,7 @@ export function createApi(token: string): Api {
             if (data === undefined) continue;
             if (/^event: session$/m.test(event)) onSession((JSON.parse(data) as { session: SessionId }).session);
             else if (/^event: update$/m.test(event)) onUpdate(JSON.parse(data) as AppUpdateState);
+            else if (/^event: systems$/m.test(event)) onSystems?.();
           }
         }
       } catch {
@@ -135,6 +150,11 @@ export function createApi(token: string): Api {
     addSystem: (path) => call("POST", "/v1/ui/systems", { path }),
     pickFolder: () => call("POST", "/v1/ui/pick-folder"),
     syncSystem: (id) => call("POST", `/v1/ui/systems/${id}/sync`),
+    importSystem: (path, repair = null) => call("POST", "/v1/ui/system-imports", { path, repair }),
+    systemImports: () => call("GET", "/v1/ui/system-imports"),
+    dismissImport: (path) => call("POST", "/v1/ui/system-imports/dismiss", { path }),
+    reviewSystem: (id, action) => call("POST", `/v1/ui/systems/${id}/review`, action),
+    agentWork: (thread) => call("GET", `/v1/ui/threads/${encodeURIComponent(thread)}/work`),
     kit: (id, n) => call("GET", `/v1/ui/systems/${id}/kit/${n}`),
     prefs: () => call("GET", "/v1/ui/prefs"),
     setPrefs: (patch) => call("POST", "/v1/ui/prefs", patch),

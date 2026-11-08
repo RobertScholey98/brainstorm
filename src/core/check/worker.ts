@@ -49,6 +49,10 @@ export type StoryProbe = {
   readonly args: string;
   readonly html: string | null;
   readonly error: string | null;
+  /** Storybook `tags` from the story and its meta. */
+  readonly tags: readonly string[];
+  /** JSON of the story's `argTypes`, reduced to controls the workbench draws. */
+  readonly argTypes: string;
 };
 
 export type InspectOutcome =
@@ -60,6 +64,10 @@ export type InspectOutcome =
       readonly frame: string | null;
       readonly stories: readonly StoryProbe[];
       readonly failed: readonly { readonly file: string; readonly message: string }[];
+      /** Export name to the tier of the file that exports it (ADR 008); exports from no tier file are absent. */
+      readonly tiers: Readonly<Record<string, string>>;
+      /** Names two tier files export as different things, as `Name (file)`. */
+      readonly duplicates: readonly string[];
     };
 
 export type WorkerOutcome = CheckOutcome | InspectOutcome;
@@ -201,9 +209,12 @@ const INSPECT = `(function () {
     try { html = __bs.renderToStaticMarkup(__story.storyElement(__bs.React, s)); } catch (e) { error = String((e && e.message) || e); }
     let args = "{}";
     try { args = JSON.stringify(__story.describeArgs(__story.storyArgs(s))); } catch (e) {}
-    return { id: s.id, file: s.file, exportName: s.exportName, title: s.title, name: s.name, component, args, html, error };
+    let argTypes = "{}";
+    try { argTypes = JSON.stringify(__story.storyArgTypes(s)); } catch (e) {}
+    const tags = __story.storyTags(s);
+    return { id: s.id, file: s.file, exportName: s.exportName, title: s.title, name: s.name, component, args, html, error, tags, argTypes };
   });
-  return JSON.stringify({ exports: exportsList, generated: k.generated || [], frame: k.frame || null, stories, failed: listed.failed });
+  return JSON.stringify({ exports: exportsList, generated: k.generated || [], frame: k.frame || null, stories, failed: listed.failed, tiers: k.tiers || {}, duplicates: k.duplicates || [] });
 })()`;
 
 export function inspect(job: InspectJob): InspectOutcome {

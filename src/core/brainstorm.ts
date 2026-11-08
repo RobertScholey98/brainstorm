@@ -33,8 +33,9 @@ import {
   type StoredProposedContent,
 } from "./store";
 import { blockConformance, compiledForConformance, proposedConformance, proposedImports } from "./system/conform";
+import { tierFolder } from "./system/source";
 import type { CheckEnv } from "./check";
-import { Systems, componentChanges } from "./systems";
+import { Systems, componentChanges, renderChanges } from "./systems";
 import {
   blockIdOf,
   framesOf,
@@ -76,6 +77,8 @@ import {
   type ProposedName,
   type ProposedView,
   type SessionSystemView,
+  type SystemVersionN,
+  type UpgradeCheck,
   type SystemId,
   type CanvasSystem,
   type ThemeExport,
@@ -182,6 +185,8 @@ export class Brainstorm {
   readonly #listeners = new Set<(session: SessionId) => void>();
   readonly #emitting = new Set<SessionId>();
   readonly #systems: Systems;
+  /** Background checks of each session's latest iteration against its system's newest version (ADR 008). */
+  readonly #upgradeChecks = new Map<string, UpgradeCheck>();
   #ticking = false;
 
   private constructor(options: BrainstormOptions) {
@@ -252,7 +257,7 @@ export class Brainstorm {
   }): Promise<Result<NewSessionResult>> {
     let system: SessionSystem | null = null;
     if (input.system !== undefined && input.system !== null) {
-      const found = this.#systems.find(input.system);
+      const found = this.#systems.forSession(input.system);
       if (!found.ok) return found;
       system = found.data;
     }
@@ -567,11 +572,13 @@ export class Brainstorm {
       );
     }
 
+    const settled = new Set(previousProposed.map((x) => `${x.name}=${x.hash}`));
     const { issues: checkIssues, contents, proposedContents } = await this.#check(draft.blocks, overrides, {
       system,
       proposed: draft.proposed,
       rawProposed: {},
       previous,
+      changedProposed: new Set(draft.proposed.filter((x) => !settled.has(`${x.name}=${x.hash}`)).map((x) => x.name)),
     });
     if (checkIssues.some(isError)) return fail(validationFailed([...parsed.warnings, ...checkIssues]));
 
@@ -619,6 +626,8 @@ export class Brainstorm {
       /** Sources of proposed components that didn't parse, so blocks importing them can still load. */
       readonly rawProposed: Readonly<Record<string, string>>;
       readonly previous: readonly IterationBlock[];
+      /** Proposed components new or changed in this commit, which must declare a tier (ADR 008). */
+      readonly changedProposed?: ReadonlySet<string>;
     } = { system: null, proposed: [], rawProposed: {}, previous: [] },
   ): Promise<{ issues: Issue[]; contents: Map<ContentHash, StoredContent>; proposedContents: StoredProposedContent[] }> {
     const overridesByBlock = new Map<BlockId, Override[]>();
@@ -703,16 +712,28 @@ export class Brainstorm {
       else issues.push(...result.warnings);
       if (compiled === null) continue;
       proposedImports(compiled).forEach((n) => n !== p.name && used.add(n));
+      if (p.tier === null && ctx.changedProposed?.has(p.name) === true) {
+        issues.push(
+          issue(
+            "missing_tier",
+            `component.json has no "tier"; say whether ${p.name} is a "primitive" (a basic element, which may write HTML), a "composite" (built from other components) or a "layout" (arranges content around slots)`,
+            { file: proposedFile(p.name, "json"), pointer: "/tier" },
+          ),
+        );
+      }
+      const tier = p.tier ?? "primitive";
       issues.push(
-        ...proposedConformance({
-          compiled,
-          css: p.files.css,
-          file,
-          cssFile: proposedFile(p.name, "css"),
-          styles: version.manifest.styles,
-          exports,
-          proposed: names,
-        }),
+        ...(tier === "primitive"
+          ? proposedConformance({
+              compiled,
+              css: p.files.css,
+              file,
+              cssFile: proposedFile(p.name, "css"),
+              styles: version.manifest.styles,
+              exports,
+              proposed: names,
+            })
+          : blockConformance({ compiled, file, cssFile: p.files.css === null ? null : proposedFile(p.name, "css"), exports, proposed: names, tier })),
       );
       if (result.kind === "ok") proposedContents.push({ hash: p.hash, files: p.files, compiled: result.compiled });
     }
@@ -795,6 +816,7 @@ export class Brainstorm {
         name: p.name,
         title: p.title,
         description: p.description,
+        tier: p.tier,
         usedBy: p.usedBy,
         promotion: promotion === undefined ? null : (state as NonNullable<ProposedView["promotion"]>),
         inSystem: newestExports.has(p.name) ? newest.n : null,
@@ -813,8 +835,52 @@ export class Brainstorm {
       themes: this.#store.themes(ref.id),
       proposed,
       canPromote: system?.projectId != null,
-      upgrade: componentChanges(version.manifest, newest.manifest),
+      upgrade: {
+        ...componentChanges(version.manifest, newest.manifest),
+        ...(newest.n > ref.n
+          ? (({ changed, tokens }) => ({ changed: changed.map((c) => c.name), tokens }))(renderChanges(version.manifest, newest.manifest))
+          : { changed: [], tokens: [] }),
+        check: newest.n > ref.n ? this.#upgradeCheck(id, ref, newest.n) : null,
+      },
     };
+  }
+
+  /**
+   * Whether moving to version `n` would break the session's design, checked once per iteration and version in the
+   * background, so the Inspector can say so before Rob upgrades. The session re-renders when the check finishes.
+   */
+  #upgradeCheck(id: SessionId, ref: SessionSystem, n: SystemVersionN): UpgradeCheck {
+    const latest = this.#store.latestIteration(id);
+    const key = `${id}@${latest?.n ?? 0}>${ref.id}@${n}`;
+    const known = this.#upgradeChecks.get(key);
+    if (known !== undefined) return known;
+    const checking: UpgradeCheck = { state: "checking" };
+    this.#upgradeChecks.set(key, checking);
+    void this.#upgradeIssues(id, { id: ref.id, n })
+      .then((errors) => {
+        const where = [...new Set(errors.map((e) => placeOf(e.file)))];
+        const issues = errors.slice(0, 3).map((e) => ({ where: placeOf(e.file), message: e.message }));
+        this.#upgradeChecks.set(key, errors.length === 0 ? { state: "clean" } : { state: "breaks", errors: errors.length, where, issues });
+      })
+      .catch((e: unknown) => this.#upgradeChecks.set(key, { state: "breaks", errors: 1, where: [], issues: [{ where: "the design", message: String(e) }] }))
+      .finally(() => this.#emit(id));
+    return checking;
+  }
+
+  /** The errors the session's latest iteration would have on another version of its system. */
+  async #upgradeIssues(id: SessionId, next: SessionSystem): Promise<Issue[]> {
+    const latest = this.#store.latestIteration(id);
+    if (latest === null) return [];
+    const blocks = this.#store.iterationBlocks(id, latest.n).flatMap((b) => {
+      const draft = readStoredBlock({ id: b.id, files: this.#store.content(b.hash).files });
+      return draft === null ? [] : [draft];
+    });
+    const proposed = this.#store.iterationProposed(id, latest.n).flatMap((p) => {
+      const draft = readStoredProposed(p.name, this.#store.proposedContent(p.hash).files);
+      return draft === null ? [] : [draft];
+    });
+    const { issues } = await this.#check(blocks, this.#store.overrides(id), { system: next, proposed, rawProposed: {}, previous: [] });
+    return issues.filter(isError);
   }
 
   #parentOf(session: SessionSummary, parent: SessionId): ForkLink["parent"] {
@@ -899,6 +965,7 @@ export class Brainstorm {
         css: stored.files.css,
         title: draft?.title ?? p.name,
         description: draft?.description ?? "",
+        tier: draft?.tier ?? null,
         usedBy: views.filter((v) => proposedImports(v.compiled).includes(p.name)).map((v) => v.id),
       };
     });
@@ -1102,26 +1169,13 @@ export class Brainstorm {
     if (ref === null) return invalid(`${id} has no design system`);
     const newest = this.#store.latestSystemVersion(ref.id);
     if (newest === null || newest.n <= ref.n) return invalid(`${id} already uses the newest version of its design system`);
-    const next: SessionSystem = { id: ref.id, n: newest.n };
-    const latest = this.#store.latestIteration(id);
-    if (latest !== null) {
-      const blocks = this.#store.iterationBlocks(id, latest.n).flatMap((b) => {
-        const draft = readStoredBlock({ id: b.id, files: this.#store.content(b.hash).files });
-        return draft === null ? [] : [draft];
-      });
-      const proposed = this.#store.iterationProposed(id, latest.n).flatMap((p) => {
-        const draft = readStoredProposed(p.name, this.#store.proposedContent(p.hash).files);
-        return draft === null ? [] : [draft];
-      });
-      const { issues } = await this.#check(blocks, this.#store.overrides(id), { system: next, proposed, rawProposed: {}, previous: [] });
-      const errors = issues.filter(isError);
-      if (errors.length > 0) {
-        return {
-          code: "validation_failed",
-          message: `version ${newest.n} breaks this design in ${errors.length} place${errors.length === 1 ? "" : "s"}, so the session stays on version ${ref.n}`,
-          issues: errors,
-        };
-      }
+    const errors = await this.#upgradeIssues(id, { id: ref.id, n: newest.n });
+    if (errors.length > 0) {
+      return {
+        code: "validation_failed",
+        message: `version ${newest.n} breaks this design in ${errors.length} place${errors.length === 1 ? "" : "s"}, so the session stays on version ${ref.n}`,
+        issues: errors,
+      };
     }
     const styles = newest.manifest.styles;
     this.#store.tx(() => {
@@ -1155,7 +1209,7 @@ export class Brainstorm {
       title: `Promote ${name} into ${system.name}`,
       message: promoteMessage({
         session,
-        system: { id: system.id, name: system.name, root: system.source.root, entry: system.source.entry },
+        system: { id: system.id, name: system.name, root: system.source.root, entry: system.source.entry, folder: tierFolder(system.source, draft?.tier ?? "primitive") },
         name,
         files,
         draft,
@@ -1727,9 +1781,18 @@ function varyMismatches(n: RequestN, scope: VaryScope, drawn: Drawn): Issue[] {
   });
 }
 
+/** `slots/home/a/block.tsx` → `home/a`; `proposed/WeekStrip/component.tsx` → `proposed/WeekStrip`. */
+function placeOf(file: string | null): string {
+  if (file === null) return "the design";
+  const block = /^slots\/([^/]+)\/([^/]+)\//.exec(file);
+  if (block !== null) return `${block[1]}/${block[2]}`;
+  const proposed = /^proposed\/([^/]+)\//.exec(file);
+  return proposed !== null ? `proposed/${proposed[1]}` : file;
+}
+
 function promoteMessage(input: {
   session: SessionSummary;
-  system: { id: SystemId; name: string; root: string; entry: string };
+  system: { id: SystemId; name: string; root: string; entry: string | null; folder: string | null };
   name: ProposedName;
   files: { tsx: string; json: string; css: string | null };
   draft: ProposedDraft | null;
@@ -1750,14 +1813,24 @@ function promoteMessage(input: {
     draft === null ? "" : `What it's for: ${draft.description}`,
     "",
     "- Write it the way the library writes its components: the same file layout, the same styling approach and variants, and its tokens. Keep its look; the design was built against it.",
-    `- \`"kit"\` in the proposed files is Brainstorm's name for this library's entry (${system.entry}); import from the library's own modules instead.`,
+    system.entry === null
+      ? `- The proposed files import from "kit", Brainstorm's name for the components .brainstorm/system.json lists; import each from its own file instead.`
+      : `- The proposed files import from "kit", Brainstorm's name for this library's entry (${system.entry}); import from the library's own modules instead.`,
+    ...(draft?.tier == null
+      ? []
+      : [
+          `- It is a ${draft.tier}${system.folder === null ? "" : `, so it belongs in ${system.folder} with the system's other ${draft.tier}s`}.${draft.tier === "primitive" ? "" : " It composes other components and writes no HTML of its own; keep it that way."}`,
+        ]),
     ...(standIns.length === 0
       ? []
       : [
-          `- ${standIns.join(", ")} ${standIns.length === 1 ? "is a layout primitive" : "are layout primitives"} Brainstorm generated because the library has none. Write that layout the way the library's own components do, such as with its utility classes.`,
+          `- ${standIns.join(", ")} ${standIns.length === 1 ? "is a primitive" : "are primitives"} Brainstorm generated because the library has none. Write it the way the library's own components do, such as with its utility classes.`,
         ]),
-    `- Export it from the library's entry, and write a story for it${draft === null ? "" : ` with these args: ${JSON.stringify(draft.example)}`}.`,
+    system.entry === null
+      ? `- Write a story for it in .brainstorm/stories/${draft === null ? "" : " that renders component.json's example"}${draft?.tier == null || draft.tier === "primitive" ? "" : `, with \`tags: ["${draft.tier}"]\` in its meta if its file isn't under the adapter's ${draft.tier}s`}.`
+      : `- Export it from the library's entry, and write a story for it${draft === null ? "" : " that renders component.json's example"}.`,
     `- Then run \`brainstorm system sync ${system.id}\`, so the design system's next version has it. Brainstorm then offers the upgrade in the session, and after it the design uses the library's component.`,
+    "- End with a short report: where you departed from the proposed files, and why, then a last line saying what you added and which version the sync made. Brainstorm shows that last line beside the promotion.",
     "",
     "The proposed files:",
     "",

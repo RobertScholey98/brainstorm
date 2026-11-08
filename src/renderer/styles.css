@@ -56,6 +56,8 @@
   /* The history strip, one height whatever it holds, and a still's card in it. */
   --spacing-strip: 84px;
   --spacing-still: 56px;
+  /* A page's reading width, for a table read row by row, such as a design system's tokens. */
+  --spacing-sheet: 720px;
   --container-xs: 20rem;
   --container-sm: 24rem;
   --container-md: 28rem;

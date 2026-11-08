@@ -2,10 +2,25 @@
  * The data a design system version holds (ADR 007). Types only, so the window can import them through core/types.
  */
 import type { CssDecl, Family, ThemeAxis, Token } from "./css";
+import type { PropInfo } from "./props";
 
 export type { CssDecl, Family, ThemeAxis, Token, TokenKind } from "./css";
+export type { PropInfo } from "./props";
 
 export type KitExportInfo = { readonly name: string; readonly type: "component" | "function" | "value" };
+
+/** What a component may contain (ADR 008): a primitive anything the library writes, a composite and a layout only the kit. */
+export type Tier = "primitive" | "composite" | "layout";
+/** Most composed first, the order the catalog and the workbench list them in. */
+export const TIERS = ["layout", "composite", "primitive"] as const satisfies readonly Tier[];
+export const isTier = (value: unknown): value is Tier => value === "primitive" || value === "composite" || value === "layout";
+
+/** A story arg's control, as Storybook's `argTypes` describe it, reduced to what the workbench draws. */
+export type ArgType = {
+  readonly control: "text" | "number" | "boolean" | "select" | null;
+  readonly options: readonly (string | number | boolean)[] | null;
+  readonly description: string | null;
+};
 
 export type StoryInfo = {
   /** `<file>#<export>`. */
@@ -18,6 +33,13 @@ export type StoryInfo = {
   readonly args: unknown;
   /** Why the story didn't render in the check, or null when it did. */
   readonly error: string | null;
+  /** Storybook `tags` from the story and its meta; a tier tag sets its component's tier. Missing before ADR 008. */
+  readonly tags?: readonly string[];
+  readonly argTypes?: Readonly<Record<string, ArgType>>;
+  /** The JSX its `render` returns, as the story file writes it, for Usage; null for a story without one. */
+  readonly source?: string | null;
+  /** A hash of the story's rendered HTML, so a version can say which components render differently. */
+  readonly htmlHash?: string | null;
 };
 
 /** A component as the catalog lists it: one per story title, or per export that has no story. */
@@ -28,6 +50,15 @@ export type CatalogEntry = {
   readonly stories: readonly string[];
   /** Added by Brainstorm because the library has no primitive by that name. */
   readonly generated: boolean;
+  /** Missing in versions synced before ADR 008, which read as primitives. */
+  readonly tier?: Tier;
+  /**
+   * The props its source declares, in order, with defaults and which are required, so the workbench lists props no story
+   * sets. Missing on generated entries and in versions synced before it was read; empty when the source couldn't be read.
+   */
+  readonly props?: readonly PropInfo[];
+  /** The catalog components its source renders, so a render change can say which one it came through. */
+  readonly uses?: readonly string[];
 };
 
 export type SystemStyles = {

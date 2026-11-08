@@ -1,0 +1,6 @@
+{
+  "name": "fixture-app",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.cjs"
+}

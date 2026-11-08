@@ -13,6 +13,8 @@ type Meta = {
   readonly title?: unknown;
   readonly component?: unknown;
   readonly args?: unknown;
+  readonly argTypes?: unknown;
+  readonly tags?: unknown;
   readonly render?: unknown;
   readonly decorators?: unknown;
 };
@@ -76,10 +78,49 @@ export function storyArgs(record: StoryRecord): Record<string, unknown> {
   return { ...asRecord(record.meta.args), ...asRecord(asRecord(record.story).args) };
 }
 
+/** Storybook `tags` from the meta and the story, such as `"composite"` (ADR 008). */
+export function storyTags(record: StoryRecord): string[] {
+  const tags = [...asArray(asRecord(record.meta).tags), ...asArray(asRecord(record.story).tags)].filter((t): t is string => typeof t === "string");
+  return [...new Set(tags)];
+}
+
+type ArgTypeOut = { control: "text" | "number" | "boolean" | "select" | null; options: (string | number | boolean)[] | null; description: string | null };
+
+/**
+ * A story's `argTypes`, from its meta and itself, as the controls the workbench draws. Storybook infers controls from
+ * TypeScript too; Brainstorm has only what the story says and the arg's own value, so the rest stay text or none.
+ */
+export function storyArgTypes(record: StoryRecord): Record<string, ArgTypeOut> {
+  const merged: Record<string, Record<string, unknown>> = {};
+  for (const source of [asRecord(asRecord(record.meta).argTypes), asRecord(asRecord(record.story).argTypes)]) {
+    for (const [name, value] of Object.entries(source)) merged[name] = { ...merged[name], ...asRecord(value) };
+  }
+  const out: Record<string, ArgTypeOut> = {};
+  for (const [name, t] of Object.entries(merged)) {
+    const options = Array.isArray(t.options) ? t.options.filter((o): o is string | number | boolean => ["string", "number", "boolean"].includes(typeof o)) : null;
+    const raw = t.control;
+    const kind = typeof raw === "string" ? raw : typeof raw === "object" && raw !== null ? asRecord(raw).type : raw === false ? "none" : undefined;
+    const control =
+      kind === "none"
+        ? null
+        : kind === "boolean"
+          ? "boolean"
+          : kind === "number" || kind === "range"
+            ? "number"
+            : kind === "select" || kind === "radio" || kind === "inline-radio" || (options !== null && options.length > 0)
+              ? "select"
+              : kind === "text"
+                ? "text"
+                : null;
+    out[name] = { control, options: options !== null && options.length > 0 ? options : null, description: typeof t.description === "string" ? t.description : null };
+  }
+  return out;
+}
+
 /** The element Storybook would render for a story: its render function, else meta's, else the component with args. */
-export function storyElement(React: ReactLike, record: StoryRecord): unknown {
+export function storyElement(React: ReactLike, record: StoryRecord, overrides: Record<string, unknown> = {}): unknown {
   const story = asRecord(record.story);
-  const args = storyArgs(record);
+  const args = { ...storyArgs(record), ...overrides };
   const context: StoryContext = { args, name: record.name, title: record.title };
   const render =
     typeof record.story === "function"
@@ -122,4 +163,49 @@ export function describeArgs(args: Record<string, unknown>): Record<string, unkn
     return Object.fromEntries(Object.entries(value as object).slice(0, 30).map(([k, v]) => [k, describe(v, depth + 1)]));
   };
   return describe(args, 0) as Record<string, unknown>;
+}
+
+/** Where a story file declares an export, so its stories keep the file's order; one this can't find goes last. */
+export function exportAt(text: string, exportName: string): number {
+  const m = new RegExp(`export\\s+(?:const|let|var|function)\\s+${exportName}\\b`).exec(text);
+  return m === null ? Number.MAX_SAFE_INTEGER : m.index;
+}
+
+/**
+ * The JSX a story's `render` returns, as its file writes it and dedented, so the workbench's Usage can show what the
+ * story composes rather than a bare `<Card />`. Null when the story has no `render`, or one this simple reader can't
+ * follow: it takes `render: (…) => ( … )` and `render: (…) => { … return ( … ) }`.
+ */
+export function renderSource(text: string, exportName: string): string | null {
+  const head = new RegExp(`export\\s+const\\s+${exportName}\\b[^=]*=`).exec(text);
+  if (head === null) return null;
+  const from = head.index + head[0].length;
+  const next = text.indexOf("\nexport ", from);
+  const render = /\brender\s*:\s*(?:\([^)]*\)|\w+)\s*=>\s*/g;
+  render.lastIndex = from;
+  const m = render.exec(text);
+  if (m === null || (next !== -1 && m.index > next)) return null;
+  let i = m.index + m[0].length;
+  if (text[i] === "{") {
+    const ret = /\breturn\s*/g;
+    ret.lastIndex = i;
+    const r = ret.exec(text);
+    if (r === null) return null;
+    i = r.index + r[0].length;
+  }
+  if (text[i] !== "(") return null;
+  let depth = 0;
+  let end = -1;
+  for (let j = i; j < text.length; j++) {
+    if (text[j] === "(") depth++;
+    else if (text[j] === ")" && --depth === 0) {
+      end = j;
+      break;
+    }
+  }
+  if (end === -1) return null;
+  const lines = text.slice(i + 1, end).split("\n").filter((l, n, all) => !((n === 0 || n === all.length - 1) && l.trim() === ""));
+  const indent = Math.min(...lines.filter((l) => l.trim() !== "").map((l) => /^ */.exec(l)![0].length));
+  const out = lines.map((l) => l.slice(indent)).join("\n").trim();
+  return out === "" ? null : out;
 }

@@ -19,6 +19,7 @@ import type {
   ContentHash,
   FeedbackId,
   FrameToHost,
+  GalleryFocus,
   HostToFrame,
   KitPayload,
   PartName,
@@ -57,6 +58,10 @@ type CanvasState = {
   readonly kitVersion: number;
   /** The system page's gallery: story ids to show, every story when null, or no gallery when undefined. */
   readonly gallery: readonly string[] | null | undefined;
+  /** One story the workbench shows alone, with Rob's args over its own, at a width or filling the frame (ADR 008). */
+  readonly galleryFocus: GalleryFocus | null;
+  readonly galleryComponents: Readonly<Record<string, string>>;
+  readonly galleryNotes: Readonly<Record<string, string>>;
 };
 
 const boot = JSON.parse(document.getElementById("brainstorm-boot")?.textContent ?? "{}") as {
@@ -308,6 +313,9 @@ let state: CanvasState = {
   present: false,
   kitVersion: 0,
   gallery: undefined,
+  galleryFocus: null,
+  galleryComponents: {},
+  galleryNotes: {},
 };
 /** The block Rob just pressed in the canvas. Its selection comes back from the host and needs no reveal. */
 let pressed: BlockId | null = null;
@@ -337,7 +345,7 @@ function receive(message: HostToFrame): void {
       applyTheme(message.theme);
       return;
     case "gallery":
-      setState({ gallery: message.stories });
+      setState({ gallery: message.stories, galleryFocus: message.focus ?? null, galleryComponents: message.components ?? {}, galleryNotes: message.notes ?? {} });
       return;
     case "modules": {
       const hashes = new Map(state.hashes);
@@ -611,16 +619,49 @@ class StoryBoundary extends Component<{ children: ReactNode }, { error: string |
 }
 
 /** The system page: each story of the kit in a frame of its own, under the session-less default theme. */
-function Gallery({ ids }: { ids: readonly string[] | null }) {
+function Gallery({ ids, focus }: { ids: readonly string[] | null; focus: GalleryFocus | null }) {
   useSyncExternalStore(subscribe, () => state.kitVersion);
   if (kit === null) return null;
   if (kit.module === null) return <BlockFailure message={kit.error ?? "the kit didn't load"} />;
-  const wanted = ids === null ? null : new Set(ids);
-  const records = kitStories().stories.filter((r) => wanted === null || wanted.has(r.id));
+  if (focus !== null) {
+    const record = kitStories().stories.find((r) => r.id === focus.id);
+    return record === undefined ? <BlockFailure message={`no story ${focus.id} in this version`} /> : <FocusedStory record={record} focus={focus} />;
+  }
+  // The host's order, which follows its catalog: tiers, or a search's best matches first.
+  const all = kitStories().stories;
+  const byId = new Map(all.map((r) => [r.id, r]));
+  const records = ids === null ? all : ids.map((id) => byId.get(id) ?? id);
   return <GalleryStories key={JSON.stringify(ids)} records={records} />;
 }
 
-function GalleryStories({ records }: { records: ReturnType<typeof kitStories>["stories"] }) {
+/** The prefix the host gives a primitive Brainstorm generated, which has no story of its own, so the gallery shows an example. */
+const GENERATED = "generated:";
+
+/**
+ * An example of each primitive Brainstorm adds to a system, built from the kit's own export, so Rob sees what a block
+ * composing with it gets. The grey cells are the canvas's own, standing in for content.
+ */
+function generatedExample(name: string): ReactNode {
+  const Primitive = kit?.module?.kit[name] as ComponentType<Record<string, unknown>> | undefined;
+  if (Primitive === undefined) return <BlockFailure message={`the kit has no ${name}`} />;
+  const h = React.createElement;
+  const cells = (n: number) => Array.from({ length: n }, (_, i) => h("div", { key: i, className: "bs-sample" }, i + 1));
+  switch (name) {
+    case "Text":
+      return h("div", { className: "bs-samples" }, h(Primitive, { size: "lg", weight: "semibold" }, "Large, semibold"), h(Primitive, {}, "Small, the default"), h(Primitive, { size: "xs", tone: "muted" }, "Extra small, muted"));
+    case "Heading":
+      return h("div", { className: "bs-samples" }, h(Primitive, { level: 1 }, "Level 1"), h(Primitive, { level: 2 }, "Level 2"), h(Primitive, { level: 3 }, "Level 3"));
+    case "Stack":
+      return h("div", { className: "bs-samples" }, h(Primitive, { gap: "2" }, ...cells(2)), h(Primitive, { direction: "row", gap: "4" }, ...cells(3)));
+    case "Grid":
+      return h(Primitive, { columns: "3", gap: "2" }, ...cells(6));
+    default:
+      return h("div", { className: "bs-sample-outline" }, h(Primitive, { padding: "4" }, h("div", { className: "bs-sample" }, "padding 4")));
+  }
+}
+
+/** The gallery's frames in order. An id the loaded kit lacks still gets a frame that says so, never a silent gap. */
+function GalleryStories({ records }: { records: readonly (ReturnType<typeof kitStories>["stories"][number] | string)[] }) {
   // A story that focuses an input on mount scrolls the page to it; each new set of stories opens at the top.
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
@@ -629,11 +670,39 @@ function GalleryStories({ records }: { records: ReturnType<typeof kitStories>["s
   }, []);
   return (
     <div className="bs-gallery">
-      {records.map((r) => (
+      {records.map((r) =>
+        typeof r === "string" && r.startsWith(GENERATED) ? (
+          <section key={r} className="bs-frame bs-story" data-story={r} data-story-generated>
+            <header className="bs-frame-title">
+              <span>{r.slice(GENERATED.length)}</span>
+              <span className="bs-frame-size">made by Brainstorm</span>
+            </header>
+            <div className="bs-frame-body bs-story-body" style={surfaceStyle()}>
+              <StoryBoundary>
+                <KitFrame>{generatedExample(r.slice(GENERATED.length))}</KitFrame>
+              </StoryBoundary>
+            </div>
+          </section>
+        ) : typeof r === "string" ? (
+          <section key={r} className="bs-frame bs-story" data-story={r} data-story-missing>
+            <header className="bs-frame-title">
+              <span>{state.galleryComponents[r] ?? r}</span>
+            </header>
+            <div className="bs-frame-body bs-story-body" style={surfaceStyle()}>
+              <BlockFailure message="this story isn't in the loaded version yet" />
+            </div>
+          </section>
+        ) : (
         <section key={r.id} className="bs-frame bs-story" data-story={r.id}>
           <header className="bs-frame-title">
-            <span>{r.title.split("/").at(-1)}</span>
-            <span className="bs-frame-size">{r.name}</span>
+            <button type="button" className="bs-story-open" onClick={() => post({ kind: "open_story", id: r.id })} data-open-story={r.id}>
+              <span>{state.galleryComponents[r.id] ?? r.title.split("/").at(-1)}</span>
+              <span className="bs-frame-size">{r.name}</span>
+              {state.galleryNotes[r.id] !== undefined && <span className="bs-frame-note">{state.galleryNotes[r.id]}</span>}
+            </button>
+            <button type="button" className="bs-story-cue" tabIndex={-1} aria-hidden onClick={() => post({ kind: "open_story", id: r.id })}>
+              Open
+            </button>
           </header>
           <div className="bs-frame-body bs-story-body" style={surfaceStyle()}>
             <StoryBoundary>
@@ -641,14 +710,30 @@ function GalleryStories({ records }: { records: ReturnType<typeof kitStories>["s
             </StoryBoundary>
           </div>
         </section>
-      ))}
+        ),
+      )}
+    </div>
+  );
+}
+
+/** The workbench's one story: Rob's args over the story's, at the width he picked. Its state survives an args change. */
+function FocusedStory({ record, focus }: { record: ReturnType<typeof kitStories>["stories"][number]; focus: GalleryFocus }) {
+  return (
+    <div className="bs-gallery-focus">
+      <section className="bs-frame bs-story" data-story={record.id} data-story-focused style={focus.width === null ? undefined : { width: focus.width }}>
+        <div className="bs-frame-body bs-story-body" style={surfaceStyle()}>
+          <StoryBoundary key={JSON.stringify(focus.args)}>
+            <KitFrame>{storyElement(React as unknown as Parameters<typeof storyElement>[0], record, focus.args) as ReactNode}</KitFrame>
+          </StoryBoundary>
+        </div>
+      </section>
     </div>
   );
 }
 
 function Canvas() {
   const s = useSyncExternalStore(subscribe, () => state);
-  if (s.gallery !== undefined) return <Gallery ids={s.gallery} />;
+  if (s.gallery !== undefined) return <Gallery ids={s.gallery} focus={s.galleryFocus} />;
   return (
     <>
       {s.frames.map((frame) => {
@@ -1027,6 +1112,7 @@ body {
 }
 .bs-frame-title > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .bs-frame-size { flex: none; font-variant-numeric: tabular-nums; font-weight: 400; }
+.bs-frame-note { flex: none; font-weight: 400; color: var(--bs-success); }
 .bs-frame:has(.bs-failure) .bs-frame-size { display: none; }
 .bs-frame[data-selected] .bs-frame-title { color: var(--bs-accent); }
 .bs-frame-body {
@@ -1104,24 +1190,38 @@ html[data-present] .bs-frame-title, html[data-present] .bs-switch, html[data-pre
 html[data-present] .bs-frame-body { min-height: 100vh; border-radius: 0; box-shadow: none !important; transition: none; }
 /* The block's own root reaches the window's foot, so its background, pattern and all, runs to the bottom edge as a page's would. */
 html[data-present] .bs-frame-body > [data-bid] > * { min-height: 100vh; box-sizing: border-box; }
-/* A proposed component: dashed, and tagged "not in system" at its root's top left. */
-.bs-proposed > :not(.bs-proposed-anchor) { outline: 1px dashed var(--bs-warning, #d97706); outline-offset: 2px; }
-/* The tag straddles the outline's top-right corner, so it marks the component without covering the design above it,
-   and fades while the pointer is over the component so what it covers can be read. */
+/* A proposed component: dashed, and tagged "not in system" at its root's top right. Neutral ink, not the warning
+   amber: a proposal is the healthy result of a brainstorm finding a gap, and amber stays for what needs fixing. */
+.bs-proposed > :not(.bs-proposed-anchor) { outline: 1px dashed var(--bs-fg-muted, #6b7280); outline-offset: 2px; }
+/* The tag sits on the outline's top edge at its right end, outside the component, so it never covers what is being
+   reviewed; it fades while the pointer is over the component so the design above it can be read. */
 .bs-proposed-anchor {
   position: absolute; z-index: 2147482000; pointer-events: none;
-  right: anchor(right); top: anchor(top); translate: 6px -50%;
+  right: anchor(right); bottom: anchor(top); translate: 2px -3px;
   transition: opacity 120ms ease-out;
 }
 .bs-proposed:hover .bs-proposed-anchor { opacity: 0.15; }
 .bs-proposed-tag {
   display: block; padding: 1px 5px; border-radius: 3px; white-space: nowrap;
-  background: var(--bs-warning, #d97706); color: #fff; font: 500 10px/14px var(--bs-font-ui); letter-spacing: 0.01em;
+  background: var(--bs-fg, #1f2937); color: var(--bs-card, #fff); font: 500 10px/14px var(--bs-font-ui); letter-spacing: 0.01em;
+  /* Brainstorm's overlay, not the kit's: a light hairline keeps it apart from a dark block under a dark theme. */
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.55);
 }
 .bs-gallery {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; align-items: start; width: 100%;
 }
 .bs-story { width: auto; }
+.bs-samples { display: grid; gap: 16px; width: 100%; }
+.bs-sample { padding: 8px 12px; border-radius: 4px; background: color-mix(in srgb, currentColor 10%, transparent); font: 500 12px/16px var(--bs-font-ui); text-align: center; }
+.bs-sample-outline { outline: 1px dashed color-mix(in srgb, currentColor 35%, transparent); }
+.bs-gallery-focus { display: flex; justify-content: center; width: 100%; }
+.bs-gallery-focus > .bs-story { width: 100%; max-width: 100%; }
+.bs-gallery-focus > .bs-story[style] { flex: none; }
+.bs-story-open { all: unset; display: flex; gap: inherit; align-items: baseline; cursor: pointer; border-radius: 3px; }
+.bs-story-open:hover > span:first-child { text-decoration: underline; }
+.bs-story-open:focus-visible { outline: 2px solid var(--bs-accent, #0d9488); outline-offset: 2px; }
+.bs-story-cue { all: unset; margin-left: auto; cursor: pointer; font-weight: 400; opacity: 0.7; }
+.bs-story:hover .bs-story-cue { opacity: 1; color: var(--bs-accent, #0d9488); }
 /* contain: a story that pins itself to the viewport, such as a sidebar, stays inside its own frame. */
 .bs-story-body { padding: 24px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; contain: layout paint; }
 body:has(.bs-gallery) #canvas { display: block; }

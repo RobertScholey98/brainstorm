@@ -16,5 +16,5 @@
     "paths": { "@/*": ["./src/renderer/*"] }
   },
   "include": ["src", "test", "vitest.config.ts"],
-  "exclude": ["src/canvas/runtime.tsx", "src/renderer", "test/kit-lib", "test/.kit-*"]
+  "exclude": ["src/canvas/runtime.tsx", "src/renderer", "test/kit-lib", "test/app-fixture", "test/.kit-*"]
 }
