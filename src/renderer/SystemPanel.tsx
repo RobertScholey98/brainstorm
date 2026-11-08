@@ -1,5 +1,5 @@
 import { ArrowUpCircle, Check, ChevronDown, ChevronRight, Download, ExternalLink, Paintbrush, Palette, RotateCcw, Send, Wrench } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout, CalloutItem } from "@/components/ui/callout";
@@ -227,7 +227,7 @@ function UpgradeErrors({ issues, more, placeTitle }: { issues: readonly CheckIss
 const list = (names: readonly string[]) => (names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
 /** What the newest version changes, in a sentence or two, or null when it changes nothing a block would notice. */
-function upgradeChanges(upgrade: SessionSystemView["upgrade"]): string | null {
+function upgradeChanges(upgrade: SessionSystemView["upgrade"]): ReactNode {
   // A removal a broken block already names ("uses Badge, which v5 doesn't have") isn't said twice.
   const named = upgrade.check?.state === "breaks" ? new Set([...missingByBlock(upgrade.check.issues).values()].flat()) : new Set<string>();
   const removed = upgrade.removed.filter((n) => !named.has(n));
@@ -235,10 +235,30 @@ function upgradeChanges(upgrade: SessionSystemView["upgrade"]): string | null {
     upgrade.added.length > 0 && `It adds ${list(upgrade.added)}`,
     removed.length > 0 && `${upgrade.added.length > 0 ? "and removes" : "It removes"} ${list(removed)}`,
   ].filter((p): p is string => typeof p === "string");
-  const why = upgrade.tokens.length === 0 ? "" : `: ${upgrade.tokens.map((t) => `${t.name} ${t.before} → ${t.after}`).join(", ")}`;
-  const changed = upgrade.changed.length > 0 ? `${list(upgrade.changed)} ${upgrade.changed.length === 1 ? "renders" : "render"} differently${why}.` : null;
   const head = parts.length > 0 ? `${parts.join(" ")}.` : null;
-  return head === null && changed === null ? null : [head, changed].filter((p) => p !== null).join(" ");
+  if (head === null && upgrade.changed.length === 0) return null;
+  return (
+    <>
+      {head}
+      {head !== null && upgrade.changed.length > 0 && " "}
+      {upgrade.changed.length > 0 && (
+        <>
+          {list(upgrade.changed)} {upgrade.changed.length === 1 ? "renders" : "render"} differently
+          {upgrade.tokens.length > 0 && ": "}
+          {/* Each change holds together on one line, "--radius 0.5rem → 0.75rem"; the list breaks only between them. */}
+          {upgrade.tokens.map((t, i) => (
+            <Fragment key={t.name}>
+              {i > 0 && ", "}
+              <span className="font-mono text-xs whitespace-nowrap" data-upgrade-token={t.name}>
+                {t.name} {t.before} → {t.after}
+              </span>
+            </Fragment>
+          ))}
+          .
+        </>
+      )}
+    </>
+  );
 }
 
 /** A request for the agent to make the broken blocks build with both versions, so Rob can upgrade after it. */
