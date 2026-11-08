@@ -170,7 +170,7 @@ function WindowMenu({
         </div>
         <PopoverFooter hint="F11 works in the preview window too.">
           <Button variant="ghost" onClick={() => run("close")} data-preview-close>
-            Close window
+            Close preview
           </Button>
         </PopoverFooter>
       </PopoverContent>

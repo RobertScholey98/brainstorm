@@ -182,7 +182,7 @@ try {
   await window.click("[data-preview-menu]");
   await window.waitForSelector("[data-preview-popover]");
   await sleep(250);
-  await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show canvas in main window, Bring preview to front and Full screen preview, and in the footer F11 works in the preview window too, with Close window");
+  await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show canvas in main window, Bring preview to front and Full screen preview, and in the footer F11 works in the preview window too, with Close preview");
   await window.click('[data-preview-look="working"]');
   await sleep(250);
   await snap(window, "10b-preview-menu-working", "The Preview menu with Working chosen: its line under the switch now in full contrast, and the Preview button behind it in the warning tone (amber edge and fill, amber eye-off)", { keepFocus: true });
@@ -284,7 +284,7 @@ try {
   await window.click("[data-preview-menu]");
   await Promise.all([preview.waitForEvent("close"), window.click("[data-preview-close]")]);
   await window.waitForSelector("[data-preview-open]");
-  check("Close window closes it, and the bar goes back to Present and Open preview window", await window.$("[data-hold]"), null);
+  check("Close preview closes it, and the bar goes back to Present and Open preview window", await window.$("[data-hold]"), null);
 
   check("no page errors in either window", errors.filter((e) => !/Autofill|DevTools/.test(e)), []);
 } finally {
