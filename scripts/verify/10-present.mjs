@@ -196,7 +196,7 @@ try {
   await window.click("[data-hold]");
   await preview.waitForSelector("[data-held-bar]");
   await preview.mouse.move(640, 790);
-  await snap(preview, "11b-preview-working-held", "The Working preview window while Hold preview is on in the main window: the same warning-toned held bar as the main window's, in its canvas's top inset, This window still shows …, with a compact Resume live");
+  await snap(preview, "11b-preview-working-held", "The Working preview window while Hold preview is on in the main window: the same warning-toned held strip as the main window's, in its canvas's top inset, saying changes in the main window wait for Resume live, which ends the strip as an amber full-height segment with a play glyph; an amber rule under the bar marks the Working look");
   await preview.click("[data-held-release]");
   await preview.waitForSelector("[data-held-bar]", { state: "detached" });
   check("Resume live in the working preview window ends Hold in the main window", await window.getAttribute("[data-hold]", "aria-pressed"), "false");
@@ -249,7 +249,7 @@ try {
   await window.click("[data-pick-toggle]");
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
-  check("a pick started here while the canvas is away waits in the preview window", await window.textContent("[data-canvas-away] [data-slot=empty-title]"), "Click an element in the preview");
+  check("a pick started here while the canvas is away waits in the preview window", await window.textContent("[data-canvas-away] [data-slot=empty-description]"), "Click an element there. Esc or Cancel stops picking here.");
   check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Click in the previewCancel");
   await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's hint reads Click in the preview, with Cancel, and the region's title says to click an element there");
   await window.keyboard.press("Escape");

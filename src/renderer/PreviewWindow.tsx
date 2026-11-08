@@ -67,7 +67,7 @@ export function PreviewWindow({ api }: { api: Api }) {
 
   useEffect(() => {
     // A shared window's title bar is on screen too, so the clean look's names the design alone.
-    document.title = scene === null ? "Brainstorm preview" : settings.look === "clean" ? scene.title : `${scene.title} · Brainstorm preview`;
+    document.title = scene === null ? "Brainstorm preview" : settings.look === "clean" ? scene.title : `${scene.title} · Working, not for sharing`;
   }, [scene?.title, scene === null, settings.look]);
 
   // A composer belongs to the brainstorm it was opened on.
@@ -170,6 +170,8 @@ export function PreviewWindow({ api }: { api: Api }) {
           />
         )}
         <section ref={area} className="relative min-h-0 flex-1 overflow-hidden bg-canvas" aria-label="Preview" data-canvas-region>
+          {/* An amber rule the width of the window, under its bar, so the look that isn't for sharing shows from across a room. */}
+          {!clean && <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-raised h-0.5 bg-warning" data-preview-private-rule />}
           <CanvasHost
             blocks={blocks}
             frames={scene.frames}

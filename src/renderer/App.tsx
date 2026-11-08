@@ -937,13 +937,14 @@ function CanvasAway({
             <AppWindow aria-hidden />
           </EmptyMedia>
           <EmptyTitle>
-            {stuck !== null ? "The canvas is in the Clean preview" : picking ? "Click an element in the preview" : "The canvas is in the preview window"}
+            {stuck !== null ? "The canvas is in the Clean preview" : "The canvas is in the preview window"}
           </EmptyTitle>
-          <EmptyDescription>
+          {/* Two lines whatever it says, so starting or ending a pick moves nothing in the region. */}
+          <EmptyDescription className="min-h-10">
             {stuck !== null
               ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience. Show the canvas here to ${act === "pin" ? "pin" : "vary an element"}, or switch the preview to Working (not for sharing).`
               : picking
-                ? "Esc or Cancel stops picking."
+                ? "Click an element there. Esc or Cancel stops picking here."
                 : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
           </EmptyDescription>
         </EmptyHeader>
