@@ -299,8 +299,12 @@ try {
   await window.click('[data-promote="WeekStrip"]');
   await window.waitForSelector('[data-proposed="WeekStrip"][data-promotion="started"]', { timeout: 30_000 });
   await window.locator("[data-proposed-list]").scrollIntoViewIfNeeded();
-  await shot(window, "promote-started", "After Promote: the WeekStrip row says a thread on robnet's project is adding it to the library, with Open thread, and offers no second Promote while it runs");
   const started = t3.started().at(-1);
+  t3.startRun(started.thread);
+  t3.reply(started.thread, "Moved WeekStrip into **components/ui/week-strip.tsx** and wrote its story. Running the library's check.");
+  await window.waitForSelector('[data-promote-status] [data-agent-last-line]', { timeout: 30_000 });
+  await window.locator("[data-proposed-list]").scrollIntoViewIfNeeded();
+  await shot(window, "promote-started", "After Promote: the WeekStrip row says the agent is adding it to robnet, with how long it has worked, its latest line and Open thread, and offers no second Promote while it runs");
   await textShot(
     app,
     "promote-message",
@@ -315,6 +319,7 @@ try {
     writeFileSync(join(library, p), text);
   }
   writeFileSync(indexPath, `${indexBefore.trimEnd()}\nexport * from './components/ui/week-strip';\n`);
+  t3.endRun(started.thread, "completed");
   cli(["system", "sync", system.id], { quiet: true });
   await window.waitForSelector("[data-system-upgrade]", { timeout: 30_000 });
   await window.locator("[data-system-panel]").scrollIntoViewIfNeeded();

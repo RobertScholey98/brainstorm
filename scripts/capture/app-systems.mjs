@@ -208,6 +208,10 @@ try {
   await window.waitForSelector('[data-system-importing][data-import-state="started"]', { timeout: 30_000 });
   await shot(window, "import-started", "After Import with an agent: a card for the running import, with the project root, what the agent is doing, Open thread and Dismiss");
   const started = t3.started().at(-1);
+  t3.startRun(started.thread);
+  t3.reply(started.thread, "Reading **src/components/ui**: 5 components so far. MealCard renders a Button, so it's a composite.");
+  await window.waitForSelector("[data-system-importing] [data-agent-last-line]", { timeout: 30_000 });
+  await shot(window, "import-working", "Once the agent's run starts: the card says Agent working with how long, and its latest line, so Rob can follow it without opening T3");
   await textShot(electron, "import-message", `The thread the import started in project "${started?.project}": its first message`, started?.message ?? "(no thread started)", "The import thread's first message: what to decide (which components, their tiers, what they need), the adapter to write with an example, how to write stories with args and argTypes, the check's four gates, then system add and a report");
 
   // The agent writes the adapter, checks, fixes what the check names, and adds the system.
@@ -217,6 +221,7 @@ try {
   for (const [file, text] of Object.entries(STORIES)) write(file, text);
   cli(["system", "check", app]);
   cli(["system", "add", app, "--thread", DEMO_THREAD]);
+  t3.endRun(started.thread, "completed");
   await textShot(electron, "agent-import-cli", "What the import agent sees: a first check failing the boundary and stories gates, then a passing check and system add", transcript.join("\n\n"), "The import agent's terminal: the first check fails the boundary (UserChip imports the app's store) and the stories gate (no component has a story yet); after excluding UserChip and writing stories, every gate passes and system add syncs v1");
 
   const system = json(["system", "list"])[0];
@@ -242,8 +247,14 @@ try {
   await new Promise((r) => setTimeout(r, 1500));
   await shot(window, "review-moved", "After stepping to PageFrame and moving it to Layout: the catalog lists it under Layouts marked moved, MealCard shows its issue, the strip says moved from primitive, and the callout offers Send 2 changes to the agent while Confirm waits on the open issue");
   await window.click("[data-review-send]");
-  await window.waitForFunction(() => document.querySelector("[data-review-status]")?.textContent?.includes("Sent"), null, { timeout: 30_000 });
-  await shot(window, "review-sent", "After Send: Brainstorm wrote PageFrame's tier into the adapter and synced v2, so the catalog keeps it under Layouts; the issue and the move went to the import's thread, the callout says what was sent with Open thread, and Confirm is free again");
+  await window.waitForSelector("[data-review-sent]", { timeout: 30_000 });
+  await shot(window, "review-sent", "After Send: Brainstorm wrote PageFrame's tier into the adapter and synced v2, so the catalog keeps it under Layouts; the issue and the move went to the import's thread, the callout lists what was sent and that it waits for the agent, and Confirm is free again");
+  const reviewThread = t3.sent().at(-1)?.thread;
+  t3.startRun(reviewThread);
+  t3.reply(reviewThread, "Made MealCard's time optional and added a story without it. Check passes; syncing now.");
+  t3.endRun(reviewThread, "completed");
+  await window.waitForSelector('[data-review-status] [data-agent-work="finished"]', { timeout: 30_000 });
+  await shot(window, "review-agent-done", "When the agent's run ends: the sent box says Agent finished with its last line, and what to do next, check the new version and confirm");
   const reviewSent = t3.sent().at(-1);
   await textShot(electron, "review-message", `What the review sent to the import's thread (${reviewSent?.thread})`, reviewSent?.message ?? "(nothing sent)", "The review's message to the import thread: Rob's note on MealCard, the tier move Brainstorm already wrote into the adapter's tiers, then check, sync and report");
 
@@ -265,12 +276,12 @@ try {
   await gallery.waitForSelector("[data-story-focused]", { timeout: 30_000 });
   await shot(window, "workbench", "Clicking a story's name opens it in the workbench: the one story, a width switch, and beside it Controls from its args and argTypes, the Props table with the variant's choices and description, and the Usage JSX with Copy");
   await window.click('[data-control-select="variant"]');
-  await window.click('[role="option"]:has-text("outline")');
+  await window.click('[role="option"]:has-text("primary")');
   await window.fill('[data-control="children"] input', "Plan next week");
   await window.click('[data-workbench-width="390"]');
   await gallery.waitForFunction(() => document.querySelector("[data-story-focused]")?.textContent?.includes("Plan next week"));
   await new Promise((r) => setTimeout(r, 600));
-  await shot(window, "workbench-changed", "The workbench after two changes at 390px: the story re-renders as an outline button reading 'Plan next week', each changed control is marked with Reset 2 changes, and the Usage snippet follows");
+  await shot(window, "workbench-changed", "The workbench after two changes at 390px: the story re-renders as a primary button reading 'Plan next week', each changed control is marked with Reset 2 changes, and the Usage snippet follows");
 
   // A brainstorm built with v2 of the system, whose blocks use Button and Badge.
   const session = cli(["session", "new", "--title", "Meal week", "--brief", "Plan the week's dinners.", "--project", app, "--system", system.id]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
@@ -339,8 +350,9 @@ export default function Plan() {
   await window.click(`[data-system="${system.id}"] button`);
   await window.waitForSelector("[data-system-sync-failed]");
   await shot(window, "sync-error-detail", "The system's page with the failed sync: a callout with the reason, that brainstorms stay on v4, and Repair with an agent");
+  const before = t3.started().length;
   await window.click(`[data-system-sync-failed] [data-system-repair]`);
-  await window.waitForFunction(() => document.querySelector("[data-system-repair]")?.textContent?.includes("Repairing"), null, { timeout: 30_000 });
+  for (let i = 0; i < 100 && t3.started().length === before; i++) await new Promise((r) => setTimeout(r, 200));
   const repair = t3.started().at(-1);
   await textShot(electron, "repair-message", `The thread Repair started in project "${repair?.project}": its first message`, repair?.message ?? "(no thread started)", "The repair thread's first message: the failed sync's issues, to find what moved and fix the adapter or stories, then check and system sync");
 } finally {
