@@ -136,3 +136,48 @@ No blockers or majors. Opus scored 9.5 in every area. What kept the others below
 - **Times and paths:** times in the same minute show seconds, and the library card shows the short path.
 
 The findings log is `design-review/systems-climb/round-5/findings-log.md`.
+
+## Round 5 (app-systems round-5, library round-10)
+
+| Area | Claude Opus 5.5 | GPT-6.1 Sol | Claude Sonnet 5.5 |
+| --- | --- | --- | --- |
+| Library list and import | 9.5 | 9.5 | 9.6 |
+| Review | 9.5 | 9.5 | 9.5 |
+| Browsing | 9.5 | 9.5 | 9.5 |
+| Workbench | 9.5 | 9.5 | 9.5 |
+| Versions, Theme and Warnings | 9.5 | 9.5 | 9.4 |
+| In a brainstorm | 9.5 | 9.5 | 9.4 |
+| Agent hand-offs | 9.5 | 9.5 | 9.6 |
+| States | 9.5 | 9.5 | 9.5 |
+| Self-consistency | 9.5 | 9.5 | 9.5 |
+| Fitness for all-day use | 9.5 | 9.0 | 9.4 |
+| Completely happy | no | no | no |
+| Blockers / majors | 0 / 0 | 0 / 0 | 0 / 0 |
+| Sheets won against Storybook | 4 of 4 | 4 of 4 | 4 of 4 |
+| Agent hand-offs against Claude Code | Brainstorm | Brainstorm | Brainstorm |
+
+No blockers or majors. These kept scores below the bar:
+- The Inspector puts Theme below the controls, Vary, Feedback and the proposed components (t14).
+- Usage cut off long JSX lines.
+- The import card printed the full path.
+
+**What round 6 addressed:**
+- **Inspector:** Theme comes straight after the design system's header, before the proposed components. Its heading says "no tweaks yet" while Save as theme is unavailable.
+- **Upgrade callout:**
+  - It names the token behind a render change: "Button and MealCard render differently: --radius 0.5rem → 0.75rem".
+  - It no longer says "removes Badge" when the broken block already names Badge.
+- **Review:**
+  - Open thread follows the status it belongs to.
+  - Show leaves once the walk is on that component.
+  - The gallery frame says "new in v3" too.
+- **Stories:** they keep their file's order, so Default leads.
+- **Theme tab:** Accent is a picker, as on the Components tab.
+- **Paths:** the import card and the offer show the short path. The theme export names its folder once.
+- **Proposed tag:** it has a light hairline, so it shows on a dark block.
+- **Wording:**
+  - The promote brief calls Text a primitive and points at `component.json`'s example rather than repeating it.
+  - The theme warning reads the same for one component or several.
+  - "In v2 · upgrade above to use it" fits its line.
+  - "New story" is singular when there's one.
+
+The findings log is `design-review/systems-climb/round-6/findings-log.md`.

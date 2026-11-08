@@ -95,8 +95,9 @@ export function SystemSection({
           </Callout>
         </div>
       )}
-      {system.proposed.length > 0 && <ProposedList api={api} system={system} send={send} />}
+      {/* The theme is what Rob changes most here, so it comes before the list of proposed components, which can be long. */}
       <ThemeEditor system={system} readOnly={readOnly} send={send} exportTheme={exportTheme} />
+      {system.proposed.length > 0 && <ProposedList api={api} system={system} send={send} />}
     </section>
   );
 }
@@ -110,7 +111,9 @@ function ThemeEditor({ system, readOnly, send, exportTheme }: Omit<Parameters<ty
     <div className="grid grid-cols-1 gap-3 border-t py-3" inert={readOnly} data-theme-editor data-tweaks={tweaked}>
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-medium">Theme</h3>
-        {tweaked > 0 && <span className="text-xs text-fg-muted">{tweaked === 1 ? "1 tweak" : `${tweaked} tweaks`} here</span>}
+        <span className="text-xs text-fg-muted" data-theme-tweaks>
+          {tweaked === 0 ? "no tweaks yet" : tweaked === 1 ? "1 tweak here" : `${tweaked} tweaks here`}
+        </span>
         <Button variant="ghost" size="xs" className="ml-auto" disabled={tweaked === 0} onClick={() => void send({ kind: "reset_theme" })} data-theme-reset>
           <RotateCcw data-icon="inline-start" aria-hidden />
           Reset
@@ -225,11 +228,15 @@ const list = (names: readonly string[]) => (names.length === 1 ? names[0] : `${n
 
 /** What the newest version changes, in a sentence or two, or null when it changes nothing a block would notice. */
 function upgradeChanges(upgrade: SessionSystemView["upgrade"]): string | null {
+  // A removal a broken block already names ("uses Badge, which v5 doesn't have") isn't said twice.
+  const named = upgrade.check?.state === "breaks" ? new Set([...missingByBlock(upgrade.check.issues).values()].flat()) : new Set<string>();
+  const removed = upgrade.removed.filter((n) => !named.has(n));
   const parts = [
     upgrade.added.length > 0 && `It adds ${list(upgrade.added)}`,
-    upgrade.removed.length > 0 && `${upgrade.added.length > 0 ? "and removes" : "It removes"} ${list(upgrade.removed)}`,
+    removed.length > 0 && `${upgrade.added.length > 0 ? "and removes" : "It removes"} ${list(removed)}`,
   ].filter((p): p is string => typeof p === "string");
-  const changed = upgrade.changed.length > 0 ? `${list(upgrade.changed)} ${upgrade.changed.length === 1 ? "renders" : "render"} differently.` : null;
+  const why = upgrade.tokens.length === 0 ? "" : `: ${upgrade.tokens.map((t) => `${t.name} ${t.before} → ${t.after}`).join(", ")}`;
+  const changed = upgrade.changed.length > 0 ? `${list(upgrade.changed)} ${upgrade.changed.length === 1 ? "renders" : "render"} differently${why}.` : null;
   const head = parts.length > 0 ? `${parts.join(" ")}.` : null;
   return head === null && changed === null ? null : [head, changed].filter((p) => p !== null).join(" ");
 }
@@ -453,8 +460,7 @@ function ThemeExportButton({ exportTheme }: { exportTheme: () => Promise<ThemeEx
               heading="Exported"
               description="CSS custom properties to paste into the app, and the same values as design tokens."
             />
-            <ExportPath path={done.css.path} />
-            <ExportPath path={done.json.path} />
+            <ExportPath paths={[done.css.path, done.json.path]} />
             <PopoverFooter>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>
                 Done
@@ -516,7 +522,7 @@ function PromoteWork({ api, thread, link, since, library, landed }: { api: Api; 
       {/* What the agent did reads first, then where it landed. */}
       {landed !== null && (
         <span className="text-xs text-success" data-promote-landed>
-          In v{landed} · upgrade above to use it from the kit
+          In v{landed} · upgrade above to use it
         </span>
       )}
       {work?.phase === "finished" && landed === null && <span className="text-xs text-fg-muted">Once the agent syncs the library, the new version shows above with Upgrade.</span>}

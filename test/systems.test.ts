@@ -252,7 +252,7 @@ export default function Chores() {
     expect(started?.message.split("\n")[0]).toBe(`[brainstorm] promote ChoreList from session ${S} ("Chores")`);
     expect(started?.message).toContain(choreListTsx.trimEnd());
     // The library has no Text of its own, so the thread is told it was a stand-in rather than left to import it.
-    expect(started?.message).toContain("- Text is a layout primitive Brainstorm generated because the library has none.");
+    expect(started?.message).toContain("- Text is a primitive Brainstorm generated because the library has none.");
     expect(data(await service.view(S)).system?.proposed[0]?.promotion).toMatchObject({ state: "started", link: `https://app.t3.codes/threads/p/${started?.thread}` });
   }, 120_000);
 

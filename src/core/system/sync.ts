@@ -8,7 +8,7 @@ import { analyzeKitCss, flattenCss, htmlClasses, parseCss, readsColorToken } fro
 import { isTier, type ArgType, type CatalogEntry, type KitExportInfo, type StoryInfo, type SystemManifest, type Tier } from "./model";
 import { componentProps, componentUses } from "./props";
 import { sourceFile, type SystemSource } from "./source";
-import { renderSource } from "./story";
+import { exportAt, renderSource } from "./story";
 
 export type SyncedVersion = {
   readonly hash: string;
@@ -49,7 +49,12 @@ export async function syncSystem(source: SystemSource, checker: Checker): Promis
   const rules = flattenCss(parseCss(css));
 
   for (const f of inspected.failed) warnings.push(issue("story_failed", `the story file threw while loading: ${f.message}`, { file: f.file }));
-  const stories: StoryInfo[] = inspected.stories.map((s) => ({
+  // A module namespace lists its exports alphabetically; Storybook lists a file's stories as the file writes them.
+  const fileOrder = new Map(inspected.stories.map((s, i) => [s.file, i]).reverse() as [string, number][]);
+  const ordered = [...inspected.stories].sort(
+    (a, b) => fileOrder.get(a.file)! - fileOrder.get(b.file)! || exportAt(storyFiles[a.file] ?? "", a.exportName) - exportAt(storyFiles[b.file] ?? "", b.exportName),
+  );
+  const stories: StoryInfo[] = ordered.map((s) => ({
     id: s.id,
     file: s.file,
     source: renderSource(storyFiles[s.file] ?? "", s.exportName),
@@ -89,7 +94,7 @@ export async function syncSystem(source: SystemSource, checker: Checker): Promis
     return htmls.length > 0 && !readsColorToken(htmls.flatMap(htmlClasses), rules) && !htmls.some((h) => /style="[^"]*var\(--/.test(h));
   });
   for (const entry of unthemed) {
-    warnings.push(issue("theme_ignored", `${entry.name}'s stories render nothing that reads a colour token, so a theme change reaches it only through the colour it inherits; check it in the gallery under each theme`, { file: sourceFile(source) }));
+    warnings.push(issue("theme_ignored", `${entry.name}'s stories render nothing that reads a colour token, so a theme change shows only through inherited colour; check the gallery under each theme`, { file: sourceFile(source) }));
   }
 
   const storyless = catalog.filter((e) => e.stories.length === 0 && !e.generated).map((e) => e.name);

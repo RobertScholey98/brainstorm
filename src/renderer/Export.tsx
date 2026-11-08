@@ -52,7 +52,7 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
               heading={<span data-export-title>Exported</span>}
               description="One HTML file that opens offline, with your settings and variant choices."
             />
-            <ExportPath path={done.path} />
+            <ExportPath paths={[done.path]} />
             <PopoverFooter>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>
                 Done
@@ -73,10 +73,11 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
 }
 
 /**
- * The folder, then the file name on its own line. The folder may break only after a separator, and a segment never
- * breaks inside itself, not even at a hyphen; the text is still the whole path for copying.
+ * The folder, then each file's name on its own line, so files written side by side name their folder once. The
+ * folder may break only after a separator, and a segment never breaks inside itself, not even at a hyphen.
  */
-export function ExportPath({ path }: { path: string }) {
+export function ExportPath({ paths }: { paths: readonly [string, ...string[]] }) {
+  const path = paths[0];
   const cut = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/")) + 1;
   const segments = path.slice(0, cut).split(/(?<=[\\/])/);
   return (
@@ -89,7 +90,11 @@ export function ExportPath({ path }: { path: string }) {
           </Fragment>
         ))}
       </span>
-      <span className="font-medium break-all text-fg">{path.slice(cut)}</span>
+      {paths.map((p) => (
+        <span key={p} className="font-medium break-all text-fg">
+          {p.slice(Math.max(p.lastIndexOf("\\"), p.lastIndexOf("/")) + 1)}
+        </span>
+      ))}
     </code>
   );
 }

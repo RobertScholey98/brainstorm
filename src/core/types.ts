@@ -888,6 +888,8 @@ export type SessionSystemView = {
     readonly removed: readonly string[];
     /** Components whose stories render differently in the newest version. */
     readonly changed: readonly string[];
+    /** Tokens whose value the newest version changes, the usual reason those components render differently. */
+    readonly tokens: readonly { readonly name: string; readonly before: string; readonly after: string }[];
     readonly check: UpgradeCheck | null;
   };
 };
@@ -969,6 +971,8 @@ export type HostToFrame =
       readonly focus?: GalleryFocus | null;
       /** Each story's component, by story id, so a frame is labelled as the catalog names it, not by its story title. */
       readonly components?: Readonly<Record<string, string>>;
+      /** A word beside a story's label, by story id, such as "new in v3" for one the agent added during a review. */
+      readonly notes?: Readonly<Record<string, string>>;
     };
 
 /** The workbench's one story (ADR 008): Rob's args over the story's own, at a width in pixels or filling the frame. */

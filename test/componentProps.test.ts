@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { componentProps, componentUses } from "../src/core/system/props";
-import { renderSource } from "../src/core/system/story";
+import { exportAt, renderSource } from "../src/core/system/story";
 
 const BUTTON = `import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
@@ -213,5 +213,13 @@ export const Block: Story = {
     expect(renderSource(file, "Default")).toBe("<Card>\n  <CardTitle>Lemon pancakes</CardTitle>\n</Card>");
     expect(renderSource(file, "Plain")).toBe(null);
     expect(renderSource(file, "Block")).toBe("<Card {...args}>{title}</Card>");
+  });
+});
+
+describe("exportAt", () => {
+  test("orders a file's stories as the file writes them, not alphabetically", () => {
+    const file = "export default meta;\nexport const Default: Story = {};\nexport const Accents: Story = {};\n";
+    const names = ["Accents", "Default", "Missing"].sort((a, b) => exportAt(file, a) - exportAt(file, b));
+    expect(names).toEqual(["Default", "Accents", "Missing"]);
   });
 });

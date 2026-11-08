@@ -61,6 +61,7 @@ type CanvasState = {
   /** One story the workbench shows alone, with Rob's args over its own, at a width or filling the frame (ADR 008). */
   readonly galleryFocus: GalleryFocus | null;
   readonly galleryComponents: Readonly<Record<string, string>>;
+  readonly galleryNotes: Readonly<Record<string, string>>;
 };
 
 const boot = JSON.parse(document.getElementById("brainstorm-boot")?.textContent ?? "{}") as {
@@ -314,6 +315,7 @@ let state: CanvasState = {
   gallery: undefined,
   galleryFocus: null,
   galleryComponents: {},
+  galleryNotes: {},
 };
 /** The block Rob just pressed in the canvas. Its selection comes back from the host and needs no reveal. */
 let pressed: BlockId | null = null;
@@ -343,7 +345,7 @@ function receive(message: HostToFrame): void {
       applyTheme(message.theme);
       return;
     case "gallery":
-      setState({ gallery: message.stories, galleryFocus: message.focus ?? null, galleryComponents: message.components ?? {} });
+      setState({ gallery: message.stories, galleryFocus: message.focus ?? null, galleryComponents: message.components ?? {}, galleryNotes: message.notes ?? {} });
       return;
     case "modules": {
       const hashes = new Map(state.hashes);
@@ -696,6 +698,7 @@ function GalleryStories({ records }: { records: readonly (ReturnType<typeof kitS
             <button type="button" className="bs-story-open" onClick={() => post({ kind: "open_story", id: r.id })} data-open-story={r.id}>
               <span>{state.galleryComponents[r.id] ?? r.title.split("/").at(-1)}</span>
               <span className="bs-frame-size">{r.name}</span>
+              {state.galleryNotes[r.id] !== undefined && <span className="bs-frame-note">{state.galleryNotes[r.id]}</span>}
             </button>
             <button type="button" className="bs-story-cue" tabIndex={-1} aria-hidden onClick={() => post({ kind: "open_story", id: r.id })}>
               Open
@@ -1109,6 +1112,7 @@ body {
 }
 .bs-frame-title > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .bs-frame-size { flex: none; font-variant-numeric: tabular-nums; font-weight: 400; }
+.bs-frame-note { flex: none; font-weight: 400; color: var(--bs-success); }
 .bs-frame:has(.bs-failure) .bs-frame-size { display: none; }
 .bs-frame[data-selected] .bs-frame-title { color: var(--bs-accent); }
 .bs-frame-body {
@@ -1200,6 +1204,8 @@ html[data-present] .bs-frame-body > [data-bid] > * { min-height: 100vh; box-sizi
 .bs-proposed-tag {
   display: block; padding: 1px 5px; border-radius: 3px; white-space: nowrap;
   background: var(--bs-fg, #1f2937); color: var(--bs-card, #fff); font: 500 10px/14px var(--bs-font-ui); letter-spacing: 0.01em;
+  /* Brainstorm's overlay, not the kit's: a light hairline keeps it apart from a dark block under a dark theme. */
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.55);
 }
 .bs-gallery {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; align-items: start; width: 100%;

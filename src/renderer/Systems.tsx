@@ -159,7 +159,7 @@ export function SystemsPage({
                 }
               >
                 <p>
-                  <span className="font-mono">{noSystem.path}</span> isn't a library's package, and its project has no <span className="font-mono">.brainstorm/system.json</span>.
+                  <span className="font-mono" data-offer-path={noSystem.path}>{shortPath(noSystem.path)}</span> isn't a library's package, and its project has no <span className="font-mono">.brainstorm/system.json</span>.
                 </p>
                 <p>
                   An agent can import the app's components. In a T3 thread on the project, it picks the components that make up the design system, writes{" "}
@@ -289,8 +289,8 @@ function ImportCard({ api, item, onRetry, onDismiss }: { api: Api; item: SystemI
       <span className="grid min-w-0 flex-1 gap-2">
         <span className="grid min-w-0 gap-1">
           <span className="text-base font-semibold">{item.state === "failed" ? "The import didn't start" : "Importing with an agent"}</span>
-          <span className="flex min-w-0 font-mono text-xs text-fg-muted">
-            <Truncate>{item.root}</Truncate>
+          <span className="flex min-w-0 font-mono text-xs text-fg-muted" data-import-path={item.root}>
+            <Truncate>{shortPath(item.root)}</Truncate>
           </span>
         </span>
         {item.state === "failed" ? (
@@ -529,6 +529,7 @@ function SystemDetail({
             view={view}
             review={review}
             act={act}
+            shown={show?.name ?? null}
             onShow={(name) => {
               setTab("components");
               setShow((s) => ({ name, nonce: (s?.nonce ?? 0) + 1 }));
@@ -613,12 +614,15 @@ function ReviewCallout({
   view,
   review,
   act,
+  shown,
   onShow,
 }: {
   api: Api;
   view: SystemView;
   review: SystemReview;
   act: (action: ReviewAction, failed: string) => Promise<boolean>;
+  /** The component the callout last took the walk to, so it offers the next one rather than the one Rob is on. */
+  shown: string | null;
   /** Takes the walk to a component, such as one the agent changed. */
   onShow: (name: string) => void;
 }) {
@@ -642,6 +646,7 @@ function ReviewCallout({
   const theirs = since === null ? [] : view.versions.filter((v) => v.n > since);
   const agentSynced = theirs.length > 0;
   const touched = [...agentChanges(view, review).keys()];
+  const toShow = touched.find((name) => name !== shown);
   // What's left to do decides the primary action: changes go to the agent first; an unsorted library goes to an agent
   // to sort; while the agent works on what Rob sent, nothing is primary; then Confirm is the way on.
   const sendFirst = changes > 0 || (unsorted && sent === null);
@@ -660,9 +665,9 @@ function ReviewCallout({
               {changes > 0 ? `Send ${count(changes, "change", "changes")} to the agent` : "Sort into tiers with an agent"}
             </Button>
           )}
-          {agentSynced && open === 0 && moves === 0 && touched[0] !== undefined && (
-            <Button variant="outline" onClick={() => onShow(touched[0]!)} data-review-show={touched[0]}>
-              {`Show ${touched[0]}`}
+          {agentSynced && open === 0 && moves === 0 && toShow !== undefined && (
+            <Button variant="outline" onClick={() => onShow(toShow)} data-review-show={toShow}>
+              {`Show ${toShow}`}
               <ArrowRight data-icon="inline-end" aria-hidden />
             </Button>
           )}
@@ -1075,6 +1080,17 @@ function ComponentsTab({
   const needle = query.trim().toLowerCase();
   const storyNames = useMemo(() => new Map(manifest.stories.map((s) => [s.id, s.name])), [manifest]);
   const components = useMemo(() => Object.fromEntries(manifest.catalog.flatMap((e) => e.stories.map((id) => [id, e.name]))), [manifest]);
+  // The catalog's "new in v3", on the gallery frame too, where Rob is looking.
+  const notes = useMemo(
+    () =>
+      Object.fromEntries(
+        manifest.stories.flatMap((s) => {
+          const v = newStory.get(`${components[s.id] ?? ""}›${s.name}`);
+          return v === undefined ? [] : [[s.id, `new in v${v}`]];
+        }),
+      ),
+    [manifest, newStory, components],
+  );
   const entries = needle === "" ? manifest.catalog : searchCatalog(manifest.catalog, needle, storyNames);
   const chosen = entries.find((e) => e.name === entry) ?? null;
   const sections = needle === "" ? catalogSections(entries, shown) : [{ heading: "", entries: [...entries] }];
@@ -1286,6 +1302,7 @@ function ComponentsTab({
               focus={focus === null ? null : { id: focus.id, args: focus.args, width: focus.width === "fill" ? null : Number(focus.width) }}
               onOpenStory={openStory}
               components={components}
+              notes={notes}
               theme={{ axes: Object.fromEntries(Object.entries(axes).filter(([, v]) => v !== DEFAULT_AXIS)), tokens: {} }}
             />
           )}
@@ -1734,8 +1751,10 @@ function GalleryFrame({
   onOpenStory,
   theme,
   components,
+  notes,
 }: {
   components: Readonly<Record<string, string>>;
+  notes: Readonly<Record<string, string>>;
   id: SystemId;
   n: SystemView["versions"][number]["n"];
   stories: readonly string[] | null;
@@ -1781,8 +1800,8 @@ function GalleryFrame({
   }, [ready, themeKey]);
   const storyKey = JSON.stringify([stories, focus]);
   useEffect(() => {
-    if (ready) post({ kind: "gallery", stories, focus, components });
-  }, [ready, storyKey, components]);
+    if (ready) post({ kind: "gallery", stories, focus, components, notes });
+  }, [ready, storyKey, components, notes]);
   return (
     <div className="relative min-h-0 min-w-0 flex-1" data-gallery={ready || undefined} data-gallery-focused={focus?.id}>
       <iframe ref={frame} title="Stories" src="/canvas" sandbox="allow-scripts" className="block size-full border-0" />
@@ -1817,13 +1836,11 @@ function ThemeTab({ manifest }: { manifest: Manifest }) {
           {rest.map((a) => (
             <div key={a.attribute} className="flex items-center gap-2 text-xs whitespace-nowrap text-fg-muted" data-theme-tab-axis={a.attribute}>
               {axisLabel(a.attribute)}
-              <Segmented
-                fit="content"
-                aria-label={axisLabel(a.attribute)}
+              <AxisPicker
+                label={axisLabel(a.attribute)}
                 value={picked[a.attribute] ?? DEFAULT_AXIS}
-                onValueChange={(v) => setPicked((prev) => ({ ...prev, [a.attribute]: v }))}
+                onChange={(v) => setPicked((prev) => ({ ...prev, [a.attribute]: v }))}
                 options={axisOptions(a, DEFAULT_AXIS)}
-                itemData="theme-tab-value"
               />
             </div>
           ))}
@@ -1928,7 +1945,7 @@ function VersionsTab({ view }: { view: SystemView }) {
                     <ChangeLine label="Renders differently" names={v.changed.map(throughText)} className="text-fg" data="version-changed" />
                   )}
                   {v.newStories.length > 0 && (
-                    <ChangeLine label="New stories" names={v.newStories.flatMap((c) => c.stories.map((s) => `${c.name} › ${s}`))} className="text-success" />
+                    <ChangeLine label={v.newStories.flatMap((c) => c.stories).length === 1 ? "New story" : "New stories"} names={v.newStories.flatMap((c) => c.stories.map((s) => `${c.name} › ${s}`))} className="text-success" />
                   )}
                   {v.retiered.length > 0 && (
                     <ChangeLine label="Tier" names={v.retiered.map((r) => `${r.name} ${TIER_LABEL[r.from].toLowerCase()} → ${TIER_LABEL[r.to].toLowerCase()}`)} className="text-fg" />

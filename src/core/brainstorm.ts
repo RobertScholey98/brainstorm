@@ -837,7 +837,9 @@ export class Brainstorm {
       canPromote: system?.projectId != null,
       upgrade: {
         ...componentChanges(version.manifest, newest.manifest),
-        changed: newest.n > ref.n ? renderChanges(version.manifest, newest.manifest).changed.map((c) => c.name) : [],
+        ...(newest.n > ref.n
+          ? (({ changed, tokens }) => ({ changed: changed.map((c) => c.name), tokens }))(renderChanges(version.manifest, newest.manifest))
+          : { changed: [], tokens: [] }),
         check: newest.n > ref.n ? this.#upgradeCheck(id, ref, newest.n) : null,
       },
     };
@@ -1822,11 +1824,11 @@ function promoteMessage(input: {
     ...(standIns.length === 0
       ? []
       : [
-          `- ${standIns.join(", ")} ${standIns.length === 1 ? "is a layout primitive" : "are layout primitives"} Brainstorm generated because the library has none. Write that layout the way the library's own components do, such as with its utility classes.`,
+          `- ${standIns.join(", ")} ${standIns.length === 1 ? "is a primitive" : "are primitives"} Brainstorm generated because the library has none. Write it the way the library's own components do, such as with its utility classes.`,
         ]),
     system.entry === null
-      ? `- Write a story for it in .brainstorm/stories/${draft === null ? "" : ` with these args: ${JSON.stringify(draft.example)}`}${draft?.tier == null || draft.tier === "primitive" ? "" : `, with \`tags: ["${draft.tier}"]\` in its meta if its file isn't under the adapter's ${draft.tier}s`}.`
-      : `- Export it from the library's entry, and write a story for it${draft === null ? "" : ` with these args: ${JSON.stringify(draft.example)}`}.`,
+      ? `- Write a story for it in .brainstorm/stories/${draft === null ? "" : " that renders component.json's example"}${draft?.tier == null || draft.tier === "primitive" ? "" : `, with \`tags: ["${draft.tier}"]\` in its meta if its file isn't under the adapter's ${draft.tier}s`}.`
+      : `- Export it from the library's entry, and write a story for it${draft === null ? "" : " that renders component.json's example"}.`,
     `- Then run \`brainstorm system sync ${system.id}\`, so the design system's next version has it. Brainstorm then offers the upgrade in the session, and after it the design uses the library's component.`,
     "- End with a short report: where you departed from the proposed files, and why, then a last line saying what you added and which version the sync made. Brainstorm shows that last line beside the promotion.",
     "",

@@ -90,7 +90,8 @@ export function AgentWorkStatus({
         </span>
         {w.counts === true && work !== null && <Elapsed since={since} now={now} className="text-fg-muted tabular-nums" />}
         {!compact && (
-          <span className="ml-auto flex shrink-0 items-center gap-1">
+          // Alone, Open thread follows the status it belongs to; with more ways out, the group sits at the row's end.
+          <span className={cn("flex shrink-0 items-center gap-1", actions !== undefined && "ml-auto")}>
             {href !== null && openThread}
             {actions}
           </span>

@@ -165,6 +165,12 @@ export function describeArgs(args: Record<string, unknown>): Record<string, unkn
   return describe(args, 0) as Record<string, unknown>;
 }
 
+/** Where a story file declares an export, so its stories keep the file's order; one this can't find goes last. */
+export function exportAt(text: string, exportName: string): number {
+  const m = new RegExp(`export\\s+(?:const|let|var|function)\\s+${exportName}\\b`).exec(text);
+  return m === null ? Number.MAX_SAFE_INTEGER : m.index;
+}
+
 /**
  * The JSX a story's `render` returns, as its file writes it and dedented, so the workbench's Usage can show what the
  * story composes rather than a bare `<Card />`. Null when the story has no `render`, or one this simple reader can't
