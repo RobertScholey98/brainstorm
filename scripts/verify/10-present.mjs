@@ -279,7 +279,7 @@ try {
   await window.click("[data-pick-toggle]");
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
-  check("a pick started here while the canvas is away waits in the preview window", [await window.textContent("[data-canvas-away] [data-slot=empty-title]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")], ["Click an element in the preview window", "Add your comment there; it appears in Feedback here. Press Esc to stop."]);
+  check("a pick started here while the canvas is away waits in the preview window", [await window.textContent("[data-canvas-away] [data-slot=empty-title]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")], ["Click an element in the preview window", "Add your comment there; it appears in Feedback here. Esc stops."]);
   check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Click to pin");
   await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's pick chip reads Click to pin, with its close, and the region's title says to click an element there and where the comment goes");
   await window.keyboard.press("Escape");
@@ -289,6 +289,8 @@ try {
   await window.click('[data-preview-look="clean"]');
   await window.click("[data-preview-menu]");
   await preview.waitForSelector("[data-preview-window=clean]");
+  await window.mouse.move(150, 860);
+  await snap(window, "16a-canvas-away-clean", "Canvas away with the preview window Clean, at rest: the region says the canvas is in the Clean preview, live and following edits here, with Bring preview to front (primary) and Show canvas here; the Preview button reads Clean, in the neutral tone");
   await window.click("[data-pick-toggle]");
   await window.waitForSelector('[data-canvas-away="stuck"]');
   check(
@@ -301,7 +303,7 @@ try {
     [null, "view", "Pins don't show in the Clean preview"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar has no pick chip); the Inspector's Pin comment takes an accent edge only (no fill, short of pressed) while the region asks, so the click shows where it was made; the region's title answers the click, Pins don't show in the Clean preview, and its line says they show only in Working, which isn't for sharing, with Show here and pin (primary: it shows the canvas here and starts the pick), Switch preview to Working (an outline with only an amber edge, lighter than the primary), and Not now");
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar has no pick chip); the Inspector's Pin comment takes an accent edge and accent label only (no fill, short of pressed) while the region asks, so the click shows where it was made; the region's title answers the click, Pins don't show in the Clean preview, and its line says they show only in Working, which isn't for sharing, with Show here and pin (primary: it shows the canvas here and starts the pick), Switch preview to Working (an outline with only an amber edge, lighter than the primary), and Not now");
   await window.click("[data-away-working]");
   await preview.waitForSelector("[data-preview-window=working]");
   await mirror.waitForSelector('body[data-mode="pin"]');

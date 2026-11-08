@@ -951,7 +951,7 @@ function CanvasAway({
             {stuck !== null
               ? `${act === "pin" ? "They show" : "It picks"} only in Working, which isn't for sharing.`
               : picking
-                ? "Add your comment there; it appears in Feedback here. Press Esc to stop."
+                ? "Add your comment there; it appears in Feedback here. Esc stops."
                 : hold
                   ? `The preview is held, so your edits show nowhere until you resume.`
                   : `It's live and follows your edits here.`}
