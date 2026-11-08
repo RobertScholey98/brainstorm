@@ -83,7 +83,7 @@ try {
     };
   });
   check("present stretches the slot to the screen's width from its top, with no title or pins", fills, { width: true, top: 0, chrome: 0 });
-  await snap(window, "03-present-start", "Present, first time this run, just started from the wheel slot: the 390 px wheel stretched to fill the screen, no canvas chrome, and at the top centre a small label, ← → change slot | Exit Esc; it fades after 3.5 s, and later presents show it only when the pointer nears the top edge");
+  await snap(window, "03-present-start", "Present, first time this run, just started from the wheel slot: the 390 px wheel stretched to fill the screen, no canvas chrome, and at the top centre a small label, Change slot ← → | Exit Esc; it fades after 3.5 s, and later presents show it only when the pointer nears the top edge");
   await sleep(3800);
   await snap(window, "04-present", "Present once the label has faded: nothing on screen but the design, as if it were the app");
   await window.keyboard.press("ArrowRight");
@@ -263,10 +263,10 @@ try {
   check(
     "held with the canvas away, the held strip still lies along the region's top and the placeholder says it's held",
     [await window.textContent("[data-held-bar]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")],
-    ["Preview held on The result · Assignment cardResume live", "It's held. It catches up with your edits here when you resume."],
+    ["Preview held on The result · Assignment cardResume live", "The preview is held. It catches up with your edits when you resume."],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "15b-canvas-away-held", "Canvas away while Hold preview is on: the held strip along the region's top, Preview held on the slot and variant, with Resume live; under it the placeholder says the canvas is in the Working preview and that it's held and catches up when resumed");
+  await snap(window, "15b-canvas-away-held", "Canvas away while Hold preview is on: the held strip along the region's top, Preview held on the slot and variant, with Resume live; under it the placeholder says the canvas is in the Working preview, and that the preview is held and catches up when resumed");
   await window.click("[data-held-release]");
   await window.waitForSelector("[data-held-bar]", { state: "detached" });
   await window.click("[data-pick-toggle]");
@@ -294,7 +294,7 @@ try {
     [null, "view", "The canvas is in the Clean preview"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says the canvas is in the Clean preview, which hides pins from the audience, with Show here and pin (primary: it shows the canvas here and starts the pick), Switch preview to Working (an outline with only an amber edge, lighter than the primary), and Not now");
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar has no pick chip); the Inspector's Pin comment shows open (accent edge) while the region asks, so the click shows where it was made; the region says the canvas is in the Clean preview, which hides pins from the audience, with Show here and pin (primary: it shows the canvas here and starts the pick), Switch preview to Working (an outline with only an amber edge, lighter than the primary), and Not now");
   await window.click("[data-away-working]");
   await preview.waitForSelector("[data-preview-window=working]");
   await mirror.waitForSelector('body[data-mode="pin"]');

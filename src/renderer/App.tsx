@@ -880,7 +880,7 @@ function SessionWorkspace({
           onReset={onReset}
           onDismiss={onDismiss}
         >
-          <VarySection picking={picking === "vary"} open={interaction.kind === "varying"} blocked={varyBlocked} onPickToggle={() => togglePick("vary")} />
+          <VarySection picking={picking === "vary"} open={interaction.kind === "varying" || stuckPick === "vary"} blocked={varyBlocked} onPickToggle={() => togglePick("vary")} />
           <FeedbackPanel
             feedback={feedback}
             blocks={blocks}
@@ -889,7 +889,8 @@ function SessionWorkspace({
             past={past !== null}
             pinBlocked={past !== null ? "Back to latest to pin a comment" : (unrendered ?? undefined)}
             picking={picking === "comment"}
-            composing={interaction.kind === "composing"}
+            // Open, too, while the away placeholder asks how to go on with a pick it couldn't start, so the click shows where it was made.
+            composing={interaction.kind === "composing" || stuckPick === "comment"}
             focused={focus}
             echoed={hoveredPin}
             onHover={setHoveredFeedback}
@@ -945,7 +946,7 @@ function CanvasAway({
               : picking
                 ? "Your comment goes to Feedback, on the right. Press Esc to stop."
                 : hold
-                  ? `It's held. It catches up with your edits here when you resume.`
+                  ? `The preview is held. It catches up with your edits when you resume.`
                   : `It's live and follows your edits here.`}
           </EmptyDescription>
         </EmptyHeader>
@@ -1015,11 +1016,12 @@ function PresentHint({ several, poke, onLeave }: { several: boolean; poke: numbe
       <TooltipLabel className="ring-1 ring-inverse-fg/25 dark:ring-fg/25">
         {several && (
           <span role="status" className="contents">
+            {/* Words, then keys, as Exit is. */}
+            Change slot
             <span className="flex items-center gap-0.5" aria-label="Left and right arrow keys">
               <Kbd tone="inverse">←</Kbd>
               <Kbd tone="inverse">→</Kbd>
             </span>
-            Change slot
           </span>
         )}
         <TooltipAction onClick={onLeave} aria-label="Exit present (Esc)" data-present-leave>

@@ -13,11 +13,11 @@ export function HeldBar({ on, onRelease }: { on: string | null; onRelease: () =>
     <div className="absolute inset-x-0 top-0 z-sticky bg-card">
       <div role="status" className="flex h-6 items-center gap-2 border-b-2 border-warning bg-warning-subtle pl-3 text-xs" data-tint data-held-bar>
         <Pause aria-hidden className="size-3 shrink-0 fill-current text-warning" />
-        {/* It names what the audience still sees, the slot and variant set apart as names. */}
+        {/* It names what the audience still sees, the slot and variant set apart in semibold. */}
         {on !== null ? (
           <span className="flex w-0 flex-1 items-center">
             <span className="shrink-0 whitespace-pre">
-              <span className="font-medium">Preview held</span> on{" "}
+              Preview held on{" "}
             </span>
             <Truncate className="min-w-0 font-semibold">{on}</Truncate>
           </span>
