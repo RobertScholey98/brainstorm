@@ -126,6 +126,8 @@ let state: CanvasState = {
 };
 /** The block Rob just pressed in the canvas. Its selection comes back from the host and needs no reveal. */
 let pressed: BlockId | null = null;
+/** How near the top edge, in px, the pointer brings back present's keys label. */
+const PRESENT_EDGE = 96;
 const listeners = new Set<() => void>();
 const setState = (next: Partial<CanvasState>) => {
   state = { ...state, ...next };
@@ -663,10 +665,18 @@ if (live && !preview) {
     revealSelected("smooth");
   });
   window.addEventListener("pointermove", (e) => (hover = state.mode === "pin" ? pickTarget(e.target) : null), true);
-  // In present the host shows how to leave while the pointer moves, as a video player shows its controls.
+  // In present the host shows how to leave when the pointer nears the top edge, as slideshow tools do; pointing at the
+  // design anywhere else leaves the screen clean, and a pointer still for 2 s hides until it moves.
   let pointed = 0;
-  window.addEventListener("pointermove", () => {
-    if (!state.present || performance.now() - pointed < 250) return;
+  let idle: ReturnType<typeof setTimeout> | undefined;
+  window.addEventListener("pointermove", (e) => {
+    if (!state.present) return;
+    delete document.documentElement.dataset.idle;
+    clearTimeout(idle);
+    idle = setTimeout(() => {
+      if (state.present) document.documentElement.dataset.idle = "";
+    }, 2000);
+    if (e.clientY > PRESENT_EDGE || performance.now() - pointed < 250) return;
     pointed = performance.now();
     post({ kind: "pointer" });
   });
@@ -807,6 +817,7 @@ body {
 body[data-mode="pin"], body[data-mode="pin"] * { cursor: crosshair !important; }
 /* Present: the slot is the window. Its frame keeps its body, so a pick and the block's own state carry on, and drops the rest. */
 html[data-present] { scrollbar-gutter: auto; }
+html[data-present][data-idle], html[data-present][data-idle] * { cursor: none !important; }
 html[data-present] body, html[data-present] .bs-frame-body { background: var(--bs-present-fill, var(--bs-card)); }
 html[data-present] #canvas { display: block; padding: 0; }
 html[data-present] .bs-frame-title, html[data-present] .bs-switch, html[data-present] .bs-pin { display: none !important; }

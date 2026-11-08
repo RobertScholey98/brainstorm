@@ -1,6 +1,5 @@
 import { AppWindow, MessageSquarePlus, Pause } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Toast } from "@/components/ui/toast";
@@ -130,11 +129,11 @@ export function PreviewWindow({ api }: { api: Api }) {
             trailing={
               <>
                 {settings.hold && (
-                  <Hint label="Hold is on in the main window, so this window keeps what it showed until you release it" side="bottom">
-                    <Badge tabIndex={0} data-held-badge>
-                      <Pause aria-hidden />
-                      Held
-                    </Badge>
+                  <Hint name="Preview held" label="Hold preview is on in the main window, so this window keeps what it showed. Resume live to catch up" side="bottom">
+                    <Button variant="outline" onClick={() => tell({ kind: "resume" })} data-held-badge>
+                      <Pause data-icon="inline-start" className="text-warning" aria-hidden />
+                      Held · Resume live
+                    </Button>
                   </Hint>
                 )}
                 <Hint label={scene.pinBlocked ?? "Click an element here to pin a comment to it"} side="bottom">

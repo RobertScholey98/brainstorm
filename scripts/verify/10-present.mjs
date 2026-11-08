@@ -99,16 +99,19 @@ try {
   check("a later present opens on the design alone, its keys waiting for the pointer", await window.getAttribute("[data-present-hint]", "data-hidden"), "");
   await window.mouse.move(700, 400);
   await window.mouse.move(720, 420);
+  await sleep(400);
+  check("pointing at the design leaves the screen clean", await window.getAttribute("[data-present-hint]", "data-hidden"), "");
+  await window.mouse.move(1100, 60);
+  await window.mouse.move(1120, 40);
   await window.waitForSelector("[data-present-hint]:not([data-hidden])");
-  await window.mouse.move(760, 440);
-  await snap(window, "05b-present-pointer", "A later present, after the pointer moved: the keys label and Exit show in the top right corner, and fade 2 s after the pointer stops");
+  await snap(window, "05b-present-pointer", "A later present, with the pointer brought near the top edge: the keys label and Exit show in the top right corner, and fade 2 s after the pointer leaves the top; pointing anywhere lower leaves the screen clean, and a still pointer hides after 2 s");
   await window.keyboard.press("F5");
   await window.waitForSelector("[data-presenting]", { state: "detached" });
   check("F5 presents and F5 leaves", true, true);
   await window.keyboard.press("F5");
   await window.waitForSelector("[data-presenting]");
-  await window.mouse.move(700, 400);
-  await window.mouse.move(720, 420);
+  await window.mouse.move(1100, 60);
+  await window.mouse.move(1120, 40);
   await window.click("[data-present-leave]");
   await window.waitForSelector("[data-presenting]", { state: "detached" });
   check("Exit in the corner label leaves present", true, true);
@@ -185,6 +188,13 @@ try {
   await settled(() => showing(mirror));
   await preview.mouse.move(640, 790);
   await snap(preview, "11-preview-working", "The preview window, Working look: the same canvas bar as the main window (slot tabs, view switch), then Pin comment at its right, over the canvas drawn as the main window draws it");
+  await window.click("[data-hold]");
+  await preview.waitForSelector("[data-held-badge]");
+  await preview.mouse.move(640, 790);
+  await snap(preview, "11b-preview-working-held", "The Working preview window while Hold preview is on in the main window: Held · Resume live in its canvas bar, before Pin comment");
+  await preview.click("[data-held-badge]");
+  await preview.waitForSelector("[data-held-badge]", { state: "detached" });
+  check("Resume live in the working preview window ends Hold in the main window", await window.getAttribute("[data-hold]", "aria-pressed"), "false");
 
   // Pin from the preview window.
   await preview.click("[data-preview-pin]");
@@ -209,7 +219,7 @@ try {
   // The main window still pins.
   await window.click("[data-pick-toggle]");
   await window.mouse.move(150, 860);
-  await snap(window, "14b-main-picking-window-open", "The main window picking while the preview window is open (Working): the pick hint, Esc and Cancel in the canvas bar; Hold preview, Preview and Present keep their places, their labels giving way to icons only if the hint needs the room");
+  await snap(window, "14b-main-picking-window-open", "The main window picking while the preview window is open (Working): the pick hint, Esc and Cancel fill room the bar keeps for them, so the view switch, Hold preview, Preview and Present are exactly where they were in 07; at this width Hold preview shows its icon alone, as it does in 07");
   await canvas.click(inBlock("result/card", "headline"));
   await window.waitForSelector("[data-composer]");
   check("the main window's canvas still pins while the preview window is open", await preview.$("[data-composer]"), null);
@@ -245,10 +255,10 @@ try {
       await mirror.evaluate(() => document.body.dataset.mode ?? "view"),
       await window.textContent("[data-canvas-away] [data-slot=empty-title]"),
     ],
-    [null, "view", "To pin a comment, switch the preview to Working"],
+    [null, "view", "To pin a comment, bring the canvas back here"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says to pin a comment, switch the preview to Working, and why, with Switch to Working (primary), Show the canvas here, and Cancel");
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says to pin a comment, bring the canvas back here, and why, with Show the canvas here (primary, which then starts the pick here), Switch preview to Working, and Cancel");
   await window.click("[data-away-working]");
   await preview.waitForSelector("[data-preview-window=working]");
   await mirror.waitForSelector('body[data-mode="pin"]');

@@ -16,7 +16,7 @@ const LOOKS: readonly { value: PreviewPrefs["look"]; label: string; about: strin
 ];
 
 /**
- * The canvas bar's right end (ADR 007). Present sits last and never moves; the preview window's controls grow to its
+ * The canvas bar's right end (ADR 007), all outline buttons, so they read as one group whether labelled or not. Present sits last and never moves; the preview window's controls grow to its
  * left: the window's button while it is shut, then Hold and the window's menu while it is open.
  */
 export function PresentControls({
@@ -43,7 +43,7 @@ export function PresentControls({
       {windowed && open && <HoldButton hold={hold} heldOn={heldOn} onHold={onHold} />}
       {windowed && (open ? <WindowMenu prefs={prefs} onPrefs={onPrefs} /> : <OpenWindow />)}
       <Hint name="Present" label="Fill the screen with this slot, as the app would look" shortcut="F5" side="bottom">
-        <Button variant="ghost" size="icon" aria-label="Present" onClick={onPresent} data-present>
+        <Button variant="outline" size="icon" aria-label="Present" onClick={onPresent} data-present>
           <Maximize aria-hidden />
         </Button>
       </Hint>
@@ -64,7 +64,7 @@ function HoldButton({ hold, heldOn, onHold }: { hold: boolean; heldOn: string | 
       side="bottom"
     >
       <Button variant="outline" aria-pressed={hold} onClick={() => onHold(!hold)} className={COMPACT} data-collapse={BAR_COLLAPSE.hold} data-hold>
-        <Pause data-icon="inline-start" aria-hidden />
+        <Pause data-icon="inline-start" className={hold ? "text-warning" : undefined} aria-hidden />
         <span className={COMPACT_LABEL}>Hold preview</span>
       </Button>
     </Hint>
@@ -74,7 +74,7 @@ function HoldButton({ hold, heldOn, onHold }: { hold: boolean; heldOn: string | 
 function OpenWindow() {
   return (
     <Hint name="Preview window" label="Mirror this canvas in a window of its own, to share or to put on another screen" side="bottom">
-      <Button variant="ghost" size="icon" aria-label="Open preview window" onClick={() => previewWindow("open")} data-preview-open>
+      <Button variant="outline" size="icon" aria-label="Open preview window" onClick={() => previewWindow("open")} data-preview-open>
         <AppWindow aria-hidden />
       </Button>
     </Hint>
@@ -90,7 +90,7 @@ function WindowMenu({ prefs, onPrefs }: { prefs: PreviewPrefs; onPrefs: (prefs: 
   const look = LOOKS.find((l) => l.value === prefs.look) ?? LOOKS[0];
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint name={`Preview window is open · ${look?.label}`} label="Change its look, or bring it to front, full screen or closed" side="bottom">
+      <Hint name={`Preview window is open · ${look?.label}`} label="Change its look, bring it to front, make it full screen, or close it" side="bottom">
         <PopoverTrigger render={<Button variant="outline" className={COMPACT} data-collapse={BAR_COLLAPSE.preview} data-preview-menu />}>
           <AppWindow data-icon="inline-start" aria-hidden />
           <span className={COMPACT_LABEL}>
@@ -106,15 +106,15 @@ function WindowMenu({ prefs, onPrefs }: { prefs: PreviewPrefs; onPrefs: (prefs: 
       <PopoverContent size="md" align="end" data-preview-popover>
         <PopoverHeader
           heading="Preview window"
-          description="Mirrors this canvas live. Hold preview, beside this menu, freezes it while you try things."
+          description="Mirrors this canvas live. Hold preview freezes it while you try things."
         />
         <div className="grid gap-1.5">
           <span className="text-xs font-medium text-fg-muted">Look</span>
           <Segmented value={prefs.look} onValueChange={(next) => onPrefs({ ...prefs, look: next })} options={LOOKS} itemData="preview-look" aria-label="Look" />
           <ul className="grid gap-0.5 text-xs" data-preview-look-about>
             {LOOKS.map((l) => (
-              <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted"} data-chosen={l.value === prefs.look || undefined}>
-                <span className="font-medium">{l.label}:</span> {l.about}
+              <li key={l.value} className={l.value === prefs.look ? "font-medium text-fg" : "text-fg-muted"} data-chosen={l.value === prefs.look || undefined}>
+                <span className="font-semibold">{l.label}:</span> {l.about}
               </li>
             ))}
           </ul>

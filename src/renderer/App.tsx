@@ -803,7 +803,12 @@ function SessionWorkspace({
             hold={preview.hold}
             picking={picking !== null}
             stuck={stuckPick}
-            onHere={() => preview.onPrefs({ ...preview.prefs, here: true })}
+            onHere={() => {
+              const kind = stuckPick;
+              setStuckPick(null);
+              preview.onPrefs({ ...preview.prefs, here: true });
+              if (kind !== null) setInteraction({ kind: "picking", for: kind });
+            }}
             onWorking={() => {
               const kind = stuckPick;
               setStuckPick(null);
@@ -928,22 +933,22 @@ function CanvasAway({
             <AppWindow aria-hidden />
           </EmptyMedia>
           <EmptyTitle>
-            {stuck !== null ? `To ${what}, switch the preview to Working` : picking ? "Click an element in the preview window" : "The canvas is in the preview window"}
+            {stuck !== null ? `To ${what}, bring the canvas back here` : picking ? "Click an element in the preview window" : "The canvas is in the preview window"}
           </EmptyTitle>
           <EmptyDescription>
             {stuck !== null
-              ? "The preview window is Clean, so whoever watches it sees only the design. Working adds the canvas bar and pins there, or show the canvas here instead."
-              : `It shows the ${name} look${hold ? ", held" : ""}. Slot tabs, settings and comments here update it as you make them.`}
+              ? "The preview window is Clean, so whoever watches it sees only the design. Showing the canvas here leaves it as it is; Working would put the canvas bar and pins on it."
+              : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row justify-center">
           {stuck !== null ? (
             <>
-              <Button variant="accent" onClick={onWorking} data-away-working>
-                Switch to Working
-              </Button>
-              <Button variant="outline" onClick={onHere} data-away-here>
+              <Button variant="accent" onClick={onHere} data-away-here>
                 Show the canvas here
+              </Button>
+              <Button variant="outline" onClick={onWorking} data-away-working>
+                Switch preview to Working
               </Button>
               <Button variant="ghost" onClick={onDismiss} data-away-dismiss>
                 Cancel
@@ -988,8 +993,8 @@ function HeldBar({ on, onRelease }: { on: string | null; onRelease: () => void }
 let presentTaught = false;
 
 /**
- * How to leave and step, in the top right corner, away from what the design says. It shows as present starts the first
- * time, and after that only while the pointer moves, as a video player's controls do, so a quiet screen is the design alone.
+ * How to leave and step, in the top right corner. It shows as present starts the first time, and after that only while
+ * the pointer is near the top edge, as slideshow tools keep theirs, so pointing at the design leaves the screen clean.
  */
 function PresentHint({ several, poke, onLeave }: { several: boolean; poke: number; onLeave: () => void }) {
   const [shown, setShown] = useState(() => !presentTaught);

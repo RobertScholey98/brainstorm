@@ -74,10 +74,11 @@ const rowFits = (row: HTMLElement): boolean => {
 };
 
 /**
- * The order the canvas bar's right end gives up its labels while a pick hint needs the room: the preview menu's look,
- * then its name, then Hold preview's. Every control keeps its place and its icon, so a pick never reshuffles the bar.
+ * The order the canvas bar's right end gives up its labels when the bar runs short: Hold preview's (its pressed state and
+ * the held bar say it), then the preview menu's look, then its name. The room is measured with the pick hint's always
+ * set aside, so the labels depend on the bar's width alone and a pick never moves a control.
  */
-export const BAR_COLLAPSE = { look: 0, preview: 1, hold: 2 } as const;
+export const BAR_COLLAPSE = { hold: 0, look: 1, preview: 2 } as const;
 
 const barFits = (bar: HTMLElement): boolean => {
   const hint = bar.querySelector("[data-bar-hint]");
@@ -85,7 +86,7 @@ const barFits = (bar: HTMLElement): boolean => {
 };
 
 /** Fits the canvas bar: its right end's labels give way, in `BAR_COLLAPSE` order, before the pick hint cuts. */
-export const useBarFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, barFits, "[data-bar-hint], [data-present-controls]", BAR_COLLAPSE.hold);
+export const useBarFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, barFits, "[data-bar-hint], [data-present-controls]", BAR_COLLAPSE.preview);
 
 /** Fits a sidebar row: its status drops its time, then its words, then a fork its branch glyph, before its title cuts. */
 export const useRowFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, rowFits, "[data-row-title]");

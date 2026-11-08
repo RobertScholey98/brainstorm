@@ -54,7 +54,9 @@ export type ToMain =
   | { readonly kind: "picked" }
   | { readonly kind: "slot"; readonly slot: SlotId }
   | { readonly kind: "step"; readonly by: -1 | 1 }
-  | { readonly kind: "view"; readonly view: "stage" | "board" };
+  | { readonly kind: "view"; readonly view: "stage" | "board" }
+  /** Resume live, from the working look's Held button. */
+  | { readonly kind: "resume" };
 
 /** The preview window is an Electron window the main process opens; a browser on the headless server has none. */
 export const canOpenPreviewWindow = () => /Electron\//.test(navigator.userAgent);
@@ -184,6 +186,7 @@ export class PreviewLink {
       this.changed();
       return;
     }
+    if (m.kind === "resume") return this.setHold(false);
     for (const h of this.handlers) h(m);
   }
 

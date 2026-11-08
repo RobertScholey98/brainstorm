@@ -7,6 +7,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { Separator } from "@/components/ui/separator";
 import { Tabs } from "@/components/ui/tabs";
 import { Truncate } from "@/components/ui/truncate";
+import { cn } from "cn";
 import { Hint } from "@/components/ui/tooltip";
 import type { CanvasLayout } from "../core/prefs";
 import type { SlotId, SlotView } from "../core/types";
@@ -85,17 +86,21 @@ export function CanvasBar({
       <Tabs value={current} onValueChange={onSlot} tabs={slots.map((s) => ({ value: s.id, label: s.title }))} itemData="slot-tab" aria-label="Slots" />
       {/* It takes only the room the tabs leave, so in a narrow window the pick hint's text gives way, never a tab. */}
       <div className="flex flex-1 items-center justify-end gap-2 pl-2">
-        {picking !== null && (
-          <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-fg-muted" role="status" data-pick-hint>
-            <Truncate className="w-0 flex-1 text-right" data-bar-hint>{pickHint ?? (picking === "vary" ? "Click an element to vary" : "Click an element to pin a comment")}</Truncate>
-            <Kbd>Esc</Kbd>
-            <Button variant="ghost" onClick={onCancelPick}>
-              Cancel
-            </Button>
-            {/* Pick mode's own controls, then the view's, as the header divides a request's actions from Regenerate. */}
-            {several && <Separator orientation="vertical" data-pick-divider />}
-          </span>
-        )}
+        {/* The hint's room is kept while no pick is on, unseen, so the controls after it never move when one starts. */}
+        <span
+          className={cn("flex min-w-0 flex-1 items-center gap-2 text-sm text-fg-muted", picking === null && "invisible")}
+          {...(picking === null ? { "aria-hidden": true, inert: true } : { role: "status", "data-pick-hint": "" })}
+        >
+          <Truncate className="w-0 flex-1 text-right" data-bar-hint>
+            {pickHint ?? (picking === "vary" ? "Click an element to vary" : "Click an element to pin a comment")}
+          </Truncate>
+          <Kbd>Esc</Kbd>
+          <Button variant="ghost" onClick={onCancelPick}>
+            Cancel
+          </Button>
+          {/* Pick mode's own controls, then the view's, as the header divides a request's actions from Regenerate. */}
+          {several && <Separator orientation="vertical" {...(picking === null ? {} : { "data-pick-divider": "" })} />}
+        </span>
         {pct < 100 && (
           <Hint label="Scaled to fit the canvas. Hide the sidebar (Ctrl+B) or collapse the Inspector to give it more room." side="bottom">
             <Badge tabIndex={0} data-canvas-zoom={pct}>
