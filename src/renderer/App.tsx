@@ -1003,21 +1003,22 @@ function PresentHint({ several, poke, onLeave }: { several: boolean; poke: numbe
   }, [shown, over, poke]);
   return (
     <div
-      className="absolute top-8 left-1/2 z-toast flex -translate-x-1/2 items-center gap-1 transition-opacity duration-300 data-hidden:pointer-events-none data-hidden:opacity-0"
+      className="absolute top-10 left-1/2 z-toast flex -translate-x-1/2 items-center gap-1 transition-opacity duration-300 data-hidden:pointer-events-none data-hidden:opacity-0"
       data-hidden={shown ? undefined : ""}
       onPointerEnter={() => setOver(true)}
       onPointerLeave={() => setOver(false)}
       onPointerMove={() => setShown(true)}
       data-present-hint
     >
-      <TooltipLabel>
+      {/* It lies over the design, never over the app, so a hairline in its own ink keeps it apart from a dark design or a light one. */}
+      <TooltipLabel className="ring-1 ring-inverse-fg/25">
         {several && (
           <span role="status" className="contents">
             <span className="flex items-center gap-0.5" aria-label="Left and right arrow keys">
               <Kbd tone="inverse">←</Kbd>
               <Kbd tone="inverse">→</Kbd>
             </span>
-            change slot
+            Change slot
           </span>
         )}
         <TooltipAction onClick={onLeave} aria-label="Exit present (Esc)" data-present-leave>

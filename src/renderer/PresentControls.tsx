@@ -44,8 +44,9 @@ export function PresentControls({
       {windowed && open && <HoldButton hold={hold} heldOn={heldOn} onHold={onHold} />}
       {windowed && (open ? <WindowMenu prefs={prefs} onPrefs={onPrefs} hold={hold} onHold={onHold} /> : <OpenWindow />)}
       <Hint name="Present" label="Fill the screen with this slot" shortcut="F5" side="bottom">
-        <Button variant="outline" size="icon" aria-label="Present" onClick={onPresent} data-present>
-          <Maximize aria-hidden />
+        <Button variant="outline" aria-label="Present" onClick={onPresent} className={COMPACT} data-collapse={BAR_COLLAPSE.present} data-present>
+          <Maximize data-icon="inline-start" aria-hidden />
+          <span className={COMPACT_LABEL}>Present</span>
         </Button>
       </Hint>
     </span>
@@ -56,7 +57,7 @@ export function PresentControls({
 function HoldButton({ hold, heldOn, onHold }: { hold: boolean; heldOn: string | null; onHold: (hold: boolean) => void }) {
   return (
     <Hint
-      name={hold ? "Preview window held" : "Hold preview window"}
+      name={hold ? "Preview held" : "Hold preview"}
       label={
         hold
           ? `It shows ${heldOn ?? "what it showed"}. Resume live sends your latest changes`

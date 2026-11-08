@@ -11,7 +11,7 @@ import { Truncate } from "@/components/ui/truncate";
 export function HeldBar({ on, here, onRelease }: { on: string | null; here: "main" | "preview"; onRelease: () => void }) {
   return (
     <div className="absolute inset-x-0 top-0 z-sticky bg-card">
-      <div role="status" className="flex h-5 items-center gap-2 border-b border-warning bg-warning/25 pl-3 text-xs dark:bg-warning-subtle" data-held-bar>
+      <div role="status" className="flex h-5 items-center gap-2 border-b border-warning bg-warning/30 pl-3 text-xs dark:bg-warning-subtle" data-held-bar>
         <Pause aria-hidden className="size-3 shrink-0 fill-current text-warning" />
         <span className="shrink-0 font-semibold">Preview held</span>
         {/* The main window names what its audience still sees, the slot and variant set apart as names; the preview

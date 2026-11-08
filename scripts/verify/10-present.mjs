@@ -62,7 +62,7 @@ try {
     await window.evaluate(() => [...document.querySelectorAll("[data-canvas-bar] [data-present-controls] button")].map((b) => b.getAttribute("aria-label") ?? b.textContent)),
     ["Open preview window", "Present"],
   );
-  await snap(window, "01-canvas-bar", "The main window as a brainstorm opens: the canvas bar now ends, after the One slot / All slots switch and a divider, with a Preview button (window icon and the word Preview, which opens the preview window) then Present (full-screen icon) last, each with a hint");
+  await snap(window, "01-canvas-bar", "The main window as a brainstorm opens: the canvas bar now ends, after the One slot / All slots switch and a divider, with a Preview button (window icon and the word Preview, which opens the preview window) then Present (full-screen icon and the word Present) last, each with a hint");
   await window.hover("[data-present]");
   await window.waitForSelector("[data-slot=tooltip-content], [role=tooltip]", { timeout: 3000 }).catch(() => {});
   await sleep(300);
@@ -147,7 +147,7 @@ try {
   await window.hover("[data-hold]");
   await window.waitForSelector("[data-slot=tooltip-content], [role=tooltip]", { timeout: 3000 }).catch(() => {});
   await sleep(300);
-  await snap(window, "07b-hold-hint", "Hold's hint while the bar shows it as the bare word Hold: it names the whole action, Hold preview window, and says what it does: Freeze the preview while you keep editing here");
+  await snap(window, "07b-hold-hint", "Hold's hint while the bar shows it as the bare word Hold: it names the whole action, Hold preview, and says what it does: Freeze the preview while you keep editing here");
   await window.mouse.move(150, 860);
   await sleep(300);
 

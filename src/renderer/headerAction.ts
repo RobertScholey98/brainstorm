@@ -74,11 +74,11 @@ const rowFits = (row: HTMLElement): boolean => {
 };
 
 /**
- * The order the canvas bar's right end gives up its labels when the bar runs short: Hold preview shortens to Hold, then
- * the preview menu drops "Preview", then Hold goes to its icon. The menu's look and chevron never go: whether a shared
+ * The order the canvas bar's right end gives up its labels when the bar runs short: Present goes to its icon, Hold
+ * preview shortens to Hold, then the preview menu drops "Preview", then Hold goes to its icon. The menu's look and chevron never go: whether a shared
  * window is Clean is what Rob checks before he shares it.
  */
-export const BAR_COLLAPSE = { holdSuffix: 0, preview: 1, hold: 2 } as const;
+export const BAR_COLLAPSE = { present: 0, holdSuffix: 1, preview: 2, hold: 3 } as const;
 
 /**
  * The bar sets aside the room its longest pick hint needs, picking or not, here or away, so the labels depend on the
