@@ -42,7 +42,7 @@ export function PresentControls({
     <span className="flex shrink-0 items-center gap-1" data-present-controls>
       {windowed && open && <HoldButton hold={hold} heldOn={heldOn} onHold={onHold} />}
       {windowed && (open ? <WindowMenu prefs={prefs} onPrefs={onPrefs} hold={hold} onHold={onHold} /> : <OpenWindow />)}
-      <Hint name="Present" label="Fill the screen with this slot, as the app would look" shortcut="F5" side="bottom">
+      <Hint name="Present" label="Fill the screen with this slot" shortcut="F5" side="bottom">
         <Button variant="outline" size="icon" aria-label="Present" onClick={onPresent} data-present>
           <Maximize aria-hidden />
         </Button>

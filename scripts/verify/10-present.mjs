@@ -66,7 +66,7 @@ try {
   await window.hover("[data-present]");
   await window.waitForSelector("[data-slot=tooltip-content], [role=tooltip]", { timeout: 3000 }).catch(() => {});
   await sleep(300);
-  await snap(window, "02-present-hint", "The Present button's hint: Present · Fill the screen with this slot, as the app would look, and its F5 key");
+  await snap(window, "02-present-hint", "The Present button's hint: Present · Fill the screen with this slot, and its F5 key");
   await window.mouse.move(150, 860);
 
   // Present in place.
