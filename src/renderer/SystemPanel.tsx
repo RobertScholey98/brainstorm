@@ -314,7 +314,7 @@ function ThemeExportButton({ exportTheme }: { exportTheme: () => Promise<ThemeEx
       <Hint label="Write this theme as CSS variables and design tokens" side="top">
         <PopoverTrigger render={<Button variant="outline" data-theme-export />}>
           <Download data-icon="inline-start" aria-hidden />
-          Export
+          Export theme
         </PopoverTrigger>
       </Hint>
       <PopoverContent size="md" align="start" data-theme-exported={done !== null || undefined}>

@@ -108,11 +108,11 @@ function WeekStrip({ days, selected, className, ...props }: React.ComponentProps
         <li
           key={d.day}
           data-selected={d.day === selected || undefined}
-          className="flex flex-col items-center gap-0.5 rounded-lg border bg-card py-2 text-card-foreground data-selected:border-primary data-selected:bg-primary data-selected:text-primary-foreground"
+          className="group flex flex-col items-center gap-0.5 rounded-lg border bg-card py-2 text-card-foreground data-selected:border-primary data-selected:bg-primary data-selected:text-primary-foreground"
         >
           <span className="text-xs">{d.day}</span>
           <span className="text-base font-semibold">{d.date}</span>
-          <span className={cn("size-1.5 rounded-full", d.planned && "bg-current")} />
+          <span className={cn("size-1.5 rounded-full", d.planned && "bg-primary group-data-selected:bg-primary-foreground")} />
         </li>
       ))}
     </ol>
@@ -163,10 +163,11 @@ try {
   });
   await window.emulateMedia({ colorScheme: "light" });
 
-  // The agent adds the library and starts a study with it.
+  // The agent adds the library and starts a study with it, in robnet, the project the library lives in.
+  const project = resolve(library, "..", "..");
   cli(["system", "add", library, "--thread", DEMO_THREAD]);
   const system = json(["system", "list"])[0];
-  const session = cli(["session", "new", "--title", "Meal plan", "--brief", BRIEF, "--system", system.id]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
+  const session = cli(["session", "new", "--title", "Meal plan", "--brief", BRIEF, "--project", project, "--system", system.id]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
   if (session === undefined) throw new Error(`session new failed:\n${transcript.at(-1)}`);
   const work = join(home, "work");
   cli(["pull", session, "--out", work]);
@@ -190,7 +191,7 @@ try {
   writeFileSync(css, good.css);
   cli(["commit", session, "--from", work, "--note", "Two week layouts and a recipe card, all from the kit"]);
   // A freeform study has no kit to propose against, so it refuses proposed components outright.
-  const sketch = cli(["session", "new", "--title", "Sketch", "--brief", "A loose sketch with no design system."]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
+  const sketch = cli(["session", "new", "--title", "Sketch", "--brief", "A loose sketch with no design system.", "--project", project]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
   if (sketch === undefined) throw new Error(`session new failed:\n${transcript.at(-1)}`);
   const loose = join(home, "sketch");
   cli(["pull", sketch, "--out", loose]);
@@ -218,7 +219,7 @@ try {
   await shot(window, "system-gallery-card", "The gallery narrowed to one component, Card, rendering its story from the library");
   await window.fill("[data-catalog-search]", "st");
   await window.waitForSelector('[data-entry="Stack"]');
-  await shot(window, "system-catalog-search", "The catalog filtered by 'st': the library's matching components beside Stack, the layout primitive Brainstorm generated because the library has none, marked as Brainstorm's");
+  await shot(window, "system-catalog-search", "The catalog filtered by 'st': names that start with it first, so Stack, the layout primitive Brainstorm generated because the library has none and marked as Brainstorm's, leads; the gallery narrows to the matches' stories");
   await window.fill("[data-catalog-search]", "");
   await window.click('[data-system-tab="theme"]');
   await window.waitForSelector("[data-system-theme]");
@@ -249,7 +250,7 @@ try {
 
   // Rob tweaks the theme for this brainstorm.
   await window.locator("[data-system-panel]").scrollIntoViewIfNeeded();
-  await shot(window, "inspector-system", "The Inspector's Design system section: robnet's UI at v1, the theme axes, colour and size tokens, Save, Export and Reset, and the proposed WeekStrip with Promote");
+  await shot(window, "inspector-system", "The Inspector's Design system section: robnet's UI at v1, the theme axes, colour and size tokens, Save as theme, Export theme and Reset, and the proposed WeekStrip with Promote");
   await window.click('[data-theme-axis="data-theme"] [data-axis-value="dark"]');
   await window.click('[data-theme-axis="data-accent"] [data-axis-select]');
   await window.click('[role="option"][data-axis-value="rose"]');

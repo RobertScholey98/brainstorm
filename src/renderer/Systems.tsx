@@ -228,14 +228,30 @@ type Manifest = NonNullable<SystemView["manifest"]>;
 
 const DEFAULT_AXIS = "__default";
 
+/** Components whose name starts with the search come first, then names that contain it, then those with a matching part. */
+function searchCatalog(catalog: readonly CatalogEntry[], needle: string): CatalogEntry[] {
+  const rank = (e: CatalogEntry) => {
+    const name = e.name.toLowerCase();
+    if (name.startsWith(needle)) return 0;
+    if (name.includes(needle)) return 1;
+    return e.parts.some((p) => p.toLowerCase().includes(needle)) ? 2 : null;
+  };
+  return catalog
+    .map((e) => ({ e, r: rank(e) }))
+    .filter((x): x is { e: CatalogEntry; r: number } => x.r !== null)
+    .sort((a, b) => a.r - b.r)
+    .map((x) => x.e);
+}
+
 function ComponentsTab({ view, manifest }: { view: SystemView; manifest: Manifest }) {
   const [entry, setEntry] = useState<string | null>(null);
   const [axes, setAxes] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
-  const entries = needle === "" ? manifest.catalog : manifest.catalog.filter((e) => [e.name, ...e.parts].some((n) => n.toLowerCase().includes(needle)));
+  const entries = needle === "" ? manifest.catalog : searchCatalog(manifest.catalog, needle);
   const chosen = entries.find((e) => e.name === entry) ?? null;
-  const stories = chosen === null ? null : chosen.stories;
+  // A search narrows the gallery too, until Rob picks one component from it.
+  const stories = chosen !== null ? chosen.stories : needle === "" ? null : entries.flatMap((e) => e.stories);
   const latest = view.latest;
   return (
     <div className="flex min-h-0 flex-1">
