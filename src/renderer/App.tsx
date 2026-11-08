@@ -943,7 +943,7 @@ function CanvasAway({
               sits under its title and leaves the spare line above the buttons. */}
           <EmptyDescription className="min-h-10">
             {stuck !== null
-              ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience.`
+              ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience; Working shows them.`
               : picking
                 ? "Write it there; it lands in Feedback here. Press Esc to stop."
                 : hold

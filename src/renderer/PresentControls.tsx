@@ -163,7 +163,8 @@ function WindowMenu({
           <ul className="grid gap-0.5 text-xs" data-preview-look-about>
             {LOOKS.map((l) => (
               <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted"}>
-                <span className="font-semibold">{l.label}:</span> {l.about}
+                {/* Each look's name at full contrast, so the one not chosen reads as a choice, not as off. */}
+                <span className="font-semibold text-fg">{l.label}:</span> {l.about}
               </li>
             ))}
           </ul>
