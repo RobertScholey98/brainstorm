@@ -324,10 +324,10 @@ try {
     [true, "Back to latest"],
   );
   check(
-    "Back to latest ends where the canvas bar's view switch ends",
+    "Back to latest ends where the canvas bar's last control, Present, ends",
     await window.evaluate(() => {
       const right = (el) => Math.round(el.getBoundingClientRect().right);
-      return right(document.querySelector("[data-back-to-latest]")) - right(document.querySelector('[data-canvas-bar] [data-slot="segmented"]'));
+      return right(document.querySelector("[data-back-to-latest]")) - right(document.querySelector("[data-canvas-bar] [data-present]"));
     }),
     0,
   );

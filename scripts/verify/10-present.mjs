@@ -177,7 +177,7 @@ try {
   await window.click("[data-preview-menu]");
   await window.waitForSelector("[data-preview-popover]");
   await sleep(250);
-  await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show the canvas in this window, Bring to front and Full screen (F11), and Close window alone in the footer");
+  await snap(window, "10-preview-menu", "The Preview menu: what the window is for and what Hold preview does, the Look switch (Clean or Working) with both looks described under it and the chosen one in full contrast, Show canvas in main window, Bring to front and Full screen (F11), and Close window alone in the footer");
   await window.click('[data-preview-look="working"]');
   await sleep(250);
   await snap(window, "10b-preview-menu-working", "The Preview menu with Working chosen: its line under the switch now in full contrast", { keepFocus: true });
@@ -232,7 +232,7 @@ try {
   await window.keyboard.press("Escape");
   await window.waitForSelector("[data-canvas-away]");
   await window.mouse.move(150, 860);
-  await snap(window, "15-canvas-away", "The main window with Show the canvas in this window off: the canvas region says the canvas is in the preview window, with Show the canvas here and Bring the window to front; the slot bar, sidebar and Inspector stay");
+  await snap(window, "15-canvas-away", "The main window with Show canvas in main window off: the canvas region says the canvas is in the preview window, with Show the canvas here and Bring the window to front; the slot bar, sidebar and Inspector stay");
   await window.click("[data-pick-toggle]");
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
