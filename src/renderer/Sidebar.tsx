@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ExternalLink, GitBranch, LayoutGrid, Undo2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, Component, ExternalLink, GitBranch, LayoutGrid, Undo2 } from "lucide-react";
 import { Fragment, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
 import { Callout } from "@/components/ui/callout";
@@ -91,6 +91,8 @@ export function HomePanel({
   current,
   overview,
   onOverview,
+  systems,
+  onSystems,
   onSession,
   onSettle,
 }: {
@@ -102,6 +104,9 @@ export function HomePanel({
   current: SessionId | null;
   overview: boolean;
   onOverview: () => void;
+  /** The design systems page is open. */
+  systems: boolean;
+  onSystems: () => void;
   onSession: (id: SessionId) => void;
   /** Settles a brainstorm, or brings a settled one back. */
   onSettle: (session: SessionListing) => void;
@@ -123,6 +128,12 @@ export function HomePanel({
             <SidebarMenuButton isActive={overview} onClick={onOverview} data-overview>
               <LayoutGrid aria-hidden />
               <span>All brainstorms</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton isActive={systems} onClick={onSystems} data-overview data-nav-systems>
+              <Component aria-hidden />
+              <span>Design systems</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

@@ -10,6 +10,7 @@ import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type FeedbackCue } from "./CanvasHost";
 import { PinComposer } from "./Feedback";
 import { HeldBar } from "./HeldBar";
+import { setKitSource } from "./kit";
 import { describe, openChannel, type MirrorScene, type PreviewSettings, type ToMain, type ToPreview } from "./mirror";
 import { failedTitle, type Notice } from "./notice";
 import { VaryComposer } from "./Vary";
@@ -36,6 +37,8 @@ export function PreviewWindow({ api }: { api: Api }) {
   const area = useRef<HTMLElement>(null);
   const channel = useRef<ReturnType<typeof openChannel> | null>(null);
   const tell = useCallback((m: ToMain) => channel.current?.post(m), []);
+  // A design system session's blocks import its kit, which this window fetches for itself.
+  useEffect(() => setKitSource(api.kit), [api]);
 
   useEffect(() => {
     const ch = openChannel<ToPreview>((m) => {
@@ -163,6 +166,7 @@ export function PreviewWindow({ api }: { api: Api }) {
           {/* An amber rule the width of the window, under its bar, so the look that isn't for sharing shows from across a room. */}
           {!clean && !settings.hold && <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-raised h-0.5 bg-warning" data-preview-private-rule />}
           <CanvasHost
+            system={scene.system}
             blocks={blocks}
             frames={scene.frames}
             props={scene.props}

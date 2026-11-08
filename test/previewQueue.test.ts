@@ -34,6 +34,7 @@ test("a strip thumbnail and a card keep their own stills of one block, which a t
     frame: { slot: "wheel", title: "The wheel", frame: { width: 390, height: 760 }, blockId: "wheel/neon" },
     module: { blockId: "wheel/neon", hash: "h1", compiled: "", css: null },
     props: { glow: 18 },
+    system: null,
   } as unknown as SessionPreview;
   const keys = [
     stillKey(preview, { dark: false, compact: true }),

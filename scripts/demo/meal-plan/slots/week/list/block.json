@@ -1,0 +1,23 @@
+{
+  "title": "Week as a list",
+  "props": {
+    "data": {
+      "days": {
+        "type": "data",
+        "description": "the week's dinners, one per day",
+        "sample": [
+          { "day": "Mon", "meal": "Tomato soup", "cook": "Rob", "tag": "Vegetarian" },
+          { "day": "Tue", "meal": "Lemon pancakes", "cook": "Maya", "tag": "25 min" },
+          { "day": "Wed", "meal": "Chicken traybake", "cook": "Jun", "tag": "Dinner" },
+          { "day": "Thu", "meal": "Leftovers", "cook": "Anyone", "tag": "Free night" }
+        ]
+      },
+      "shopped": { "type": "data", "description": "share of the shopping list ticked off", "sample": 60 }
+    },
+    "appearance": {
+      "density": { "type": "enum", "label": "Density", "default": "Roomy", "options": ["Compact", "Roomy"] },
+      "showProgress": { "type": "boolean", "label": "Shopping progress", "default": true },
+      "cta": { "type": "text", "label": "Button", "default": "Shop for the week" }
+    }
+  }
+}

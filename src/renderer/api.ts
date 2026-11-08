@@ -2,9 +2,11 @@ import type { AppUpdateState } from "../core/appUpdate";
 import type { UiPrefs, UiPrefsPatch } from "../core/prefs";
 import type {
   ExportResult,
+  Issue,
   ForkInput,
   IterationN,
   IterationView,
+  KitPayload,
   Result,
   RobAction,
   SessionId,
@@ -12,7 +14,15 @@ import type {
   SessionPreview,
   SessionView,
   SlotId,
+  SystemId,
+  SystemListing,
+  SystemVersionN,
+  SystemView,
+  ThemeExport,
 } from "../core/types";
+
+/** What adding or syncing a design system answers: the system as it is now, whether a new version came of it, and its warnings. */
+export type SyncOutcome = { readonly system: SystemView; readonly created: boolean; readonly warnings: readonly Issue[] };
 
 export type Api = {
   sessions(): Promise<Result<SessionListing[]>>;
@@ -29,6 +39,13 @@ export type Api = {
   /** Settles a brainstorm, or brings it back. */
   settle(id: SessionId, settled: boolean): Promise<Result<SessionListing>>;
   exportHtml(id: SessionId): Promise<Result<ExportResult>>;
+  /** Writes the session's theme as CSS and design tokens to the exports folder. */
+  exportTheme(id: SessionId): Promise<Result<ThemeExport>>;
+  systems(): Promise<Result<SystemListing[]>>;
+  system(id: SystemId): Promise<Result<SystemView>>;
+  addSystem(path: string): Promise<Result<SyncOutcome>>;
+  syncSystem(id: SystemId): Promise<Result<SyncOutcome>>;
+  kit(id: SystemId, n: SystemVersionN): Promise<Result<KitPayload>>;
   prefs(): Promise<Result<UiPrefs>>;
   setPrefs(patch: UiPrefsPatch): Promise<Result<UiPrefs>>;
   /** Where the installed app is in updating itself. */
@@ -101,6 +118,12 @@ export function createApi(token: string): Api {
     act: (id, action) => call("POST", `/v1/ui/sessions/${id}/actions`, action),
     settle: (id, settled) => call("POST", `/v1/ui/sessions/${id}/settle`, { settled }),
     exportHtml: (id) => call("POST", `/v1/ui/sessions/${id}/export`),
+    exportTheme: (id) => call("POST", `/v1/ui/sessions/${id}/theme-export`),
+    systems: () => call("GET", "/v1/ui/systems"),
+    system: (id) => call("GET", `/v1/ui/systems/${id}`),
+    addSystem: (path) => call("POST", "/v1/ui/systems", { path }),
+    syncSystem: (id) => call("POST", `/v1/ui/systems/${id}/sync`),
+    kit: (id, n) => call("GET", `/v1/ui/systems/${id}/kit/${n}`),
     prefs: () => call("GET", "/v1/ui/prefs"),
     setPrefs: (patch) => call("POST", "/v1/ui/prefs", patch),
     update: () => call("GET", "/v1/ui/update"),

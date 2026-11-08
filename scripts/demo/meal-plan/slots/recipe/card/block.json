@@ -1,0 +1,16 @@
+{
+  "title": "Recipe card",
+  "props": {
+    "data": {
+      "recipe": {
+        "type": "data",
+        "description": "the recipe on screen",
+        "sample": { "title": "Lemon pancakes", "summary": "Light, thin pancakes with lemon and sugar.", "minutes": 25, "tags": ["Vegetarian", "Breakfast"] }
+      }
+    },
+    "appearance": {
+      "servings": { "type": "number", "label": "Servings", "default": 4, "min": 1, "max": 12, "step": 1 },
+      "primary": { "type": "text", "label": "Primary action", "default": "Add to Tuesday" }
+    }
+  }
+}

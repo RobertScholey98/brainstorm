@@ -15,7 +15,9 @@ import {
   parseIterationN,
   parsePartName,
   parsePropName,
+  parseProposedName,
   parseSessionId,
+  parseSystemId,
   parseSlotId,
   parseThreadId,
   parseVariantKey,
@@ -26,6 +28,8 @@ import {
   type RobAction,
   type SessionId,
   type SlotId,
+  type SystemId,
+  type SystemVersionN,
 } from "../core/types";
 
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
@@ -69,7 +73,18 @@ const newSessionBody = z.strictObject({
   brief: z.string(),
   thread: threadId,
   project: z.string().nullable(),
+  /** A design system's id or name. */
+  system: z.string().trim().min(1).nullable().default(null),
 });
+const addSystemBody = z.strictObject({
+  path: z.string().trim().min(1),
+  name: z.string().trim().min(1).nullable().default(null),
+  frame: z.string().trim().min(1).nullable().default(null),
+  stubs: z.record(z.string(), z.string()).optional(),
+  thread: threadId.nullable().default(null),
+});
+const themeName = z.string().trim().min(1).max(60);
+const cssName = z.string().regex(/^--[\w-]+$/, "a custom property, such as --primary");
 const attachBody = z.strictObject({ ref: z.string().trim().min(1), thread: threadId });
 const settleBody = z.strictObject({ settled: z.boolean() });
 const iterationN = zBranded(z.number(), parseIterationN, "iteration number");
@@ -133,6 +148,14 @@ const ACTIONS: { readonly [K in RobAction["kind"]]: z.ZodType<Extract<RobAction,
       .transform((d) => (d === null || d.trim() === "" ? null : d.trim())),
   }),
   mark_seen: z.strictObject({ kind: z.literal("mark_seen"), blocks: z.tuple([blockId], blockId) }),
+  set_theme_axis: z.strictObject({ kind: z.literal("set_theme_axis"), axis: z.string().min(1), value: z.string().min(1).nullable() }),
+  set_theme_token: z.strictObject({ kind: z.literal("set_theme_token"), token: cssName, value: z.string().min(1).max(200) }),
+  clear_theme_token: z.strictObject({ kind: z.literal("clear_theme_token"), token: cssName }),
+  reset_theme: z.strictObject({ kind: z.literal("reset_theme") }),
+  apply_theme: z.strictObject({ kind: z.literal("apply_theme"), name: themeName }),
+  save_theme: z.strictObject({ kind: z.literal("save_theme"), name: themeName }),
+  upgrade_system: z.strictObject({ kind: z.literal("upgrade_system") }),
+  promote: z.strictObject({ kind: z.literal("promote"), name: zBranded(z.string(), parseProposedName, "proposed component name") }),
 };
 
 const isActionKind = (k: unknown): k is RobAction["kind"] => typeof k === "string" && Object.hasOwn(ACTIONS, k);
@@ -207,6 +230,21 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
         : fn(id, { params, query, body });
     };
 
+  const withSystem =
+    (fn: (id: SystemId, input: { params: string[]; query: URLSearchParams; body: unknown }) => Promise<Result<unknown>>) =>
+    async ({ params, query, body }: { params: string[]; query: URLSearchParams; body: unknown }) => {
+      const raw = decodeSegment(params[0] ?? "");
+      if (raw === null) return usage(`"${params[0]}" is not a valid URL path segment`);
+      // The agent may name a system by its id or its name.
+      const id = parseSystemId(raw) ?? (() => {
+        const found = service.systems.find(raw);
+        return found.ok ? found.data.id : null;
+      })();
+      return id === null
+        ? ({ ok: false, error: { code: "not_found", entity: "system", message: `no design system has the id or name "${raw}"` } } as const)
+        : fn(id, { params, query, body });
+    };
+
   const queryThread = (query: URLSearchParams, required: boolean): Result<ReturnType<typeof parseThreadId>> => {
     const raw = query.get("thread");
     if (raw === null) return required ? usage("thread is required") : { ok: true, data: null };
@@ -221,7 +259,9 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       auth: "agent",
       handle: async ({ body }) => {
         const b = parseBody(newSessionBody, body);
-        return b.ok ? service.newSession({ title: b.data.title, brief: b.data.brief, thread: b.data.thread, projectPath: b.data.project }) : b;
+        return b.ok
+          ? service.newSession({ title: b.data.title, brief: b.data.brief, thread: b.data.thread, projectPath: b.data.project, system: b.data.system })
+          : b;
       },
     },
     {
@@ -270,6 +310,30 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
         return b.ok ? service.commit({ session: id, ...b.data }) : b;
       }),
     },
+    ...(["agent", "ui"] as const).flatMap((auth): Route[] => [
+      { method: "GET", path: new RegExp(`^/v1/${auth}/systems$`), auth, handle: async () => ({ ok: true, data: service.systems.list() }) },
+      {
+        method: "POST",
+        path: new RegExp(`^/v1/${auth}/systems$`),
+        auth,
+        handle: async ({ body }) => {
+          const b = parseBody(addSystemBody, body);
+          return b.ok ? service.systems.add(b.data) : b;
+        },
+      },
+      { method: "GET", path: new RegExp(`^/v1/${auth}/systems/([^/]+)$`), auth, handle: withSystem(async (id) => service.systems.view(id)) },
+      { method: "POST", path: new RegExp(`^/v1/${auth}/systems/([^/]+)/sync$`), auth, handle: withSystem((id) => service.systems.sync(id)) },
+    ]),
+    {
+      method: "GET",
+      path: /^\/v1\/ui\/systems\/([^/]+)\/kit\/(\d+)$/,
+      auth: "ui",
+      handle: withSystem(async (id, { params }) => {
+        const n = Number(params[1]);
+        return Number.isInteger(n) && n >= 1 ? service.systems.kit(id, n as SystemVersionN) : usage(`"${params[1]}" is not a version number`);
+      }),
+    },
+    { method: "POST", path: /^\/v1\/ui\/sessions\/([^/]+)\/theme-export$/, auth: "ui", handle: withSession(async (id) => service.exportTheme(id)) },
     { method: "GET", path: /^\/v1\/ui\/sessions$/, auth: "ui", handle: () => service.listSessions(null) },
     { method: "GET", path: /^\/v1\/ui\/sessions\/([^/]+)$/, auth: "ui", handle: withSession((id) => service.view(id)) },
     {

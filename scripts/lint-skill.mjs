@@ -29,7 +29,7 @@ const cliBlock = help.stdout.split(/\r?\n/).filter((l) => /^\s+brainstorm /.test
 const allowed = new Map();
 for (const line of cliBlock.trim().split("\n")) {
   const words = line.trim().split(/\s+/);
-  const key = words[1] === "session" ? `session ${words[2]}` : words[1];
+  const key = words[1] === "session" || words[1] === "system" ? `${words[1]} ${words[2]}` : words[1];
   allowed.set(key, new Set([...line.matchAll(/--[a-z]+/g)].map((m) => m[0]).concat("--json")));
 }
 console.log("CLI commands:", [...allowed.keys()].join(", "));
@@ -41,7 +41,7 @@ for (const file of mdFiles) {
     if (/^https?:/.test(target)) continue;
     expect(existsSync(resolve(dirname(file), target)), `${file}: link ${target} resolves`);
   }
-  for (const m of text.matchAll(/brainstorm (session (?:new|list|attach)|context|pull|validate|commit)\b([^\n`]*)/g)) {
+  for (const m of text.matchAll(/brainstorm (session (?:new|list|attach)|system (?:list|add|sync|show)|context|pull|validate|commit)\b([^\n`]*)/g)) {
     const flags = [...m[2].matchAll(/--[a-z]+/g)].map((f) => f[0]);
     if (!used.has(m[1])) used.set(m[1], new Set());
     flags.forEach((f) => used.get(m[1]).add(f));

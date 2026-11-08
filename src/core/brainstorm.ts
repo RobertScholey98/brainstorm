@@ -21,7 +21,20 @@ import { projectNameAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { exportFileName } from "./fileName";
 import { bakeDefaults, carryOver, forkTitle, VARY_MAX, varyNames } from "./fork";
-import { Store, type FeedbackRecord, type IterationBlock, type StoredContent, type StoredFork, type StoredIteration } from "./store";
+import {
+  Store,
+  type FeedbackRecord,
+  type IterationBlock,
+  type IterationProposed,
+  type SessionSystem,
+  type StoredContent,
+  type StoredFork,
+  type StoredIteration,
+  type StoredProposedContent,
+} from "./store";
+import { blockConformance, compiledForConformance, proposedConformance, proposedImports } from "./system/conform";
+import type { CheckEnv } from "./check";
+import { Systems, componentChanges } from "./systems";
 import {
   blockIdOf,
   framesOf,
@@ -59,6 +72,14 @@ import {
   type Override,
   type PartName,
   type ProjectId,
+  type ProposedDraft,
+  type ProposedName,
+  type ProposedView,
+  type SessionSystemView,
+  type SystemId,
+  type CanvasSystem,
+  type ThemeExport,
+  type ThemeState,
   type PropsSchema,
   type PullResult,
   type Request,
@@ -81,7 +102,7 @@ import {
   type VaryScope,
   type WorkingCopyDraft,
 } from "./types";
-import { blockFile, emitWorkingCopy, readStoredBlock, scanWorkingCopy } from "./workingCopy";
+import { blockFile, emitWorkingCopy, proposedFile, readStoredBlock, readStoredProposed, scanWorkingCopy } from "./workingCopy";
 
 const SNAPSHOT_MESSAGES = 30;
 const UNREACHABLE_TTL_MS = 10_000;
@@ -132,6 +153,8 @@ type Prepared =
       readonly latest: StoredIteration | null;
       readonly draft: WorkingCopyDraft;
       readonly contents: readonly StoredContent[];
+      readonly proposed: readonly IterationProposed[];
+      readonly proposedContents: readonly StoredProposedContent[];
       readonly addresses: readonly FeedbackId[];
       readonly changed: readonly BlockId[];
       readonly removed: readonly BlockId[];
@@ -158,6 +181,7 @@ export class Brainstorm {
   readonly #loaded = new Map<ContentHash, Loaded>();
   readonly #listeners = new Set<(session: SessionId) => void>();
   readonly #emitting = new Set<SessionId>();
+  readonly #systems: Systems;
   #ticking = false;
 
   private constructor(options: BrainstormOptions) {
@@ -169,6 +193,18 @@ export class Brainstorm {
     this.#newSessionId = options.newSessionId ?? randomSessionId;
     this.#clockMs = options.clockMs ?? (() => performance.now());
     this.#agentHome = options.agentHome ?? null;
+    this.#systems = new Systems({
+      store: this.#store,
+      checker: this.#checker,
+      bridge: this.#bridge,
+      now: this.#now,
+      onVersion: (id) => this.#store.sessionsOn(id).forEach((s) => this.#emit(s)),
+    });
+  }
+
+  /** Design systems themselves: add, sync, list, the kit a canvas loads. */
+  get systems(): Systems {
+    return this.#systems;
   }
 
   /** Opens the database and reconciles requests a previous run left in `sending`. */
@@ -211,7 +247,15 @@ export class Brainstorm {
     brief: string;
     thread: ThreadId;
     projectPath: string | null;
+    /** A design system's id or name; the session builds with its newest version. */
+    system?: string | null;
   }): Promise<Result<NewSessionResult>> {
+    let system: SessionSystem | null = null;
+    if (input.system !== undefined && input.system !== null) {
+      const found = this.#systems.find(input.system);
+      if (!found.ok) return found;
+      system = found.data;
+    }
     const thread = await this.#resolveThread(input.thread);
     if (!thread.ok) return thread;
     const name = input.projectPath === null ? null : await projectNameAt(input.projectPath);
@@ -225,7 +269,7 @@ export class Brainstorm {
     this.#store.tx(() => {
       this.#store.ensureProject(session.projectId, input.projectPath, session.createdAt);
       if (name !== null) this.#store.nameProject(session.projectId, name);
-      this.#store.createSession(session, input.thread);
+      this.#store.createSession(session, input.thread, system);
     });
     this.#emit(session.id);
     return ok({ session, attachment: this.#store.attachment(session.id) });
@@ -369,6 +413,7 @@ export class Brainstorm {
         addressed: feedback.filter((f) => f.status.state === "addressed"),
       },
       controlVocabulary: controlVocabulary(),
+      system: this.#agentSystem(id),
       next: [
         ...(attached ? [] : [`brainstorm session attach ${id}`]),
         `brainstorm pull ${id}`,
@@ -388,8 +433,10 @@ export class Brainstorm {
             n: latest.n,
             slots: latest.slots,
             blocks: this.#store.iterationBlocks(id, latest.n).map((b) => ({ id: b.id, files: this.#store.content(b.hash).files })),
+            proposed: this.#store.iterationProposed(id, latest.n).map((p) => ({ name: p.name, files: this.#store.proposedContent(p.hash).files })),
           };
-    return ok({ files: emitWorkingCopy(id, contents), iteration: latest?.n ?? null });
+    const system = this.#store.sessionSystem(id);
+    return ok({ files: emitWorkingCopy(id, contents, system === null ? null : this.#systems.docs(system)), iteration: latest?.n ?? null });
   }
 
   async validate(input: Omit<CommitInput, "note">): Promise<Result<ValidateResult>> {
@@ -427,6 +474,8 @@ export class Brainstorm {
         iteration,
         blocks: p.draft.blocks.map((b) => ({ id: b.id, hash: b.hash })),
         contents: p.contents,
+        proposed: p.proposed,
+        proposedContents: p.proposedContents,
         addresses: p.addresses,
       });
       if (this.#store.attachment(input.session).lostAt !== null) this.#store.setLost(input.session, null);
@@ -455,10 +504,16 @@ export class Brainstorm {
     if (owner !== null) return fail(owner);
 
     const overrides = this.#store.overrides(session);
+    const system = this.#store.sessionSystem(session);
     const scanned = scanWorkingCopy(input.files);
     const parsed = scanned.parsed;
     if (!parsed.ok) {
-      const checked = await this.#check(scanned.blocks, overrides);
+      // Proposed components didn't all parse; their raw sources still let blocks that import them load.
+      const raw = Object.entries(input.files).flatMap(([path, text]) => {
+        const m = /^proposed\/([A-Z][A-Za-z0-9]*)\/component\.tsx$/.exec(path);
+        return m === null ? [] : [[`proposed/${m[1]}`, text] as const];
+      });
+      const checked = await this.#check(scanned.blocks, overrides, { system, proposed: [], rawProposed: Object.fromEntries(raw), previous: [] });
       return fail(validationFailed([...parsed.issues, ...checked.issues]));
     }
     const draft = parsed.value;
@@ -493,7 +548,10 @@ export class Brainstorm {
       .sort();
     const removed = previous.filter((b) => !drafted.has(b.id)).map((b) => b.id);
     const sameSlots = latest !== null && JSON.stringify(latest.slots) === JSON.stringify(draft.manifest.slots);
-    if (latest !== null && changed.length === 0 && removed.length === 0 && sameSlots && adding.length === 0) {
+    const previousProposed = latest === null ? [] : this.#store.iterationProposed(session, latest.n);
+    const proposedKey = (list: readonly { name: string; hash: string }[]) => list.map((x) => `${x.name}=${x.hash}`).join(",");
+    const sameProposed = proposedKey(previousProposed) === proposedKey(draft.proposed);
+    if (latest !== null && changed.length === 0 && removed.length === 0 && sameSlots && sameProposed && adding.length === 0) {
       return ok({ kind: "replay", latest });
     }
 
@@ -509,7 +567,12 @@ export class Brainstorm {
       );
     }
 
-    const { issues: checkIssues, contents } = await this.#check(draft.blocks, overrides);
+    const { issues: checkIssues, contents, proposedContents } = await this.#check(draft.blocks, overrides, {
+      system,
+      proposed: draft.proposed,
+      rawProposed: {},
+      previous,
+    });
     if (checkIssues.some(isError)) return fail(validationFailed([...parsed.warnings, ...checkIssues]));
 
     const partsOf = (b: IterationBlock) => contents.get(b.hash)?.parts ?? this.#load(b).content.parts;
@@ -527,30 +590,143 @@ export class Brainstorm {
       ...lostPins(feedback, before.parts, after.parts),
       ...(request === null ? [] : requestWarnings(request, [...changed, ...removed], input.addresses, byId, drawn)),
     ];
-    return ok({ kind: "create", latest, draft, contents: [...contents.values()], addresses: addressable, changed, removed, warnings });
+    return ok({
+      kind: "create",
+      latest,
+      draft,
+      contents: [...contents.values()],
+      proposed: draft.proposed.map((x) => ({ name: x.name, hash: x.hash })),
+      proposedContents,
+      addresses: addressable,
+      changed,
+      removed,
+      warnings,
+    });
   }
 
-  /** Checks every content hash the store doesn't already hold. Stored hashes passed when they were committed. */
+  /**
+   * Checks blocks, and a session's proposed components. In a freeform session a stored hash passed when it was
+   * committed, so only new hashes are checked. With a design system a block's check depends on the kit version and
+   * the session's proposed components too, so every block that isn't unchanged from the session's last iteration is
+   * checked, as is every block that imports a proposed component; and every block is held to the kit (ADR 007).
+   */
   async #check(
     blocks: readonly BlockDraft[],
     overrides: readonly Override[],
-  ): Promise<{ issues: Issue[]; contents: Map<ContentHash, StoredContent> }> {
+    ctx: {
+      readonly system: SessionSystem | null;
+      readonly proposed: readonly ProposedDraft[];
+      /** Sources of proposed components that didn't parse, so blocks importing them can still load. */
+      readonly rawProposed: Readonly<Record<string, string>>;
+      readonly previous: readonly IterationBlock[];
+    } = { system: null, proposed: [], rawProposed: {}, previous: [] },
+  ): Promise<{ issues: Issue[]; contents: Map<ContentHash, StoredContent>; proposedContents: StoredProposedContent[] }> {
     const overridesByBlock = new Map<BlockId, Override[]>();
     for (const o of overrides) overridesByBlock.set(o.blockId, [...(overridesByBlock.get(o.blockId) ?? []), o]);
-    const fresh = blocks.filter((b) => !this.#store.hasContent(b.hash));
-    const results = await this.#checker.checkBlocks(fresh, overridesByBlock);
+    const { system } = ctx;
     const issues: Issue[] = [];
     const contents = new Map<ContentHash, StoredContent>();
+    const proposedContents: StoredProposedContent[] = [];
+
+    if (system === null) {
+      for (const p of ctx.proposed) {
+        issues.push(
+          issue("invalid_proposed", "proposed components are for sessions with a design system; this session is freeform, so write the component inside a block", {
+            file: proposedFile(p.name, "tsx"),
+          }),
+        );
+      }
+      const fresh = blocks.filter((b) => !this.#store.hasContent(b.hash));
+      const results = await this.#checker.checkBlocks(fresh, overridesByBlock);
+      for (const [hash, result] of results) {
+        const block = fresh.find((b) => b.hash === hash);
+        if (block === undefined) continue;
+        if (result.kind === "failed") issues.push(...result.issues);
+        else {
+          issues.push(...result.warnings);
+          contents.set(hash, { hash, files: block.files, compiled: result.compiled, parts: result.parts });
+        }
+      }
+      return { issues, contents, proposedContents };
+    }
+
+    const version = this.#systems.version(system);
+    const exports = new Set(version.manifest.exports.map((e) => e.name));
+    const sources: Record<string, string> = { ...ctx.rawProposed, ...Object.fromEntries(ctx.proposed.map((p) => [`proposed/${p.name}`, p.files.tsx])) };
+    const names = new Set(Object.keys(sources).map((spec) => spec.slice("proposed/".length)));
+    const env: CheckEnv = this.#systems.env(system, sources);
+    const unchanged = new Set(ctx.previous.map((b) => `${b.id}@${b.hash}`));
+    const importsProposed = (b: BlockDraft) => /["']proposed\//.test(b.files.tsx);
+    const fresh = blocks.filter((b) => !unchanged.has(`${b.id}@${b.hash}`) || importsProposed(b));
+    const results = await this.#checker.checkBlocks(fresh, overridesByBlock, env);
     for (const [hash, result] of results) {
       const block = fresh.find((b) => b.hash === hash);
       if (block === undefined) continue;
       if (result.kind === "failed") issues.push(...result.issues);
       else {
         issues.push(...result.warnings);
-        contents.set(hash, { hash, files: block.files, compiled: result.compiled, parts: result.parts });
+        if (!this.#store.hasContent(hash)) contents.set(hash, { hash, files: block.files, compiled: result.compiled, parts: result.parts });
       }
     }
-    return { issues, contents };
+    // Conformance reads every block, including one that failed to render, so Rob's agent sees every rule it broke at once.
+    const used = new Set<string>();
+    for (const b of blocks) {
+      const compiled = compiledForConformance(b.files.tsx);
+      if (compiled === null) continue;
+      proposedImports(compiled).forEach((n) => used.add(n));
+      issues.push(
+        ...blockConformance({
+          compiled,
+          file: blockFile(b.id, "tsx"),
+          cssFile: b.files.css === null ? null : blockFile(b.id, "css"),
+          exports,
+          proposed: names,
+        }),
+      );
+    }
+
+    const checked = await Promise.all(
+      ctx.proposed.map(async (p) => {
+        const file = proposedFile(p.name, "tsx");
+        const result = await this.#checker.checkSource({
+          source: p.files.tsx,
+          file,
+          props: p.example,
+          env: this.#systems.env(system, sources, `proposed/${p.name}`),
+        });
+        return { p, file, result };
+      }),
+    );
+    for (const { p, file, result } of checked) {
+      const compiled = result.kind === "ok" ? result.compiled : compiledForConformance(p.files.tsx);
+      if (result.kind === "failed") issues.push(...result.issues);
+      else issues.push(...result.warnings);
+      if (compiled === null) continue;
+      proposedImports(compiled).forEach((n) => n !== p.name && used.add(n));
+      issues.push(
+        ...proposedConformance({
+          compiled,
+          css: p.files.css,
+          file,
+          cssFile: proposedFile(p.name, "css"),
+          styles: version.manifest.styles,
+          exports,
+          proposed: names,
+        }),
+      );
+      if (result.kind === "ok") proposedContents.push({ hash: p.hash, files: p.files, compiled: result.compiled });
+    }
+    for (const p of ctx.proposed) {
+      if (exports.has(p.name)) {
+        issues.push(
+          issue("proposed_in_kit", `the kit exports ${p.name} now, so blocks get the kit's; import it from "kit" and delete proposed/${p.name}`, { file: proposedFile(p.name, "tsx") }),
+        );
+      }
+      if (!used.has(p.name)) {
+        issues.push(issue("unused_proposed", `no block imports proposed/${p.name}; import it, or delete the folder`, { file: proposedFile(p.name, "tsx") }));
+      }
+    }
+    return { issues, contents, proposedContents };
   }
 
   async view(id: SessionId): Promise<Result<SessionView>> {
@@ -574,7 +750,71 @@ export class Brainstorm {
       feedback: this.#feedback(id),
       request: request === null ? null : this.#requestView(session, request, attachment, iteration),
       regenerate: regenerateGate({ hasIteration: latest !== null, open: this.#store.openRequest(id), attachment }),
+      system: this.#sessionSystemView(id, iteration),
     });
+  }
+
+/** The kit version, theme and proposed components a canvas frame loads for this session's iteration. */
+  #canvasSystem(id: SessionId, iteration: IterationView | null): CanvasSystem | null {
+    const ref = this.#store.sessionSystem(id);
+    if (ref === null) return null;
+    const proposed = (iteration?.proposed ?? []).map(({ name, hash, compiled, css }) => ({ name, hash, compiled, css }));
+    return { id: ref.id, n: ref.n, theme: this.#themeState(id), proposed };
+  }
+
+  #agentSystem(id: SessionId): AgentContext["system"] {
+    const ref = this.#store.sessionSystem(id);
+    if (ref === null) return null;
+    const docs = this.#systems.docs(ref);
+    return { id: ref.id, name: docs.name, n: ref.n, catalog: docs.catalog };
+  }
+
+  #themeState(id: SessionId): ThemeState {
+    const axes: Record<string, string> = {};
+    const tokens: Record<string, string> = {};
+    for (const { key, value } of this.#store.sessionTheme(id)) {
+      if (key.startsWith("axis:")) axes[key.slice(5)] = value;
+      else if (key.startsWith("token:")) tokens[key.slice(6)] = value;
+    }
+    return { axes, tokens };
+  }
+
+  #sessionSystemView(id: SessionId, iteration: IterationView | null): SessionSystemView | null {
+    const ref = this.#store.sessionSystem(id);
+    if (ref === null) return null;
+    const system = this.#store.system(ref.id);
+    const version = this.#systems.version(ref);
+    const newest = this.#store.latestSystemVersion(ref.id) ?? version;
+    const promotions = new Map(this.#store.promotions(id).map((p) => [p.name, p]));
+    const newestExports = new Set(newest.manifest.exports.map((e) => e.name));
+    const ownExports = new Set(version.manifest.exports.map((e) => e.name));
+    const proposed: ProposedView[] = (iteration?.proposed ?? []).map((p) => {
+      const promotion = promotions.get(p.name);
+      const { name: _n, ...state } = promotion ?? { name: p.name };
+      return {
+        name: p.name,
+        title: p.title,
+        description: p.description,
+        usedBy: p.usedBy,
+        promotion: promotion === undefined ? null : (state as NonNullable<ProposedView["promotion"]>),
+        inSystem: newestExports.has(p.name) ? newest.n : null,
+        fromKit: ownExports.has(p.name),
+      };
+    });
+    return {
+      id: ref.id,
+      name: system?.name ?? ref.id,
+      n: ref.n,
+      latest: newest.n,
+      kitHash: version.hash,
+      axes: version.manifest.styles.axes,
+      tokens: version.manifest.styles.tokens,
+      theme: this.#themeState(id),
+      themes: this.#store.themes(ref.id),
+      proposed,
+      canPromote: system?.projectId != null,
+      upgrade: componentChanges(version.manifest, newest.manifest),
+    };
   }
 
   #parentOf(session: SessionSummary, parent: SessionId): ForkLink["parent"] {
@@ -649,7 +889,20 @@ export class Brainstorm {
       ),
       isNew: (introduced.get(blockId) ?? 1) > 1 && !seen.has(blockId),
     }));
-    return { ...summary, slots, blocks: views };
+    const proposed = this.#store.iterationProposed(id, latest.n).map((p) => {
+      const stored = this.#store.proposedContent(p.hash);
+      const draft = readStoredProposed(p.name, stored.files);
+      return {
+        name: p.name,
+        hash: p.hash,
+        compiled: stored.compiled,
+        css: stored.files.css,
+        title: draft?.title ?? p.name,
+        description: draft?.description ?? "",
+        usedBy: views.filter((v) => proposedImports(v.compiled).includes(p.name)).map((v) => v.id),
+      };
+    });
+    return { ...summary, slots, blocks: views, proposed };
   }
 
   /** A past iteration as the canvas shows it, read-only: its own blocks, with Rob's settings that still apply to them. */
@@ -778,7 +1031,167 @@ export class Brainstorm {
       case "check_thread":
         await this.#poll(id);
         return null;
+      case "set_theme_axis":
+      case "set_theme_token":
+      case "clear_theme_token":
+      case "reset_theme":
+      case "apply_theme":
+      case "save_theme":
+        return this.#theme(id, action);
+      case "upgrade_system":
+        return this.#upgrade(id);
+      case "promote":
+        return this.#promote(session, action.name);
     }
+  }
+
+  /** Theme tweaks belong to the session; a saved theme belongs to the system (ADR 007). */
+  #theme(id: SessionId, action: Extract<RobAction, { kind: `${string}_theme${string}` }>): Failure | null {
+    const ref = this.#store.sessionSystem(id);
+    if (ref === null) return invalid(`${id} has no design system, so it has no theme`);
+    const styles = this.#systems.version(ref).manifest.styles;
+    const at = this.#now();
+    switch (action.kind) {
+      case "set_theme_axis": {
+        const axis = styles.axes.find((a) => a.attribute === action.axis);
+        if (axis === undefined) return notFound("theme", `the system has no theme axis ${action.axis}`);
+        if (action.value !== null && !axis.values.includes(action.value)) return invalid(`${action.axis} is one of ${axis.values.join(", ")}`);
+        this.#store.setSessionTheme(id, `axis:${action.axis}`, action.value, at);
+        return null;
+      }
+      case "set_theme_token": {
+        if (!styles.tokens.some((t) => t.name === action.token)) return notFound("theme", `the system has no token ${action.token}`);
+        const value = action.value.trim();
+        if (value === "" || value.length > 200 || /[;{}<>]/.test(value)) return invalid(`"${action.value}" isn't a CSS value`);
+        this.#store.setSessionTheme(id, `token:${action.token}`, value, at);
+        return null;
+      }
+      case "clear_theme_token":
+        this.#store.setSessionTheme(id, `token:${action.token}`, null, at);
+        return null;
+      case "reset_theme":
+        this.#store.clearSessionTheme(id);
+        return null;
+      case "apply_theme": {
+        const theme = this.#store.themes(ref.id).find((t) => t.name === action.name);
+        if (theme === undefined) return notFound("theme", `the system has no saved theme "${action.name}"`);
+        this.#store.tx(() => {
+          this.#store.clearSessionTheme(id);
+          for (const [axis, value] of Object.entries(theme.axes)) this.#store.setSessionTheme(id, `axis:${axis}`, value, at);
+          for (const [token, value] of Object.entries(theme.tokens)) this.#store.setSessionTheme(id, `token:${token}`, value, at);
+        });
+        return null;
+      }
+      case "save_theme": {
+        const name = action.name.trim();
+        if (name === "" || name.length > 60) return invalid("a theme's name is 1 to 60 characters");
+        const state = this.#themeState(id);
+        if (Object.keys(state.axes).length === 0 && Object.keys(state.tokens).length === 0) return invalid("this session's theme has no tweaks to save");
+        this.#store.saveTheme(ref.id, { name, axes: state.axes, tokens: state.tokens, createdAt: at });
+        return null;
+      }
+    }
+  }
+
+  /**
+   * Moves the session to its system's newest version, after checking every block and proposed component of its latest
+   * iteration against it. A version that breaks the design leaves the session where it was, and says what breaks.
+   */
+  async #upgrade(id: SessionId): Promise<Failure | null> {
+    const ref = this.#store.sessionSystem(id);
+    if (ref === null) return invalid(`${id} has no design system`);
+    const newest = this.#store.latestSystemVersion(ref.id);
+    if (newest === null || newest.n <= ref.n) return invalid(`${id} already uses the newest version of its design system`);
+    const next: SessionSystem = { id: ref.id, n: newest.n };
+    const latest = this.#store.latestIteration(id);
+    if (latest !== null) {
+      const blocks = this.#store.iterationBlocks(id, latest.n).flatMap((b) => {
+        const draft = readStoredBlock({ id: b.id, files: this.#store.content(b.hash).files });
+        return draft === null ? [] : [draft];
+      });
+      const proposed = this.#store.iterationProposed(id, latest.n).flatMap((p) => {
+        const draft = readStoredProposed(p.name, this.#store.proposedContent(p.hash).files);
+        return draft === null ? [] : [draft];
+      });
+      const { issues } = await this.#check(blocks, this.#store.overrides(id), { system: next, proposed, rawProposed: {}, previous: [] });
+      const errors = issues.filter(isError);
+      if (errors.length > 0) {
+        return {
+          code: "validation_failed",
+          message: `version ${newest.n} breaks this design in ${errors.length} place${errors.length === 1 ? "" : "s"}, so the session stays on version ${ref.n}`,
+          issues: errors,
+        };
+      }
+    }
+    const styles = newest.manifest.styles;
+    this.#store.tx(() => {
+      this.#store.setSessionSystemVersion(id, newest.n);
+      for (const { key } of this.#store.sessionTheme(id)) {
+        const keep = key.startsWith("axis:") ? styles.axes.some((a) => a.attribute === key.slice(5)) : styles.tokens.some((t) => t.name === key.slice(6));
+        if (!keep) this.#store.setSessionTheme(id, key, null, this.#now());
+      }
+    });
+    return null;
+  }
+
+  /** Starts a T3 thread on the system's own project that adds a proposed component to the library. */
+  async #promote(session: SessionSummary, name: ProposedName): Promise<Failure | null> {
+    const id = session.id;
+    const ref = this.#store.sessionSystem(id);
+    if (ref === null) return invalid(`${id} has no design system to promote into`);
+    const system = this.#store.system(ref.id);
+    const latest = this.#store.latestIteration(id);
+    const stored = latest === null ? undefined : this.#store.iterationProposed(id, latest.n).find((p) => p.name === name);
+    if (system === null || stored === undefined) return notFound("proposed", `${id} has no proposed component ${name}`);
+    if (system.projectId === null) {
+      return invalid(`Brainstorm doesn't know which T3 project holds ${system.source.root}; start a brainstorm from that project once, or add the system from a thread there`);
+    }
+    const files = this.#store.proposedContent(stored.hash).files;
+    const draft = readStoredProposed(name, files);
+    this.#store.setPromotion(id, name, { state: "starting" }, this.#now());
+    this.#emit(id);
+    const result = await this.#bridge.start({
+      project: system.projectId,
+      title: `Promote ${name} into ${system.name}`,
+      message: promoteMessage({
+        session,
+        system: { id: system.id, name: system.name, root: system.source.root, entry: system.source.entry },
+        name,
+        files,
+        draft,
+        generated: this.#systems.version(ref).manifest.catalog.filter((e) => e.generated).map((e) => e.name),
+      }),
+    });
+    if (result.kind === "failed") {
+      this.#store.setPromotion(id, name, { state: "failed", error: result.error }, this.#now());
+      return null;
+    }
+    // `thread start` gives only the id; the thread's own view has the link Rob opens it with.
+    const shown = await this.#bridge.snapshot(result.thread, { messages: 0 });
+    this.#store.setPromotion(id, name, { state: "started", thread: result.thread, link: shown.kind === "found" ? shown.snapshot.thread.link : null }, this.#now());
+    return null;
+  }
+
+  /** Writes the session's theme as CSS custom properties and as design tokens (DTCG JSON) to the exports folder. */
+  exportTheme(id: SessionId): Result<ThemeExport> {
+    const session = this.#store.session(id);
+    if (session === null) return fail(notFound("session", `no session ${id}`));
+    const ref = this.#store.sessionSystem(id);
+    if (ref === null) return fail(invalid(`${id} has no design system, so it has no theme`));
+    const name = this.#store.system(ref.id)?.name ?? ref.id;
+    const version = this.#systems.version(ref);
+    const theme = this.#themeState(id);
+    const base = exportFileName(`${session.title} theme`, id, ref.n as number as IterationN, new Date(this.#now())).replace(/\.html$/, "");
+    mkdirSync(this.#exportsDir, { recursive: true });
+    const write = (file: string, text: string) => {
+      const path = join(this.#exportsDir, file);
+      writeFileSync(path, text);
+      return { path, file };
+    };
+    return ok({
+      css: write(`${base}.css`, themeCss(name, session.title, theme)),
+      json: write(`${base}.tokens.json`, `${JSON.stringify(themeTokens(name, theme, version.manifest.styles.tokens), null, 2)}\n`),
+    });
   }
 
   /** Regenerate and vary: one gate, one insert, one send, so both share every phase. */
@@ -898,7 +1311,18 @@ export class Brainstorm {
       if (draft === null) throw new Error(`${blockId} no longer parses with Rob's settings baked in`);
       return { id: blockId, title, hash: draft.hash, draft };
     });
-    const { issues, contents } = await this.#check(baked.flatMap((b) => (b.draft === null ? [] : [b.draft])), []);
+    const system = this.#store.sessionSystem(parentId);
+    const parentProposed = this.#store.iterationProposed(parentId, source.n);
+    const proposedDrafts = parentProposed.flatMap((p) => {
+      const draft = readStoredProposed(p.name, this.#store.proposedContent(p.hash).files);
+      return draft === null ? [] : [draft];
+    });
+    const { issues, contents } = await this.#check(
+      baked.flatMap((b) => (b.draft === null ? [] : [b.draft])),
+      [],
+      // Unbaked blocks are as the parent committed them, against the same kit, so only the baked ones are checked.
+      { system, proposed: [], rawProposed: Object.fromEntries(proposedDrafts.map((p) => [`proposed/${p.name}`, p.files.tsx])), previous: [] },
+    );
     const broken = issues.find(isError);
     if (broken !== undefined) {
       const title = baked.find((b) => broken.file?.startsWith(`slots/${b.id}/`))?.title ?? "A picked variant";
@@ -916,7 +1340,10 @@ export class Brainstorm {
         iteration: { n: 1 as IterationN, threadId: source.threadId, note: null, slots: slots.map(({ slot }) => ({ id: slot.id, title: slot.title, frame: slot.frame })), createdAt: at },
         blocks: baked.map((b) => ({ id: b.id, hash: b.hash })),
         contents: [...contents.values()],
+        proposed: parentProposed,
         feedback: pins.map((f) => ({ pin: f.pin, text: f.text })),
+        system,
+        theme: this.#store.sessionTheme(parentId),
         request: { body: { scope: { kind: "all" }, freetext: instruction }, at },
       },
       pendingThreadOf(id),
@@ -1008,7 +1435,12 @@ export class Brainstorm {
     const frame = frames.find((f) => f.slot === at.slot) ?? frames[0];
     const block = frame === undefined ? undefined : iteration?.blocks.find((b) => b.id === frame.blockId);
     if (frame === undefined || block === undefined) return ok(null);
-    return ok({ frame, module: { blockId: block.id, hash: block.hash, compiled: block.compiled, css: block.css }, props: block.effectiveProps });
+    return ok({
+      frame,
+      module: { blockId: block.id, hash: block.hash, compiled: block.compiled, css: block.css },
+      props: block.effectiveProps,
+      system: this.#canvasSystem(id, iteration),
+    });
   }
 
   async exportHtml(id: SessionId): Promise<Result<ExportResult>> {
@@ -1020,7 +1452,10 @@ export class Brainstorm {
     const file = exportFileName(session.title, id, latest.n, new Date(this.#now()));
     const path = join(this.#exportsDir, file);
     mkdirSync(this.#exportsDir, { recursive: true });
-    writeFileSync(path, buildCanvasDocument(exportPayload(iteration), "export"));
+    const system = this.#canvasSystem(id, iteration);
+    const kit = system === null ? null : this.#systems.kit(system.id, system.n);
+    if (kit !== null && !kit.ok) return kit;
+    writeFileSync(path, buildCanvasDocument(exportPayload(iteration, kit === null || system === null ? null : { kit: kit.data, theme: system.theme }), "export"));
     return ok({ path, file });
   }
 
@@ -1290,4 +1725,73 @@ function varyMismatches(n: RequestN, scope: VaryScope, drawn: Drawn): Issue[] {
     }
     return out;
   });
+}
+
+function promoteMessage(input: {
+  session: SessionSummary;
+  system: { id: SystemId; name: string; root: string; entry: string };
+  name: ProposedName;
+  files: { tsx: string; json: string; css: string | null };
+  draft: ProposedDraft | null;
+  /** The primitives Brainstorm generated because the library has none. */
+  generated: readonly string[];
+}): string {
+  const { session, system, name, files, draft } = input;
+  const fromKit = [...files.tsx.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']kit["']/g)].flatMap((m) =>
+    (m[1] ?? "").split(",").map((n) => n.trim().split(/\s+as\s+/)[0] ?? ""),
+  );
+  const standIns = fromKit.filter((n) => input.generated.includes(n));
+  const fence = (lang: string, text: string) => `\`\`\`${lang}\n${text.trimEnd()}\n\`\`\``;
+  return [
+    `[brainstorm] promote ${name} from session ${session.id} ("${session.title}")`,
+    "",
+    `A Brainstorm design built with the ${system.name} design system needed a component the library doesn't have, so it proposed ${name}. Add it to the library at ${system.root}, so designs and the app can use it from the kit.`,
+    "",
+    draft === null ? "" : `What it's for: ${draft.description}`,
+    "",
+    "- Write it the way the library writes its components: the same file layout, the same styling approach and variants, and its tokens. Keep its look; the design was built against it.",
+    `- \`"kit"\` in the proposed files is Brainstorm's name for this library's entry (${system.entry}); import from the library's own modules instead.`,
+    ...(standIns.length === 0
+      ? []
+      : [
+          `- ${standIns.join(", ")} ${standIns.length === 1 ? "is a layout primitive" : "are layout primitives"} Brainstorm generated because the library has none. Write that layout the way the library's own components do, such as with its utility classes.`,
+        ]),
+    `- Export it from the library's entry, and write a story for it${draft === null ? "" : ` with these args: ${JSON.stringify(draft.example)}`}.`,
+    `- Then run \`brainstorm system sync ${system.id}\`, so the design system's next version has it. Brainstorm then offers the upgrade in the session, and after it the design uses the library's component.`,
+    "",
+    "The proposed files:",
+    "",
+    "component.tsx",
+    fence("tsx", files.tsx),
+    "",
+    "component.json",
+    fence("json", files.json),
+    ...(files.css === null ? [] : ["", "component.css", fence("css", files.css)]),
+  ].join("\n");
+}
+
+function themeCss(system: string, session: string, theme: ThemeState): string {
+  const axes = Object.entries(theme.axes);
+  const tokens = Object.entries(theme.tokens);
+  const lines = [`/* ${system} theme, from the Brainstorm session "${session.replace(/\*\//g, "")}". */`];
+  if (axes.length > 0) {
+    lines.push(`/* Set on <html>: ${axes.map(([a, v]) => (a === "class" ? `class="${v}"` : `${a}="${v}"`)).join(" ")} */`);
+  }
+  lines.push(":root {", ...tokens.map(([name, value]) => `  ${name}: ${value};`), "}", "");
+  return lines.join("\n");
+}
+
+const DTCG_TYPE: Record<string, string | null> = { color: "color", length: "dimension", font: "fontFamily", number: "number", other: null };
+
+function themeTokens(system: string, theme: ThemeState, tokens: readonly { name: string; kind: string }[]): Record<string, unknown> {
+  const kinds = new Map(tokens.map((t) => [t.name, t.kind]));
+  const out: Record<string, unknown> = {
+    $description: `${system} theme from Brainstorm`,
+    $extensions: { "brainstorm.axes": theme.axes },
+  };
+  for (const [name, value] of Object.entries(theme.tokens)) {
+    const type = DTCG_TYPE[kinds.get(name) ?? "other"] ?? null;
+    out[name.replace(/^--/, "")] = type === null ? { $value: value } : { $type: type, $value: value };
+  }
+  return out;
 }

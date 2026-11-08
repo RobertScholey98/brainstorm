@@ -76,7 +76,7 @@ export function ExportButton({ disabled, exportHtml }: { disabled: boolean; expo
  * The folder, then the file name on its own line. The folder may break only after a separator, and a segment never
  * breaks inside itself, not even at a hyphen; the text is still the whole path for copying.
  */
-function ExportPath({ path }: { path: string }) {
+export function ExportPath({ path }: { path: string }) {
   const cut = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/")) + 1;
   const segments = path.slice(0, cut).split(/(?<=[\\/])/);
   return (

@@ -1,8 +1,11 @@
 import * as React from "react";
-import { Component, type ComponentType, type ReactNode, useSyncExternalStore } from "react";
+import { Component, type ComponentType, type ReactNode, useLayoutEffect, useSyncExternalStore } from "react";
 import * as JSXRuntime from "react/jsx-runtime";
 import { CircleAlert } from "lucide-react";
+import * as ReactDOM from "react-dom";
+import * as ReactDOMClient from "react-dom/client";
 import { createRoot } from "react-dom/client";
+import { listStories, storyElement, type StoryRecord } from "../core/system/story";
 import { designCss, SCROLLBAR } from "../core/design";
 import { partLabel } from "../core/part";
 import { CANVAS_PAD, CANVAS_TOP, fitFrames, GAP } from "./fit";
@@ -17,10 +20,13 @@ import type {
   FeedbackId,
   FrameToHost,
   HostToFrame,
+  KitPayload,
   PartName,
+  ProposedModule,
   Pin,
   Props,
   SlotId,
+  ThemeState,
 } from "../core/types";
 
 type Loaded = { readonly ok: true; readonly component: ComponentType<Props> } | { readonly ok: false; readonly message: string };
@@ -47,6 +53,10 @@ type CanvasState = {
   readonly scrolling: ReadonlySet<string>;
   /** The slot on the stage fills the window, with none of the canvas's chrome (ADR 007). */
   readonly present: boolean;
+  /** The design system's kit the blocks import, once it has loaded; bumps when it or the proposed components change. */
+  readonly kitVersion: number;
+  /** The system page's gallery: story ids to show, every story when null, or no gallery when undefined. */
+  readonly gallery: readonly string[] | null | undefined;
 };
 
 const boot = JSON.parse(document.getElementById("brainstorm-boot")?.textContent ?? "{}") as {
@@ -62,6 +72,8 @@ const post = (message: FrameToHost) => {
 };
 
 const modules = new Map<ContentHash, Loaded>();
+/** Each module's source, so a block loads again when the kit or a proposed component it imports changes. */
+const sources = new Map<ContentHash, CanvasModule>();
 const styles = new Map<BlockId, HTMLStyleElement>();
 const reported = new Set<string>();
 
@@ -72,10 +84,181 @@ function reportError(blockId: BlockId, hash: ContentHash | undefined, message: s
   post({ kind: "block_error", blockId, message });
 }
 
+// --- Design systems (ADR 007) -------------------------------------------------------------------------------------
+
+type KitModule = {
+  readonly kit: Record<string, unknown>;
+  readonly frame: string | null;
+  readonly stories: Readonly<Record<string, () => unknown>>;
+};
+
+/** The kit's bundle, evaluated once per version. Its externals are this frame's own React. */
+let kit: { readonly hash: string; readonly module: KitModule | null; readonly error: string | null; readonly surface: KitPayload["surface"] } | null = null;
+let kitStyle: HTMLStyleElement | null = null;
+/** Proposed components, by name: their compiled source, and the module once a block first imports it. */
+const proposed = new Map<string, { readonly hash: string; readonly compiled: string; loaded: { readonly __esModule: true; readonly default: unknown } | null }>();
+const proposedStyles = new Map<string, HTMLStyleElement>();
+
+const kitRequire = (name: string): unknown => {
+  if (name === "react") return React;
+  if (name === "react/jsx-runtime") return JSXRuntime;
+  if (name === "react-dom") return ReactDOM;
+  if (name === "react-dom/client") return ReactDOMClient;
+  throw new Error(`the kit can't import "${name}"`);
+};
+
+function loadKit(payload: KitPayload | null): void {
+  if (payload === null) {
+    kit = null;
+    kitStyle?.remove();
+    kitStyle = null;
+    return;
+  }
+  if (kit?.hash === payload.hash) return;
+  let module: KitModule | null = null;
+  let error: string | null = null;
+  try {
+    const m = { exports: {} as KitModule };
+    new Function("require", "module", "exports", payload.bundle)(kitRequire, m, m.exports);
+    module = m.exports;
+  } catch (e) {
+    error = e instanceof Error ? e.message : String(e);
+  }
+  kit = { hash: payload.hash, module, error, surface: payload.surface };
+  kitStyle ??= document.createElement("style");
+  kitStyle.dataset.kit = "";
+  // Layered under the canvas chrome, so the kit's own page rules (body, html) style the frames' contents, not the canvas.
+  kitStyle.textContent = `@layer kit {\n${payload.css}\n}`;
+  document.head.append(kitStyle);
+  modules.clear();
+}
+
+/** The badge that marks a proposed component on the canvas. */
+function ProposedTag({ name }: { name: string }) {
+  return (
+    <span className="bs-proposed-tag" aria-hidden>
+      {name} · not in system
+    </span>
+  );
+}
+
+let anchors = 0;
+
+/**
+ * A proposed component, wrapped so the canvas can mark it "not in system" without changing its layout: the wrapper is
+ * display: contents, and the tag is anchored to the component's own root element.
+ */
+function wrapProposed(name: string, Inner: ComponentType<Props>): ComponentType<Props> {
+  function Proposed(props: Props) {
+    const [anchor] = React.useState(() => `--bs-proposed-${++anchors}`);
+    const ref = React.useCallback(
+      (el: HTMLDivElement | null) => {
+        const root = el?.querySelector(":scope > :not(.bs-proposed-tag)");
+        if (root instanceof HTMLElement) root.style.setProperty("anchor-name", anchor);
+      },
+      [anchor],
+    );
+    return (
+      <div className="bs-proposed" data-proposed={name} ref={ref} style={{ display: "contents" }}>
+        <Inner {...props} />
+        <span style={{ ["positionAnchor" as string]: anchor }} className="bs-proposed-anchor">
+          <ProposedTag name={name} />
+        </span>
+      </div>
+    );
+  }
+  Proposed.displayName = `Proposed(${name})`;
+  return Proposed;
+}
+
+function requireProposed(name: string): unknown {
+  // The session's kit has the component now (an upgrade after Promote), so blocks get the real one, untagged.
+  const real = kit?.module?.kit[name];
+  if (real !== undefined) return { __esModule: true, default: real };
+  const entry = proposed.get(name);
+  if (entry === undefined) throw new Error(`there is no proposed component ${name}`);
+  if (entry.loaded === null) {
+    const module = { exports: {} as { default?: unknown } };
+    new Function("require", "module", "exports", entry.compiled)(blockRequire, module, module.exports);
+    const inner = module.exports.default;
+    // __esModule is set non-enumerable, so a spread drops it; without it a block's default import would get the whole module.
+    entry.loaded = {
+      ...module.exports,
+      __esModule: true,
+      default: typeof inner === "function" || typeof inner === "object" ? wrapProposed(name, inner as ComponentType<Props>) : inner,
+    };
+  }
+  return entry.loaded;
+}
+
+function setProposed(list: readonly ProposedModule[]): void {
+  const names = new Set<string>(list.map((m) => m.name));
+  for (const [name, style] of proposedStyles) {
+    if (!names.has(name)) {
+      style.remove();
+      proposedStyles.delete(name);
+    }
+  }
+  let changed = list.length !== proposed.size;
+  for (const m of list) {
+    if (proposed.get(m.name)?.hash === m.hash) continue;
+    changed = true;
+    proposed.set(m.name, { hash: m.hash, compiled: m.compiled, loaded: null });
+    let style = proposedStyles.get(m.name);
+    if (m.css === null) {
+      style?.remove();
+      proposedStyles.delete(m.name);
+      continue;
+    }
+    if (style === undefined) {
+      style = document.createElement("style");
+      style.dataset.proposedCss = m.name;
+      document.head.append(style);
+      proposedStyles.set(m.name, style);
+    }
+    // Proposed names are PascalCase identifiers, so they are safe inside the attribute selector.
+    style.textContent = `@scope ([data-proposed="${m.name}"]) {\n${m.css}\n}`;
+  }
+  for (const name of [...proposed.keys()]) if (!names.has(name)) proposed.delete(name);
+  // A block that imports a changed proposed component must load again.
+  if (changed) modules.clear();
+}
+
+let themed: { attrs: string[]; classes: string[]; tokens: string[] } = { attrs: [], classes: [], tokens: [] };
+
+/** The session's theme: axis values on the root element, and token values over the system's own. */
+function applyTheme(theme: ThemeState): void {
+  const root = document.documentElement;
+  for (const a of themed.attrs) root.removeAttribute(a);
+  for (const c of themed.classes) root.classList.remove(c);
+  for (const t of themed.tokens) root.style.removeProperty(t);
+  themed = { attrs: [], classes: [], tokens: [] };
+  for (const [axis, value] of Object.entries(theme.axes)) {
+    if (axis === "class") {
+      root.classList.add(value);
+      themed.classes.push(value);
+    } else if (/^data-[\w-]+$/.test(axis)) {
+      root.setAttribute(axis, value);
+      themed.attrs.push(axis);
+    }
+  }
+  for (const [token, value] of Object.entries(theme.tokens)) {
+    if (!/^--[\w-]+$/.test(token)) continue;
+    root.style.setProperty(token, value);
+    themed.tokens.push(token);
+  }
+  requestAnimationFrame(measureScrolling);
+}
+
 const blockRequire = (name: string): unknown => {
   if (name === "react") return React;
   if (name === "react/jsx-runtime") return JSXRuntime;
-  throw new Error(`blocks can only import react, not "${name}"`);
+  if (name === "kit") {
+    if (kit?.module != null) return kit.module.kit;
+    throw new Error(kit?.error ?? "the design system's kit hasn't loaded");
+  }
+  if (name.startsWith("proposed/")) return requireProposed(name.slice("proposed/".length));
+  throw new Error(`blocks can only import react${kit === null ? "" : ", kit and proposed components"}, not "${name}"`);
 };
 
 function load(m: CanvasModule): Loaded {
@@ -83,7 +266,7 @@ function load(m: CanvasModule): Loaded {
     const module = { exports: {} as { default?: unknown } };
     new Function("require", "module", "exports", m.compiled)(blockRequire, module, module.exports);
     const component = module.exports.default;
-    return typeof component === "function"
+    return typeof component === "function" || (typeof component === "object" && component !== null)
       ? { ok: true, component: component as ComponentType<Props> }
       : { ok: false, message: "the module has no default-exported component" };
   } catch (e) {
@@ -123,6 +306,8 @@ let state: CanvasState = {
   hashes: new Map(),
   scrolling: new Set(),
   present: false,
+  kitVersion: 0,
+  gallery: undefined,
 };
 /** The block Rob just pressed in the canvas. Its selection comes back from the host and needs no reveal. */
 let pressed: BlockId | null = null;
@@ -140,9 +325,24 @@ const subscribe = (l: () => void) => {
 
 function receive(message: HostToFrame): void {
   switch (message.kind) {
+    case "kit":
+      loadKit(message.kit);
+      setState({ kitVersion: state.kitVersion + 1 });
+      return;
+    case "proposed":
+      setProposed(message.modules);
+      setState({ kitVersion: state.kitVersion + 1 });
+      return;
+    case "theme":
+      applyTheme(message.theme);
+      return;
+    case "gallery":
+      setState({ gallery: message.stories });
+      return;
     case "modules": {
       const hashes = new Map(state.hashes);
       for (const m of message.modules) {
+        sources.set(m.hash, m);
         if (!modules.has(m.hash)) modules.set(m.hash, load(m));
         if (hashes.get(m.blockId) !== m.hash) applyCss(m);
         hashes.set(m.blockId, m.hash);
@@ -299,7 +499,7 @@ function fitCanvas(): void {
   post({ kind: "zooms", zooms: Object.fromEntries(next) });
 }
 
-const HOST_KINDS = new Set<string>(["modules", "state", "mode", "pins", "pulse", "variants", "present"] satisfies HostToFrame["kind"][]);
+const HOST_KINDS = new Set<string>(["modules", "state", "mode", "pins", "pulse", "variants", "present", "kit", "theme", "proposed", "gallery"] satisfies HostToFrame["kind"][]);
 
 class BlockBoundary extends Component<
   { blockId: BlockId; hash: ContentHash; props: Props; children: ReactNode },
@@ -338,8 +538,28 @@ function BlockFailure({ message }: { message: string }) {
   );
 }
 
+/** The kit's frame component, when the system names one: what the real app wraps every page in. */
+function KitFrame({ children }: { children: ReactNode }) {
+  const name = kit?.module?.frame ?? null;
+  const Frame = name === null ? undefined : (kit?.module?.kit[name] as ComponentType<{ children: ReactNode }> | undefined);
+  return Frame === undefined ? <>{children}</> : <Frame>{children}</Frame>;
+}
+
+/** The kit's page surface (its body background, colour and font), which a frame body takes in a system session. */
+function surfaceStyle(): React.CSSProperties | undefined {
+  if (kit === null || kit.surface.length === 0) return undefined;
+  return Object.fromEntries(kit.surface.map((d) => [d.property, d.value])) as React.CSSProperties;
+}
+
 function Block({ frame, hash, props }: { frame: CanvasFrame; hash: ContentHash | undefined; props: Props }) {
-  const loaded = hash === undefined ? undefined : modules.get(hash);
+  let loaded = hash === undefined ? undefined : modules.get(hash);
+  if (hash !== undefined && loaded === undefined) {
+    const source = sources.get(hash);
+    if (source !== undefined) {
+      loaded = load(source);
+      modules.set(hash, loaded);
+    }
+  }
   if (hash === undefined || loaded === undefined) return null;
   if (!loaded.ok) {
     reportError(frame.blockId, hash, loaded.message);
@@ -349,7 +569,9 @@ function Block({ frame, hash, props }: { frame: CanvasFrame; hash: ContentHash |
   return (
     <BlockBoundary key={hash} blockId={frame.blockId} hash={hash} props={props}>
       <div data-bid={frame.blockId} style={{ display: "contents" }}>
-        <Rendered {...props} />
+        <KitFrame>
+          <Rendered {...props} />
+        </KitFrame>
       </div>
     </BlockBoundary>
   );
@@ -368,8 +590,65 @@ function VariantSwitch({ frame, variants }: { frame: CanvasFrame; variants: read
   );
 }
 
+type StoryState = { readonly stories: readonly StoryRecord[]; readonly failed: readonly { file: string; message: string }[] };
+let storiesOf: { hash: string; stories: StoryState } | null = null;
+
+function kitStories(): StoryState {
+  if (kit?.module == null) return { stories: [], failed: [] };
+  const current = storiesOf?.hash === kit.hash ? storiesOf : { hash: kit.hash, stories: listStories(kit.module.stories) };
+  storiesOf = current;
+  return current.stories;
+}
+
+class StoryBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  override state: { error: string | null } = { error: null };
+  static getDerivedStateFromError(e: unknown) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+  override render() {
+    return this.state.error === null ? this.props.children : <BlockFailure message={this.state.error} />;
+  }
+}
+
+/** The system page: each story of the kit in a frame of its own, under the session-less default theme. */
+function Gallery({ ids }: { ids: readonly string[] | null }) {
+  useSyncExternalStore(subscribe, () => state.kitVersion);
+  if (kit === null) return null;
+  if (kit.module === null) return <BlockFailure message={kit.error ?? "the kit didn't load"} />;
+  const wanted = ids === null ? null : new Set(ids);
+  const records = kitStories().stories.filter((r) => wanted === null || wanted.has(r.id));
+  return <GalleryStories key={JSON.stringify(ids)} records={records} />;
+}
+
+function GalleryStories({ records }: { records: ReturnType<typeof kitStories>["stories"] }) {
+  // A story that focuses an input on mount scrolls the page to it; each new set of stories opens at the top.
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+    const frame = requestAnimationFrame(() => window.scrollTo(0, 0));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return (
+    <div className="bs-gallery">
+      {records.map((r) => (
+        <section key={r.id} className="bs-frame bs-story" data-story={r.id}>
+          <header className="bs-frame-title">
+            <span>{r.title.split("/").at(-1)}</span>
+            <span className="bs-frame-size">{r.name}</span>
+          </header>
+          <div className="bs-frame-body bs-story-body" style={surfaceStyle()}>
+            <StoryBoundary>
+              <KitFrame>{storyElement(React as unknown as Parameters<typeof storyElement>[0], r) as ReactNode}</KitFrame>
+            </StoryBoundary>
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function Canvas() {
   const s = useSyncExternalStore(subscribe, () => state);
+  if (s.gallery !== undefined) return <Gallery ids={s.gallery} />;
   return (
     <>
       {s.frames.map((frame) => {
@@ -409,6 +688,7 @@ function Canvas() {
               data-height={frame.frame.height ?? undefined}
               data-scrolls={gutter(frame) > 0 || undefined}
               style={{
+                ...surfaceStyle(),
                 width: s.present ? "100%" : frame.frame.width + gutter(frame) / (zoom ?? 1),
                 height: frame.frame.height === null ? undefined : s.present ? "100vh" : frame.frame.height,
                 zoom,
@@ -463,7 +743,7 @@ function Preview() {
   const frame = s.frames[0];
   if (frame === undefined) return null;
   return (
-    <div className="bs-preview" style={{ width: frame.frame.width, height: frame.frame.height ?? undefined, zoom: previewZoom(frame.frame.width) }}>
+    <div className="bs-preview" style={{ ...surfaceStyle(), width: frame.frame.width, height: frame.frame.height ?? undefined, zoom: previewZoom(frame.frame.width) }}>
       <Block frame={frame} hash={s.hashes.get(frame.blockId)} props={s.props[frame.blockId] ?? {}} />
     </div>
   );
@@ -824,6 +1104,27 @@ html[data-present] .bs-frame-title, html[data-present] .bs-switch, html[data-pre
 html[data-present] .bs-frame-body { min-height: 100vh; border-radius: 0; box-shadow: none !important; transition: none; }
 /* The block's own root reaches the window's foot, so its background, pattern and all, runs to the bottom edge as a page's would. */
 html[data-present] .bs-frame-body > [data-bid] > * { min-height: 100vh; box-sizing: border-box; }
+/* A proposed component: dashed, and tagged "not in system" at its root's top left. */
+.bs-proposed > :not(.bs-proposed-anchor) { outline: 1px dashed var(--bs-warning, #d97706); outline-offset: 2px; }
+/* The tag straddles the outline's top-right corner, so it marks the component without covering the design above it,
+   and fades while the pointer is over the component so what it covers can be read. */
+.bs-proposed-anchor {
+  position: absolute; z-index: 2147482000; pointer-events: none;
+  right: anchor(right); top: anchor(top); translate: 6px -50%;
+  transition: opacity 120ms ease-out;
+}
+.bs-proposed:hover .bs-proposed-anchor { opacity: 0.15; }
+.bs-proposed-tag {
+  display: block; padding: 1px 5px; border-radius: 3px; white-space: nowrap;
+  background: var(--bs-warning, #d97706); color: #fff; font: 500 10px/14px var(--bs-font-ui); letter-spacing: 0.01em;
+}
+.bs-gallery {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; align-items: start; width: 100%;
+}
+.bs-story { width: auto; }
+/* contain: a story that pins itself to the viewport, such as a sidebar, stays inside its own frame. */
+.bs-story-body { padding: 24px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; contain: layout paint; }
+body:has(.bs-gallery) #canvas { display: block; }
 body[data-mode="pin"] .bs-pin { cursor: pointer !important; }
 ${
   preview

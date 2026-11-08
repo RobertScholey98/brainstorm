@@ -1,0 +1,44 @@
+{
+  "title": "Week strip",
+  "description": "Seven day pills in a row; a dot marks a planned dinner and the selected day takes the primary colour.",
+  "example": {
+    "selected": "Tue",
+    "days": [
+      {
+        "day": "Mon",
+        "date": 10,
+        "planned": true
+      },
+      {
+        "day": "Tue",
+        "date": 11,
+        "planned": true
+      },
+      {
+        "day": "Wed",
+        "date": 12,
+        "planned": true
+      },
+      {
+        "day": "Thu",
+        "date": 13,
+        "planned": false
+      },
+      {
+        "day": "Fri",
+        "date": 14,
+        "planned": false
+      },
+      {
+        "day": "Sat",
+        "date": 15,
+        "planned": true
+      },
+      {
+        "day": "Sun",
+        "date": 16,
+        "planned": false
+      }
+    ]
+  }
+}

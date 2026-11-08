@@ -1,5 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import type { BlockId, BlockView, CanvasFrame, CanvasMode, CanvasPin, CanvasRect, ContentHash, FeedbackId, FrameToHost, HostToFrame, Pin, Props, SlotId } from "../core/types";
+import type {
+  BlockId,
+  BlockView,
+  CanvasFrame,
+  CanvasMode,
+  CanvasPin,
+  CanvasRect,
+  CanvasSystem,
+  ContentHash,
+  FeedbackId,
+  FrameToHost,
+  HostToFrame,
+  KitPayload,
+  Pin,
+  Props,
+  SlotId,
+} from "../core/types";
+import { kitFor } from "./kit";
 
 export type Placement = { readonly placed: ReadonlySet<FeedbackId>; readonly detached: ReadonlySet<FeedbackId> };
 
@@ -30,7 +47,10 @@ export function CanvasHost({
   onPlacement,
   onZooms,
   onPointer,
+  system,
 }: {
+  /** The session's design system, or null for a freeform session. Its kit loads before any block. */
+  system: CanvasSystem | null;
   blocks: readonly BlockView[];
   frames: readonly CanvasFrame[];
   props: Readonly<Record<string, Props>>;
@@ -64,6 +84,39 @@ export function CanvasHost({
   handlers.current = { onSelect, onBlockError, onPicked, onPinClicked, onPinHovered, onPlacement, onZooms, onPointer };
 
   const post = (message: HostToFrame) => frame.current?.contentWindow?.postMessage(message, "*");
+
+  const [kit, setKit] = useState<{ readonly key: string; readonly payload: KitPayload | null } | null>(null);
+  const kitKey = system === null ? null : `${system.id}@${system.n}`;
+  useEffect(() => {
+    if (system === null || kitKey === null) return;
+    let current = true;
+    void kitFor(system.id, system.n).then((payload) => current && setKit({ key: kitKey, payload }));
+    return () => {
+      current = false;
+    };
+    // Keyed by version alone: the theme and proposed components change without a new kit.
+  }, [kitKey]);
+  /** Blocks wait for the kit, so none loads against a kit that isn't there and reports a failure it didn't have. */
+  const kitReady = system === null || (kit?.key === kitKey && kit.payload !== null);
+
+  useEffect(() => {
+    if (readyCount === 0) return;
+    if (system === null) {
+      post({ kind: "kit", kit: null });
+      return;
+    }
+    if (kit?.key === kitKey && kit.payload !== null) post({ kind: "kit", kit: kit.payload });
+  }, [readyCount, kit, kitKey]);
+
+  const proposedKey = JSON.stringify(system?.proposed.map((p) => p.hash) ?? []);
+  useEffect(() => {
+    if (readyCount > 0 && kitReady) post({ kind: "proposed", modules: system?.proposed ?? [] });
+  }, [readyCount, kitReady, proposedKey]);
+
+  const themeKey = JSON.stringify(system?.theme ?? null);
+  useEffect(() => {
+    if (readyCount > 0 && system !== null) post({ kind: "theme", theme: system.theme });
+  }, [readyCount, themeKey]);
 
   useEffect(() => {
     const receive = (e: MessageEvent) => {
@@ -114,12 +167,12 @@ export function CanvasHost({
   }, []);
 
   useEffect(() => {
-    if (readyCount === 0) return;
+    if (readyCount === 0 || !kitReady) return;
     const fresh = blocks.filter((b) => sent.current.get(b.id) !== b.hash);
     if (fresh.length === 0) return;
     post({ kind: "modules", modules: fresh.map((b) => ({ blockId: b.id, hash: b.hash, compiled: b.compiled, css: b.css })) });
     for (const b of fresh) sent.current.set(b.id, b.hash);
-  }, [readyCount, blocks]);
+  }, [readyCount, blocks, kitReady]);
 
   // Before the state, so a frame that comes up presenting never lays out its chrome first.
   useEffect(() => {
@@ -127,8 +180,8 @@ export function CanvasHost({
   }, [readyCount, present]);
 
   useEffect(() => {
-    if (readyCount > 0) post({ kind: "state", frames, props, selected, stage });
-  }, [readyCount, frames, props, selected, stage]);
+    if (readyCount > 0 && kitReady) post({ kind: "state", frames, props, selected, stage });
+  }, [readyCount, frames, props, selected, stage, kitReady]);
 
   useEffect(() => {
     if (readyCount > 0) post({ kind: "mode", mode });

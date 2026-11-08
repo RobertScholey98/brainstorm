@@ -4,3 +4,4 @@ dist/
 test-results/
 design-review/
 release/
+test/.kit-*/

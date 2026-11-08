@@ -1,3 +1,7 @@
+import type { SystemManifest, ThemeAxis, Token } from "./system/model";
+
+export type { CatalogEntry, SystemManifest, ThemeAxis, Token } from "./system/model";
+
 declare const brand: unique symbol;
 export type Brand<T, B extends string> = T & { readonly [brand]: B };
 
@@ -6,6 +10,10 @@ export type NonEmpty<T> = readonly [T, ...T[]];
 export type Json = null | boolean | number | string | readonly Json[] | { readonly [key: string]: Json };
 
 export type SessionId = Brand<string, "SessionId">;
+export type SystemId = Brand<string, "SystemId">;
+export type SystemVersionN = Brand<number, "SystemVersionN">;
+/** A proposed component's name, PascalCase, which blocks import as `proposed/<name>`. */
+export type ProposedName = Brand<string, "ProposedName">;
 export type ProjectId = Brand<string, "ProjectId">;
 export type ThreadId = Brand<string, "ThreadId">;
 export type RunId = Brand<string, "RunId">;
@@ -20,6 +28,8 @@ export type FeedbackId = Brand<number, "FeedbackId">;
 export type ContentHash = Brand<string, "ContentHash">;
 
 export const SESSION_ID_PATTERN = /^s_[0-9a-z]{6,16}$/;
+export const SYSTEM_ID_PATTERN = /^ds_[0-9a-z]{6,16}$/;
+export const PROPOSED_NAME_PATTERN = /^[A-Z][A-Za-z0-9]{0,47}$/;
 // T3 prefixes threads that agents create, e.g. "mcp:<uuid>".
 export const THREAD_ID_PATTERN = /^(?:[a-z]+:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const SLOT_ID_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
@@ -42,6 +52,8 @@ const positiveInt =
     Number.isSafeInteger(raw) && raw > 0 ? (raw as T) : null;
 
 export const parseSessionId = matching<SessionId>(SESSION_ID_PATTERN);
+export const parseSystemId = matching<SystemId>(SYSTEM_ID_PATTERN);
+export const parseProposedName = matching<ProposedName>(PROPOSED_NAME_PATTERN);
 export const parseThreadId = matching<ThreadId>(THREAD_ID_PATTERN);
 export const parseSlotId = matching<SlotId>(SLOT_ID_PATTERN);
 export const parseVariantKey = matching<VariantKey>(SLOT_ID_PATTERN);
@@ -184,11 +196,34 @@ export type BlockDraft = {
   readonly controls: ControlsSpec;
 };
 
-export type WorkingCopyDraft = { readonly manifest: WorkingCopyManifest; readonly blocks: readonly BlockDraft[] };
+/** A proposed component's stored files: `component.tsx`, `component.json` and the optional `component.css`. */
+export type ProposedFiles = { readonly tsx: string; readonly json: string; readonly css: string | null };
+
+/**
+ * A component a design needs that its design system lacks (ADR 007). It may write HTML, unlike a block, but only with
+ * the kit's classes and the values the kit uses. `example` is the props its story renders it with.
+ */
+export type ProposedDraft = {
+  readonly name: ProposedName;
+  readonly hash: ContentHash;
+  readonly files: ProposedFiles;
+  readonly title: string;
+  readonly description: string;
+  readonly example: Readonly<Record<string, Json>>;
+};
+
+export type WorkingCopyDraft = {
+  readonly manifest: WorkingCopyManifest;
+  readonly blocks: readonly BlockDraft[];
+  readonly proposed: readonly ProposedDraft[];
+};
+
+export type StoredProposed = { readonly name: ProposedName; readonly files: ProposedFiles };
 
 export type StoredBlock = { readonly id: BlockId; readonly files: BlockFiles };
 
 export type IterationContents = {
+  readonly proposed: readonly StoredProposed[];
   readonly n: IterationN;
   readonly slots: readonly SlotManifest[];
   readonly blocks: readonly StoredBlock[];
@@ -219,6 +254,29 @@ const ISSUE_SEVERITY = {
   out_of_scope: "warning",
   not_addressed: "warning",
   vary_mismatch: "warning",
+  // Design systems (ADR 007): syncing one, and holding a design in a session with one to it.
+  system_source: "error",
+  system_bundle_failed: "error",
+  system_css_failed: "error",
+  kit_load_failed: "error",
+  no_story: "warning",
+  story_failed: "warning",
+  theme_ignored: "warning",
+  off_scale: "warning",
+  remote_url: "warning",
+  frame_missing: "warning",
+  raw_element: "error",
+  style_prop: "error",
+  css_in_system: "error",
+  unknown_component: "error",
+  unknown_proposed: "error",
+  invalid_proposed: "error",
+  unknown_class: "error",
+  off_scale_value: "error",
+  untokened_value: "error",
+  dynamic_class: "warning",
+  unused_proposed: "warning",
+  proposed_in_kit: "warning",
 } as const satisfies Record<string, "error" | "warning">;
 
 export type IssueCode = keyof typeof ISSUE_SEVERITY;
@@ -264,7 +322,7 @@ export type Failure =
   | {
       readonly code: "not_found";
       readonly message: string;
-      readonly entity: "session" | "thread" | "iteration" | "block" | "feedback" | "request";
+      readonly entity: "session" | "thread" | "iteration" | "block" | "feedback" | "request" | "system" | "theme" | "proposed";
     }
   | { readonly code: "validation_failed"; readonly message: string; readonly issues: readonly Issue[] }
   | {
@@ -459,7 +517,17 @@ export type RobAction =
   | { readonly kind: "mark_seen"; readonly blocks: NonEmpty<BlockId> }
   | { readonly kind: "retry_request" }
   | { readonly kind: "withdraw_request" }
-  | { readonly kind: "check_thread" };
+  | { readonly kind: "check_thread" }
+  // A session's theme (ADR 007). Tweaks belong to the session; Save as theme copies them to the system.
+  /** `value: null` clears the axis back to the system's default. */
+  | { readonly kind: "set_theme_axis"; readonly axis: string; readonly value: string | null }
+  | { readonly kind: "set_theme_token"; readonly token: string; readonly value: string }
+  | { readonly kind: "clear_theme_token"; readonly token: string }
+  | { readonly kind: "reset_theme" }
+  | { readonly kind: "apply_theme"; readonly name: string }
+  | { readonly kind: "save_theme"; readonly name: string }
+  | { readonly kind: "upgrade_system" }
+  | { readonly kind: "promote"; readonly name: ProposedName };
 
 /** `file` is the name inside the exports folder. */
 export type ExportResult = { readonly path: string; readonly file: string };
@@ -557,6 +625,8 @@ export type AgentContext = {
   readonly request: RequestContext | null;
   readonly feedback: { readonly open: readonly Feedback[]; readonly addressed: readonly Feedback[] };
   readonly controlVocabulary: string;
+  /** The session's design system, or null for a freeform session. `catalog` is the text the agent reads. */
+  readonly system: { readonly id: SystemId; readonly name: string; readonly n: SystemVersionN; readonly catalog: string } | null;
   readonly next: readonly string[];
 };
 
@@ -584,7 +654,11 @@ export type SlotView = {
   readonly active: VariantKey;
 };
 
+/** What the canvas loads for a proposed component. */
+export type ProposedModule = { readonly name: ProposedName; readonly hash: ContentHash; readonly compiled: string; readonly css: string | null };
+
 export type IterationView = Omit<IterationSummary, "slots" | "blocks"> & {
+  readonly proposed: readonly (ProposedModule & { readonly title: string; readonly description: string; readonly usedBy: readonly BlockId[] })[];
   readonly slots: readonly SlotView[];
   readonly blocks: readonly BlockView[];
 };
@@ -622,7 +696,110 @@ export type SessionView = {
   readonly feedback: readonly Feedback[];
   readonly request: { readonly request: Request; readonly phase: RequestPhase; readonly message: string } | null;
   readonly regenerate: Regenerate;
+  readonly system: SessionSystemView | null;
 };
+
+// --- Design systems (ADR 007) -----------------------------------------------------------------------------------------
+
+export type SystemSourceView = {
+  readonly root: string;
+  readonly entry: string;
+  readonly css: string | null;
+  readonly stories: readonly string[];
+  readonly frame: string | null;
+  readonly stubs: Readonly<Record<string, string>>;
+};
+
+export type SystemVersionSummary = {
+  readonly n: SystemVersionN;
+  readonly hash: string;
+  readonly syncedAt: string;
+  readonly components: number;
+  readonly stories: number;
+  readonly failedStories: number;
+  readonly warnings: readonly Issue[];
+};
+
+export type SystemListing = {
+  readonly id: SystemId;
+  readonly name: string;
+  readonly root: string;
+  readonly projectId: ProjectId | null;
+  readonly latest: SystemVersionSummary | null;
+  /** Sessions that use any version of it. */
+  readonly sessions: number;
+};
+
+export type SavedTheme = {
+  readonly name: string;
+  readonly axes: Readonly<Record<string, string>>;
+  readonly tokens: Readonly<Record<string, string>>;
+  readonly createdAt: string;
+};
+
+export type SystemView = SystemListing & {
+  readonly source: SystemSourceView;
+  /** Each version, with the brainstorms that build with it. */
+  readonly versions: readonly (Omit<SystemVersionSummary, "warnings"> & {
+    readonly sessions: readonly { readonly id: SessionId; readonly title: string }[];
+    /** Components it exports that the version before didn't, and ones it dropped. */
+    readonly added: readonly string[];
+    readonly removed: readonly string[];
+  })[];
+  /** The latest version's manifest, without its story sources. */
+  readonly manifest: Omit<SystemManifest, "storyFiles"> | null;
+  readonly themes: readonly SavedTheme[];
+};
+
+/** What a canvas frame loads to render a design system's components. */
+export type KitPayload = {
+  readonly hash: string;
+  readonly bundle: string;
+  readonly css: string;
+  readonly frame: string | null;
+  readonly surface: readonly { readonly property: string; readonly value: string }[];
+};
+
+/** A session's theme as the canvas applies it: attribute values on the root, and token values over the system's own. */
+export type ThemeState = { readonly axes: Readonly<Record<string, string>>; readonly tokens: Readonly<Record<string, string>> };
+
+export type PromotionState =
+  | { readonly state: "starting" }
+  /** `link` opens the thread in T3; null when T3 didn't show the thread right after starting it. */
+  | { readonly state: "started"; readonly thread: ThreadId; readonly link: string | null }
+  | { readonly state: "failed"; readonly error: string };
+
+export type ProposedView = {
+  readonly name: ProposedName;
+  readonly title: string;
+  readonly description: string;
+  readonly usedBy: readonly BlockId[];
+  readonly promotion: (PromotionState & { readonly at: string }) | null;
+  /** The newest version of the system that exports a component by this name, or null. */
+  readonly inSystem: SystemVersionN | null;
+  /** The session's version exports it, so blocks that import it get the kit's component, untagged. */
+  readonly fromKit: boolean;
+};
+
+export type SessionSystemView = {
+  readonly id: SystemId;
+  readonly name: string;
+  readonly n: SystemVersionN;
+  /** The system's newest version, which the session can upgrade to when it's newer than `n`. */
+  readonly latest: SystemVersionN;
+  readonly kitHash: string;
+  readonly axes: readonly ThemeAxis[];
+  readonly tokens: readonly Token[];
+  readonly theme: ThemeState;
+  readonly themes: readonly SavedTheme[];
+  readonly proposed: readonly ProposedView[];
+  /** Whether a T3 project is known for the system's source, so Promote can start a thread there. */
+  readonly canPromote: boolean;
+  /** What the newest version changes against the session's, by exported component name; empty when they're the same. */
+  readonly upgrade: { readonly added: readonly string[]; readonly removed: readonly string[] };
+};
+
+export type ThemeExport = { readonly css: ExportResult; readonly json: ExportResult };
 
 export type CanvasModule = {
   readonly blockId: BlockId;
@@ -674,7 +851,14 @@ export type HostToFrame =
    * Present: the slot on the stage fills the window with none of the canvas's own chrome (title, frame edge, selection,
    * pins), as if the design were the app itself. Pick mode still works in it (ADR 007).
    */
-  | { readonly kind: "present"; readonly on: boolean };
+  | { readonly kind: "present"; readonly on: boolean }
+  /** A design system's kit, sent once per version; null clears it. */
+  | { readonly kind: "kit"; readonly kit: KitPayload | null }
+  | { readonly kind: "theme"; readonly theme: ThemeState }
+  /** Proposed components that blocks import as `proposed/<name>`. */
+  | { readonly kind: "proposed"; readonly modules: readonly ProposedModule[] }
+  /** The system page's gallery: the loaded kit's stories with these ids, or every story when null. */
+  | { readonly kind: "gallery"; readonly stories: readonly string[] | null };
 
 export type CanvasVariant = { readonly blockId: BlockId; readonly title: string };
 
@@ -705,7 +889,20 @@ export type FrameToHost =
  * What a home card previews: the latest iteration's first slot, showing the variant Rob has selected, with his
  * settings applied. Null before the first iteration.
  */
-export type SessionPreview = { readonly frame: CanvasFrame; readonly module: CanvasModule; readonly props: Props };
+/** What a canvas frame needs for a session with a design system: the kit version to load, its theme and proposed components. */
+export type CanvasSystem = {
+  readonly id: SystemId;
+  readonly n: SystemVersionN;
+  readonly theme: ThemeState;
+  readonly proposed: readonly ProposedModule[];
+};
+
+export type SessionPreview = {
+  readonly frame: CanvasFrame;
+  readonly module: CanvasModule;
+  readonly props: Props;
+  readonly system: CanvasSystem | null;
+};
 
 /** A fork's source: an iteration of the parent, and the variant Rob picked per slot there. A slot left out keeps the one it shows. */
 export type ForkInput = {

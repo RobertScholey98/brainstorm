@@ -1,5 +1,5 @@
 import type { PreviewPrefs } from "../core/prefs";
-import { blockIdOf, type BlockId, type BlockView, type CanvasFrame, type CanvasPin, type FeedbackId, type IterationN, type Props, type SessionId, type SlotId, type SlotView } from "../core/types";
+import { blockIdOf, type BlockId, type BlockView, type CanvasFrame, type CanvasPin, type CanvasSystem, type FeedbackId, type IterationN, type Props, type SessionId, type SlotId, type SlotView } from "../core/types";
 
 /**
  * The preview window mirrors the main window's canvas (ADR 007). The two are pages of one origin in one Electron
@@ -14,6 +14,8 @@ export type MirrorScene = {
   readonly title: string;
   readonly slots: readonly SlotView[];
   readonly frames: readonly CanvasFrame[];
+  /** The canvas's design system kit, theme and proposed components, or null for a freeform session. */
+  readonly system: CanvasSystem | null;
   /** Keyed by BlockId, with Rob's unsaved settings over the stored ones, so a slider drag shows as he drags. */
   readonly props: Readonly<Record<string, Props>>;
   readonly selected: BlockId | null;

@@ -5,13 +5,15 @@ Brainstorm stores sessions in its own database. You edit a disposable working co
 ## Commands
 
 ```
-brainstorm session new     --title <t> [--brief -|<text>] [--thread <id>] [--project <path>]
+brainstorm session new     --title <t> [--brief -|<text>] [--thread <id>] [--project <path>] [--system <id|name>]
 brainstorm session list    [--thread <id>]                 # sessions in the thread's project
 brainstorm session attach  <id|title> [--thread <id>]
 brainstorm context         <session> [--thread <id>]
 brainstorm pull            <session> [--out <dir>]          # default .brainstorm/<session>
 brainstorm validate        <session> [--from <dir>]
 brainstorm commit          <session> [--from <dir>] [--thread <id>] [--addresses 4,7] [--note <text>]
+brainstorm system list                                     # design systems Brainstorm has synced
+brainstorm system sync     <system>                         # after the library changes
 ```
 
 - `--thread` defaults to `$T3CODE_THREAD_ID`. Leave it off.
@@ -121,6 +123,27 @@ Warnings arrive with a saved iteration. Fix the ones you caused and commit again
 | `vary_mismatch` | A vary request's new variant is missing, has another title, or lacks the target `data-part`. Add the folder under the key `context` named, set that title, or restore the part. |
 
 A commit that changes nothing and addresses nothing new returns the latest iteration with `created: false`. That is a safe replay.
+
+## Design systems
+
+A session made with `--system` builds only with that design system, so every design can be built from the real library. `pull` adds `system/CATALOG.md`, which lists each component with its stories, and `system/stories/`, which holds the story sources. Read both before writing a block; commit ignores the folder.
+
+- A block imports components from `"kit"` and composes them: `import { Card, Button, Stack, Text } from "kit"`. Lay out with `Stack`, `Grid` and `Box`, and write text with `Text` and `Heading`. Their spacing and size props take steps on the system's scale.
+- A block writes no HTML tags, no `className` or `style`, and no `block.css`. Pins need a `data-part`; pass it to the kit's primitives, which forward `data-*` props.
+- When the kit has nothing that fits, write a proposed component in `proposed/<Name>/`: `component.tsx` (default export), `component.json` (`{ "title", "description", "example" }`) and an optional `component.css`. A block imports it as `import ChoreList from "proposed/ChoreList"`. Rob sees it labelled "not in system" and can promote it into the library.
+- A proposed component may write HTML, but only with classes the kit's CSS defines, and in `component.css` only the kit's token variables and the values the catalog lists. Prefer the kit's components inside it.
+- Once the kit exports a component by a proposed component's name, after Rob upgrades the session to that version, import it from `"kit"` and delete the proposed folder.
+
+| Code | What to do |
+| --- | --- |
+| `raw_element` | A block writes an HTML tag. Use the kit's component for it, or a proposed component. |
+| `style_prop` | A block passes `className` or `style`, or a proposed component passes `style`. Pick a prop or variant of the kit's component, or move the style into `component.css`. |
+| `css_in_system` | Delete the block's `block.css`. |
+| `unknown_component` | The kit has no export by that name. Check the catalog. |
+| `unknown_proposed` | A block imports a proposed component with no folder. Write it, or fix the name. |
+| `unknown_class`, `dynamic_class` | A proposed component uses a class the kit doesn't define, or builds one from an expression. Write literal kit classes, or a rule in `component.css`. |
+| `off_scale_value` | A value in `component.css` is off the kit's scales. Use the value the message suggests, or read a token. |
+| `unused_proposed` | No block imports the proposed component. Import it, or delete its folder. |
 
 ## Requests
 
