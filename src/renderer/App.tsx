@@ -817,6 +817,7 @@ function SessionWorkspace({
               if (kind !== null) setInteraction({ kind: "picking", for: kind });
             }}
             onDismiss={() => setStuckPick(null)}
+            onHold={() => link.setHold(true)}
           />
         )}
         {preview.open && preview.hold && !presenting && <HeldBar on={preview.heldOn} onRelease={() => link.setHold(false)} />}
@@ -917,6 +918,7 @@ function CanvasAway({
   onHere,
   onWorking,
   onDismiss,
+  onHold,
 }: {
   look: PreviewPrefs["look"];
   hold: boolean;
@@ -927,6 +929,7 @@ function CanvasAway({
   onHere: () => void;
   onWorking: () => void;
   onDismiss: () => void;
+  onHold: () => void;
 }) {
   const act = stuck === "vary" ? "vary" : "pin";
   const name = look === "clean" ? "Clean" : "Working";
@@ -959,10 +962,12 @@ function CanvasAway({
                   ? "Choose its variants there. Esc stops."
                   : "Add your comment there; it appears in Feedback here. Esc stops."
                 : hold
-                  ? `The canvas is in the ${name} preview, which is held.`
+                  ? `The canvas is in the ${name} preview, which is held. Resume live sends your edits there.`
                   : look === "clean"
                     ? // The look an audience may be watching: every edit reaches it as it's made.
-                      "Your audience sees each edit as you make it. Hold pauses it."
+                      <>
+                        <span className="text-fg">Your audience sees each edit as you make it.</span> Hold pauses it.
+                      </>
                     : "It's live and follows your edits."}
           </EmptyDescription>
         </EmptyHeader>
@@ -997,6 +1002,12 @@ function CanvasAway({
                 Bring preview to front
               </Button>
               {/* A pick that is on carries over to the canvas here, so the button says so. */}
+              {/* Clean and live, every edit reaches the audience, so the way to pause it sits beside the words that say so. */}
+              {look === "clean" && picking === null && (
+                <Button variant="outline" onClick={onHold} data-away-hold>
+                  Hold preview
+                </Button>
+              )}
               <Button variant="outline" onClick={onHere} data-away-here>
                 {picking === "comment" ? "Show canvas here and pin" : picking === "vary" ? "Show canvas here and vary" : "Show canvas here"}
               </Button>

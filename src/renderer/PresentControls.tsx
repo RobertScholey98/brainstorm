@@ -43,7 +43,7 @@ export function PresentControls({
     <span className="flex shrink-0 items-center gap-1" data-present-controls>
       {windowed && open && <HoldButton hold={hold} heldOn={heldOn} onHold={onHold} />}
       {windowed && (open ? <WindowMenu prefs={prefs} onPrefs={onPrefs} hold={hold} heldOn={heldOn} onHold={onHold} /> : <OpenWindow />)}
-      <Hint name="Present" label="Fill the screen with this slot" shortcut="F5" side="bottom">
+      <Hint name="Present" label="Fill the screen with this slot" shortcut="F5" side="bottom" align="end">
         <Button variant="outline" aria-label="Present" onClick={onPresent} className={COMPACT} data-collapse={BAR_COLLAPSE.present} data-present>
           <Maximize data-icon="inline-start" aria-hidden />
           <span className={COMPACT_LABEL}>Present</span>

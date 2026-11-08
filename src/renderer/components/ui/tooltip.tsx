@@ -120,6 +120,7 @@ function Hint({
   label,
   shortcut,
   side,
+  align,
   disabled,
   children,
 }: {
@@ -127,6 +128,8 @@ function Hint({
   label: ReactNode
   shortcut?: string
   side: NonNullable<TooltipPrimitive.Positioner.Props["side"]>
+  /** Which edge of the control the hint lines up with: "end" keeps a hint at a bar's end from spilling past it. */
+  align?: TooltipPrimitive.Positioner.Props["align"]
   disabled?: boolean
   children: ReactElement
 }) {
@@ -134,7 +137,7 @@ function Hint({
   return (
     <Tooltip disabled={disabled}>
       <TooltipTrigger render={children} />
-      <TooltipContent side={side} anchor={row?.anchor} sideOffset={row === null ? undefined : rowOffset(row)} covers={row?.text}>
+      <TooltipContent side={side} align={align} anchor={row?.anchor} sideOffset={row === null ? undefined : rowOffset(row)} covers={row?.text}>
         {name !== undefined && (
           <>
             <span className="font-medium" data-hint-name>
