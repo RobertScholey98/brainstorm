@@ -130,5 +130,14 @@ async function run(): Promise<void> {
   contents.on("will-frame-navigate", (event) => {
     if (new URL(event.url).origin !== origin) event.preventDefault();
   });
+  // The page keeps the UI token only in memory and wipes it from the URL, so a page that loads again (a reload, or a
+  // renderer brought back after a crash) would come up without it. Each such load goes back to the URL that carries it.
+  contents.on("did-navigate", (_event, url) => {
+    const target = new URL(url);
+    if (target.origin === origin && !target.hash.startsWith("#ui=")) void contents.loadURL(server.url);
+  });
+  contents.on("render-process-gone", (_event, details) => {
+    if (!closing && details.reason !== "clean-exit") void contents.loadURL(server.url);
+  });
   await window.loadURL(server.url);
 }

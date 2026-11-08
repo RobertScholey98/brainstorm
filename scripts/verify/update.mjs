@@ -1,4 +1,5 @@
-// The in-app update, end to end: installs this build as version A, serves an A+1 build from a local feed
+// The installed app, end to end. Installs this build as version A and checks that it installs the use-brainstorm skill,
+// opened directly and started by the brainstorm command. Then the in-app update: serves an A+1 build from a local feed
 // (BRAINSTORM_UPDATE_FEED, in place of GitHub's), waits for the sidebar's Restart to update, presses it, and checks that
 // the installed app is now A+1 and runs. Then it uninstalls. npm run verify:update
 //
@@ -99,12 +100,60 @@ const uninstall = () => {
   else if (existsSync(join(target.dir, "Uninstall Brainstorm.exe"))) execFileSync(join(target.dir, "Uninstall Brainstorm.exe"), ["/S"], { stdio: "inherit" });
 };
 
-const { ELECTRON_RUN_AS_NODE: _, ...baseEnv } = process.env;
+const { ELECTRON_RUN_AS_NODE: _, BRAINSTORM_HOME: __, ...baseEnv } = process.env;
 const open = () => _electron.launch({ executablePath: target.exe, env: { ...baseEnv, BRAINSTORM_HOME: home, BRAINSTORM_UPDATE_FEED: feedUrl } });
 const macLog = join(homedir(), "Library", "Logs", "Brainstorm", "update.log");
+
+// Rob's own environment on a fake user folder: no BRAINSTORM_HOME, so the app keeps its default home and installs the
+// use-brainstorm skill into <user>/.claude/skills, as it does on his machine.
+const user = join(work, "user");
+const userEnv = {
+  ...baseEnv,
+  BRAINSTORM_DISABLE_AUTO_UPDATE: "1",
+  ...(mac ? { HOME: user } : { USERPROFILE: user, APPDATA: join(user, "AppData", "Roaming") }),
+};
+const userHome = mac ? join(user, "Library", "Application Support", "brainstorm") : join(user, "AppData", "Roaming", "brainstorm");
+const skill = join(user, ".claude", "skills", "use-brainstorm", "SKILL.md");
+const brainstormCommand = mac ? ["/usr/local/bin/brainstorm"] : ["cmd.exe", "/d", "/c", join(target.dir, "resources", "bin", "brainstorm.cmd")];
+const readOr = (path, otherwise) => (existsSync(path) ? readFileSync(path, "utf8") : otherwise);
+
+async function skillChecks() {
+  mkdirSync(user, { recursive: true });
+  // Opened as the Dock or Start menu opens it.
+  const direct = await _electron.launch({ executablePath: target.exe, env: userEnv });
+  let stderr = "";
+  direct.process().stderr?.on("data", (d) => (stderr += d));
+  await direct.firstWindow();
+  const installed = await until(() => existsSync(skill) || null, 30_000);
+  check("the app opened directly installs the use-brainstorm skill", installed, true);
+  if (!installed) console.log(`the app's stderr:\n${stderr}`);
+  await direct.close();
+
+  // Started by the brainstorm command, as an agent in a T3 thread starts it.
+  rmSync(join(user, ".claude"), { recursive: true, force: true });
+  try {
+    const [command, ...args] = brainstormCommand;
+    execFileSync(command, [...args, "session", "list", "--thread", "11111111-1111-1111-1111-111111111111", "--json"], {
+      env: userEnv,
+      stdio: "inherit",
+      timeout: 60_000,
+    });
+  } catch (e) {
+    console.log(`brainstorm session list failed: ${e.message}`);
+  }
+  const viaCli = await until(() => existsSync(skill) || null, 30_000);
+  check("the app the brainstorm command starts installs the skill", viaCli, true);
+  if (!viaCli) console.log(`server.log:\n${readOr(join(userHome, "server.log"), "(none)")}`);
+  try {
+    process.kill(JSON.parse(readFileSync(join(userHome, "api.json"), "utf8")).pid);
+  } catch {}
+  await new Promise((r) => setTimeout(r, 2000));
+}
+
 let app = null;
 try {
   install();
+  await skillChecks();
   app = await open();
   const window = await app.firstWindow();
   check("the installed app runs version A", (await until(health, 30_000))?.version, version);
