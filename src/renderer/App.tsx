@@ -12,6 +12,7 @@ import {
   type BlockId,
   type BlockView,
   type CanvasRect,
+  type CanvasSystem,
   type CanvasPin,
   type ContentHash,
   type Feedback,
@@ -28,6 +29,7 @@ import {
   type SessionListing,
   type SessionView,
   type SlotId,
+  type SystemId,
   type VariantKey,
 } from "../core/types";
 import { applyPrefs, NO_PREFS, stripOpen, type CanvasLayout, type UiPrefs, type UiPrefsPatch } from "../core/prefs";
@@ -48,6 +50,9 @@ import { RequestDetail } from "./Regenerate";
 import { settleUndoes, useSettleShortcut } from "./settle";
 import { SessionBar, TopBar } from "./TopBar";
 import { VaryComposer, VarySection } from "./Vary";
+import { setKitSource } from "./kit";
+import { SystemSection } from "./SystemPanel";
+import { SystemsPage } from "./Systems";
 import { blockedMessage } from "../core/machines";
 import type { AppUpdateState } from "../core/appUpdate";
 
@@ -67,7 +72,10 @@ const RAIL = 40;
  * What the window shows. An open brainstorm keeps its canvas while the sidebar shows the home list, so going back to
  * pick another one doesn't throw away the one on screen.
  */
-type Nav = { readonly kind: "overview" } | { readonly kind: "brainstorm"; readonly id: SessionId; readonly panel: "session" | "home" };
+type Nav =
+  | { readonly kind: "overview" }
+  | { readonly kind: "systems"; readonly id: SystemId | null }
+  | { readonly kind: "brainstorm"; readonly id: SessionId; readonly panel: "session" | "home" };
 
 type Picked = { readonly pin: Pin; readonly at: { readonly x: number; readonly y: number }; readonly rect: CanvasRect };
 
@@ -89,6 +97,7 @@ const NO_PLACEMENT: Placement = { placed: new Set(), detached: new Set() };
 /** The window waits for the stored layout before its first paint, so a remembered width never jumps into place. */
 export function App({ api }: { api: Api }) {
   const [prefs, setPrefs] = useState<UiPrefs | null>(null);
+  useEffect(() => setKitSource(api.kit), [api]);
   useEffect(() => void api.prefs().then((r) => setPrefs(r.ok ? r.data : NO_PREFS)), [api]);
   const savePrefs = useCallback(
     (patch: UiPrefsPatch) => {
@@ -192,6 +201,8 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
       current={sessionId}
       overview={nav.kind === "overview"}
       onOverview={() => setNav({ kind: "overview" })}
+      systems={nav.kind === "systems"}
+      onSystems={() => setNav({ kind: "systems", id: null })}
       onSession={openSession}
       onSettle={(s) => void toggleSettled(s)}
     />
@@ -225,6 +236,13 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
                 query={prefs.home}
                 onQuery={(home) => savePrefs({ home })}
               />
+              {toast}
+            </section>
+          </Shell>
+        ) : nav.kind === "systems" ? (
+          <Shell sidebar={sidebar(homePanel)} bar={<TopBar />}>
+            <section className="relative min-w-0 flex-1 overflow-hidden bg-canvas" aria-label="Design systems" data-canvas-region>
+              <SystemsPage api={api} selected={nav.id} onSelect={(id) => setNav({ kind: "systems", id })} showNotice={setNotice} />
               {toast}
             </section>
           </Shell>
@@ -405,6 +423,20 @@ function SessionWorkspace({
   const readOnly = past === null ? null : past.n;
   const slots = iteration?.slots ?? [];
   const blocks = iteration?.blocks ?? [];
+  const sessionSystem = view?.system ?? null;
+  // The canvas's kit, theme and proposed components; the iteration on the canvas brings its own proposed components.
+  const canvasSystem = useMemo<CanvasSystem | null>(
+    () =>
+      sessionSystem === null
+        ? null
+        : {
+            id: sessionSystem.id,
+            n: sessionSystem.n,
+            theme: sessionSystem.theme,
+            proposed: (iteration?.proposed ?? []).map(({ name, hash, compiled, css }) => ({ name, hash, compiled, css })),
+          },
+    [sessionSystem, iteration],
+  );
   blocksNow.current = blocks;
   const slot = slots.find((s) => s.id === selectedSlot) ?? slots[0] ?? null;
   const selectedBlock = slot === null ? null : (blocks.find((b) => b.id === blockIdOf(slot.id, slot.active)) ?? null);
@@ -618,6 +650,7 @@ function SessionWorkspace({
           <WaitingEmpty loading={view === null || past !== null} />
         ) : (
           <CanvasHost
+            system={canvasSystem}
             blocks={blocks}
             frames={frames}
             props={frameProps}
@@ -713,6 +746,19 @@ function SessionWorkspace({
             onOpen={openFeedback}
             send={send}
           />
+          {view.system !== null && (
+            <SystemSection
+              system={view.system}
+              readOnly={past !== null}
+              send={send}
+              exportTheme={async () => {
+                const r = await api.exportTheme(sessionId);
+                if (r.ok) return r.data;
+                showNotice({ title: "Couldn't export the theme", detail: r.error.message });
+                return null;
+              }}
+            />
+          )}
         </Inspector>
       )}
     </Shell>

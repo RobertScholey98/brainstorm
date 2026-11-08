@@ -9,7 +9,9 @@ import {
   isError,
   issue,
   parseIterationN,
+  parseProposedName,
   parseSessionId,
+  PROPOSED_NAME_PATTERN,
   parseSlotId,
   parseVariantKey,
   SLOT_ID_PATTERN,
@@ -22,6 +24,9 @@ import {
   type IterationN,
   type Issue,
   type Parsed,
+  type ProposedDraft,
+  type ProposedFiles,
+  type ProposedName,
   type SessionId,
   type SlotId,
   type SlotManifest,
@@ -35,6 +40,25 @@ const MANIFEST = "brainstorm.json";
 const GUIDE = "GUIDE.md";
 const GITIGNORE = ".gitignore";
 const IGNORED_ON_COMMIT = new Set([GUIDE, GITIGNORE]);
+/** A session with a design system gets its catalog and story sources here on pull, to read; commit ignores the folder. */
+const SYSTEM_DIR = "system/";
+
+// Key order here is the canonical file order for a proposed component's content hash.
+const PROPOSED_FILES = {
+  "component.tsx": { key: "tsx", required: true, about: "the component, default-exported; it may import react, kit and other proposed components" },
+  "component.json": { key: "json", required: true, about: '`{ "title": "Chore list", "description": "…", "example": { …props } }`' },
+  "component.css": { key: "css", required: false, about: 'styles, served wrapped in `@scope ([data-proposed="<Name>"])`; only values the kit uses' },
+} as const satisfies Record<string, { key: keyof ProposedFiles; required: boolean; about: string }>;
+
+type ProposedFileName = keyof typeof PROPOSED_FILES;
+const PROPOSED_FILE_NAMES = Object.keys(PROPOSED_FILES) as ProposedFileName[];
+const isProposedFileName = (name: string): name is ProposedFileName => Object.hasOwn(PROPOSED_FILES, name);
+
+const proposedJsonShape = z.strictObject({
+  title: z.string().min(1),
+  description: z.string().min(1),
+  example: z.record(z.string(), z.json()).default({}),
+});
 
 const FRAME_WIDTH = { min: 240, max: 1920, default: 390 } as const;
 const FRAME_HEIGHT = { min: 100, max: 4000 } as const;
@@ -84,6 +108,14 @@ const blockJsonShape = z.strictObject({ title: z.string().min(1), props: z.unkno
 /** CRLF and a BOM are editor noise; stored content and hashes use the normalized text. */
 const normalize = (text: string): string => text.replace(/^﻿/, "").replace(/\r\n/g, "\n");
 
+export function proposedHash(files: ProposedFiles): ContentHash {
+  const present = PROPOSED_FILE_NAMES.flatMap((name) => {
+    const text = files[PROPOSED_FILES[name].key];
+    return text === null ? [] : [[name, text]];
+  });
+  return createHash("sha256").update(JSON.stringify(["proposed", ...present])).digest("hex") as ContentHash;
+}
+
 export function contentHash(files: BlockFiles): ContentHash {
   const present = BLOCK_FILE_NAMES.flatMap((name) => {
     const text = files[BLOCK_FILES[name].key];
@@ -113,6 +145,7 @@ export function parseWorkingCopy(raw: FileMap): Parsed<WorkingCopyDraft> {
 export function scanWorkingCopy(raw: FileMap): { readonly parsed: Parsed<WorkingCopyDraft>; readonly blocks: readonly BlockDraft[] } {
   const issues: Issue[] = [];
   const dirs = new Map<string, BlockDir>();
+  const proposedDirs = new Map<string, Partial<Record<ProposedFileName, string>>>();
   const badIds = new Set<string>();
   let manifestText: string | null = null;
 
@@ -122,8 +155,30 @@ export function scanWorkingCopy(raw: FileMap): { readonly parsed: Parsed<Working
       manifestText = text;
       continue;
     }
-    if (IGNORED_ON_COMMIT.has(path)) continue;
+    if (IGNORED_ON_COMMIT.has(path) || path.startsWith(SYSTEM_DIR)) continue;
     const parts = path.split("/");
+    if (parts[0] === "proposed") {
+      const [, nameRaw, fileName] = parts;
+      if (parts.length !== 3 || nameRaw === undefined || fileName === undefined || !isProposedFileName(fileName)) {
+        issues.push(
+          issue("unexpected_file", `a proposed component is proposed/<Name>/{${PROPOSED_FILE_NAMES.join(",")}}, so this file would be dropped`, {
+            file: path,
+          }),
+        );
+        continue;
+      }
+      if (parseProposedName(nameRaw) === null) {
+        if (!badIds.has(`proposed/${nameRaw}`)) {
+          badIds.add(`proposed/${nameRaw}`);
+          issues.push(issue("invalid_id", `"${nameRaw}" must match ${PROPOSED_NAME_PATTERN.source}, PascalCase like a component`, { file: `proposed/${nameRaw}` }));
+        }
+        continue;
+      }
+      const dir = proposedDirs.get(nameRaw) ?? {};
+      dir[fileName] = text;
+      proposedDirs.set(nameRaw, dir);
+      continue;
+    }
     const [top, slotRaw, variantRaw, name] = parts;
     if (parts.length !== 4 || top !== "slots" || !slotRaw || !variantRaw || !name || !isBlockFileName(name)) {
       const retired = top === "slots" && name !== undefined && Object.hasOwn(RETIRED_FILES, name) ? RETIRED_FILES[name] : undefined;
@@ -131,7 +186,7 @@ export function scanWorkingCopy(raw: FileMap): { readonly parsed: Parsed<Working
         issue(
           "unexpected_file",
           retired ??
-            `Brainstorm reads only ${MANIFEST} and slots/<slot>/<variant>/{${BLOCK_FILE_NAMES.join(",")}}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.`,
+            `Brainstorm reads only ${MANIFEST}, slots/<slot>/<variant>/{${BLOCK_FILE_NAMES.join(",")}} and, with a design system, proposed/<Name>/{${PROPOSED_FILE_NAMES.join(",")}}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.`,
           { file: path },
         ),
       );
@@ -188,9 +243,15 @@ export function scanWorkingCopy(raw: FileMap): { readonly parsed: Parsed<Working
     if (block !== null) blocks.push(block);
   }
 
+  const proposed: ProposedDraft[] = [];
+  for (const [name, files] of [...proposedDirs].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const draft = parseProposed(name as ProposedName, files, issues);
+    if (draft !== null) proposed.push(draft);
+  }
+
   const all = [...issues, ...warnings];
   if (manifest === null || all.some(isError)) return { parsed: { ok: false, issues: all }, blocks };
-  return { parsed: { ok: true, value: { manifest, blocks }, warnings }, blocks };
+  return { parsed: { ok: true, value: { manifest, blocks, proposed }, warnings }, blocks };
 }
 
 function parseManifest(text: string, issues: Issue[]): WorkingCopyManifest | null {
@@ -294,6 +355,51 @@ function parseBlock(dir: BlockDir, issues: Issue[], warnings: Issue[]): BlockDra
   };
 }
 
+function parseProposed(name: ProposedName, files: Partial<Record<ProposedFileName, string>>, issues: Issue[]): ProposedDraft | null {
+  const path = (file: ProposedFileName) => `proposed/${name}/${file}`;
+  const before = issues.length;
+  for (const file of PROPOSED_FILE_NAMES) {
+    if (PROPOSED_FILES[file].required && files[file] === undefined) {
+      issues.push(issue("missing_file", `${file} is required in every proposed component (${PROPOSED_FILES[file].about})`, { file: path(file) }));
+    }
+  }
+  const tsx = files["component.tsx"];
+  const jsonText = files["component.json"];
+  if (tsx === undefined || jsonText === undefined) return null;
+  const json = parseJson(jsonText, path("component.json"));
+  if (!json.ok) {
+    issues.push(json.issue);
+    return null;
+  }
+  const shape = parseWith(proposedJsonShape, json.value, "invalid_proposed", { file: path("component.json") });
+  if (!shape.ok) {
+    issues.push(...shape.issues);
+    return null;
+  }
+  if (issues.length > before) return null;
+  const stored: ProposedFiles = { tsx, json: jsonText, css: files["component.css"] ?? null };
+  return {
+    name,
+    hash: proposedHash(stored),
+    files: stored,
+    title: shape.data.title,
+    description: shape.data.description,
+    example: shape.data.example as ProposedDraft["example"],
+  };
+}
+
+/** Reads a stored proposed component back. It passed this same parse when it was committed. */
+export function readStoredProposed(name: ProposedName, files: ProposedFiles): ProposedDraft | null {
+  const raw: Partial<Record<ProposedFileName, string>> = { "component.tsx": files.tsx, "component.json": files.json };
+  if (files.css !== null) raw["component.css"] = files.css;
+  return parseProposed(name, raw, []);
+}
+
+export function proposedFile(name: ProposedName, key: keyof ProposedFiles): string {
+  const file = PROPOSED_FILE_NAMES.find((f) => PROPOSED_FILES[f].key === key) ?? "component.tsx";
+  return `proposed/${name}/${file}`;
+}
+
 /** Reads a stored block back into its parsed form. Stored blocks passed this same parse when they were committed. */
 export function readStoredBlock(block: StoredBlock): BlockDraft | null {
   const [slot, variant] = block.id.split("/");
@@ -334,10 +440,13 @@ export function blockFile(id: BlockId, key: keyof BlockFiles): string {
 
 /** Whether `pull` owns this path: it replaces `slots/` wholesale and rewrites the generated files. */
 export function ownedByPull(path: string): boolean {
-  return path === MANIFEST || IGNORED_ON_COMMIT.has(path) || path.startsWith("slots/");
+  return path === MANIFEST || IGNORED_ON_COMMIT.has(path) || path.startsWith("slots/") || path.startsWith("proposed/") || path.startsWith(SYSTEM_DIR);
 }
 
-export function emitWorkingCopy(session: SessionId, iteration: IterationContents | null): FileMap {
+/** What a session's design system adds to its working copy: a catalog to read, and the stories that show each component in use. */
+export type SystemDocs = { readonly name: string; readonly catalog: string; readonly storyFiles: Readonly<Record<string, string>> };
+
+export function emitWorkingCopy(session: SessionId, iteration: IterationContents | null, system: SystemDocs | null = null): FileMap {
   const manifest = {
     format: 1,
     session,
@@ -350,7 +459,7 @@ export function emitWorkingCopy(session: SessionId, iteration: IterationContents
   };
   const files: Record<string, string> = {
     [GITIGNORE]: "*\n",
-    [GUIDE]: guide(session),
+    [GUIDE]: guide(session, system),
     [MANIFEST]: JSON.stringify(manifest, null, 2) + "\n",
   };
   for (const block of iteration?.blocks ?? []) {
@@ -358,6 +467,16 @@ export function emitWorkingCopy(session: SessionId, iteration: IterationContents
       const text = block.files[BLOCK_FILES[name].key];
       if (text !== null) files[`slots/${block.id}/${name}`] = text;
     }
+  }
+  for (const p of iteration?.proposed ?? []) {
+    for (const name of PROPOSED_FILE_NAMES) {
+      const text = p.files[PROPOSED_FILES[name].key];
+      if (text !== null) files[`proposed/${p.name}/${name}`] = text;
+    }
+  }
+  if (system !== null) {
+    files[`${SYSTEM_DIR}CATALOG.md`] = system.catalog;
+    for (const [path, text] of Object.entries(system.storyFiles)) files[`${SYSTEM_DIR}stories/${path}`] = text;
   }
   return files;
 }
@@ -369,7 +488,23 @@ function fieldList(shape: Record<string, z.ZodType>): string {
     .join(", ");
 }
 
-function guide(session: SessionId): string {
+function systemGuide(system: SystemDocs): string[] {
+  return [
+    `## Design system: ${system.name}`,
+    "",
+    "This session builds only with its design system, so the design can be built from the real library. `system/CATALOG.md` lists every component with its props and stories, and `system/stories/` holds the stories that show each one in use. Both are regenerated on pull and ignored on commit.",
+    "",
+    '- A block imports components from `"kit"` (`import { Card, Button, Stack, Text } from "kit"`) and composes them. It writes no HTML tags, no `className` or `style` props, and no `block.css`; commit refuses each one.',
+    "- Lay out with the kit's `Stack`, `Grid` and `Box`, and write text with `Text` and `Heading`. Their spacing and size props take steps on the system's scales.",
+    '- When the kit has nothing that fits, write a **proposed component** in `proposed/<Name>/` and import it in a block as `import ChoreList from "proposed/ChoreList"`. Rob sees it labelled "not in system", and can promote it into the library.',
+    ...PROPOSED_FILE_NAMES.map((name) => `  - \`${name}\` (${PROPOSED_FILES[name].required ? "required" : "optional"}): ${PROPOSED_FILES[name].about}.`),
+    "  - It may write HTML, using only classes the kit's CSS defines and, in `component.css`, only the token variables and values the kit uses. Commit names any value off the kit's scales. No `style` prop.",
+    "  - Prefer the kit's components inside it. Its `example` props must render it, as a story would.",
+    "",
+  ];
+}
+
+function guide(session: SessionId, system: SystemDocs | null = null): string {
   const propTypes = Object.entries(PROP_TYPES).map(
     ([type, { fields, rule }]) => `- \`"${type}"\`: ${fieldList(fields.shape)}.${rule ? ` ${rule}` : ""}`,
   );
@@ -399,6 +534,7 @@ function guide(session: SessionId): string {
     `- It must render without throwing, with defaults and with Rob's overrides, within ${CHECK_TIMEOUT_MS / 1000} s. No \`window\` or \`document\` during render; effects are fine.`,
     '- Mark meaningful elements with `data-part="<name>"`, unique within the render. Rob pins feedback to them. Never write `data-bid`.',
     "",
+    ...(system === null ? [] : systemGuide(system)),
     "## Props (`block.json` `props`)",
     "",
     "- `data` props are what the block shows. `appearance` props are what Rob adjusts. Both are optional objects keyed by camelCase prop name.",

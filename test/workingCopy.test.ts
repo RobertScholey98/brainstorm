@@ -119,6 +119,7 @@ describe("parseWorkingCopy", () => {
             controls: { root: "section", elements: { section: { type: "Section", props: { title: "Classic wheel" }, children: [] } } },
           },
         ],
+        proposed: [],
       },
       warnings: [uncontrolled("accent"), uncontrolled("density"), uncontrolled("showOdds"), uncontrolled("headline")],
     });
@@ -159,13 +160,13 @@ describe("parseWorkingCopy", () => {
         err(
           "unexpected_file",
           "notes.txt",
-          "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
+          "Brainstorm reads only brainstorm.json, slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json} and, with a design system, proposed/<Name>/{component.tsx,component.json,component.css}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
         ),
         err("invalid_id", "slots/wheel/Neon", '"Neon" must match ^[a-z][a-z0-9-]{0,31}$'),
         err(
           "unexpected_file",
           "slots/wheel/helper.ts",
-          "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
+          "Brainstorm reads only brainstorm.json, slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json} and, with a design system, proposed/<Name>/{component.tsx,component.json,component.css}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
         ),
         err(
           "unexpected_file",
@@ -175,7 +176,7 @@ describe("parseWorkingCopy", () => {
         err(
           "unexpected_file",
           "slots/wheel/neon/utils.ts",
-          "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
+          "Brainstorm reads only brainstorm.json, slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json} and, with a design system, proposed/<Name>/{component.tsx,component.json,component.css}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
         ),
         err("invalid_manifest", "brainstorm.json", 'slot "wheel" is listed twice', "/slots/2/id"),
         err("invalid_id", "brainstorm.json", '"Bad" must match ^[a-z][a-z0-9-]{0,31}$', "/slots/3/id"),
@@ -293,6 +294,7 @@ describe("emitWorkingCopy", () => {
       n: 4 as IterationN,
       slots: parsed.value.manifest.slots,
       blocks: parsed.value.blocks.map((b) => ({ id: b.id, files: b.files })),
+      proposed: [],
     };
     const emitted = emitWorkingCopy(session, iteration);
     expect(Object.keys(emitted).sort()).toEqual([

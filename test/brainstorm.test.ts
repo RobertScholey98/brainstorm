@@ -183,7 +183,7 @@ describe("commit", () => {
           loc: null,
           pointer: null,
           message:
-            "Brainstorm reads only brainstorm.json and slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
+            "Brainstorm reads only brainstorm.json, slots/<slot>/<variant>/{block.tsx,block.json,block.css,controls.json} and, with a design system, proposed/<Name>/{component.tsx,component.json,component.css}, so this file would be dropped. Blocks can't import local files; inline helpers in block.tsx.",
         },
         {
           severity: "error",
@@ -744,6 +744,7 @@ describe("context", () => {
         addressed: [],
       },
       controlVocabulary: undefined,
+      system: null,
       next: [`brainstorm session attach ${S}`, `brainstorm pull ${S}`, `brainstorm validate ${S}`, `brainstorm commit ${S} --addresses 1`],
     });
   });
@@ -766,6 +767,7 @@ describe("preview", () => {
       frame: { slot: "wheel", title: "The wheel", frame: FRAME, blockId: "wheel/reel" },
       module: { blockId: "wheel/reel", hash: reel?.hash, compiled: reel?.compiled, css: reel?.css },
       props: { headline: "Spin it" },
+      system: null,
     });
     expect(service.preview("s_nothere1" as SessionId).ok).toBe(false);
   });
