@@ -129,6 +129,20 @@ describe("a design system", () => {
       ["Stack", [], 0, true],
       ["Text", [], 0, true],
     ]);
+    // Props are read from the source, so Button lists `onClick`, which no story sets; generated entries have none.
+    expect(Object.fromEntries(manifest.catalog.map((e) => [e.name, e.props]))).toEqual({
+      Button: [
+        { name: "children", default: null, required: true, options: null, type: "ReactNode" },
+        { name: "variant", default: '"primary"', required: false, options: ["primary", "outline"], type: '"primary" | "outline"' },
+        { name: "onClick", default: null, required: false, options: null, type: "() => void" },
+      ],
+      Card: [{ name: "children", default: null, required: true, options: null, type: "ReactNode" }],
+      Box: undefined,
+      Grid: undefined,
+      Heading: undefined,
+      Stack: undefined,
+      Text: undefined,
+    });
     expect(manifest.styles.axes).toEqual([{ attribute: "data-theme", values: ["dark"], default: null }]);
     expect(manifest.styles.tokens.find((t) => t.name === "--primary")).toMatchObject({ kind: "color", value: "#4f46e5", byAxis: { "data-theme=dark": "#818cf8" } });
     expect(manifest.styles.measured.radius).toContain("8px");

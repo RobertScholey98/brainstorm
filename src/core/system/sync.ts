@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import type { Checker } from "../check";
 import { issue, type Issue } from "../types";
 import { buildSystem } from "./build";
 import { analyzeKitCss, flattenCss, htmlClasses, parseCss, readsColorToken } from "./css";
 import { isTier, type ArgType, type CatalogEntry, type KitExportInfo, type StoryInfo, type SystemManifest, type Tier } from "./model";
+import { componentProps } from "./props";
 import { sourceFile, type SystemSource } from "./source";
 
 export type SyncedVersion = {
@@ -72,7 +75,9 @@ export async function syncSystem(source: SystemSource, checker: Checker): Promis
     warnings.push(issue("duplicate_export", `more than one tier file exports ${list(inspected.duplicates, 8)}; the kit keeps the first`, { file: sourceFile(source) }));
   }
   const tiers = Object.fromEntries(Object.entries(inspected.tiers).filter((e): e is [string, Tier] => isTier(e[1])));
-  const catalog = catalogOf(inspected.exports, stories, inspected.generated, tiers, source.componentTiers ?? {});
+  const listed = catalogOf(inspected.exports, stories, inspected.generated, tiers, source.componentTiers ?? {});
+  const props = componentProps(componentSources(source.root, built.value.inputs, storyFiles), listed.filter((e) => !e.generated).map((e) => e.name));
+  const catalog = listed.map((e) => (e.generated ? e : { ...e, props: props[e.name] ?? [] }));
   const htmlById = new Map(inspected.stories.map((s) => [s.id, s.html]));
   const unthemed = catalog.filter((entry) => {
     const htmls = entry.stories.map((id) => htmlById.get(id)).filter((h): h is string => typeof h === "string");
@@ -120,6 +125,24 @@ export async function syncSystem(source: SystemSource, checker: Checker): Promis
       inputs: built.value.inputs,
     },
   };
+}
+
+/**
+ * The library's own scripts the build read, by absolute path, for reading props from: no packages, stories or type
+ * declarations. A file that can't be read is left out, so its components list no props rather than failing the sync.
+ */
+function componentSources(root: string, inputs: readonly string[], storyFiles: Readonly<Record<string, string>>): Map<string, string> {
+  const stories = new Set(Object.keys(storyFiles).map((p) => path.resolve(root, p)));
+  const files = new Map<string, string>();
+  for (const file of inputs) {
+    if (!/\.[cm]?[jt]sx?$/.test(file) || file.endsWith(".d.ts") || file.split(/[\\/]/).includes("node_modules") || stories.has(path.resolve(file))) continue;
+    try {
+      files.set(file, readFileSync(file, "utf8"));
+    } catch {
+      // Gone since the build read it; the next sync reads it again.
+    }
+  }
+  return files;
 }
 
 const list = (items: readonly string[], max: number) => (items.length <= max ? items.join(", ") : `${items.slice(0, max).join(", ")} and ${items.length - max} more`);

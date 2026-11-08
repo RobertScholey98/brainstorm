@@ -2,8 +2,10 @@
  * The data a design system version holds (ADR 007). Types only, so the window can import them through core/types.
  */
 import type { CssDecl, Family, ThemeAxis, Token } from "./css";
+import type { PropInfo } from "./props";
 
 export type { CssDecl, Family, ThemeAxis, Token, TokenKind } from "./css";
+export type { PropInfo } from "./props";
 
 export type KitExportInfo = { readonly name: string; readonly type: "component" | "function" | "value" };
 
@@ -48,6 +50,11 @@ export type CatalogEntry = {
   readonly generated: boolean;
   /** Missing in versions synced before ADR 008, which read as primitives. */
   readonly tier?: Tier;
+  /**
+   * The props its source declares, in order, with defaults and which are required, so the workbench lists props no story
+   * sets. Missing on generated entries and in versions synced before it was read; empty when the source couldn't be read.
+   */
+  readonly props?: readonly PropInfo[];
 };
 
 export type SystemStyles = {

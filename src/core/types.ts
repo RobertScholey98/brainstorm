@@ -1,6 +1,6 @@
 import type { SystemManifest, ThemeAxis, Tier, Token } from "./system/model";
 
-export type { ArgType, CatalogEntry, StoryInfo, SystemManifest, ThemeAxis, Tier, Token } from "./system/model";
+export type { ArgType, CatalogEntry, PropInfo, StoryInfo, SystemManifest, ThemeAxis, Tier, Token } from "./system/model";
 
 declare const brand: unique symbol;
 export type Brand<T, B extends string> = T & { readonly [brand]: B };
