@@ -1024,7 +1024,7 @@ try {
     [await staged(), await rouletteCanvas.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), await pinAt(1)],
     [["wheel", "result"], true, true],
   );
-  check("a frame's label sits as far off the canvas bar on the board as on the stage", [stageLabel, await labelTop()], [24, 24]);
+  check("a frame's label sits as far off the canvas bar on the board as on the stage", [stageLabel, await labelTop()], [32, 32]);
   check(
     "a board row that fits at 100% sits centred, as the stage centres its frame",
     await settled(() =>

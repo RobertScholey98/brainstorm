@@ -317,7 +317,7 @@ try {
   await canvas.waitForFunction((sel) => document.querySelector(sel)?.textContent?.includes("Odds lean"), inBlock("wheel/neon", "pool"));
   check("clicking a still shows that iteration, read-only", [await canvasAt(window), (await pool(canvas)).includes("Odds lean")], [{ n: 1, past: 1 }, true]);
   await window.waitForTimeout(400);
-  check("under the Viewing bar the frame's label sits 24 px below the canvas's top, as on the latest", await labelOffset(canvas), 24);
+  check("under the Viewing bar the frame's label sits 32 px below the canvas's top, as on the latest", await labelOffset(canvas), 32);
   check(
     "under a bar naming it, with Back to latest",
     [(await window.textContent("[data-past-bar]")).startsWith("Viewing iteration 1"), (await window.textContent("[data-back-to-latest]")).trim()],
@@ -427,7 +427,7 @@ try {
   await window.click("[data-history-toggle]");
   await window.waitForSelector("[data-history]", { state: "detached" });
   await window.waitForTimeout(400);
-  check("once the strip folds the frame's label still sits 24 px below the canvas's top", await labelOffset(canvas), 24);
+  check("once the strip folds the frame's label still sits 32 px below the canvas's top", await labelOffset(canvas), 32);
   const prefs = await window.evaluate(async () => (await fetch("/v1/ui/prefs").then((r) => r.json()).catch(() => null)));
   void prefs;
   await app.close();

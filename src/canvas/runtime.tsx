@@ -5,7 +5,7 @@ import { CircleAlert } from "lucide-react";
 import { createRoot } from "react-dom/client";
 import { designCss, SCROLLBAR } from "../core/design";
 import { partLabel } from "../core/part";
-import { CANVAS_PAD, fitFrames, GAP } from "./fit";
+import { CANVAS_PAD, CANVAS_TOP, fitFrames, GAP } from "./fit";
 import type {
   BlockId,
   CanvasFrame,
@@ -196,7 +196,7 @@ function receive(message: HostToFrame): void {
 
 /**
  * Scrolls the selected frame in only as far as it takes, from wherever the selection came: a press, the shell, a
- * resize. A frame taller or wider than the room shows from its label, 24 px off the bar, never with its label cut:
+ * resize. A frame taller or wider than the room shows from its label, 32 px off the bar, never with its label cut:
  * scrollIntoView's "nearest" would line up its far edge instead, and leave the label tucked under the bar.
  */
 function revealSelected(behavior: ScrollBehavior): void {
@@ -204,9 +204,9 @@ function revealSelected(behavior: ScrollBehavior): void {
   if (frame === null) return;
   const r = frame.getBoundingClientRect();
   const { clientWidth, clientHeight } = document.documentElement;
-  const by = (start: number, end: number, room: number) =>
-    start < CANVAS_PAD ? start - CANVAS_PAD : end > room - CANVAS_PAD ? Math.min(end - (room - CANVAS_PAD), start - CANVAS_PAD) : 0;
-  scrollBy({ left: by(r.left, r.right, clientWidth), top: by(r.top, r.bottom, clientHeight), behavior });
+  const by = (start: number, end: number, room: number, pad: number) =>
+    start < pad ? start - pad : end > room - CANVAS_PAD ? Math.min(end - (room - CANVAS_PAD), start - pad) : 0;
+  scrollBy({ left: by(r.left, r.right, clientWidth, CANVAS_PAD), top: by(r.top, r.bottom, clientHeight, CANVAS_TOP), behavior });
 }
 
 /** How far inside the canvas edge a revealed pin or picked element stops: room for a pin's pulse, and no more. */
@@ -214,7 +214,7 @@ const REVEAL_MARGIN = 12;
 
 /**
  * Brings `target` into view by the least it takes, and never leaves its frame's label cut by the bar. A target already
- * in view moves nothing. When the move would leave the label half under the bar, the label sits 24 px under it, as on
+ * in view moves nothing. When the move would leave the label half under the bar, the label sits 32 px under it, as on
  * a fresh stage, or, when the target lies too far down a tall frame to show beside it, wholly out of view with the
  * frame's top edge.
  */
@@ -226,7 +226,7 @@ function revealInFrame(target: Element, behavior: ScrollBehavior): void {
   const frame = target.closest(".bs-frame");
   const label = frame?.querySelector(".bs-frame-title")?.getBoundingClientRect();
   const top = frame?.querySelector(".bs-frame-body")?.getBoundingClientRect().top;
-  if (label !== undefined && top !== undefined && top - by > 0 && label.top - by < CANVAS_PAD) by = by < 0 ? label.top - CANVAS_PAD : Math.max(by, top);
+  if (label !== undefined && top !== undefined && top - by > 0 && label.top - by < CANVAS_TOP) by = by < 0 ? label.top - CANVAS_TOP : Math.max(by, top);
   scrollBy({ top: by, behavior });
 }
 
@@ -734,12 +734,12 @@ body {
 }
 #canvas {
   display: flex; align-items: flex-start; gap: ${GAP}px;
-  padding: ${CANVAS_PAD}px calc(${CANVAS_PAD}px - var(--bs-scrollbar)) 48px;
+  padding: ${CANVAS_TOP}px calc(${CANVAS_PAD}px - var(--bs-scrollbar)) 48px;
 }
 /* Both views centre what fits; safe keeps a row a rounding pixel too wide from losing its left edge. */
 #canvas { justify-content: safe center; }
 /* A reveal stops at the canvas padding, so a frame's label sits the same way off the bar in both views. */
-.bs-frame { flex: none; min-width: 0; scroll-margin: ${CANVAS_PAD}px; }
+.bs-frame { flex: none; min-width: 0; scroll-margin: ${CANVAS_TOP}px ${CANVAS_PAD}px ${CANVAS_PAD}px; }
 .bs-frame[data-offstage] { position: fixed; left: 0; top: 0; visibility: hidden; pointer-events: none; }
 .bs-frame-title {
   display: flex; gap: 8px; max-width: 100%; box-sizing: border-box;

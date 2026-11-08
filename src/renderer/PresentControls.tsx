@@ -12,8 +12,8 @@ import { BAR_COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
 import { canOpenPreviewWindow, previewWindow } from "./mirror";
 
 const LOOKS: readonly { value: PreviewPrefs["look"]; label: string; about: string }[] = [
-  { value: "clean", label: "Clean", about: "just the design, ready to share." },
-  { value: "working", label: "Working", about: "canvas, slot tabs and pins. Not for sharing." },
+  { value: "clean", label: "Clean", about: "Just the design, ready to share." },
+  { value: "working", label: "Working", about: "Canvas, slot tabs and pins. Not for sharing." },
 ];
 
 /**
@@ -42,7 +42,7 @@ export function PresentControls({
   return (
     <span className="flex shrink-0 items-center gap-1" data-present-controls>
       {windowed && open && <HoldButton hold={hold} heldOn={heldOn} onHold={onHold} />}
-      {windowed && (open ? <WindowMenu prefs={prefs} onPrefs={onPrefs} hold={hold} onHold={onHold} /> : <OpenWindow />)}
+      {windowed && (open ? <WindowMenu prefs={prefs} onPrefs={onPrefs} hold={hold} heldOn={heldOn} onHold={onHold} /> : <OpenWindow />)}
       <Hint name="Present" label="Fill the screen with this slot" shortcut="F5" side="bottom">
         <Button variant="outline" aria-label="Present" onClick={onPresent} className={COMPACT} data-collapse={BAR_COLLAPSE.present} data-present>
           <Maximize data-icon="inline-start" aria-hidden />
@@ -94,11 +94,13 @@ function WindowMenu({
   prefs,
   onPrefs,
   hold,
+  heldOn,
   onHold,
 }: {
   prefs: PreviewPrefs;
   onPrefs: (prefs: PreviewPrefs) => void;
   hold: boolean;
+  heldOn: string | null;
   onHold: (hold: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -137,7 +139,7 @@ function WindowMenu({
       <PopoverContent size="md" align="end" data-preview-popover>
         <PopoverHeader
           heading="Preview window"
-          description="Mirrors this canvas live."
+          description={hold ? `Held on ${heldOn ?? "what it showed"}.` : "Mirrors this canvas live."}
         />
         <div className="grid gap-1.5">
           <span className="text-xs font-medium text-fg-muted">Look</span>
@@ -157,25 +159,22 @@ function WindowMenu({
             itemData="preview-look"
             aria-label="Look"
           />
-          <ul className="grid gap-0.5 text-xs" data-preview-look-about>
-            {LOOKS.map((l) => (
-              <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted"} data-chosen={l.value === prefs.look || undefined}>
-                <span className={l.value === prefs.look ? "font-semibold" : "font-medium"}>{l.label}:</span> {l.about}
-              </li>
-            ))}
-          </ul>
+          {/* The chosen look's one line; the other's risk shows on its glyph before the click. */}
+          <p className="text-xs text-fg-muted" data-preview-look-about>
+            {look?.about}
+          </p>
         </div>
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
             <span className="text-sm">Hold preview</span>
-            <span className="text-xs text-fg-muted">Freeze the preview while you keep editing here. Resume live shows your latest changes.</span>
+            <span className="text-xs text-fg-muted">Freeze it while you keep editing here.</span>
           </span>
           <Switch checked={hold} onCheckedChange={onHold} className="mt-0.5" data-preview-menu-hold />
         </label>
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
             <span className="text-sm">Show canvas in main window</span>
-            <span className="text-xs text-fg-muted">Turn off to show the canvas only in the preview window. The main window keeps the controls.</span>
+            <span className="text-xs text-fg-muted">Off: the canvas shows only in the preview window.</span>
           </span>
           <Switch checked={prefs.here} onCheckedChange={(here) => onPrefs({ ...prefs, here })} className="mt-0.5" data-preview-here />
         </label>

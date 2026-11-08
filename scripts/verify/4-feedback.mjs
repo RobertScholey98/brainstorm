@@ -107,7 +107,7 @@ try {
   await canvas.evaluate(() => scrollTo(0, 0));
   await window.click('[data-feedback="2"] [data-feedback-text]');
   await canvas.waitForSelector('.bs-pin[data-pin="2"].bs-pulse');
-  check("pulsing a pin already in view near a tall frame's foot moves nothing, so its label stays 24 px under the bar", await settled(stageAt), [0, 24]);
+  check("pulsing a pin already in view near a tall frame's foot moves nothing, so its label stays 32 px under the bar", await settled(stageAt), [0, 32]);
   await window.setViewportSize({ width: 1440, height: 640 });
   await canvas.evaluate(() => scrollTo(0, 0));
   await window.click('[data-feedback="2"] [data-feedback-text]');
