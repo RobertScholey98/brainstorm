@@ -120,7 +120,8 @@ Built on 2026-11-08 and checked end to end against robnet's `packages/ui` (72 co
 
 - **No per-OS binaries.** Sync bundles with esbuild-wasm and compiles Tailwind v4 with its pure-JS compiler, so the app
   ships no native tools. Tailwind's scanner is replaced by a word scan of the library's sources; it keeps words with
-  parentheses and commas, such as `py-(--card-spacing)`, which shadcn's v4 components write.
+  parentheses and commas, such as `py-(--card-spacing)`, which shadcn's v4 components write, and splits nothing but
+  whitespace inside square brackets, so `has-[>svg]:px-3` and `*:[svg:not([class*='size-'])]:size-4` survive.
 - **Checks are static, and story failures warn.** A story that throws in the sandbox is a warning (`story_failed`), not
   a refused version, because one broken story shouldn't hold back a library's other 72 components. "Every component
   changes with the theme" is a static check of the CSS each story's classes reach (`theme_ignored`), and the measured

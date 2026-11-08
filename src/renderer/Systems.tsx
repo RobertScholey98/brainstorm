@@ -258,13 +258,13 @@ function ComponentsTab({ view, manifest }: { view: SystemView; manifest: Manifes
       {/* The catalog takes the Inspector's width, so the stories get the rest. flex-none beats ScrollPane's flex-1. */}
       <div className="flex w-inspector flex-none flex-col border-r bg-card" data-catalog>
         <div className="px-4 pt-3">
-          <Input type="search" placeholder={`Search ${manifest.catalog.length} components`} aria-label="Search components" value={query} onChange={(e) => setQuery(e.target.value)} data-catalog-search />
+          <Input type="search" placeholder={`Search ${manifest.catalog.filter((e) => !e.generated).length} components`} aria-label="Search components" value={query} onChange={(e) => setQuery(e.target.value)} data-catalog-search />
         </div>
         <ScrollPane inset={4}>
           <ul className="grid gap-0.5 py-3">
             {needle === "" && <CatalogRow label="All stories" detail={`${manifest.stories.length}`} active={entry === null} onClick={() => setEntry(null)} />}
             {entries.map((e) => (
-              <CatalogRow key={e.name} label={e.name} detail={entryDetail(e)} active={entry === e.name} onClick={() => setEntry(e.name)} data-entry={e.name} />
+              <CatalogRow key={e.name} label={e.name} via={matchedPart(e, needle)} detail={entryDetail(e)} active={entry === e.name} onClick={() => setEntry(e.name)} data-entry={e.name} />
             ))}
             {entries.length === 0 && <li className="px-2 py-1.5 text-sm text-fg-muted">No component matches "{query.trim()}"</li>}
           </ul>
@@ -305,9 +305,23 @@ function ComponentsTab({ view, manifest }: { view: SystemView; manifest: Manifes
   );
 }
 
+/** The part a search matched when the component's own name doesn't, so Breadcrumb shows why "st" found it. */
+const matchedPart = (e: CatalogEntry, needle: string) =>
+  needle === "" || e.name.toLowerCase().includes(needle) ? undefined : e.parts.find((p) => p.toLowerCase().includes(needle));
+
 const entryDetail = (e: CatalogEntry) => (e.generated ? "Brainstorm's" : e.stories.length === 0 ? "no story" : `${e.stories.length}`);
 
-function CatalogRow({ label, detail, active, onClick, ...data }: { label: string; detail: string; active: boolean; onClick: () => void; [attr: `data-${string}`]: unknown }) {
+function CatalogRow({
+  label,
+  via,
+  detail,
+  active,
+  onClick,
+  ...data
+}: {
+  label: string;
+  via?: string | undefined;
+  detail: string; active: boolean; onClick: () => void; [attr: `data-${string}`]: unknown }) {
   return (
     <li>
       <button
@@ -317,8 +331,15 @@ function CatalogRow({ label, detail, active, onClick, ...data }: { label: string
         className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring aria-current:bg-selected aria-current:font-medium"
         {...data}
       >
-        <span className="flex min-w-0 flex-1">
-          <Truncate>{label}</Truncate>
+        <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+          <span className="flex min-w-0 shrink-0">
+            <Truncate>{label}</Truncate>
+          </span>
+          {via !== undefined && (
+            <span className="flex min-w-0 text-xs text-fg-muted" data-catalog-via>
+              <Truncate>{via}</Truncate>
+            </span>
+          )}
         </span>
         <span className="shrink-0 text-xs text-fg-muted">{detail}</span>
       </button>

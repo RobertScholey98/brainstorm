@@ -104,12 +104,15 @@ function ThemeEditor({ system, readOnly, send, exportTheme }: Parameters<typeof 
       ))}
       {colours.length > 0 && <TokenList heading="Colours" tokens={colours} theme={theme.tokens} axes={theme.axes} send={send} />}
       {others.length > 0 && <TokenList heading="Sizes and type" tokens={others} theme={theme.tokens} axes={theme.axes} send={send} />}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Two equal columns, so the theme's actions line up however many there are. */}
+      <div className="grid grid-cols-2 gap-2">
         <SaveTheme disabled={tweaked === 0} onSave={(name) => send({ kind: "save_theme", name })} />
-        {system.themes.length > 0 && (
-          <SavedThemes names={system.themes.map((t) => t.name)} onApply={(name) => void send({ kind: "apply_theme", name })} />
-        )}
         <ThemeExportButton exportTheme={exportTheme} />
+        {system.themes.length > 0 && (
+          <div className="col-span-2 grid">
+            <SavedThemes names={system.themes.map((t) => t.name)} onApply={(name) => void send({ kind: "apply_theme", name })} />
+          </div>
+        )}
       </div>
     </div>
   );

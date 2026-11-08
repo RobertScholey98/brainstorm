@@ -110,7 +110,7 @@ function WeekStrip({ days, selected, className, ...props }: React.ComponentProps
           data-selected={d.day === selected || undefined}
           className="group flex flex-col items-center gap-0.5 rounded-lg border bg-card py-2 text-card-foreground data-selected:border-primary data-selected:bg-primary data-selected:text-primary-foreground"
         >
-          <span className="text-xs">{d.day}</span>
+          <span className="text-xs text-muted-foreground group-data-selected:text-primary-foreground">{d.day}</span>
           <span className="text-base font-semibold">{d.date}</span>
           <span className={cn("size-1.5 rounded-full", d.planned && "bg-primary group-data-selected:bg-primary-foreground")} />
         </li>
