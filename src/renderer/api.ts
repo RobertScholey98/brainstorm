@@ -1,3 +1,4 @@
+import type { AppAbout, SkillInstall } from "../core/about";
 import type { AppUpdateState } from "../core/appUpdate";
 import type { UiPrefs, UiPrefsPatch } from "../core/prefs";
 import type {
@@ -54,6 +55,14 @@ export type Api = {
   update(): Promise<Result<AppUpdateState>>;
   /** Quits into the downloaded update, which reopens the app. */
   installUpdate(): Promise<Result<AppUpdateState>>;
+  /** Looks for a newer release now. */
+  checkUpdate(): Promise<Result<AppUpdateState>>;
+  /** Downloads the update a check offered while automatic updates are off. */
+  downloadUpdate(): Promise<Result<AppUpdateState>>;
+  /** The version, the folders and the skill Settings shows. */
+  about(): Promise<Result<AppAbout>>;
+  /** Copies the bundled /use-brainstorm skill to ~/.claude now. */
+  installSkill(): Promise<Result<SkillInstall>>;
   /** Calls `onSession` with each changed session id, and `onUpdate` with each update state, until `signal` aborts, reconnecting after a drop. */
   events(on: { onSession: (id: SessionId) => void; onUpdate: (state: AppUpdateState) => void; onOpen: () => void }, signal: AbortSignal): Promise<void>;
 };
@@ -131,6 +140,10 @@ export function createApi(token: string): Api {
     setPrefs: (patch) => call("POST", "/v1/ui/prefs", patch),
     update: () => call("GET", "/v1/ui/update"),
     installUpdate: () => call("POST", "/v1/ui/update/install"),
+    checkUpdate: () => call("POST", "/v1/ui/update/check"),
+    downloadUpdate: () => call("POST", "/v1/ui/update/download"),
+    about: () => call("GET", "/v1/ui/about"),
+    installSkill: () => call("POST", "/v1/ui/skill/install"),
     events,
   };
 }

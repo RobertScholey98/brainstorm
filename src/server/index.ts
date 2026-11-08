@@ -8,6 +8,8 @@ import { createT3Bridge } from "../core/bridge/t3";
 import { Brainstorm } from "../core/brainstorm";
 import { createChecker } from "../core/check";
 import type { AgentBridge } from "../core/types";
+import type { SkillHost } from "../core/about";
+import { DEFAULT_SETTINGS, type AppSettings } from "../core/prefs";
 import { brainstormHome, exportsDir, packageVersion, writeApi } from "./appData";
 import { createHttpHandler } from "./http";
 
@@ -22,6 +24,10 @@ export type ServerOptions = {
   readonly updates?: AppUpdates;
   /** The installed app's native folder dialog, resolving to the chosen folder or null when cancelled; the headless server has none. */
   readonly pickFolder?: () => Promise<string | null>;
+  /** The agent skill the installed app keeps; the headless server and an app on another home have none. */
+  readonly skill?: SkillHost;
+  /** Called with the stored settings once the database opens, before the server listens, and again on each change. */
+  readonly onSettings?: (settings: AppSettings) => void;
 };
 
 export type RunningServer = {
@@ -57,7 +63,12 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
 
   let port = 0;
   const updates = options.updates ?? updatesOff("The headless server has no app to update.");
-  const http = createHttpHandler({ service, agentToken, uiToken, version, updates, pickFolder: options.pickFolder ?? null },() => port);
+  const stored = service.prefs();
+  options.onSettings?.(stored.ok ? stored.data.settings : DEFAULT_SETTINGS);
+  const http = createHttpHandler(
+    { service, agentToken, uiToken, version, updates, pickFolder: options.pickFolder ?? null, home, skill: options.skill ?? null, onSettings: options.onSettings },
+    () => port,
+  );
   const server: Server = createServer(http.listener);
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);

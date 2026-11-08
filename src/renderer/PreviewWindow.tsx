@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Toast } from "@/components/ui/toast";
 import { Hint, TooltipProvider } from "@/components/ui/tooltip";
+import { DEFAULT_SETTINGS } from "../core/prefs";
 import type { BlockView, CanvasRect, FeedbackId, Pin, RobAction } from "../core/types";
 import type { Api } from "./api";
 import { CanvasBar } from "./CanvasBar";
@@ -39,6 +40,14 @@ export function PreviewWindow({ api }: { api: Api }) {
   const tell = useCallback((m: ToMain) => channel.current?.post(m), []);
   // A design system session's blocks import its kit, which this window fetches for itself.
   useEffect(() => setKitSource(api.kit), [api]);
+  // Vary starts on Settings' count, which Rob changes in the main window, so this one reads it again on each focus.
+  const [varyCount, setVaryCount] = useState(DEFAULT_SETTINGS.varyCount);
+  useEffect(() => {
+    const read = () => void api.prefs().then((r) => r.ok && setVaryCount(r.data.settings.varyCount));
+    read();
+    window.addEventListener("focus", read);
+    return () => window.removeEventListener("focus", read);
+  }, [api]);
 
   useEffect(() => {
     const ch = openChannel<ToPreview>((m) => {
@@ -213,6 +222,7 @@ export function PreviewWindow({ api }: { api: Api }) {
               rect={composing.rect}
               block={blockOf(composing.pin)}
               slot={scene.slots.find((s) => s.id === blockOf(composing.pin)?.slot) ?? null}
+              initialCount={varyCount}
               bounds={bounds}
               onSend={async (count, direction) => {
                 if (await act({ kind: "vary", target: composing.pin, count, direction })) setComposing(null);

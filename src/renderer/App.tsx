@@ -27,6 +27,7 @@ import {
   type Pin,
   type PropName,
   type Props,
+  type Result,
   type RobAction,
   type SessionId,
   type SessionListing,
@@ -36,7 +37,8 @@ import {
   type SystemId,
   type VariantKey,
 } from "../core/types";
-import { applyPrefs, NO_PREFS, stripOpen, type CanvasLayout, type PreviewPrefs, type UiPrefs, type UiPrefsPatch } from "../core/prefs";
+import { applyPrefs, NO_PREFS, stripOpen, type AppSettings, type CanvasLayout, type PreviewPrefs, type UiPrefs, type UiPrefsPatch } from "../core/prefs";
+import type { AppAbout } from "../core/about";
 import type { Api } from "./api";
 import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type FeedbackCue, type Placement } from "./CanvasHost";
@@ -62,6 +64,9 @@ import { SystemSection } from "./SystemPanel";
 import { SystemsPage } from "./Systems";
 import { blockedMessage } from "../core/machines";
 import type { AppUpdateState } from "../core/appUpdate";
+import { alertsBetween } from "./notify";
+import { raise } from "./raiseAlerts";
+import { SettingsDialog } from "./Settings";
 
 /** How often an open brainstorm asks T3 whether its thread still exists, besides on window focus. */
 const THREAD_CHECK_MS = 15_000;
@@ -162,10 +167,16 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
   current.current = sessionId;
   const loaded = useRef(false);
 
+  // Notifications compare each reading of the list with the one before, under the setting as it is when the list lands.
+  const lastList = useRef<readonly SessionListing[] | null>(null);
+  const notify = useRef(prefs.settings.notifications);
+  notify.current = prefs.settings.notifications;
   const refreshList = useCallback(async () => {
     const list = await api.sessions();
     if (list.ok) {
       loaded.current = true;
+      if (lastList.current !== null) raise(alertsBetween(lastList.current, list.data), notify.current, (id) => setNav({ kind: "brainstorm", id, panel: "session" }));
+      lastList.current = list.data;
       setSessions(list.data);
       setListError(null);
       // A refresh runs on every server event, so it clears only the notice it raised itself.
@@ -199,11 +210,48 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     );
     return () => controller.abort();
   }, [api, refreshList]);
-  const installUpdate = useCallback(async () => {
-    const result = await api.installUpdate();
-    if (result.ok) setUpdate(result.data);
-    else setNotice({ title: failedTitle("update"), detail: result.error.message });
+  const updateCall = useCallback(
+    async (call: () => Promise<Result<AppUpdateState>>, failed: "update" | "check" | "download") => {
+      const result = await call();
+      if (result.ok) setUpdate(result.data);
+      else setNotice({ title: failedTitle(failed), detail: result.error.message });
+    },
+    [],
+  );
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [about, setAbout] = useState<AppAbout | null>(null);
+  useEffect(() => {
+    if (settingsOpen && about === null) void api.about().then((r) => r.ok && setAbout(r.data));
+  }, [api, settingsOpen, about]);
+  // Ctrl+, opens Settings, as it does in T3 Code and most desktop apps.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === ",") {
+        e.preventDefault();
+        setSettingsOpen(true);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  const reinstallSkill = useCallback(async (): Promise<string | null> => {
+    const result = await api.installSkill();
+    if (!result.ok) {
+      setNotice({ title: failedTitle("skill"), detail: result.error.message });
+      return null;
+    }
+    const done = result.data;
+    if (done.kind === "current") return "The installed skill already matches this version.";
+    return done.backup === null ? "Installed the skill this version ships with." : "Installed the skill this version ships with, and backed up the copy you had changed.";
   }, [api]);
+  const footUpdate = {
+    state: update,
+    onSettings: () => setSettingsOpen(true),
+    onCheck: () => void updateCall(api.checkUpdate, "check"),
+    onDownload: () => void updateCall(api.downloadUpdate, "download"),
+    onInstall: () => void updateCall(api.installUpdate, "update"),
+  };
 
   const toggleSettled = useCallback(
     async (s: SessionListing) => {
@@ -235,7 +283,7 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
     />
   );
   const sidebar = (panel: ReactNode) => (
-    <AppSidebar width={fitted.sidebar} limits={sidebarLimits} onWidth={setSidebarWidth} update={update} onInstallUpdate={() => void installUpdate()}>
+    <AppSidebar width={fitted.sidebar} limits={sidebarLimits} onWidth={setSidebarWidth} update={footUpdate}>
       {panel}
     </AppSidebar>
   );
@@ -297,8 +345,21 @@ function Window({ api, prefs, savePrefs }: { api: Api; prefs: UiPrefs; savePrefs
             homePanel={nav.panel === "home" ? homePanel : null}
             onHome={() => setNav({ kind: "brainstorm", id: nav.id, panel: "home" })}
             onOpen={(id) => (id === null ? setNav({ kind: "overview" }) : openSession(id))}
+            settings={prefs.settings}
           />
         )}
+        <SettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          prefs={prefs}
+          save={savePrefs}
+          about={about}
+          update={update}
+          onCheck={footUpdate.onCheck}
+          onDownload={footUpdate.onDownload}
+          onInstall={footUpdate.onInstall}
+          onSkill={reinstallSkill}
+        />
       </SidebarProvider>
     </TooltipProvider>
   );
@@ -335,6 +396,7 @@ function SessionWorkspace({
   homePanel,
   onHome,
   onOpen,
+  settings,
 }: {
   api: Api;
   sessionId: SessionId;
@@ -361,13 +423,15 @@ function SessionWorkspace({
   onHome: () => void;
   /** Opens another brainstorm, or home with null: a fork, its parent, or home after a discard. */
   onOpen: (id: SessionId | null) => void;
+  /** Settings' canvas defaults: the view, the history strip and Vary's count, each until Rob picks his own here. */
+  settings: AppSettings;
 }) {
   const [view, setView] = useState<SessionView | null>(null);
   // A failed setting is named by its control's label, read when the failure comes back.
   const blocksNow = useRef<readonly BlockView[]>([]);
   // Selection is a slot, so switching variants keeps the controls on the slot's new block.
   const [selectedSlot, setSelectedSlot] = useState<SlotId | null>(layout?.slot ?? null);
-  const [canvasView, setCanvasView] = useState<CanvasLayout["view"]>(layout?.view ?? "stage");
+  const [canvasView, setCanvasView] = useState<CanvasLayout["view"]>(layout?.view ?? settings.canvasView);
   // Keyed by content, since a past iteration's block has the latest one's id and maybe other code.
   const [blockErrors, setBlockErrors] = useState<ReadonlyMap<ContentHash, string>>(new Map());
   const [interaction, setInteraction] = useState<CanvasInteraction>({ kind: "view" });
@@ -725,7 +789,7 @@ function SessionWorkspace({
     [api, sessionId],
   );
   const showing = past?.n ?? latest?.n ?? null;
-  const stripShown = stripOpen(history.choice, view?.history.iterations.length ?? history.latest ?? 0);
+  const stripShown = stripOpen(history.choice, view?.history.iterations.length ?? history.latest ?? 0, settings.historyStrip);
   const historyToggle = { open: stripShown, onToggle: () => history.onChoose(!stripShown) };
   const strip = stripShown && view !== null && showing !== null && view.history.iterations.length > 0;
 
@@ -877,6 +941,7 @@ function SessionWorkspace({
             block={blocks.find((b) => b.id === interaction.pin.blockId) ?? null}
             slot={slots.find((s) => s.id === blocks.find((b) => b.id === interaction.pin.blockId)?.slot) ?? null}
             bounds={{ width: canvasArea.current?.clientWidth ?? 0, height: canvasArea.current?.clientHeight ?? 0 }}
+            initialCount={settings.varyCount}
             onSend={(count, direction) => sendVary(interaction.pin, count, direction)}
             onCancel={() => setInteraction({ kind: "view" })}
           />

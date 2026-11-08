@@ -3,7 +3,7 @@ import { autoUpdater as platformUpdater, type AppUpdater } from "electron-update
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { MacZipUpdater } from "./macUpdater";
-import { installable, nextUpdateState, updateOffReason, type AppUpdateEvent, type AppUpdates, type AppUpdateState } from "../core/appUpdate";
+import { canCheck, installable, nextUpdateState, updateOffReason, type AppUpdateEvent, type AppUpdates, type AppUpdateState } from "../core/appUpdate";
 
 /** T3 Code's cadence: a first look soon after start, then a poll. Brainstorm releases are rarer, so it polls less. */
 const FIRST_CHECK_MS = 15_000;
@@ -53,7 +53,7 @@ export function createUpdater(): AppUpdates {
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.on("checking-for-update", () => apply({ kind: "checking" }));
-    autoUpdater.on("update-available", (info) => apply({ kind: "found", version: info.version }));
+    autoUpdater.on("update-available", (info) => apply({ kind: "found", version: info.version, download: autoUpdater.autoDownload }));
     autoUpdater.on("update-not-available", () => apply({ kind: "none", at: new Date().toISOString() }));
     autoUpdater.on("download-progress", (progress) => apply({ kind: "progress", percent: progress.percent }));
     autoUpdater.on("update-downloaded", (info) => apply({ kind: "downloaded", version: info.version }));
@@ -69,11 +69,30 @@ export function createUpdater(): AppUpdates {
     setInterval(check, POLL_MS).unref();
   }
 
+  const download = (): boolean => {
+    if (autoUpdater === null || state.kind !== "available") return false;
+    apply({ kind: "found", version: state.version, download: true });
+    // The error event reports a failed download too.
+    autoUpdater.downloadUpdate().catch(() => {});
+    return true;
+  };
+
   return {
     state: () => state,
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+    check() {
+      if (autoUpdater === null || !canCheck(state)) return false;
+      autoUpdater.checkForUpdates().catch(() => {});
+      return true;
+    },
+    download,
+    setAutoDownload(on) {
+      if (autoUpdater === null) return;
+      autoUpdater.autoDownload = on;
+      if (on) download();
     },
     install() {
       if (installable(state) === null) return false;

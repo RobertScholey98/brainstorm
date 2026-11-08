@@ -1,16 +1,16 @@
 import { describe, expect, test } from "vitest";
-import { macZipFor, nextUpdateState, updateOffReason, type AppUpdateEvent, type AppUpdateState, type UpdateHost } from "../src/core/appUpdate";
+import { canCheck, macZipFor, nextUpdateState, updateOffReason, type AppUpdateEvent, type AppUpdateState, type UpdateHost } from "../src/core/appUpdate";
 
 const run = (events: readonly AppUpdateEvent[], from: AppUpdateState = { kind: "idle", checkedAt: null }) => events.reduce(nextUpdateState, from);
 
 describe("app update state", () => {
   test("a found update downloads, then waits for a restart", () => {
-    expect(run([{ kind: "checking" }, { kind: "found", version: "0.2.0" }, { kind: "progress", percent: 41.7 }])).toEqual({
+    expect(run([{ kind: "checking" }, { kind: "found", version: "0.2.0", download: true }, { kind: "progress", percent: 41.7 }])).toEqual({
       kind: "downloading",
       version: "0.2.0",
       percent: 41,
     });
-    expect(run([{ kind: "checking" }, { kind: "found", version: "0.2.0" }, { kind: "downloaded", version: "0.2.0" }])).toEqual({
+    expect(run([{ kind: "checking" }, { kind: "found", version: "0.2.0", download: true }, { kind: "downloaded", version: "0.2.0" }])).toEqual({
       kind: "ready",
       version: "0.2.0",
     });
@@ -22,13 +22,13 @@ describe("app update state", () => {
 
   test("a ready update survives a later poll that finds it again, finds nothing, or fails", () => {
     const ready: AppUpdateState = { kind: "ready", version: "0.2.0" };
-    expect(run([{ kind: "checking" }, { kind: "found", version: "0.2.0" }], ready)).toEqual(ready);
+    expect(run([{ kind: "checking" }, { kind: "found", version: "0.2.0", download: true }], ready)).toEqual(ready);
     expect(run([{ kind: "checking" }, { kind: "none", at: "x" }], ready)).toEqual(ready);
     expect(run([{ kind: "checking" }, { kind: "error", message: "offline" }], ready)).toEqual(ready);
   });
 
   test("a newer version found while one is ready downloads in its place", () => {
-    expect(run([{ kind: "found", version: "0.3.0" }], { kind: "ready", version: "0.2.0" })).toEqual({ kind: "downloading", version: "0.3.0", percent: 0 });
+    expect(run([{ kind: "found", version: "0.3.0", download: true }], { kind: "ready", version: "0.2.0" })).toEqual({ kind: "downloading", version: "0.3.0", percent: 0 });
   });
 
   test("a failed install keeps the downloaded version, so Rob can restart again", () => {
@@ -48,7 +48,33 @@ describe("app update state", () => {
 
   test("off never moves", () => {
     const off: AppUpdateState = { kind: "off", reason: "x" };
-    expect(run([{ kind: "checking" }, { kind: "found", version: "0.2.0" }, { kind: "downloaded", version: "0.2.0" }], off)).toBe(off);
+    expect(run([{ kind: "checking" }, { kind: "found", version: "0.2.0", download: true }, { kind: "downloaded", version: "0.2.0" }], off)).toBe(off);
+  });
+
+  test("with automatic updates off, a found update waits for Rob, and his download takes it from there", () => {
+    const offered = run([{ kind: "checking" }, { kind: "found", version: "0.2.0", download: false }]);
+    expect(offered).toEqual({ kind: "available", version: "0.2.0" });
+    // A later poll that finds it again, finds it gone or fails keeps the offer, except that a gone release withdraws it.
+    expect(run([{ kind: "checking" }, { kind: "found", version: "0.2.0", download: false }], offered)).toBe(offered);
+    expect(run([{ kind: "checking" }, { kind: "error", message: "offline" }], offered)).toBe(offered);
+    expect(run([{ kind: "checking" }, { kind: "none", at: "x" }], offered)).toEqual({ kind: "idle", checkedAt: "x" });
+    // A newer release replaces the offer.
+    expect(nextUpdateState(offered, { kind: "found", version: "0.3.0", download: false })).toEqual({ kind: "available", version: "0.3.0" });
+    expect(run([{ kind: "found", version: "0.2.0", download: true }, { kind: "progress", percent: 12 }, { kind: "downloaded", version: "0.2.0" }], offered)).toEqual({
+      kind: "ready",
+      version: "0.2.0",
+    });
+  });
+
+  test("Rob can check from idle, an offer or a failed check, and not while one runs or a download or restart is under way", () => {
+    expect(canCheck({ kind: "idle", checkedAt: null })).toBe(true);
+    expect(canCheck({ kind: "available", version: "0.2.0" })).toBe(true);
+    expect(canCheck({ kind: "failed", message: "offline", version: null })).toBe(true);
+    expect(canCheck({ kind: "checking" })).toBe(false);
+    expect(canCheck({ kind: "downloading", version: "0.2.0", percent: 3 })).toBe(false);
+    expect(canCheck({ kind: "ready", version: "0.2.0" })).toBe(false);
+    expect(canCheck({ kind: "failed", message: "installer exited 2", version: "0.2.0" })).toBe(false);
+    expect(canCheck({ kind: "off", reason: "x" })).toBe(false);
   });
 });
 

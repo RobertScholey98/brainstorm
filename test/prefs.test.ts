@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { applyPrefs, readPrefs, stripOpen } from "../src/core/prefs";
+import { applyPrefs, DEFAULT_SETTINGS, readPrefs, stripOpen } from "../src/core/prefs";
 import type { SessionId } from "../src/core/types";
 import { startServer } from "../src/server/index";
 import { FakeBridge } from "./fakeBridge";
@@ -29,7 +29,7 @@ describe("UI prefs", () => {
     await withServer(home, async (call) => {
       expect((await call("GET")).body).toEqual({
         ok: true,
-        data: { panes: { sidebar: null, inspector: null }, inspectorRail: false, historyStrip: {}, canvas: {}, home: { status: "active", projects: [], sort: "recent" }, preview: { look: "clean", here: true } },
+        data: { panes: { sidebar: null, inspector: null }, inspectorRail: false, historyStrip: {}, canvas: {}, home: { status: "active", projects: [], sort: "recent" }, preview: { look: "clean", here: true }, settings: DEFAULT_SETTINGS },
       });
       await call("POST", { panes: { sidebar: 312 } });
       await call("POST", { panes: { inspector: 344 }, inspectorRail: true });
@@ -49,6 +49,7 @@ describe("UI prefs", () => {
           canvas: { s_abcdefgh: { view: "board", slot: "wheel" } },
           home: { status: "settled", projects: ["proj-a"], sort: "title" },
           preview: { look: "working", here: false },
+          settings: DEFAULT_SETTINGS,
         },
       });
     });
@@ -84,6 +85,10 @@ describe("UI prefs", () => {
       { key: "strip.s_abcdefgh", json: "true" },
       { key: "strip.s_zzzzzzzz", json: '"open"' },
       { key: "preview.window", json: '{"look":"stage","here":true}' },
+      { key: "setting.theme", json: '"dark"' },
+      { key: "setting.varyCount", json: "12" },
+      { key: "setting.notifications", json: '"loud"' },
+      { key: "setting.constructor", json: "true" },
     ];
     expect(readPrefs(rows)).toEqual({
       panes: { sidebar: 264, inspector: null },
@@ -92,6 +97,7 @@ describe("UI prefs", () => {
       canvas: { s_abcdefgh: { view: "stage", slot: null } },
       home: { status: "active", projects: [], sort: "recent" },
       preview: { look: "clean", here: true },
+      settings: { ...DEFAULT_SETTINGS, theme: "dark" },
     });
   });
 });
@@ -107,6 +113,7 @@ describe("applyPrefs", () => {
       panes: { inspector: 320 },
       historyStrip: { session: "s_zzzzzzzz" as SessionId, open: false },
       canvas: { session: "s_zzzzzzzz" as SessionId, layout: { view: "board" as const, slot: null } },
+      settings: { notifications: "off" as const, varyCount: undefined },
     };
     expect(applyPrefs(before, patch)).toEqual({
       panes: { sidebar: 264, inspector: 320 },
@@ -115,6 +122,7 @@ describe("applyPrefs", () => {
       canvas: { s_abcdefgh: { view: "stage", slot: "wheel" }, s_zzzzzzzz: { view: "board", slot: null } },
       home: { status: "active", projects: [], sort: "recent" },
       preview: { look: "clean", here: true },
+      settings: { ...DEFAULT_SETTINGS, notifications: "off" },
     });
   });
 });
@@ -123,5 +131,9 @@ describe("stripOpen", () => {
   test("a strip Rob hasn't set is shut with one iteration and open from the second, and his own choice wins either way", () => {
     expect([stripOpen(undefined, 0), stripOpen(undefined, 1), stripOpen(undefined, 2), stripOpen(undefined, 7)]).toEqual([false, false, true, true]);
     expect([stripOpen(true, 1), stripOpen(false, 2), stripOpen(false, 1), stripOpen(true, 5)]).toEqual([true, false, false, true]);
+  });
+
+  test("Settings can open or shut every strip Rob hasn't set, and his own choice still wins", () => {
+    expect([stripOpen(undefined, 1, "open"), stripOpen(undefined, 5, "closed"), stripOpen(false, 1, "open"), stripOpen(true, 5, "closed")]).toEqual([true, false, false, true]);
   });
 });

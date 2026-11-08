@@ -11,6 +11,8 @@ export type AppUpdateState =
   /** Up to date as of `checkedAt`, or not checked yet. */
   | { readonly kind: "idle"; readonly checkedAt: string | null }
   | { readonly kind: "checking" }
+  /** Found with automatic updates off: Rob decides whether to download it. */
+  | { readonly kind: "available"; readonly version: string }
   | { readonly kind: "downloading"; readonly version: string; readonly percent: number }
   /** Downloaded; a restart installs it, and so does the next quit. */
   | { readonly kind: "ready"; readonly version: string }
@@ -20,7 +22,8 @@ export type AppUpdateState =
 
 export type AppUpdateEvent =
   | { readonly kind: "checking" }
-  | { readonly kind: "found"; readonly version: string }
+  /** `download` is false when automatic updates are off, so the update waits for Rob. */
+  | { readonly kind: "found"; readonly version: string; readonly download: boolean }
   | { readonly kind: "none"; readonly at: string }
   | { readonly kind: "progress"; readonly percent: number }
   | { readonly kind: "downloaded"; readonly version: string }
@@ -36,11 +39,12 @@ export function nextUpdateState(state: AppUpdateState, event: AppUpdateEvent): A
   if (state.kind === "off") return state;
   switch (event.kind) {
     case "checking":
-      // A downloaded update stays ready while a later poll looks for a newer one.
+      // A downloaded update stays ready, and one waiting for Rob stays offered, while a later poll looks for a newer one.
       return state.kind === "idle" || (state.kind === "failed" && state.version === null) ? { kind: "checking" } : state;
     case "found":
       if (state.kind === "installing" || installable(state) === event.version) return state;
-      return state.kind === "downloading" && state.version === event.version ? state : { kind: "downloading", version: event.version, percent: 0 };
+      if ((state.kind === "downloading" || (state.kind === "available" && !event.download)) && state.version === event.version) return state;
+      return event.download ? { kind: "downloading", version: event.version, percent: 0 } : { kind: "available", version: event.version };
     case "none":
       return installable(state) === null && state.kind !== "downloading" ? { kind: "idle", checkedAt: event.at } : state;
     case "progress":
@@ -52,26 +56,37 @@ export function nextUpdateState(state: AppUpdateState, event: AppUpdateEvent): A
       return version === null ? state : { kind: "installing", version };
     }
     case "error": {
-      // electron-updater reports a failed background check the same way, which says nothing a ready update needs.
-      if (state.kind === "ready") return state;
+      // electron-updater reports a failed background check the same way, which says nothing a ready or offered update needs.
+      if (state.kind === "ready" || state.kind === "available") return state;
       const version = state.kind === "installing" ? state.version : installable(state);
       return { kind: "failed", message: event.message, version };
     }
   }
 }
 
-/** What the server needs from the updater: the state, its changes, and the restart. */
+/** What the server needs from the updater: the state, its changes, Rob's check and download, and the restart. */
 export type AppUpdates = {
   state(): AppUpdateState;
   subscribe(listener: (state: AppUpdateState) => void): () => void;
+  /** Looks for a newer release now; false when this build can't update or a download or install is under way. */
+  check(): boolean;
+  /** Downloads the update a check offered; false when none is on offer. */
+  download(): boolean;
+  /** Whether a check downloads what it finds. Turning it on downloads an update already on offer. */
+  setAutoDownload(on: boolean): void;
   /** Starts quitting into the downloaded installer; false when there's none, or a restart already started. */
   install(): boolean;
 };
 
+/** Whether Rob can ask for a check now: not while one runs, nor while a download or restart is under way. */
+export function canCheck(state: AppUpdateState): boolean {
+  return state.kind === "idle" || state.kind === "available" || (state.kind === "failed" && state.version === null);
+}
+
 /** The headless server has no installer to update. */
 export function updatesOff(reason: string): AppUpdates {
   const state: AppUpdateState = { kind: "off", reason };
-  return { state: () => state, subscribe: () => () => {}, install: () => false };
+  return { state: () => state, subscribe: () => () => {}, check: () => false, download: () => false, setAutoDownload: () => {}, install: () => false };
 }
 
 export type UpdateHost = {

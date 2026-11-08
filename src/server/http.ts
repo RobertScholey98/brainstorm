@@ -8,7 +8,9 @@ import type { AppUpdates } from "../core/appUpdate";
 import type { Brainstorm } from "../core/brainstorm";
 import { zBranded } from "../core/parse";
 import { VARY_MAX } from "../core/fork";
-import { uiPrefsPatch } from "../core/prefs";
+import { uiPrefsPatch, type AppSettings } from "../core/prefs";
+import type { AppAbout, SkillHost } from "../core/about";
+import { exportsDir } from "./appData";
 import {
   parseBlockId,
   parseFeedbackId,
@@ -213,6 +215,12 @@ export type HttpOptions = {
   readonly updates: AppUpdates;
   /** The window's native folder dialog, or null where there's no window to show one. */
   readonly pickFolder: (() => Promise<string | null>) | null;
+  /** Brainstorm's home folder, which Settings shows. */
+  readonly home: string;
+  /** The agent skill the installed app keeps, or null where it leaves the user's skills alone. */
+  readonly skill?: SkillHost | null;
+  /** Told the settings each time a save changes any, so the main process can act on its own. */
+  readonly onSettings?: (settings: AppSettings) => void;
 };
 
 export function createHttpHandler(options: HttpOptions, port: () => number) {
@@ -363,7 +371,40 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       auth: "ui",
       handle: async ({ body }) => {
         const patch = parseBody(uiPrefsPatch, body);
-        return patch.ok ? service.setPrefs(patch.data) : patch;
+        if (!patch.ok) return patch;
+        const saved = service.setPrefs(patch.data);
+        if (saved.ok && patch.data.settings !== undefined) options.onSettings?.(saved.data.settings);
+        return saved;
+      },
+    },
+    {
+      method: "GET",
+      path: /^\/v1\/ui\/about$/,
+      auth: "ui",
+      handle: async () => {
+        const skill = options.skill ?? null;
+        const about: AppAbout = {
+          version: options.version,
+          platform: process.platform,
+          home: options.home,
+          exports: exportsDir(options.home),
+          skill: skill === null ? null : { target: skill.target, backups: skill.backups },
+        };
+        return { ok: true, data: about };
+      },
+    },
+    {
+      method: "POST",
+      path: /^\/v1\/ui\/skill\/install$/,
+      auth: "ui",
+      handle: async () => {
+        const skill = options.skill ?? null;
+        if (skill === null) return { ok: false, error: { code: "unavailable", message: "Only the installed Brainstorm app on your own home manages the agent skill." } };
+        try {
+          return { ok: true, data: skill.install() };
+        } catch (e) {
+          return { ok: false, error: { code: "unavailable", message: `The skill didn't install: ${e instanceof Error ? e.message : String(e)}` } };
+        }
       },
     },
     { method: "POST", path: /^\/v1\/ui\/sessions\/([^/]+)\/export$/, auth: "ui", handle: withSession((id) => service.exportHtml(id)) },
@@ -414,6 +455,26 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
         updates.install()
           ? { ok: true, data: updates.state() }
           : { ok: false, error: { code: "invalid_action", message: "There's no downloaded update to install." } },
+    },
+    {
+      method: "POST",
+      path: /^\/v1\/ui\/update\/check$/,
+      auth: "ui",
+      handle: async () => {
+        if (updates.check()) return { ok: true, data: updates.state() };
+        const state = updates.state();
+        const message = state.kind === "off" ? state.reason : "Brainstorm is already checking for, downloading or installing an update.";
+        return { ok: false, error: { code: "invalid_action", message } };
+      },
+    },
+    {
+      method: "POST",
+      path: /^\/v1\/ui\/update\/download$/,
+      auth: "ui",
+      handle: async () =>
+        updates.download()
+          ? { ok: true, data: updates.state() }
+          : { ok: false, error: { code: "invalid_action", message: "There's no update waiting to download." } },
     },
     {
       method: "GET",

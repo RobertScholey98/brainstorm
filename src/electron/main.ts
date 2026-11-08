@@ -1,11 +1,13 @@
 import { app, BrowserWindow, dialog, Menu, nativeTheme, screen, session, shell, type BrowserWindowConstructorOptions, type Rectangle, type WebContents } from "electron";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { solidColours } from "../core/design";
 import { packageRoot } from "../core/packageRoot";
 import { installSkill, SKILL_NAME } from "../core/skillInstall";
+import { OPENABLE, type Openable, type SkillHost } from "../core/about";
+import type { AppSettings } from "../core/prefs";
 import { brainstormHome, exportsDir } from "../server/appData";
 import { startServer, type RunningServer } from "../server/index";
 import { createUpdater } from "./updater";
@@ -71,16 +73,43 @@ function writePlace(window: BrowserWindow): void {
   }
 }
 
-/** An installed app keeps ~/.claude/skills/use-brainstorm on the version it shipped with, so agents can drive it. */
-function installBundledSkill(): void {
+/**
+ * An installed app keeps ~/.claude/skills/use-brainstorm on the version it shipped with, so agents can drive it. A
+ * BRAINSTORM_HOME marks a test or otherwise isolated app, which leaves the user's skills alone.
+ */
+const claudeDir = join(homedir(), ".claude");
+const skill: SkillHost | null =
+  app.isPackaged && !process.env.BRAINSTORM_HOME
+    ? {
+        target: join(claudeDir, "skills", SKILL_NAME),
+        backups: join(claudeDir, "skill-backups"),
+        install: () => installSkill(fileURLToPath(new URL(`skills/${SKILL_NAME}`, packageRoot())), claudeDir),
+      }
+    : null;
+
+function installBundledSkill(host: SkillHost): void {
   try {
-    const source = fileURLToPath(new URL(`skills/${SKILL_NAME}`, packageRoot()));
-    const result = installSkill(source, join(homedir(), ".claude"));
+    const result = host.install();
     if (result.kind === "installed") console.error(`installed the ${SKILL_NAME} skill to ${result.target}${result.backup ? `; the old copy is in ${result.backup}` : ""}`);
   } catch (e) {
     console.error(`couldn't install the ${SKILL_NAME} skill: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
+
+/** The folders Settings opens, by the name its link carries, so a link can't open any other. */
+const FOLDERS: Record<Openable, string | null> = {
+  home,
+  exports,
+  skill: skill?.target ?? null,
+  "skill-backups": skill?.backups ?? null,
+};
+const folderOf = (pathname: string): string | null => {
+  const name = /^\/open-folder\/([a-z-]+)$/.exec(pathname)?.[1];
+  return name !== undefined && (OPENABLE as readonly string[]).includes(name) ? FOLDERS[name as Openable] : null;
+};
+
+// Windows shows a notification only for an app with a model id, and the installer registers the app under its appId.
+if (process.platform === "win32") app.setAppUserModelId("io.github.robertscholey98.brainstorm");
 
 if (app.requestSingleInstanceLock()) void run();
 else app.quit();
@@ -96,10 +125,9 @@ async function run(): Promise<void> {
 
   await app.whenReady();
   Menu.setApplicationMenu(null);
-  // A BRAINSTORM_HOME marks a test or otherwise isolated app, which leaves the user's skills alone.
-  if (app.isPackaged && !process.env.BRAINSTORM_HOME) installBundledSkill();
 
   let server: RunningServer;
+  let settings: AppSettings | null = null;
   try {
     // The renderer has no preload, so the window asks for a folder through the server, which opens the dialog here.
     const pickFolder = async (): Promise<string | null> => {
@@ -107,19 +135,27 @@ async function run(): Promise<void> {
       const picked = window === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(window, options);
       return picked.canceled ? null : (picked.filePaths[0] ?? null);
     };
-    server = await startServer({ home, updates: createUpdater(), pickFolder });
+    const updates = createUpdater();
+    // The theme Rob picks is the native one, so the pages' prefers-color-scheme, the canvas frames and the title bar
+    // overlay all follow it, the same way they follow the OS.
+    const onSettings = (next: AppSettings) => {
+      settings = next;
+      nativeTheme.themeSource = next.theme;
+      updates.setAutoDownload(next.autoUpdate);
+    };
+    server = await startServer({ home, updates, pickFolder, skill: skill ?? undefined, onSettings });
   } catch (e) {
     dialog.showErrorBox("Brainstorm couldn't start", e instanceof Error ? e.message : String(e));
     app.exit(1);
     return;
   }
+  if (skill !== null && (settings as AppSettings | null)?.skillUpdate !== false) installBundledSkill(skill);
   const origin = new URL(server.url).origin;
-  // Copy phrase writes the clipboard, and Present fills the screen, from the window; the canvas frame and everything else
-  // stay denied.
+  // Copy phrase writes the clipboard, Present fills the screen and a brainstorm that moved in the background raises a
+  // notification, from the window; the canvas frame and everything else stay denied.
+  const ALLOWED = new Set(["clipboard-sanitized-write", "fullscreen", "notifications"]);
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) =>
-    callback(
-      (permission === "clipboard-sanitized-write" || permission === "fullscreen") && details.isMainFrame && new URL(details.requestingUrl).origin === origin,
-    ),
+    callback(ALLOWED.has(permission) && details.isMainFrame && new URL(details.requestingUrl).origin === origin),
   );
   // The preview window's page is the renderer's, told by its hash which window it is (ADR 007).
   const previewUrl = `${server.url}&window=preview`;
@@ -164,7 +200,16 @@ async function run(): Promise<void> {
       const target = new URL(opened);
       const command = target.origin === origin ? /^\/preview-window\/(open|close|fullscreen)$/.exec(target.pathname)?.[1] : undefined;
       const file = target.origin === origin ? exported(target.pathname) : null;
-      if (command === "open") openPreview();
+      const folder = target.origin === origin ? folderOf(target.pathname) : null;
+      if (target.origin === origin && target.pathname === "/main-window/focus") {
+        // A notification's click brings back the window it came from.
+        if (shown.isMinimized()) shown.restore();
+        shown.show();
+        shown.focus();
+      } else if (folder !== null) {
+        // A folder nothing has written yet, such as skill-backups before the first backup, opens its parent instead.
+        void shell.openPath(existsSync(folder) ? folder : dirname(folder));
+      } else if (command === "open") openPreview();
       else if (command === "close") preview?.close();
       else if (command === "fullscreen") {
         const w = openPreview();
