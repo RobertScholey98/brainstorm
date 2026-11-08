@@ -11,8 +11,8 @@ import { BAR_COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
 import { canOpenPreviewWindow, previewWindow } from "./mirror";
 
 const LOOKS: readonly { value: PreviewPrefs["look"]; label: string; about: string }[] = [
-  { value: "clean", label: "Clean", about: "The design alone, filling the window. Safe to share." },
-  { value: "working", label: "Working", about: "The canvas as it is here, with slot tabs, pins and Pin comment. For your own screen." },
+  { value: "clean", label: "Clean", about: "Design only. Ready to share." },
+  { value: "working", label: "Working", about: "Canvas, slot tabs and comment tools. For your own screen." },
 ];
 
 /**
@@ -120,7 +120,7 @@ function WindowMenu({
       <PopoverContent size="md" align="end" data-preview-popover>
         <PopoverHeader
           heading="Preview window"
-          description="Mirrors this canvas live, for sharing or another screen."
+          description="Mirrors this canvas live."
         />
         <div className="grid gap-1.5">
           <span className="text-xs font-medium text-fg-muted">Look</span>
@@ -136,14 +136,14 @@ function WindowMenu({
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
             <span className="text-sm">Hold preview</span>
-            <span className="text-xs text-fg-muted">Freeze it on what it shows now while you try things here.</span>
+            <span className="text-xs text-fg-muted">Freeze it while you try things here.</span>
           </span>
           <Switch checked={hold} onCheckedChange={onHold} className="mt-0.5" data-preview-menu-hold />
         </label>
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
             <span className="text-sm">Show canvas in main window</span>
-            <span className="text-xs text-fg-muted">Turn off to show it only in the preview window. Slots and controls stay here.</span>
+            <span className="text-xs text-fg-muted">Turn off to use the canvas only in the preview window. Controls stay here.</span>
           </span>
           <Switch checked={prefs.here} onCheckedChange={(here) => onPrefs({ ...prefs, here })} className="mt-0.5" data-preview-here />
         </label>
