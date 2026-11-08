@@ -943,7 +943,7 @@ function CanvasAway({
               ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience. Show the canvas here to ${act === "pin" ? "pin" : "vary an element"}, or switch the preview to Working (not for sharing).`
               : picking
                 ? "Press Esc or Cancel to stop."
-                : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
+                : `The ${name} preview is ${hold ? "held" : "live"}. Slot and setting changes here appear there${hold ? " when you resume" : ""}.`}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row justify-center">
