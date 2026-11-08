@@ -937,12 +937,13 @@ function CanvasAway({
           <EmptyTitle>
             {stuck !== null ? "The canvas is in the Clean preview" : picking ? "Click an element in the preview window" : `The canvas is in the ${name} preview`}
           </EmptyTitle>
-          {/* Two lines whatever it says, so starting or ending a pick moves nothing in the region. */}
-          <EmptyDescription className="flex min-h-10 items-center justify-center">
+          {/* Two lines' room whatever it says, so starting or ending a pick moves nothing in the region; a one-line body
+              sits under its title and leaves the spare line above the buttons. */}
+          <EmptyDescription className="min-h-10">
             {stuck !== null
-              ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience. Show the canvas here to ${act === "pin" ? "pin" : "vary an element"}, or switch the preview to Working (not for sharing).`
+              ? `Clean hides ${act === "pin" ? "pins" : "tools"} from your audience.`
               : picking
-                ? "Your comment lands here in Feedback. Press Esc to stop."
+                ? "Your comment goes to Feedback, on the right. Press Esc to stop."
                 : hold
                   ? `It's held. It catches up with your edits here when you resume.`
                   : `It's live and follows your edits here.`}

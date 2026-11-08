@@ -126,7 +126,7 @@ function WindowMenu({
                 aria-hidden={l.value !== prefs.look || undefined}
               >
                 {l.value === "working" ? <EyeOff data-icon="inline-start" className="text-warning" aria-hidden /> : <AppWindow data-icon="inline-start" aria-hidden />}
-                <span className="text-fg-muted data-collapsed:hidden" data-collapse={BAR_COLLAPSE.preview}>
+                <span className="text-fg/75 data-collapsed:hidden" data-collapse={BAR_COLLAPSE.preview}>
                   Preview
                 </span>
                 <span className="font-semibold">{l.label}</span>

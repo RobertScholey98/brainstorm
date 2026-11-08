@@ -207,7 +207,7 @@ try {
   await window.click("[data-hold]");
   await preview.waitForSelector("[data-held-bar]");
   await preview.mouse.move(640, 790);
-  await snap(preview, "11b-preview-working-held", "The Working preview window while Hold preview is on in the main window: the same warning-toned held strip as the main window's, in its canvas's top inset, in the same words, Preview held on the slot and variant it keeps, with Resume live ending the strip as an amber full-height segment with a play glyph; an amber rule under the bar marks the Working look");
+  await snap(preview, "11b-preview-working-held", "The Working preview window while Hold preview is on in the main window: the same warning-toned held strip as the main window's, in its canvas's top inset, in the same words, Preview held on the slot and variant it keeps, with Resume live ending the strip as an amber full-height segment with a play glyph; while held, the strip's own amber edge stands in for the Working look's amber rule");
   await preview.click("[data-held-release]");
   await preview.waitForSelector("[data-held-bar]", { state: "detached" });
   check("Resume live in the working preview window ends Hold in the main window", await window.getAttribute("[data-hold]", "aria-pressed"), "false");
@@ -253,16 +253,28 @@ try {
   // Give the canvas away.
   await window.click("[data-preview-menu]");
   await window.click("[data-preview-here]");
-  await window.keyboard.press("Escape");
+  // Closed with the pointer, as Rob would, so the menu's button takes no keyboard focus ring or hint.
+  await window.click("[data-preview-menu]");
   await window.waitForSelector("[data-canvas-away]");
   await window.mouse.move(150, 860);
   await snap(window, "15-canvas-away", "The main window with Show canvas in main window off: the canvas region says the canvas is in the Working preview, live and following edits here, with Bring preview to front (primary) and Show canvas here; the slot bar, sidebar and Inspector stay");
+  await window.click("[data-hold]");
+  await window.waitForSelector("[data-held-bar]");
+  check(
+    "held with the canvas away, the held strip still lies along the region's top and the placeholder says it's held",
+    [await window.textContent("[data-held-bar]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")],
+    ["Preview held on The result · Assignment cardResume live", "It's held. It catches up with your edits here when you resume."],
+  );
+  await window.mouse.move(150, 860);
+  await snap(window, "15b-canvas-away-held", "Canvas away while Hold preview is on: the held strip along the region's top, Preview held on the slot and variant, with Resume live; under it the placeholder says the canvas is in the Working preview and that it's held and catches up when resumed");
+  await window.click("[data-held-release]");
+  await window.waitForSelector("[data-held-bar]", { state: "detached" });
   await window.click("[data-pick-toggle]");
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
-  check("a pick started here while the canvas is away waits in the preview window", [await window.textContent("[data-canvas-away] [data-slot=empty-title]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")], ["Click an element in the preview window", "Your comment lands here in Feedback. Press Esc to stop."]);
+  check("a pick started here while the canvas is away waits in the preview window", [await window.textContent("[data-canvas-away] [data-slot=empty-title]"), await window.textContent("[data-canvas-away] [data-slot=empty-description]")], ["Click an element in the preview window", "Your comment goes to Feedback, on the right. Press Esc to stop."]);
   check("the bar's pick hint says where to pick, in full", await window.textContent("[data-pick-hint]"), "Click to pin");
-  await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's hint reads Click to pin, with Cancel, and the region's title says to click an element there");
+  await snap(window, "16-canvas-away-picking", "The same, after Pin comment in the Inspector: the canvas bar's pick chip reads Click to pin, with its close, and the region's title says to click an element there and where the comment goes");
   await window.keyboard.press("Escape");
 
   // A clean preview window can't take a pick, so with the canvas away the main window says so and offers a way on.
@@ -282,7 +294,7 @@ try {
     [null, "view", "The canvas is in the Clean preview"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says the canvas is in the Clean preview, which hides pins, in two short lines, with Show here and pin (primary: it shows the canvas here and starts the pick), Switch preview to Working (an outline with only an amber edge, lighter than the primary), and Not now");
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says the canvas is in the Clean preview, which hides pins from the audience, with Show here and pin (primary: it shows the canvas here and starts the pick), Switch preview to Working (an outline with only an amber edge, lighter than the primary), and Not now");
   await window.click("[data-away-working]");
   await preview.waitForSelector("[data-preview-window=working]");
   await mirror.waitForSelector('body[data-mode="pin"]');
