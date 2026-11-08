@@ -480,7 +480,7 @@ function SystemDetail({
   return (
     <div className="flex size-full flex-col" data-system-detail={id}>
       <div className="flex flex-col gap-3 border-b bg-card px-6 pt-4">
-        <div className="flex items-start gap-2">
+        <div className="flex items-center gap-2">
           <Hint label="Design systems" side="bottom" align="start">
             <Button variant="ghost" size="icon" className="-ml-2 shrink-0" aria-label="Back to design systems" onClick={onBack} data-systems-back>
               <ArrowLeft aria-hidden />
@@ -488,6 +488,7 @@ function SystemDetail({
           </Hint>
           <div className="min-w-0 flex-1">
             <PageHeader
+              inline
               heading={view?.name ?? "Design system"}
               description={
                 <span className="flex min-w-0 items-center gap-x-2 font-mono text-xs">
@@ -1595,9 +1596,8 @@ function Workbench({
                 {copied ? "Copied" : "Copy"}
               </Button>
             </h3>
-            {/* A story's own JSX keeps its lines and scrolls sideways; wrapped mid-tag, it would read as broken code. */}
-            <pre className={cn("rounded-md bg-muted p-3 font-mono text-xs", source === null ? "break-words whitespace-pre-wrap" : "overflow-x-auto whitespace-pre")} data-workbench-snippet>
-              {snippet}
+            <pre className="rounded-md bg-muted p-3 font-mono text-xs" data-workbench-snippet>
+              <CodeLines code={snippet} />
             </pre>
             {source !== null && <p className="text-xs text-fg-muted">The story's own JSX, from its render.</p>}
           </section>
@@ -1680,6 +1680,21 @@ function AxisPicker({ label, value, onChange, options }: { label: string; value:
       </SelectContent>
     </Select>
   );
+}
+
+/**
+ * Code in a narrow pane: each line keeps its indent, and one too long for the pane wraps under itself with a hanging
+ * indent, so a wrapped line still reads as one line of code rather than a new one.
+ */
+function CodeLines({ code }: { code: string }) {
+  return code.split("\n").map((line, i) => {
+    const indent = line.length - line.trimStart().length;
+    return (
+      <span key={i} className="block break-words whitespace-pre-wrap" style={{ paddingLeft: `${indent + 2}ch`, textIndent: "-2ch" }}>
+        {line.trimStart() === "" ? " " : line.trimStart()}
+      </span>
+    );
+  });
 }
 
 function ArgControl({ row, value, onChange }: { row: ArgRow; value: unknown; onChange: (value: Json) => void }) {
