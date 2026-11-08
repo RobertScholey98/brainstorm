@@ -83,7 +83,7 @@ try {
     };
   });
   check("present stretches the slot to the screen's width from its top, with no title or pins", fills, { width: true, top: 0, chrome: 0 });
-  await snap(window, "03-present-start", "Present, first time this run, just started from the wheel slot: the 390 px wheel stretched to fill the screen, no canvas chrome, and in the top right corner a small label, Esc to leave · ← → to change slot, with Exit; it fades after 3.5 s, and later presents show it only while the pointer moves");
+  await snap(window, "03-present-start", "Present, first time this run, just started from the wheel slot: the 390 px wheel stretched to fill the screen, no canvas chrome, and at the top centre a small label, ← → change slot | Exit Esc; it fades after 3.5 s, and later presents show it only when the pointer nears the top edge");
   await sleep(3800);
   await snap(window, "04-present", "Present once the label has faded: nothing on screen but the design, as if it were the app");
   await window.keyboard.press("ArrowRight");
@@ -104,7 +104,7 @@ try {
   await window.mouse.move(1100, 60);
   await window.mouse.move(1120, 40);
   await window.waitForSelector("[data-present-hint]:not([data-hidden])");
-  await snap(window, "05b-present-pointer", "A later present, with the pointer brought near the top edge: the keys label and Exit show in the top right corner, and fade 2 s after the pointer leaves the top; pointing anywhere lower leaves the screen clean, and a still pointer hides after 2 s");
+  await snap(window, "05b-present-pointer", "A later present, with the pointer brought near the top edge: the keys label and Exit show at the top centre, and fade 2 s after the pointer leaves the top; pointing anywhere lower leaves the screen clean, and a still pointer hides after 2 s");
   await window.keyboard.press("F5");
   await window.waitForSelector("[data-presenting]", { state: "detached" });
   check("F5 presents and F5 leaves", true, true);
@@ -232,7 +232,7 @@ try {
   await window.keyboard.press("Escape");
   await window.waitForSelector("[data-canvas-away]");
   await window.mouse.move(150, 860);
-  await snap(window, "15-canvas-away", "The main window with Show canvas in main window off: the canvas region says the canvas is in the preview window, with Show the canvas here and Bring the window to front; the slot bar, sidebar and Inspector stay");
+  await snap(window, "15-canvas-away", "The main window with Show canvas in main window off: the canvas region says the canvas is in the preview window, with Bring preview to front (primary) and Show canvas here; the slot bar, sidebar and Inspector stay");
   await window.click("[data-pick-toggle]");
   await mirror.waitForSelector('body[data-mode="pin"]');
   await window.waitForSelector("[data-canvas-away]");
@@ -255,10 +255,10 @@ try {
       await mirror.evaluate(() => document.body.dataset.mode ?? "view"),
       await window.textContent("[data-canvas-away] [data-slot=empty-title]"),
     ],
-    [null, "view", "To pin a comment, show the canvas here"],
+    [null, "view", "Your audience sees only the design"],
   );
   await window.mouse.move(150, 860);
-  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says to pin a comment, bring the canvas back here, and why, with Show the canvas here (primary, which then starts the pick here), Switch preview to Working, and Cancel");
+  await snap(window, "16b-canvas-away-clean-pick", "Canvas away, preview window Clean, after Pin comment: no pick mode starts (the bar and Pin comment are as they were); the region says the audience sees only the design and why, with Show canvas here and pin (primary, which then starts the pick here), Switch preview to Working, and Cancel");
   await window.click("[data-away-working]");
   await preview.waitForSelector("[data-preview-window=working]");
   await mirror.waitForSelector('body[data-mode="pin"]');

@@ -11,8 +11,8 @@ import { BAR_COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
 import { canOpenPreviewWindow, previewWindow } from "./mirror";
 
 const LOOKS: readonly { value: PreviewPrefs["look"]; label: string; about: string }[] = [
-  { value: "clean", label: "Clean", about: "Design only. Ready to share." },
-  { value: "working", label: "Working", about: "Canvas, slot tabs and comment tools. For your own screen." },
+  { value: "clean", label: "Clean", about: "just the design, ready to share." },
+  { value: "working", label: "Working", about: "canvas, slot tabs and comment tools, for your own screen." },
 ];
 
 /**
@@ -65,7 +65,12 @@ function HoldButton({ hold, heldOn, onHold }: { hold: boolean; heldOn: string | 
     >
       <Button variant="caution" aria-pressed={hold} onClick={() => onHold(!hold)} className={COMPACT} data-collapse={BAR_COLLAPSE.hold} data-hold>
         <CirclePause data-icon="inline-start" className={hold ? "text-warning" : undefined} aria-hidden />
-        <span className={COMPACT_LABEL}>Hold preview</span>
+        <span className={COMPACT_LABEL}>
+          Hold
+          <span className="data-collapsed:hidden" data-collapse={BAR_COLLAPSE.holdSuffix}>
+            {" preview"}
+          </span>
+        </span>
       </Button>
     </Hint>
   );
@@ -127,7 +132,7 @@ function WindowMenu({
           <Segmented value={prefs.look} onValueChange={(next) => onPrefs({ ...prefs, look: next })} options={LOOKS} itemData="preview-look" aria-label="Look" />
           <ul className="grid gap-0.5 text-xs" data-preview-look-about>
             {LOOKS.map((l) => (
-              <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted"} data-chosen={l.value === prefs.look || undefined}>
+              <li key={l.value} className={l.value === prefs.look ? "text-fg" : "text-fg-muted/70"} data-chosen={l.value === prefs.look || undefined}>
                 <span className="font-semibold">{l.label}:</span> {l.about}
               </li>
             ))}

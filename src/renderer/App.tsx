@@ -925,8 +925,7 @@ function CanvasAway({
   onWorking: () => void;
   onDismiss: () => void;
 }) {
-  const what = stuck === "vary" ? "vary an element" : "pin a comment";
-  const privately = stuck === "vary" ? "vary it" : "pin it";
+  const act = stuck === "vary" ? "vary" : "pin";
   const name = look === "clean" ? "Clean" : "Working";
   return (
     <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away={stuck !== null ? "stuck" : picking ? "picking" : ""}>
@@ -936,11 +935,11 @@ function CanvasAway({
             <AppWindow aria-hidden />
           </EmptyMedia>
           <EmptyTitle>
-            {stuck !== null ? `To ${what}, show the canvas here` : picking ? "Pick an element in the preview window" : "The canvas is in the preview window"}
+            {stuck !== null ? "Your audience sees only the design" : picking ? "Pick an element in the preview window" : "The canvas is in the preview window"}
           </EmptyTitle>
           <EmptyDescription>
             {stuck !== null
-              ? `Clean shows your audience only the design. Show the canvas here to ${privately} privately.`
+              ? `The preview window is Clean. ${act === "pin" ? "Pin" : "Vary"} here, or switch the preview to Working, which shows viewers the canvas tools.`
               : picking
                 ? "Esc or Cancel stops picking."
                 : `It shows the ${name} look${hold ? ", held" : ", live"}. Choose slots and change settings here, and it follows.`}
@@ -950,10 +949,10 @@ function CanvasAway({
           {stuck !== null ? (
             <>
               <Button variant="accent" onClick={onHere} data-away-here>
-                Show the canvas here
+                Show canvas here and {act}
               </Button>
               <Button variant="outline" onClick={onWorking} data-away-working>
-                Switch to Working (viewers see tools)
+                Switch preview to Working
               </Button>
               <Button variant="ghost" onClick={onDismiss} data-away-dismiss>
                 Cancel
@@ -963,10 +962,10 @@ function CanvasAway({
             <>
               {/* The canvas is in the other window, so that is the way on; bringing it back is the alternative. */}
               <Button variant="accent" onClick={() => previewWindow("open")} data-away-front>
-                Bring the window to front
+                Bring preview to front
               </Button>
               <Button variant="outline" onClick={onHere} data-away-here>
-                Show the canvas here
+                Show canvas here
               </Button>
             </>
           )}
@@ -1000,7 +999,7 @@ function PresentHint({ several, poke, onLeave }: { several: boolean; poke: numbe
   }, [shown, over, poke]);
   return (
     <div
-      className="absolute top-4 left-1/2 z-toast flex -translate-x-1/2 items-center gap-1 transition-opacity duration-300 data-hidden:pointer-events-none data-hidden:opacity-0"
+      className="absolute top-6 left-1/2 z-toast flex -translate-x-1/2 items-center gap-1 transition-opacity duration-300 data-hidden:pointer-events-none data-hidden:opacity-0"
       data-hidden={shown ? undefined : ""}
       onPointerEnter={() => setOver(true)}
       onPointerLeave={() => setOver(false)}

@@ -74,11 +74,11 @@ const rowFits = (row: HTMLElement): boolean => {
 };
 
 /**
- * The order the canvas bar's right end gives up its labels when the bar runs short: Hold preview's (its pressed state and
- * the held bar say it), then the preview menu's "Preview", leaving its look and chevron, which never go: whether a shared
+ * The order the canvas bar's right end gives up its labels when the bar runs short: Hold preview shortens to Hold, then
+ * the preview menu drops "Preview", then Hold goes to its icon. The menu's look and chevron never go: whether a shared
  * window is Clean is what Rob checks before he shares it.
  */
-export const BAR_COLLAPSE = { hold: 0, preview: 1 } as const;
+export const BAR_COLLAPSE = { holdSuffix: 0, preview: 1, hold: 2 } as const;
 
 /**
  * The bar sets aside the room its longest pick hint needs, picking or not, here or away, so the labels depend on the
@@ -97,7 +97,7 @@ const barFits = (bar: HTMLElement): boolean => {
 };
 
 /** Fits the canvas bar: its right end's labels give way, in `BAR_COLLAPSE` order, before the pick hint cuts. */
-export const useBarFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, barFits, "[data-bar-hint], [data-present-controls]", BAR_COLLAPSE.preview);
+export const useBarFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, barFits, "[data-bar-hint], [data-present-controls]", BAR_COLLAPSE.hold + 1);
 
 /** Fits a sidebar row: its status drops its time, then its words, then a fork its branch glyph, before its title cuts. */
 export const useRowFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, rowFits, "[data-row-title]");
