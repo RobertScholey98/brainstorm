@@ -203,7 +203,7 @@ try {
   await mirror.waitForSelector("html:not([data-present])");
   await settled(() => showing(mirror));
   await preview.mouse.move(640, 790);
-  await snap(preview, "11-preview-working", "The preview window, Working look: the same canvas bar as the main window (slot tabs, view switch), then Not for sharing (amber eye-off and amber text) with Switch to Clean in the same warning tone, and Pin comment at its right, over the canvas drawn as the main window draws it");
+  await snap(preview, "11-preview-working", "The preview window, Working look: the same canvas bar as the main window (slot tabs, view switch), then Not for sharing (amber eye-off and amber text) with Switch to Clean as a plain outline (amber marks the way into Working, never the way out), and Pin comment at its right, over the canvas drawn as the main window draws it");
   await window.click("[data-hold]");
   await preview.waitForSelector("[data-held-bar]");
   await preview.mouse.move(640, 790);

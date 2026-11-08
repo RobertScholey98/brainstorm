@@ -127,7 +127,7 @@ function WindowMenu({
                 <span className="text-fg-muted data-collapsed:hidden" data-collapse={BAR_COLLAPSE.preview}>
                   Preview
                 </span>
-                {l.label}
+                <span className="font-semibold">{l.label}</span>
               </span>
             ))}
           </span>
@@ -160,7 +160,7 @@ function WindowMenu({
         <label className="flex items-start justify-between gap-3">
           <span className="grid gap-0.5">
             <span className="text-sm">Show canvas in main window</span>
-            <span className="text-xs text-fg-muted">Turn off to show the canvas only in the preview window. This window keeps the controls.</span>
+            <span className="text-xs text-fg-muted">Turn off to show the canvas only in the preview window. The main window keeps the controls.</span>
           </span>
           <Switch checked={prefs.here} onCheckedChange={(here) => onPrefs({ ...prefs, here })} className="mt-0.5" data-preview-here />
         </label>

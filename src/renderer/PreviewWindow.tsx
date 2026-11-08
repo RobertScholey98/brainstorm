@@ -1,5 +1,4 @@
 import { AppWindow, EyeOff, MessageSquarePlus } from "lucide-react";
-import { cn } from "cn";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -11,6 +10,7 @@ import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type FeedbackCue } from "./CanvasHost";
 import { PinComposer } from "./Feedback";
 import { HeldBar } from "./HeldBar";
+import { HeldLabel } from "./HeldLabel";
 import { describe, openChannel, type MirrorScene, type PreviewSettings, type ToMain, type ToPreview } from "./mirror";
 import { failedTitle, type Notice } from "./notice";
 import { VaryComposer } from "./Vary";
@@ -136,7 +136,7 @@ export function PreviewWindow({ api }: { api: Api }) {
                   Not for sharing
                 </span>
                 <Hint label="Show only the design in this window, as an audience should see it" side="bottom">
-                  <Button variant="caution" data-warn onClick={() => tell({ kind: "clean" })} data-preview-to-clean>
+                  <Button variant="outline" onClick={() => tell({ kind: "clean" })} data-preview-to-clean>
                     Switch to Clean
                   </Button>
                 </Hint>
@@ -149,19 +149,8 @@ export function PreviewWindow({ api }: { api: Api }) {
                       onClick={() => tell({ kind: "pick", for: picking === "comment" ? null : "comment" })}
                       data-preview-pin
                     >
-                      {/* As wide as its wider label, so a pick moves nothing in this bar either; glyph and words centre as one. */}
-                      <span className="grid justify-items-center">
-                        {(["Pin comment", "Picking…"] as const).map((label, i) => (
-                          <span
-                            key={label}
-                            className={cn("col-start-1 row-start-1 flex items-center gap-1.5", (picking === "comment") !== (i === 1) && "invisible")}
-                            aria-hidden={(picking === "comment") !== (i === 1) || undefined}
-                          >
-                            <MessageSquarePlus data-icon="inline-start" aria-hidden />
-                            {label}
-                          </span>
-                        ))}
-                      </span>
+                      <MessageSquarePlus data-icon="inline-start" aria-hidden />
+                      <HeldLabel active={picking === "comment"} idle="Pin comment" busy="Picking…" />
                     </Button>
                   </span>
                 </Hint>
