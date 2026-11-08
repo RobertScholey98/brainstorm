@@ -648,6 +648,7 @@ function ReviewCallout({
   return (
     <Callout
       tone="info"
+      inline
       heading="Review this import before brainstorms use it"
       data-system-review-callout
       actions={
@@ -674,10 +675,10 @@ function ReviewCallout({
     >
       {sent === null && (
         <p className="max-w-sheet">
-          Step through the components with <Kbd>←</Kbd> <Kbd>→</Kbd> and check how each renders. Move one to another tier, or raise an issue for the agent. Brainstorms can use the system once you confirm it.
+          Step through with <Kbd>←</Kbd> <Kbd>→</Kbd>, check how each component renders, and move or raise an issue on any that's wrong. Brainstorms can use it once you confirm it.
         </p>
       )}
-      {unsorted && sent === null && <p>This library came from its package, so nothing sorted its components into tiers and they all list as primitives. Sort them yourself, or have an agent do it.</p>}
+      {unsorted && sent === null && <p className="max-w-sheet">It came from its package, so nothing has sorted it into tiers yet: every component lists as a primitive.</p>}
       {(moves > 0 || open > 0) && (
         <div className="grid gap-1" data-review-pending>
           {moves > 0 && <p>{count(moves, "tier change", "tier changes")}, written to the adapter when you send or confirm.</p>}
@@ -696,7 +697,7 @@ function ReviewCallout({
         </div>
       )}
       {sent !== null && (
-        <div className="grid gap-2 rounded-md bg-card p-3 ring-1 ring-border" data-review-status>
+        <div className="grid gap-1" data-review-status>
           <AgentWorkStatus work={work} since={sent.at} link={review.thread?.link ?? null} />
           {/* Once the agent has synced, what it made and what Rob sent share one line; Show takes him to it. */}
           <SentItems
@@ -1053,6 +1054,13 @@ function ComponentsTab({
   const [seenAt, setSeenAt] = useState<ReadonlyMap<string, number>>(() => new Map());
   const n = view.latest?.n ?? 0;
   const touched = useMemo(() => agentChanges(view, review), [view, review]);
+  // Stories the agent's versions added since Rob sent his review, by component and story name, with the version.
+  const newStory = useMemo(() => {
+    const since = review?.sent?.version ?? null;
+    const out = new Map<string, number>();
+    if (since !== null) for (const v of view.versions) if (v.n > since) for (const c of v.newStories) for (const s of c.stories) out.set(`${c.name}›${s}`, v.n);
+    return out;
+  }, [view, review]);
   const seen = (name: string) => (seenAt.get(name) ?? -1) >= (touched.get(name) ?? 0);
   useEffect(() => {
     if (review === null || entry === null) return;
@@ -1187,7 +1195,15 @@ function ComponentsTab({
                       {/* The picked component's stories, as Storybook nests them, each opening in the workbench. */}
                       {entry === e.name &&
                         e.stories.map((id) => (
-                          <CatalogRow key={id} label={storyNames.get(id) ?? id} detail="" nested active={focus?.id === id} onClick={() => openStory(id)} data-entry-story={id} />
+                          <CatalogRow
+                            key={id}
+                            label={storyNames.get(id) ?? id}
+                            detail={newStory.has(`${e.name}›${storyNames.get(id) ?? id}`) ? `new in v${newStory.get(`${e.name}›${storyNames.get(id) ?? id}`)}` : ""}
+                            nested
+                            active={focus?.id === id}
+                            onClick={() => openStory(id)}
+                            data-entry-story={id}
+                          />
                         ))}
                     </Fragment>
                   ))}
@@ -1517,7 +1533,10 @@ function Workbench({
   const base = (typeof story.args === "object" && story.args !== null ? story.args : {}) as Record<string, unknown>;
   const current = { ...base, ...overrides };
   const name = story.component ?? owner?.name ?? story.title.split("/").at(-1) ?? "Component";
-  const snippet = `import { ${name} } from "kit";\n\n${usageSnippet(name, current)}`;
+  // A story that renders its own JSX shows that, with what it imports, since its args alone would give a bare <Card />.
+  const source = story.source ?? null;
+  const imports = source === null ? [name] : [...new Set([...source.matchAll(/<([A-Z]\w*)/g)].map((m) => m[1]!))];
+  const snippet = `import { ${imports.join(", ")} } from "kit";\n\n${source ?? usageSnippet(name, current)}`;
   // A control starts at the story's value, or the prop's default for one the story leaves unset.
   const startOf = (key: string) => (key in base ? base[key] : rows.find((r) => r.name === key)?.value);
   // Setting a control back to where it started isn't a change, so it leaves the overrides and the count.
@@ -1555,6 +1574,30 @@ function Workbench({
                 ))}
               </ul>
             )}
+          </section>
+          <section className="grid gap-2" data-workbench-usage>
+            <h3 className="flex items-center gap-2 text-sm font-medium">
+              Usage
+              <Button
+                variant="ghost"
+                size="xs"
+                className="ml-auto"
+                onClick={() =>
+                  void navigator.clipboard.writeText(snippet).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  })
+                }
+                data-workbench-copy
+              >
+                {copied ? <Check data-icon="inline-start" aria-hidden /> : <Copy data-icon="inline-start" aria-hidden />}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </h3>
+            <pre className="rounded-md bg-muted p-3 font-mono text-xs break-words whitespace-pre-wrap" data-workbench-snippet>
+              {snippet}
+            </pre>
+            {source !== null && <p className="text-xs text-fg-muted">The story's own JSX, from its render.</p>}
           </section>
           <section className="grid gap-2" data-workbench-props>
             <h3 className="text-sm font-medium">Props</h3>
@@ -1609,29 +1652,6 @@ function Workbench({
                 ? `From ${siblings.length <= 1 ? "this story" : `its ${siblings.length} stories`}. Props no story sets aren't listed.`
                 : `From ${owner?.name ?? "the component"}'s source, with examples from ${siblings.length <= 1 ? "its story" : `its ${siblings.length} stories`}.`}
             </p>
-          </section>
-          <section className="grid gap-2" data-workbench-usage>
-            <h3 className="flex items-center gap-2 text-sm font-medium">
-              Usage
-              <Button
-                variant="ghost"
-                size="xs"
-                className="ml-auto"
-                onClick={() =>
-                  void navigator.clipboard.writeText(snippet).then(() => {
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1500);
-                  })
-                }
-                data-workbench-copy
-              >
-                {copied ? <Check data-icon="inline-start" aria-hidden /> : <Copy data-icon="inline-start" aria-hidden />}
-                {copied ? "Copied" : "Copy"}
-              </Button>
-            </h3>
-            <pre className="rounded-md bg-muted p-3 font-mono text-xs break-words whitespace-pre-wrap" data-workbench-snippet>
-              {snippet}
-            </pre>
           </section>
         </div>
       </ScrollPane>

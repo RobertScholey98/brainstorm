@@ -36,6 +36,8 @@ export type StoryInfo = {
   /** Storybook `tags` from the story and its meta; a tier tag sets its component's tier. Missing before ADR 008. */
   readonly tags?: readonly string[];
   readonly argTypes?: Readonly<Record<string, ArgType>>;
+  /** The JSX its `render` returns, as the story file writes it, for Usage; null for a story without one. */
+  readonly source?: string | null;
   /** A hash of the story's rendered HTML, so a version can say which components render differently. */
   readonly htmlHash?: string | null;
 };

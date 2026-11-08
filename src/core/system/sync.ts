@@ -8,6 +8,7 @@ import { analyzeKitCss, flattenCss, htmlClasses, parseCss, readsColorToken } fro
 import { isTier, type ArgType, type CatalogEntry, type KitExportInfo, type StoryInfo, type SystemManifest, type Tier } from "./model";
 import { componentProps, componentUses } from "./props";
 import { sourceFile, type SystemSource } from "./source";
+import { renderSource } from "./story";
 
 export type SyncedVersion = {
   readonly hash: string;
@@ -51,6 +52,7 @@ export async function syncSystem(source: SystemSource, checker: Checker): Promis
   const stories: StoryInfo[] = inspected.stories.map((s) => ({
     id: s.id,
     file: s.file,
+    source: renderSource(storyFiles[s.file] ?? "", s.exportName),
     exportName: s.exportName,
     title: s.title,
     name: s.name,

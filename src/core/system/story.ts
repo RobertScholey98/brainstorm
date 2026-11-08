@@ -164,3 +164,42 @@ export function describeArgs(args: Record<string, unknown>): Record<string, unkn
   };
   return describe(args, 0) as Record<string, unknown>;
 }
+
+/**
+ * The JSX a story's `render` returns, as its file writes it and dedented, so the workbench's Usage can show what the
+ * story composes rather than a bare `<Card />`. Null when the story has no `render`, or one this simple reader can't
+ * follow: it takes `render: (…) => ( … )` and `render: (…) => { … return ( … ) }`.
+ */
+export function renderSource(text: string, exportName: string): string | null {
+  const head = new RegExp(`export\\s+const\\s+${exportName}\\b[^=]*=`).exec(text);
+  if (head === null) return null;
+  const from = head.index + head[0].length;
+  const next = text.indexOf("\nexport ", from);
+  const render = /\brender\s*:\s*(?:\([^)]*\)|\w+)\s*=>\s*/g;
+  render.lastIndex = from;
+  const m = render.exec(text);
+  if (m === null || (next !== -1 && m.index > next)) return null;
+  let i = m.index + m[0].length;
+  if (text[i] === "{") {
+    const ret = /\breturn\s*/g;
+    ret.lastIndex = i;
+    const r = ret.exec(text);
+    if (r === null) return null;
+    i = r.index + r[0].length;
+  }
+  if (text[i] !== "(") return null;
+  let depth = 0;
+  let end = -1;
+  for (let j = i; j < text.length; j++) {
+    if (text[j] === "(") depth++;
+    else if (text[j] === ")" && --depth === 0) {
+      end = j;
+      break;
+    }
+  }
+  if (end === -1) return null;
+  const lines = text.slice(i + 1, end).split("\n").filter((l, n, all) => !((n === 0 || n === all.length - 1) && l.trim() === ""));
+  const indent = Math.min(...lines.filter((l) => l.trim() !== "").map((l) => /^ */.exec(l)![0].length));
+  const out = lines.map((l) => l.slice(indent)).join("\n").trim();
+  return out === "" ? null : out;
+}

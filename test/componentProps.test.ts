@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { componentProps, componentUses } from "../src/core/system/props";
+import { renderSource } from "../src/core/system/story";
 
 const BUTTON = `import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
@@ -185,5 +186,32 @@ export function MealList({ children }: { children: React.ReactNode }) {
       ["/lib/button.tsx", `export function Button(props: { children: React.ReactNode }) {\n  return <button {...props} />;\n}\n`],
     ]);
     expect(componentUses(files, ["MealCard", "MealList", "Badge", "Button"])).toEqual({ MealCard: ["Badge", "Button"] });
+  });
+});
+
+describe("renderSource", () => {
+  test("gives the JSX a story's render returns, dedented, and null for an args-only story", () => {
+    const file = `export const Default: Story = {
+  render: () => (
+    <Card>
+      <CardTitle>Lemon pancakes</CardTitle>
+    </Card>
+  ),
+};
+
+export const Plain: Story = { args: { children: "Save" } };
+
+export const Block: Story = {
+  render: (args) => {
+    const title = "Soup";
+    return (
+      <Card {...args}>{title}</Card>
+    );
+  },
+};
+`;
+    expect(renderSource(file, "Default")).toBe("<Card>\n  <CardTitle>Lemon pancakes</CardTitle>\n</Card>");
+    expect(renderSource(file, "Plain")).toBe(null);
+    expect(renderSource(file, "Block")).toBe("<Card {...args}>{title}</Card>");
   });
 });
