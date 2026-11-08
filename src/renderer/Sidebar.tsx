@@ -58,7 +58,7 @@ export function AppSidebar({
   return (
     <Sidebar variant="inset" collapsible="offcanvas">
       {/* The sidebar's share of the window header: it moves the window, with the toggle at its left as in T3 Code. */}
-      <SidebarHeader className="-mt-2 h-12 flex-row items-center gap-2 px-1 py-0" data-drag-region>
+      <SidebarHeader className="-mt-2 h-12 flex-row items-center gap-2 px-1 py-0" data-drag-region data-window-start>
         <SidebarTrigger />
         <Mark size={20} />
         <span className="text-sm font-semibold">Brainstorm</span>

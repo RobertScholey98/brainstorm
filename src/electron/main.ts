@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, nativeTheme, session, shell } from "electron";
+import { app, BrowserWindow, dialog, Menu, nativeTheme, session, shell, type BrowserWindowConstructorOptions } from "electron";
 import { readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -28,10 +28,20 @@ function exported(pathname: string): string | null {
   }
 }
 
-/** The app draws its own header; the native buttons overlay its right end in the header's own colours. */
+/**
+ * The app draws its own header. On Windows and Linux the native buttons overlay its right end in the header's own
+ * colours. On macOS the traffic lights sit at its left end, 16 px in and centred on it, as T3 Code places them, and the
+ * page leaves them room (styles.css, data-traffic-lights).
+ */
 const HEADER_HEIGHT = 48;
+const MAC = process.platform === "darwin";
+const TRAFFIC_LIGHT_RADIUS = 7;
 const theme = () => solidColours(nativeTheme.shouldUseDarkColors ? "dark" : "light");
 const overlay = () => ({ color: theme()["app"], symbolColor: theme()["fg"], height: HEADER_HEIGHT });
+const titleBar = (): Pick<BrowserWindowConstructorOptions, "titleBarStyle" | "titleBarOverlay" | "trafficLightPosition"> =>
+  MAC
+    ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: HEADER_HEIGHT / 2 - TRAFFIC_LIGHT_RADIUS } }
+    : { titleBarStyle: "hidden", titleBarOverlay: overlay() };
 
 /** An installed app keeps ~/.claude/skills/use-brainstorm on the version it shipped with, so agents can drive it. */
 function installBundledSkill(): void {
@@ -89,18 +99,25 @@ async function run(): Promise<void> {
     minWidth: 1100,
     minHeight: 720,
     title: "Brainstorm",
-    titleBarStyle: "hidden",
-    titleBarOverlay: overlay(),
+    ...titleBar(),
     backgroundColor: theme()["app"],
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   const shown = window;
   // The page follows prefers-color-scheme, which is the same setting, so the overlay needs no word from the renderer.
   nativeTheme.on("updated", () => {
-    shown.setTitleBarOverlay(overlay());
+    if (!MAC) shown.setTitleBarOverlay(overlay());
     shown.setBackgroundColor(theme()["app"] ?? "#000000");
   });
   const contents = window.webContents;
+  // macOS hides the traffic lights in full screen, so the page gives their room back. The renderer has no preload, so
+  // the main process marks the page itself.
+  if (MAC) {
+    const mark = (on: boolean) => void contents.executeJavaScript(`document.documentElement.toggleAttribute("data-fullscreen", ${on})`).catch(() => {});
+    shown.on("enter-full-screen", () => mark(true));
+    shown.on("leave-full-screen", () => mark(false));
+    contents.on("did-finish-load", () => mark(shown.isFullScreen()));
+  }
   // The renderer has no preload, so Show in folder is a link to /reveal-export/<file> that never opens a window.
   contents.setWindowOpenHandler(({ url }) => {
     const target = new URL(url);
