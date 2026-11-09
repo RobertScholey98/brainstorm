@@ -1,8 +1,9 @@
-import { ArrowLeft, ArrowRight, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsRight, Component, Copy, ExternalLink, Flag, FolderOpen, FolderPlus, ListChecks, RefreshCw, RotateCcw, Send, Wrench, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsRight, Component, Copy, ExternalLink, Flag, FolderGit2, FolderOpen, FolderPlus, ListChecks, RefreshCw, RotateCcw, Send, Wrench, X } from "lucide-react";
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout, CalloutItem } from "@/components/ui/callout";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
@@ -27,6 +28,8 @@ import type {
   HostToFrame,
   Issue,
   Json,
+  ProjectId,
+  ProjectListing,
   ReviewAction,
   ReviewIssue,
   StoryInfo,
@@ -380,6 +383,11 @@ function SystemCard({
             {warnings > 0 && <span className="text-warning"> · {warnings === 1 ? "1 warning" : `${warnings} warnings`}</span>}
           </span>
         )}
+        {system.projects.length > 0 && (
+          <span className="flex min-w-0 text-sm text-fg-muted" data-system-card-projects>
+            <Truncate>{`Projects: ${system.projects.map(projectLabel).join(", ")}`}</Truncate>
+          </span>
+        )}
         {error !== null && (
           <span className="text-sm text-danger" data-system-sync-error>
             {`The sync ${at(error.at, now, latest?.syncedAt ?? null)} failed: ${firstError(error)}`}
@@ -499,6 +507,7 @@ function SystemDetail({
             />
           </div>
           {latest !== null && <Badge>v{latest.n}</Badge>}
+          {view !== null && <SystemProjects api={api} view={view} showNotice={showNotice} />}
           <Button variant="outline" disabled={syncing} onClick={onSync} data-system-sync={id}>
             {syncing ? <Spinner data-icon="inline-start" /> : <RefreshCw data-icon="inline-start" aria-hidden />}
             {syncing ? "Syncing…" : "Sync"}
@@ -575,6 +584,71 @@ function SystemDetail({
 }
 
 const shortPath = (path: string) => path.split(/[\\/]/).filter(Boolean).slice(-2).join("/");
+
+/** A project by its repo's name, or "Other project" as the sidebar and Home call one with none. */
+const projectLabel = (p: { name: string | null }) => p.name ?? "Other project";
+
+/**
+ * The projects whose brainstorms build with this system (ADR 009), each a checkbox. A project is T3's, so the choice
+ * holds in every thread and worktree on it. Checking a project another system has moves it here.
+ */
+function SystemProjects({ api, view, showNotice }: { api: Api; view: SystemView; showNotice: (notice: Notice) => void }) {
+  const [projects, setProjects] = useState<readonly ProjectListing[] | null>(null);
+  const [busy, setBusy] = useState<ProjectId | null>(null);
+  const load = useCallback(() => void api.projects().then((r) => r.ok && setProjects(r.data)), [api]);
+  // The view comes back after every change to a system or a project, so the list follows it.
+  useEffect(load, [load, view]);
+  const toggle = async (p: ProjectListing) => {
+    const using = p.system?.id === view.id;
+    setBusy(p.id);
+    const r = await api.setProjectSystem(p.id, using ? null : view.id);
+    setBusy(null);
+    if (!r.ok) return showNotice({ title: "Couldn't change the project's design system", detail: r.error.message });
+    load();
+  };
+  const count = view.projects.length;
+  const label = count === 0 ? "No projects" : count === 1 ? projectLabel(view.projects[0]!) : `${count} projects`;
+  return (
+    <Popover>
+      <PopoverTrigger render={<Button variant="outline" data-system-projects={view.id} />}>
+        <FolderGit2 aria-hidden data-icon="inline-start" />
+        <Truncate className="max-w-picker font-normal">{label}</Truncate>
+        <ChevronDown aria-hidden data-icon="inline-end" className="text-fg-muted" />
+      </PopoverTrigger>
+      <PopoverContent align="end" size="md" data-system-projects-menu>
+        <PopoverHeader
+          heading="Projects"
+          description={`A brainstorm in a checked project builds with ${view.name} unless the agent names another system. It holds in every worktree of the project.${view.review?.state === "pending" ? " Brainstorms wait until you confirm the system." : ""}`}
+        />
+        {projects === null ? (
+          <Skeleton className="h-7 w-full" />
+        ) : projects.length === 0 ? (
+          <p className="text-fg-muted" data-system-projects-empty>
+            Brainstorm lists a project once a brainstorm or a design system comes from it. For a new project, ask its agent to run{" "}
+            <span className="font-mono">brainstorm project use {view.name}</span>.
+          </p>
+        ) : (
+          <div className="-mx-1.5 flex flex-col" role="group" aria-label="Projects">
+            {projects.map((p) => {
+              const other = p.system !== null && p.system.id !== view.id ? p.system : null;
+              return (
+                <label key={p.id} className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 hover:bg-hover" data-system-project={p.id}>
+                  <Checkbox checked={p.system?.id === view.id} disabled={busy !== null} onCheckedChange={() => void toggle(p)} />
+                  <Truncate>{projectLabel(p)}</Truncate>
+                  {other !== null && (
+                    <span className="ml-auto flex min-w-0 shrink text-xs text-fg-muted" data-system-project-other={other.id}>
+                      <Truncate>{`uses ${other.name}`}</Truncate>
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /** A project folder by its last two names, which tell Rob which project it is; the hint and Copy give the full path. */
 function ProjectPath({ path }: { path: string }) {

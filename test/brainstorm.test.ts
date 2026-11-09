@@ -100,6 +100,7 @@ describe("commit", () => {
       data: {
         session: { id: S, projectId: "proj-a", title: "Chore wheel", brief: "Pick who does chores", createdAt: AT },
         attachment: { session: S, threadId: T1, attachedAt: AT, lostAt: null },
+        system: null,
       },
     });
     expect(await service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: "first cut" })).toEqual({

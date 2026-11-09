@@ -17,6 +17,7 @@ import {
   parseFeedbackId,
   parseIterationN,
   parsePartName,
+  parseProjectId,
   parsePropName,
   parseProposedName,
   parseSessionId,
@@ -76,9 +77,19 @@ const newSessionBody = z.strictObject({
   brief: z.string(),
   thread: threadId,
   project: z.string().nullable(),
-  /** A design system's id or name. */
-  system: z.string().trim().min(1).nullable().default(null),
+  /** The project's design system unless the agent names one by id or name, or asks for none (ADR 009). */
+  system: z
+    .discriminatedUnion("kind", [
+      z.strictObject({ kind: z.literal("project") }),
+      z.strictObject({ kind: z.literal("none") }),
+      z.strictObject({ kind: z.literal("named"), ref: z.string().trim().min(1) }),
+    ])
+    .default({ kind: "project" }),
 });
+/** An agent sets its project's design system by id or name; null clears it. */
+const agentProjectSystemBody = z.strictObject({ thread: threadId, project: z.string().nullable(), system: z.string().trim().min(1).nullable() });
+/** The window sets a project's design system by id; null clears it. */
+const uiProjectSystemBody = z.strictObject({ system: z.string().trim().min(1).nullable() });
 const addSystemBody = z.strictObject({
   path: z.string().trim().min(1),
   name: z.string().trim().min(1).nullable().default(null),
@@ -291,6 +302,38 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
       handle: async ({ query }) => {
         const thread = queryThread(query, true);
         return thread.ok ? service.listSessions(thread.data) : thread;
+      },
+    },
+    // The design system of the agent's project (ADR 009), which its brainstorms build with unless told otherwise.
+    {
+      method: "GET",
+      path: /^\/v1\/agent\/project-system$/,
+      auth: "agent",
+      handle: async ({ query }) => {
+        const thread = queryThread(query, true);
+        return !thread.ok ? thread : thread.data === null ? usage("thread is required") : service.projectSystem(thread.data);
+      },
+    },
+    {
+      method: "POST",
+      path: /^\/v1\/agent\/project-system$/,
+      auth: "agent",
+      handle: async ({ body }) => {
+        const b = parseBody(agentProjectSystemBody, body);
+        return b.ok ? service.setProjectSystem({ thread: b.data.thread, projectPath: b.data.project, system: b.data.system }) : b;
+      },
+    },
+    { method: "GET", path: /^\/v1\/ui\/projects$/, auth: "ui", handle: async () => ({ ok: true, data: service.systems.projects() }) },
+    {
+      method: "POST",
+      path: /^\/v1\/ui\/projects\/([^/]+)\/system$/,
+      auth: "ui",
+      handle: async ({ params, body }) => {
+        const raw = decodeSegment(params[0] ?? "");
+        const project = raw === null ? null : parseProjectId(raw);
+        if (project === null) return usage(`"${params[0]}" is not a project id`);
+        const b = parseBody(uiProjectSystemBody, body);
+        return b.ok ? service.systems.setProjectSystem(project, b.data.system) : b;
       },
     },
     {

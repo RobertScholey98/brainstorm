@@ -5,7 +5,7 @@ Brainstorm stores sessions in its own database. You edit a disposable working co
 ## Commands
 
 ```
-brainstorm session new     --title <t> [--brief -|<text>] [--thread <id>] [--project <path>] [--system <id|name>]
+brainstorm session new     --title <t> [--brief -|<text>] [--thread <id>] [--project <path>] [--system <id|name|none>]
 brainstorm session list    [--thread <id>]                 # sessions in the thread's project
 brainstorm session attach  <id|title> [--thread <id>]
 brainstorm context         <session> [--thread <id>]
@@ -16,6 +16,8 @@ brainstorm system list                                     # design systems Brai
 brainstorm system sync     <system>                         # after the library changes
 brainstorm system check    <project root>                   # an import's gates, without saving
 brainstorm system add      <package folder|project root>    # once the check passes
+brainstorm project show                                    # the design system this project's brainstorms use
+brainstorm project use     <system|none>                    # set it for the project, in every worktree
 ```
 
 - `--thread` defaults to `$T3CODE_THREAD_ID`. Leave it off.
@@ -128,7 +130,7 @@ A commit that changes nothing and addresses nothing new returns the latest itera
 
 ## Design systems
 
-A session made with `--system` builds only with that design system, so every design can be built from the real library. `pull` adds `system/CATALOG.md`, which lists each component with its stories, and `system/stories/`, which holds the story sources. Read both before writing a block; commit ignores the folder.
+A session with a design system builds only with it, so every design can be built from the real library. `session new` gives a session its project's system, or the one `--system` names, and prints which. `pull` adds `system/CATALOG.md`, which lists each component with its stories, and `system/stories/`, which holds the story sources. Read both before writing a block; commit ignores the folder.
 
 - A block imports components from `"kit"` and composes them: `import { Card, Button, Stack, Text } from "kit"`. Lay out with `Stack`, `Grid` and `Box`, and write text with `Text` and `Heading`. Their spacing and size props take steps on the system's scale.
 - A block writes no HTML tags, no `className` or `style`, and no `block.css`. Pins need a `data-part`; pass it to the kit's primitives, which forward `data-*` props.

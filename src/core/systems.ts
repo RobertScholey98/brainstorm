@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { basename, relative, resolve } from "node:path";
 import { observeWork } from "./agentWork";
+import { projectNameAt } from "./projectName";
 import { PLAIN_ENV, type CheckEnv, type Checker } from "./check";
 import type { Store, SessionSystem, StoredSystem, StoredSystemVersion } from "./store";
 import { catalogMarkdown } from "./system/catalog";
@@ -13,14 +14,17 @@ import {
   isError,
   type AgentBridge,
   type AgentWork,
+  type ChosenSystem,
   type Failure,
   type Issue,
   type IssueCode,
   type KitPayload,
   type ProjectId,
+  type ProjectListing,
   type Result,
   type ReviewAction,
   type SystemCheck,
+  type SystemChoice,
   type SystemId,
   type SystemImport,
   type SystemListing,
@@ -91,10 +95,11 @@ export class Systems {
   }
 
   list(): SystemListing[] {
-    return this.#store.systems().map((s) => this.#listing(s));
+    const projects = this.projects();
+    return this.#store.systems().map((s) => this.#listing(s, projects));
   }
 
-  #listing(s: StoredSystem): SystemListing {
+  #listing(s: StoredSystem, projects: readonly ProjectListing[] = this.projects()): SystemListing {
     const latest = this.#store.latestSystemVersion(s.id);
     return {
       id: s.id,
@@ -106,7 +111,62 @@ export class Systems {
       syncError: s.syncError,
       adapter: typeof s.source.adapter === "string",
       review: s.review,
+      projects: projects
+        .filter((p) => p.system?.id === s.id)
+        .map(({ id, name }) => ({ id, name })),
     };
+  }
+
+  /** Every project Brainstorm knows, by name, with the system its brainstorms build with (ADR 009). */
+  projects(): ProjectListing[] {
+    const systems = this.#store.systems();
+    return this.#store
+      .projects()
+      .map((p): ProjectListing => {
+        const system = p.system === null ? null : systems.find((s) => s.id === p.system);
+        // A project Brainstorm saw only as a system's source, before it named projects on `add`, goes by that folder.
+        const source = systems.find((s) => s.projectId === p.id);
+        return {
+          id: p.id,
+          name: p.name ?? (source === undefined ? null : basename(source.source.root)),
+          system: system === null || system === undefined ? null : { id: system.id, name: system.name },
+        };
+      })
+      .sort((a, b) => (a.name ?? "￿").localeCompare(b.name ?? "￿") || a.id.localeCompare(b.id));
+  }
+
+  project(id: ProjectId): ProjectListing {
+    return this.projects().find((p) => p.id === id) ?? { id, name: this.#store.projectName(id), system: null };
+  }
+
+  /**
+   * Sets the system a project's brainstorms build with, or clears it with null. A system awaiting Rob's review may be
+   * set; brainstorms wait for his confirmation as they do when the agent names it.
+   */
+  setProjectSystem(project: ProjectId, ref: string | null): Result<ProjectListing> {
+    let id: SystemId | null = null;
+    if (ref !== null) {
+      const found = this.find(ref);
+      if (!found.ok) return found;
+      id = found.data.id;
+    }
+    this.#store.setProjectSystem(project, id, this.#now());
+    this.#changed();
+    return ok(this.project(project));
+  }
+
+  /** The system a new session in `project` builds with, from the agent's choice (ADR 009). */
+  forNewSession(project: ProjectId, choice: SystemChoice): Result<ChosenSystem | null> {
+    if (choice.kind === "none") return ok(null);
+    const from = choice.kind === "named" ? "named" : "project";
+    const ref = choice.kind === "named" ? choice.ref : this.#store.projectSystem(project);
+    if (ref === null) return ok(null);
+    const found = this.forSession(ref);
+    if (!found.ok) {
+      if (from === "named") return found;
+      return fail({ ...found.error, message: `${found.error.message}. It is this project's design system; pass --system none for a brainstorm without it` });
+    }
+    return ok({ ...found.data, name: this.#store.system(found.data.id)?.name ?? found.data.id, from });
   }
 
   view(id: SystemId): Result<SystemView> {
@@ -164,6 +224,7 @@ export class Systems {
     const source = detectSource(root, overrides);
     if (!source.ok) return fail(syncFailed(source.issues));
     const projectId = await this.#projectOf(root, input.thread ?? null);
+    const projectName = projectId === null ? null : await projectNameAt(root);
     const synced = await syncSystem(source.value, this.#checker);
     if (!synced.ok) return fail(syncFailed(synced.issues));
     const id = this.#newId();
@@ -183,6 +244,12 @@ export class Systems {
       this.#store.setReview(id, review);
       this.#store.setSystemInputs(id, inputsOf(source.value, synced.value.inputs));
       this.#store.insertSystemVersion({ system: id, n: 1 as SystemVersionN, ...synced.value, syncedAt: at });
+      // The project it came from builds with it from now on, in every worktree, unless that project has one already.
+      if (projectId !== null) {
+        this.#store.ensureProject(projectId, null, at);
+        if (projectName !== null && this.#store.projectName(projectId) === null) this.#store.nameProject(projectId, projectName);
+        if (this.#store.projectSystem(projectId) === null) this.#store.setProjectSystem(projectId, id, at);
+      }
       // The import an agent ran for this folder is done once the system it wrote is added.
       if (imported !== undefined) this.#store.deleteImport(imported.root);
     });

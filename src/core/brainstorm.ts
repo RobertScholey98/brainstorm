@@ -73,6 +73,8 @@ import {
   type Override,
   type PartName,
   type ProjectId,
+  type ProjectListing,
+  type SystemChoice,
   type ProposedDraft,
   type ProposedName,
   type ProposedView,
@@ -252,17 +254,14 @@ export class Brainstorm {
     brief: string;
     thread: ThreadId;
     projectPath: string | null;
-    /** A design system's id or name; the session builds with its newest version. */
-    system?: string | null;
+    /** The project's design system unless the agent names one or asks for none; it builds with the newest version. */
+    system?: SystemChoice;
   }): Promise<Result<NewSessionResult>> {
-    let system: SessionSystem | null = null;
-    if (input.system !== undefined && input.system !== null) {
-      const found = this.#systems.forSession(input.system);
-      if (!found.ok) return found;
-      system = found.data;
-    }
     const thread = await this.#resolveThread(input.thread);
     if (!thread.ok) return thread;
+    const chosen = this.#systems.forNewSession(thread.data.projectId, input.system ?? { kind: "project" });
+    if (!chosen.ok) return chosen;
+    const system = chosen.data;
     const name = input.projectPath === null ? null : await projectNameAt(input.projectPath);
     const session: SessionSummary = {
       id: this.#newSessionId(),
@@ -274,10 +273,32 @@ export class Brainstorm {
     this.#store.tx(() => {
       this.#store.ensureProject(session.projectId, input.projectPath, session.createdAt);
       if (name !== null) this.#store.nameProject(session.projectId, name);
-      this.#store.createSession(session, input.thread, system);
+      this.#store.createSession(session, input.thread, system === null ? null : { id: system.id, n: system.n });
     });
     this.#emit(session.id);
-    return ok({ session, attachment: this.#store.attachment(session.id) });
+    return ok({ session, attachment: this.#store.attachment(session.id), system });
+  }
+
+  /** The design system of the thread's project (ADR 009). */
+  async projectSystem(thread: ThreadId): Promise<Result<ProjectListing>> {
+    const info = await this.#resolveThread(thread);
+    return info.ok ? ok(this.#systems.project(info.data.projectId)) : info;
+  }
+
+  /**
+   * Sets the design system of the thread's project, or clears it with null. `projectPath` is the agent's folder, which
+   * names a project Brainstorm hasn't seen yet so the window can list it.
+   */
+  async setProjectSystem(input: { thread: ThreadId; projectPath: string | null; system: string | null }): Promise<Result<ProjectListing>> {
+    const info = await this.#resolveThread(input.thread);
+    if (!info.ok) return info;
+    const project = info.data.projectId;
+    const name = input.projectPath === null ? null : await projectNameAt(input.projectPath);
+    this.#store.tx(() => {
+      this.#store.ensureProject(project, input.projectPath, this.#now());
+      if (name !== null) this.#store.nameProject(project, name);
+    });
+    return this.#systems.setProjectSystem(project, input.system);
   }
 
   /** The sessions in the thread's project, or every session when `thread` is null. */

@@ -180,7 +180,7 @@ describe("a design system from an app project", () => {
     const importThread = bridge.started[0]?.thread;
     const review = (action: Parameters<typeof service.systems.review>[1]) => service.systems.review(system, action);
     expect(data(service.systems.view(system)).review).toMatchObject({ state: "pending", thread: { id: importThread } });
-    const early = await service.newSession({ title: "Early", brief: "", thread: T1, projectPath: app, system: "Fixture app" });
+    const early = await service.newSession({ title: "Early", brief: "", thread: T1, projectPath: app, system: { kind: "named", ref: "Fixture app" } });
     expect(early.ok ? "" : early.error.message).toContain(`Rob hasn't confirmed the design system "Fixture app" yet`);
 
     // A move is staged until Rob sends or confirms, and moving it back undoes it.
@@ -271,7 +271,7 @@ describe("tiers in a session", () => {
     })();
     const added = data(await other.systems.add({ path: app }));
     data(await other.systems.review(added.system.id, { kind: "confirm" }));
-    data(await other.newSession({ title: "Meals", brief: "", thread: T1, projectPath: app, system: "Fixture app" }));
+    data(await other.newSession({ title: "Meals", brief: "", thread: T1, projectPath: app, system: { kind: "named", ref: "Fixture app" } }));
     const commit = (files: FileMap) => other.commit({ session: S2, thread: T1, files, addresses: [], note: null });
     const codes = (r: Awaited<ReturnType<typeof commit>>) => (r.ok ? [] : r.error.code === "validation_failed" ? r.error.issues.filter((i) => i.severity === "error").map((i) => i.code) : [r.error.code]);
 

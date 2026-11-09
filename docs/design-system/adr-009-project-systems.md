@@ -1,0 +1,83 @@
+# ADR 009: A project's design system
+
+Status: accepted. It extends ADR 007 and ADR 008. Rob raised it on 2026-11-08: with a new worktree selected, which he
+always has, "that new worktree folder isn't automatically linked to a design system", and in a new T3 project there
+is "no way to get it to use that design system (besides saying 'use design system x' which seems flaky and
+unreliable)". He agreed to the design below in the same conversation.
+
+## Context
+
+A session builds with one design system or none (ADR 007). The agent chose which. The skill told it to run
+`brainstorm system list` and pass `--system` "when the product's UI comes from one of the listed design systems". A
+system remembers its source folder, such as `C:\Users\rober\code\app`. An agent in a worktree runs in
+`~\.t3\worktrees\app\t3-…`, so the paths don't match, the agent decides no system fits, and `session new` makes a
+freeform session without a word. In a new project no system's folder matches at all, so naming one in chat was the
+only way, and the agent had to remember it on every brainstorm.
+
+Brainstorm already knows each thread's T3 project, from `t3 thread show`. It is the same in every worktree of a
+project, which is why `docs/design.md` keys sessions by it and never by path.
+
+## Decision
+
+### Each project has a design system, or none
+
+- **Keyed by T3 project.** Brainstorm keeps one system per T3 project (`project_system`). Every thread on the project
+  shares it, in the main checkout or any worktree.
+- **`session new` uses it.** A session builds with its project's system unless the agent names another with
+  `--system <id|name>`, for that brainstorm only, or passes `--system none`. The output names the system and says when
+  it is the project's, so a wrong one is visible in the agent's transcript.
+- **A system awaiting Rob's review refuses the session**, as a named one does (ADR 008). The message adds that it is
+  the project's system and that `--system none` makes a brainstorm without it. A project's system is never skipped
+  silently, because silent skipping is the bug.
+- **No system means freeform**, and the output says the project has none and how to set one.
+
+### Three ways to set it
+
+- **`system add`** makes the new system its project's, unless the project has one already. This covers an imported
+  system and every worktree after it with no extra step.
+- **`brainstorm project use <system|none>`** sets or clears it from any thread on the project. This is how a new
+  project starts from a system Rob already has: he tells the agent once, and the choice is stored, not remembered.
+  `brainstorm project show` prints it.
+- **The Design systems page.** A system's header has a Projects control listing every project Brainstorm knows, each a
+  checkbox. Checking a project another system has moves it, and the row says which system it uses now. The card lists
+  the system's projects.
+
+The window lists only projects Brainstorm has seen: those with a brainstorm, those a system came from, and those set
+from a thread. T3's CLI can't list projects, so a project that has none of these is set from its own thread.
+
+### The skill stops choosing
+
+The skill no longer matches systems to the product. It runs `session new`, and only when Rob names a system does it
+act: `project use` when the project has none, so later brainstorms keep it, or `--system` for this brainstorm when the
+project has another.
+
+## Data
+
+Store migration 10 (`src/core/store.ts`):
+
+```
+project_system        project_id -> system_id, set_at
+```
+
+The migration gives each project that exactly one system came from that system. A project that several came from has
+none until Rob picks. `project` rows are now also made for a system's project on `add`, named after the repo, so the
+window can name it; a row made without a path takes the first path a session gives.
+
+## Alternatives not taken
+
+- **Match the worktree to the system's folder by its git common dir.** It fixes worktrees but not a new project, and
+  it stays a guess about which system a project uses.
+- **A committed `.brainstorm/project.json` naming the system.** It would follow the code into worktrees, but system
+  ids are local to one Brainstorm install, and every new project would need a commit to use a system. The adapter
+  (ADR 008) stays the project's record of its own system; which system a project's brainstorms use is Brainstorm's.
+- **Several systems per project.** A session holds one system (ADR 007), so a default has to be one. `--system`
+  reaches any other.
+- **Leave the choice to the agent.** That is the flaky behaviour this replaces.
+
+## As built
+
+- `test/projectSystem.test.ts` covers the project's system from a main-checkout thread and a worktree thread on the
+  same project, the refusal while it awaits review, `--system none`, a named system for one brainstorm, a second
+  system from the same project, a new project set by `project use`, and clearing it.
+- `test/store.test.ts` covers the migration's backfill.
+- `--system none` means no system. A system named "none" is still reachable by its id.
