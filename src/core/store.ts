@@ -71,13 +71,16 @@ const MIGRATIONS: readonly Migration[] = [
     base INTEGER, thread_id TEXT NOT NULL,
     state TEXT NOT NULL CHECK(state IN ('sending','sent','send_failed','fulfilled','withdrawn')),
     error TEXT, sent_at TEXT, fulfilled_in INTEGER, created_at TEXT NOT NULL, PRIMARY KEY(session_id, n));
+  -- One open request per session. ADR 009 holds a whole brainstorm to one, since its branches share a thread; that rule
+  -- lives in the service (Trees and the request gates), not here, and migration 11 can leave several open in one tree.
   CREATE UNIQUE INDEX one_open_request ON request(session_id) WHERE state IN ('sending','sent','send_failed');
   `,
   `ALTER TABLE project ADD COLUMN name TEXT;`,
   `CREATE TABLE ui_pref(key TEXT PRIMARY KEY, value_json TEXT NOT NULL);`,
   dropVariantNotes,
   `ALTER TABLE session ADD COLUMN settled_at TEXT; ALTER TABLE session ADD COLUMN unsettled_at TEXT;`,
-  // Every block that exists already counts as seen, so nothing old lights up as new.
+  // Every block that exists already counts as seen, so nothing old lights up as new. ADR 005 named a branch a fork, and
+  // storage keeps that name: a branch is still a `fork` row, since migrations and stored databases name the table.
   `
   CREATE TABLE fork(session_id TEXT PRIMARY KEY REFERENCES session, parent_id TEXT NOT NULL REFERENCES session,
     parent_n INTEGER NOT NULL, baked_json TEXT NOT NULL, created_at TEXT NOT NULL,
@@ -300,18 +303,18 @@ const toSession = (r: Row): SessionSummary => ({
   createdAt: str(r.created_at),
 });
 
-/** A fork's link to its parent. `baked` names the settings that became its defaults, for the agent. */
-export type StoredFork = {
+/** A branch's link to its parent. `baked` names the settings that became its defaults, for the agent. */
+export type StoredBranch = {
   readonly parent: SessionId;
   readonly from: IterationN;
   readonly baked: readonly BakedSetting[];
   readonly createdAt: string;
 };
 
-/** Everything a fork is made of, written in one transaction before its thread starts. */
-export type NewFork = {
+/** Everything a branch is made of, written in one transaction on the thread its tree shares. */
+export type NewBranch = {
   readonly session: SessionSummary;
-  readonly fork: StoredFork;
+  readonly link: StoredBranch;
   readonly iteration: StoredIteration;
   readonly blocks: readonly IterationBlock[];
   readonly contents: readonly StoredContent[];
@@ -323,7 +326,7 @@ export type NewFork = {
    * out, so that iteration fulfils it; any other goes to the agent.
    */
   readonly request: { readonly body: RequestBody; readonly at: string; readonly answered: boolean } | null;
-  /** The parent's design system version and theme, which the fork keeps. */
+  /** The parent's design system version and theme, which the branch keeps. */
   readonly system: SessionSystem | null;
   readonly theme: readonly { readonly key: string; readonly value: string }[];
 };
@@ -355,7 +358,7 @@ const toListing = (r: Row): StoredListing => {
     settledAt: strOrNull(r.settled_at),
     unsettledAt: strOrNull(r.unsettled_at),
     woken: num(r.woken) === 1,
-    parent: r.fork_parent === null ? null : (str(r.fork_parent) as SessionId),
+    parent: r.branch_parent === null ? null : (str(r.branch_parent) as SessionId),
   };
 };
 
@@ -557,7 +560,7 @@ export class Store {
               AND NOT EXISTS (SELECT 1 FROM request r WHERE r.session_id = s.id AND r.fulfilled_in = i.n AND r.created_at <= root.settled_at)
           )
         ) AS woken,
-        f.parent_id AS fork_parent
+        f.parent_id AS branch_parent
       FROM session s JOIN project p ON p.id = s.project_id JOIN attachment a ON a.session_id = s.id AND a.detached_at IS NULL
         JOIN up ON up.id = s.id JOIN session root ON root.id = up.root
         LEFT JOIN fork f ON f.session_id = s.id
@@ -569,27 +572,27 @@ export class Store {
   }
 
   /**
-   * The fork, its first iteration with carried feedback, then request 1, so the iteration can't fulfil the request. An
-   * answered request goes in before the iteration instead, so the iteration does fulfil it. The fork joins the thread
+   * The branch, its first iteration with carried feedback, then request 1, so the iteration can't fulfil the request. An
+   * answered request goes in before the iteration instead, so the iteration does fulfil it. The branch joins the thread
    * its tree shares as it is, lost included, as migration 11 joins an old fork to it.
    */
-  createFork(input: NewFork, shared: Pick<Attachment, "threadId" | "lostAt">): void {
-    const { session, fork, iteration, request } = input;
+  createBranch(input: NewBranch, shared: Pick<Attachment, "threadId" | "lostAt">): void {
+    const { session, link, iteration, request } = input;
     const thread = shared.threadId;
     this.tx(() => {
       this.createSession(session, thread, input.system);
       if (shared.lostAt !== null) this.setLost(session.id, shared.lostAt);
-      for (const t of input.theme) this.setSessionTheme(session.id, t.key, t.value, fork.createdAt);
+      for (const t of input.theme) this.setSessionTheme(session.id, t.key, t.value, link.createdAt);
       this.#run(
         "INSERT INTO fork(session_id, parent_id, parent_n, baked_json, created_at) VALUES (?, ?, ?, ?, ?)",
         session.id,
-        fork.parent,
-        fork.from,
-        JSON.stringify(fork.baked),
-        fork.createdAt,
+        link.parent,
+        link.from,
+        JSON.stringify(link.baked),
+        link.createdAt,
       );
       // It was made on the parent's iteration, so that is its base.
-      if (request?.answered === true) this.insertRequest(session.id, { body: request.body, feedbackIds: [], base: fork.from, threadId: thread, at: request.at });
+      if (request?.answered === true) this.insertRequest(session.id, { body: request.body, feedbackIds: [], base: link.from, threadId: thread, at: request.at });
       this.insertIteration({
         session: session.id,
         iteration,
@@ -599,7 +602,7 @@ export class Store {
         proposedContents: [],
         addresses: [],
       });
-      const ids = input.feedback.map((f) => this.insertFeedback(session.id, { pin: f.pin, text: f.text, createdIn: iteration.n, at: fork.createdAt }));
+      const ids = input.feedback.map((f) => this.insertFeedback(session.id, { pin: f.pin, text: f.text, createdIn: iteration.n, at: link.createdAt }));
       if (request !== null && !request.answered) {
         const asked = ids.filter((_, i) => input.feedback[i]?.asked === true);
         this.insertRequest(session.id, { body: request.body, feedbackIds: asked, base: iteration.n, threadId: thread, at: request.at });
@@ -709,7 +712,7 @@ export class Store {
     });
   }
 
-  fork(session: SessionId): StoredFork | null {
+  branchLink(session: SessionId): StoredBranch | null {
     const r = this.#get("SELECT * FROM fork WHERE session_id = ?", session);
     if (r === undefined) return null;
     return {
@@ -721,7 +724,7 @@ export class Store {
   }
 
   /** Every branch's parent and the iteration it left from, archived branches included, for walking a brainstorm's tree. */
-  forkLinks(): Map<SessionId, { readonly parent: SessionId; readonly from: IterationN }> {
+  branchLinks(): Map<SessionId, { readonly parent: SessionId; readonly from: IterationN }> {
     return new Map(
       this.#all("SELECT session_id, parent_id, parent_n FROM fork ORDER BY created_at, session_id").map((r) => [
         str(r.session_id) as SessionId,
@@ -730,8 +733,8 @@ export class Store {
     );
   }
 
-  /** Forks made from `parent` that still exist, oldest first. */
-  forksOf(parent: SessionId): { id: SessionId; title: string; from: IterationN }[] {
+  /** Branches made from `parent` that still exist, oldest first. */
+  branchesOf(parent: SessionId): { id: SessionId; title: string; from: IterationN }[] {
     return this.#all(
       `SELECT s.id, s.title, f.parent_n FROM fork f JOIN session s ON s.id = f.session_id
        WHERE f.parent_id = ? AND s.archived_at IS NULL ORDER BY f.created_at, s.id`,

@@ -37,7 +37,7 @@ export class Trees {
   }
 
   walk(id: SessionId): TreeWalk {
-    return walkTree(this.#store.forkLinks(), id);
+    return walkTree(this.#store.branchLinks(), id);
   }
 
   /** The brainstorm a branch belongs to, by its root: the session with no parent. */
@@ -102,7 +102,7 @@ export class Trees {
       const own = history(session).filter((e) => upTo === null || e.n <= upTo);
       iterations.push(...own);
       const next = chain[i + 1]?.session;
-      for (const b of this.#store.forksOf(session)) {
+      for (const b of this.#store.branchesOf(session)) {
         if (b.id !== next && (upTo === null || b.from <= upTo)) branches.push({ id: b.id, title: b.title, parent: session, from: b.from });
       }
       const latest = this.#store.latestIteration(session);

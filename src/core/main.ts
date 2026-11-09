@@ -19,6 +19,14 @@ import {
 type SlotShape = { readonly id: SlotId; readonly variants: readonly VariantKey[] };
 type BlockShape = Pick<BlockView, "id" | "slot" | "variant" | "variedFrom">;
 
+/** The slots of a stored iteration, in the shape the marks' rules read: each slot with the variants its blocks hold. */
+export function slotShapes(
+  iteration: { readonly slots: readonly { readonly id: SlotId }[] },
+  blocks: readonly { readonly id: BlockId }[],
+): { id: SlotId; variants: VariantKey[] }[] {
+  return iteration.slots.map((s) => ({ id: s.id, variants: blocks.map((b) => splitBlockId(b.id)).filter((b) => b.slot === s.id).map((b) => b.variant) }));
+}
+
 /**
  * The marks that still name something in this iteration and still mean something together. A regenerate can remove a
  * block a mark pointed at. A graft needs a Main to go into, and one taken from that Main has nothing to add, so either

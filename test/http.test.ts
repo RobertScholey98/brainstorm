@@ -97,6 +97,9 @@ describe("http", () => {
     const ui = (method: string, path: string, body?: unknown) => call(method, `/v1/ui/sessions/${id}${path}`, server.uiToken, body);
     expect((await ui("POST", "/branch", { from: 1, picks: {}, instruction: "x" })).body.error.code, "the old body is refused").toBe("usage");
     expect((await ui("POST", "/branch", { from: 1, marks: { mains: { wheel: "Not A Key" }, grafts: [], trashed: [] }, instruction: null })).status).toBe(400);
+    const badSlot = await ui("POST", "/branch", { from: 1, marks: { mains: { "Not A Slot": "a" }, grafts: [], trashed: [] }, instruction: null });
+    expect([badSlot.status, badSlot.body.error.code, badSlot.body.error.message], "a Main's slot is checked at the edge too").toEqual([400, "usage", "marks.mains.Not A Slot: Invalid key in record"]);
+    expect((await ui("POST", "/branch", { from: 1, marks: { mains: { wheel: "a" }, grafts: [], trashed: [] }, instruction: null })).body.error.code, "a good one reaches the service").toBe("not_found");
     expect((await ui("POST", "/branch", { from: 0, marks: { mains: {}, grafts: [], trashed: [] }, instruction: "x" })).status).toBe(400);
     expect((await ui("POST", "/branch", { from: 1, marks: { mains: {}, grafts: [], trashed: [] }, instruction: "x" })).body.error).toEqual({ code: "not_found", entity: "iteration", message: `${id} has no iteration 1` });
     expect((await call("POST", "/v1/agent/sessions/" + id + "/branch", agentToken, { from: 1, marks: { mains: {}, grafts: [], trashed: [] }, instruction: "x" })).status, "only Rob branches").toBe(400);

@@ -128,7 +128,7 @@ test("a version 9 store turns forks into branches: their iterations continue the
   expect(ns(v9.grand), "its child left it at its first iteration, now 3").toEqual([4, 5]);
   expect(ns(v9.pending), "a fork from 3 starts at 4").toEqual([4]);
   expect(ns(v9.same), "a fork from 1 starts at 2").toEqual([2]);
-  expect([v9.fork, v9.grand, v9.pending, v9.same].map((id) => store.fork(id)?.from)).toEqual([2, 3, 3, 1]);
+  expect([v9.fork, v9.grand, v9.pending, v9.same].map((id) => store.branchLink(id)?.from)).toEqual([2, 3, 3, 1]);
 
   // What moves with a fork's iterations: their blocks and proposed components, its pins and their history, and the
   // requests they answered. The root's own rows stay where they were.

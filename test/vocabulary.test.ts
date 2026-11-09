@@ -32,3 +32,19 @@ describe("UI vocabulary", () => {
     expect(found).toEqual([]);
   });
 });
+
+// Storage keeps ADR 005's `fork` table (ADR 009), which the store's SQL and migration 11 name. Nothing else does.
+const STORE = join("src", "core", "store.ts");
+const STORE_FORK_NAMES = new Set(["fork", "forks", "fork_parent", "forksBecomeBranches"]);
+
+describe("code vocabulary", () => {
+  it("says branch everywhere but the store", () => {
+    const found = sources("src").filter((file) => file !== STORE && /fork/i.test(readFileSync(file, "utf8")));
+    expect(found).toEqual([]);
+  });
+
+  it("names fork in the store only for its table and the migration that made forks branches", () => {
+    const names = new Set(readFileSync(STORE, "utf8").match(/\w*fork\w*/gi));
+    expect([...names].filter((name) => !STORE_FORK_NAMES.has(name))).toEqual([]);
+  });
+});

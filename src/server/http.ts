@@ -111,7 +111,7 @@ const instruction = z
 const branchBody = z.strictObject({
   from: iterationN,
   marks: z.strictObject({
-    mains: z.record(z.string(), variantKey),
+    mains: z.record(slotId, variantKey),
     grafts: z.array(
       z.strictObject({
         id: zBranded(z.number(), parseGraftId, "graft id"),

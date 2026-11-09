@@ -23,8 +23,8 @@ import { prefRows, readPrefs, type UiPrefs, type UiPrefsPatch } from "./prefs";
 import { projectNameAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { exportFileName } from "./fileName";
-import { bakeDefaults, branchTitle } from "./branch";
-import { confirmPlan, liveMarks, showingVariant, trashRefusal, withApproval, withPick, withTrash } from "./main";
+import { Branches } from "./branch";
+import { confirmPlan, liveMarks, showingVariant, slotShapes, trashRefusal, withApproval, withPick, withTrash } from "./main";
 import {
   Store,
   type FeedbackRecord,
@@ -51,7 +51,6 @@ import {
   type AgentContext,
   type Attachment,
   type AttachResult,
-  type BakedSetting,
   type BlockDraft,
   type BlockId,
   type BlockView,
@@ -111,7 +110,6 @@ import {
   type ThreadInfo,
   type ThreadSnapshot,
   type ValidateResult,
-  type VariantKey,
   type VaryScope,
   type WorkingCopyDraft,
 } from "./types";
@@ -182,6 +180,7 @@ const summaryOf = ({ id, projectId, title, brief, createdAt }: SessionSummary): 
 export class Brainstorm {
   readonly #store: Store;
   readonly #trees: Trees;
+  readonly #branches: Branches;
   readonly #bridge: AgentBridge;
   readonly #checker: Checker;
   readonly #exportsDir: string;
@@ -216,6 +215,16 @@ export class Brainstorm {
       bridge: this.#bridge,
       now: this.#now,
       onVersion: (id) => this.#store.sessionsOn(id).forEach((s) => this.#emit(s)),
+    });
+    this.#branches = new Branches({
+      store: this.#store,
+      trees: this.#trees,
+      now: this.#now,
+      newSessionId: this.#newSessionId,
+      load: (block) => this.#load(block),
+      feedback: (id) => this.#feedback(id),
+      proposedUsedBy: (session, n, kept) => this.#proposedUsedBy(session, n, kept),
+      check: (blocks, overrides, ctx) => this.#check(blocks, overrides, ctx),
     });
   }
 
@@ -310,7 +319,7 @@ export class Brainstorm {
   #listings(project: ProjectId | null): SessionListing[] {
     const all = this.#store.sessions(project);
     const byId = new Map(all.map((s) => [s.id, s]));
-    const links = this.#store.forkLinks();
+    const links = this.#store.branchLinks();
     return all
       .filter((s) => s.parent === null)
       .map((root) => {
@@ -450,7 +459,7 @@ export class Brainstorm {
     };
     const attached = thread !== null && thread === attachment.threadId;
     const addresses = open?.feedbackIds ?? [];
-    const link = this.#store.fork(id);
+    const link = this.#store.branchLink(id);
     return ok({
       session: { id, title: session.title, brief: session.brief },
       branchOf:
@@ -474,7 +483,7 @@ export class Brainstorm {
         open: feedback.filter((f) => f.status.state === "open"),
         addressed: feedback.filter((f) => f.status.state === "addressed"),
       },
-      marks: latest === null ? NO_MARKS : liveMarks(this.#store.marks(id), this.#slotShapes(latest, blocks)),
+      marks: latest === null ? NO_MARKS : liveMarks(this.#store.marks(id), slotShapes(latest, blocks)),
       controlVocabulary: controlVocabulary(),
       system: this.#agentSystem(id),
       next: [
@@ -832,7 +841,7 @@ export class Brainstorm {
     const latest = this.#store.latestIteration(id);
     const { iteration, overrides } = this.#current(id, latest);
     const request = this.#store.latestRequest(id);
-    const link = this.#store.fork(id);
+    const link = this.#store.branchLink(id);
     const root = this.#trees.rootOf(id);
     return ok({
       session,
@@ -965,7 +974,7 @@ export class Brainstorm {
   }
 
   #history(id: SessionId): HistoryEntry[] {
-    const link = this.#store.fork(id);
+    const link = this.#store.branchLink(id);
     const byIteration = new Map(this.#store.requests(id).flatMap((r) => (r.state.state === "fulfilled" ? [[r.state.iteration, r]] : [])));
     return this.#store.iterations(id).map((i, index): HistoryEntry => {
       const request = byIteration.get(i.n);
@@ -985,11 +994,6 @@ export class Brainstorm {
               : { kind: "agent", note: i.note };
       return { session: id, n: i.n, createdAt: i.createdAt, origin };
     });
-  }
-
-  /** The slots of a stored iteration, in the shape the marks' rules read. */
-  #slotShapes(iteration: StoredIteration, blocks: readonly IterationBlock[]): { id: SlotId; variants: VariantKey[] }[] {
-    return iteration.slots.map((s) => ({ id: s.id, variants: blocks.map((b) => splitBlockId(b.id)).filter((b) => b.slot === s.id).map((b) => b.variant) }));
   }
 
   /**
@@ -1041,7 +1045,7 @@ export class Brainstorm {
     const varied = this.#variedFrom(id, latest.n);
     const { slots: _slots, blocks: _blocks, ...summary } = this.#summary(id, latest, blocks);
     const loaded = blocks.map((b) => ({ id: b.id, ...splitBlockId(b.id), ...this.#load(b) }));
-    const marks = isLatest ? liveMarks(this.#store.marks(id), this.#slotShapes(latest, blocks)) : NO_MARKS;
+    const marks = isLatest ? liveMarks(this.#store.marks(id), slotShapes(latest, blocks)) : NO_MARKS;
     const slots: SlotView[] = latest.slots.flatMap((s) => {
       const [head, ...rest] = loaded.filter((l) => l.slot === s.id).map((l) => l.variant);
       if (head === undefined) return [];
@@ -1450,7 +1454,7 @@ export class Brainstorm {
   ): Failure | null {
     if (latest === null) return notFound("iteration", `${id} has no iteration to mark yet`);
     if (this.#store.openRequest(id)?.scope.kind === "confirm") return invalid("a confirm is open; its marks change once it lands or you withdraw it");
-    const slots = this.#slotShapes(latest, blocks);
+    const slots = slotShapes(latest, blocks);
     const before = liveMarks(this.#store.marks(id), slots);
     const slotOf = (b: BlockId) => (blocks.some((x) => x.id === b) ? slots.find((s) => s.id === splitBlockId(b).slot) : undefined);
     const missing = (b: BlockId) => notFound("block", `${b} is not in the latest iteration of ${id}`);
@@ -1508,7 +1512,7 @@ export class Brainstorm {
   async #confirm(id: SessionId, latest: StoredIteration | null, blocks: readonly IterationBlock[]): Promise<Failure | null> {
     const gated = this.#gate(id, latest);
     if (gated !== null) return gated;
-    const plan = confirmPlan(this.#slotShapes(latest!, blocks), this.#store.marks(id));
+    const plan = confirmPlan(slotShapes(latest!, blocks), this.#store.marks(id));
     if (plan === null) return invalid("there is nothing to confirm: choose a Main, trash a variant or pick an element first");
     if (plan.grafts.length > 0) return this.#request(id, { scope: plan, freetext: null }, latest, blocks);
     const attachment = this.#store.attachment(id);
@@ -1545,7 +1549,7 @@ export class Brainstorm {
   ): void {
     const { session, iteration } = write;
     if (confirm !== null) {
-      this.#store.changeMarks(session, liveMarks(this.#store.marks(session), this.#slotShapes(confirm.confirmed, confirm.blocks)), NO_MARKS, iteration.createdAt);
+      this.#store.changeMarks(session, liveMarks(this.#store.marks(session), slotShapes(confirm.confirmed, confirm.blocks)), NO_MARKS, iteration.createdAt);
       this.#letGo(session, confirm.dropped, iteration.createdAt);
     }
     this.#store.insertIteration(write);
@@ -1682,157 +1686,24 @@ export class Brainstorm {
 
   /** A branch's first request says where it came from, and a resend of it later says so again. */
   #messageFor(request: Request): string {
-    const link = request.n === 1 ? this.#store.fork(request.session) : null;
+    const link = request.n === 1 ? this.#store.branchLink(request.session) : null;
     return formatRequestMessage(request, link === null ? {} : { branchOf: { parent: link.parent, from: link.from } });
   }
 
   /**
    * Confirms on a past iteration (ADR 009): a new branch of the brainstorm, on its thread, that continues from iteration
-   * `from` of `parentId`. Its first iteration is that one narrowed by Rob's marks, with his settings baked in as
-   * defaults and his open pins carried. With grafts, the narrowing waits for the agent: the first iteration keeps every
-   * variant, and request 1 is the confirm. An instruction asks the agent to try it on the branch. With neither, request
-   * 1 is still the confirm, fulfilled by the first iteration, as an app-applied confirm is.
+   * `from` of `parentId`. `Branches` (branch.ts) makes it; the service tells the window and sends request 1, when the
+   * branch has one to send, as it does for any request.
    */
   async branch(parentId: SessionId, input: BranchInput): Promise<Result<{ readonly branch: SessionId }>> {
-    const start = this.#branchStart(parentId, input);
-    if (!start.ok) return start;
-    const closed = this.#branchGate(start.data);
-    if (closed !== null) return fail(closed);
-    const baked = await this.#bakeBranch(start.data);
-    if (!baked.ok) return baked;
-    const id = this.#newSessionId();
-    const written = this.#writeBranch(id, start.data, baked.data);
-    if (!written.ok) return written;
+    const made = await this.#branches.make(parentId, input);
+    if (!made.ok) return made;
+    const { id, thread } = made.data;
     this.#emit(id);
     this.#emit(parentId);
     const request = this.#store.openRequest(id);
-    if (request !== null) await this.#send(id, request.n, written.data);
+    if (request !== null) await this.#send(id, request.n, thread);
     return ok({ branch: id });
-  }
-
-  /** What a branch starts from, or why it can't: the parent's iteration, and Rob's marks on it as a plan. */
-  #branchStart(parentId: SessionId, input: BranchInput): Result<BranchStart> {
-    const parent = this.#store.session(parentId);
-    if (parent === null) return fail(notFound("session", `no session ${parentId}`));
-    const source = this.#store.iteration(parentId, input.from);
-    if (source === null) return fail(notFound("iteration", `${parentId} has no iteration ${input.from}`));
-    const blocks = this.#store.iterationBlocks(parentId, source.n);
-    const slotShapes = this.#slotShapes(source, blocks);
-    // Marks made on this iteration name only its blocks, so one that doesn't is refused rather than quietly dropped.
-    const named = [...Object.entries(input.marks.mains).map(([s, v]) => blockIdOf(s as SlotId, v!)), ...input.marks.trashed, ...input.marks.grafts.map((g) => g.from.blockId)];
-    for (const b of named) {
-      if (!blocks.some((x) => x.id === b)) return fail(notFound("block", `${b} is not in iteration ${source.n}`));
-    }
-    const into = input.marks.grafts.find((g) => !source.slots.some((s) => s.id === g.into));
-    if (into !== undefined) return fail(notFound("block", `slot ${into.into} is not in iteration ${source.n}`));
-    const marks = liveMarks(input.marks, slotShapes);
-    const instruction = input.instruction?.trim() || null;
-    const plan = confirmPlan(slotShapes, marks);
-    const grafting = plan !== null && plan.grafts.length > 0;
-    if (plan === null && instruction === null) return fail(invalid("say what the branch should try, or mark what it keeps"));
-    return ok({ parent, source, blocks, marks, plan, instruction, grafting });
-  }
-
-  /**
-   * Why the branch can't be made now, or null. Its request goes to the thread every branch shares, so the same gate
-   * holds as for any request. A branch that asks the agent nothing passes.
-   */
-  #branchGate({ parent, grafting, instruction }: BranchStart): Failure | null {
-    if (!grafting && instruction === null) return null;
-    const busy = this.#trees.openElsewhere(parent.id) ?? this.#store.openRequest(parent.id);
-    if (busy !== null) return { code: "request_open", message: `request ${busy.n} is still open on this brainstorm's thread; let it finish or withdraw it first`, n: busy.n };
-    const attachment = this.#store.attachment(parent.id);
-    if (attachment.lostAt !== null) return { code: "thread_lost", message: `thread ${attachment.threadId} is gone; start a fresh thread first`, thread: attachment.threadId };
-    return null;
-  }
-
-  /**
-   * The branch's first iteration: the variants it keeps, with Rob's settings on them baked into their defaults and
-   * checked again, or a refusal naming the kept variant his settings break.
-   */
-  async #bakeBranch({ parent, source, blocks, plan, grafting }: BranchStart): Promise<Result<BakedBranch>> {
-    const kept = grafting || plan === null ? blocks : blocks.filter((b) => !plan.drop.includes(b.id));
-    const { applicable } = classifyOverrides(this.#schemas(blocks), this.#store.overrides(parent.id));
-    const settings = applicable.flatMap((o) => {
-      const stored = kept.find((b) => b.id === o.blockId);
-      const spec = stored === undefined ? undefined : appearanceProp(this.#load(stored).draft.props, o.prop);
-      return spec === undefined || spec.default === o.value ? [] : [{ blockId: o.blockId, prop: o.prop, value: o.value }];
-    });
-    const baked: { id: BlockId; title: string; hash: ContentHash; draft: BlockDraft | null }[] = [];
-    for (const stored of kept) {
-      const mine = settings.filter((s) => s.blockId === stored.id);
-      const title = this.#load(stored).draft.title;
-      if (mine.length === 0) {
-        baked.push({ id: stored.id, title, hash: stored.hash, draft: null });
-        continue;
-      }
-      const files = this.#load(stored).content.files;
-      const draft = readStoredBlock({ id: stored.id, files: { ...files, json: bakeDefaults(files.json, mine) } });
-      if (draft === null) return fail(invalid(`${title} doesn't read with your settings as its defaults. Reset its settings, or keep another variant.`));
-      baked.push({ id: stored.id, title, hash: draft.hash, draft });
-    }
-    const system = this.#store.sessionSystem(parent.id);
-    // A branch narrowed by the app carries only the proposed components its kept variants use, as a confirm does.
-    const proposed = kept === blocks ? this.#store.iterationProposed(parent.id, source.n) : this.#proposedUsedBy(parent.id, source.n, kept);
-    const proposedDrafts = proposed.flatMap((p) => {
-      const draft = readStoredProposed(p.name, this.#store.proposedContent(p.hash).files);
-      return draft === null ? [] : [draft];
-    });
-    const { issues, contents } = await this.#check(
-      baked.flatMap((b) => (b.draft === null ? [] : [b.draft])),
-      [],
-      // Unbaked blocks are as the parent committed them, against the same kit, so only the baked ones are checked.
-      { system, proposed: [], rawProposed: Object.fromEntries(proposedDrafts.map((p) => [`proposed/${p.name}`, p.files.tsx])), previous: [] },
-    );
-    const broken = issues.find(isError);
-    if (broken !== undefined) {
-      const title = baked.find((b) => broken.file?.startsWith(`slots/${b.id}/`))?.title ?? "A kept variant";
-      return fail(invalid(`${title} doesn't render with your settings as its defaults (${broken.message}). Reset the setting that breaks it, or keep another variant.`));
-    }
-    return ok({ kept, settings, blocks: baked.map((b) => ({ id: b.id, hash: b.hash })), contents: [...contents.values()], system, proposed });
-  }
-
-  /** Writes branch `id` with its first iteration, carried pins and request 1 in one transaction, and returns its thread. */
-  #writeBranch(id: SessionId, start: BranchStart, baked: BakedBranch): Result<ThreadId> {
-    const { parent, source, marks, instruction, grafting } = start;
-    const at = this.#now();
-    const keptIds = new Set(baked.kept.map((b) => b.id));
-    const pins = this.#feedback(parent.id).filter((f) => f.status.state === "open" && keptIds.has(f.pin.blockId));
-    const { body, answered } = branchRequest(start);
-    const asked = new Set(body === null ? [] : requestFeedback(pins, body.scope).map((f) => f.id));
-    return this.#store.tx((): Result<ThreadId> => {
-      // The check awaited the worker, so another branch may have opened a request on the thread meanwhile.
-      const late = this.#branchGate(start);
-      if (late !== null) return fail(late);
-      // The tree's thread as it is: a branch made while it is lost is lost too, so it never reads as healthy.
-      const shared = this.#store.attachment(parent.id);
-      const thread = shared.threadId;
-      this.#store.createFork(
-        {
-          // Numbered in its tree: the branch line and the strip already say where it left from.
-          session: { id, projectId: parent.projectId, title: instruction === null ? `Branch ${this.#trees.walk(parent.id).members.length}` : branchTitle(instruction), brief: parent.brief, createdAt: at },
-          fork: { parent: parent.id, from: source.n, baked: baked.settings, createdAt: at },
-          // A branch continues its source's numbers, so a trail reads 1, 2, 3, 4 whichever branch it ends on.
-          // Made on the thread the tree shares now, as an iteration the app writes for a confirm is.
-          iteration: { n: (source.n + 1) as IterationN, threadId: thread, note: null, slots: source.slots, createdAt: at },
-          blocks: baked.blocks,
-          contents: baked.contents,
-          proposed: baked.proposed,
-          feedback: pins.map((f) => ({ pin: f.pin, text: f.text, asked: asked.has(f.id) })),
-          system: baked.system,
-          theme: this.#store.sessionTheme(parent.id),
-          request: body === null ? null : { body, at, answered },
-        },
-        shared,
-      );
-      // While the agent merges, the branch shows the marks it was confirmed with.
-      if (grafting) {
-        for (const [slot, variant] of Object.entries(marks.mains)) this.#store.setMain(id, slot as SlotId, variant!);
-        for (const g of marks.grafts) this.#store.addGraft(id, g, at);
-        for (const b of marks.trashed) this.#store.setTrashed(id, b, true);
-      }
-      return ok(thread);
-    });
   }
 
   /** A still: the slot `at.slot` (else the first) of iteration `at.n` (else the latest), showing its selected variant. */
@@ -2002,42 +1873,6 @@ export class Brainstorm {
       changed: blocks.filter((b) => previous.get(b.id) !== b.hash).map((b) => b.id),
     };
   }
-}
-
-/** What a branch starts from: the parent, the iteration it leaves from, and Rob's marks on it as a plan. */
-type BranchStart = {
-  readonly parent: SessionSummary;
-  readonly source: StoredIteration;
-  readonly blocks: readonly IterationBlock[];
-  readonly marks: Marks;
-  readonly plan: ConfirmScope | null;
-  readonly instruction: string | null;
-  /** With grafts the narrowing waits for the agent, so the first iteration keeps every variant. */
-  readonly grafting: boolean;
-};
-
-/** A branch's first iteration, baked and checked: the blocks it keeps, the settings baked into them, and their content. */
-type BakedBranch = {
-  readonly kept: readonly IterationBlock[];
-  readonly settings: readonly BakedSetting[];
-  readonly blocks: readonly IterationBlock[];
-  readonly contents: readonly StoredContent[];
-  readonly system: SessionSystem | null;
-  readonly proposed: readonly IterationProposed[];
-};
-
-/**
- * A branch's request 1: the confirm, unless only an instruction goes to the agent. With no grafts and no instruction
- * the first iteration already carries the confirm out, so it fulfils the request (`answered`).
- */
-function branchRequest({ plan, grafting, instruction }: BranchStart): { readonly body: RequestBody | null; readonly answered: boolean } {
-  const body: RequestBody | null =
-    plan !== null && (grafting || instruction === null)
-      ? { scope: plan, freetext: instruction }
-      : instruction !== null
-        ? { scope: { kind: "all" }, freetext: instruction }
-        : null;
-  return { body, answered: !grafting && instruction === null };
 }
 
 const invalid = (message: string): Failure => ({ code: "invalid_action", message });
