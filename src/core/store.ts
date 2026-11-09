@@ -688,7 +688,9 @@ export class Store {
 
   /**
    * Writes what changed from `before` to `after`, both as the rules read them. Rows the rules leave unread, such as a
-   * graft waiting for its slot's Main, are in neither, so they stay as they are.
+   * graft waiting for its slot's Main, are in neither, so they stay as they are. A new graft is stored under the
+   * store's own next id, not the one main.ts minted from the marks it read, which an unread graft may hold; nothing
+   * reads the minted id.
    */
   changeMarks(session: SessionId, before: Marks, after: Marks, at: string): void {
     this.tx(() => {
@@ -750,9 +752,9 @@ export class Store {
   }
 
   /** A session's title, read even once archived, so a branch can still name its parent. */
-  sessionName(id: SessionId): { title: string } | null {
+  sessionName(id: SessionId): string | null {
     const r = this.#get("SELECT title FROM session WHERE id = ?", id);
-    return r === undefined ? null : { title: str(r.title) };
+    return r === undefined ? null : str(r.title);
   }
 
   /** Each block id's first iteration, for whether it is new. */
