@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -88,112 +88,107 @@ test("a version 3 store drops variant notes and stores each noted block under th
   expect(columns).not.toContain("about");
 });
 
-test("a version 9 store turns forks into branches: their iterations continue the parent's numbers, on the root's thread", async () => {
+/**
+ * A version 9 store as version 9's own code wrote it: test/fixtures/make-v9-store.mjs drove that commit's service to
+ * make it, and its header lists what is in it. Loaded fresh for each test, so the migration runs on rows nobody wrote
+ * by hand.
+ */
+function v9Store(): string {
   const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
-  seeded(path).close();
-  const v9 = new DatabaseSync(path);
-  v9.exec("DROP TABLE main_choice; DROP TABLE graft; DROP TABLE trashed; DROP TABLE primary_branch; PRAGMA user_version = 9;");
-  const fork = "s_fork0001";
-  const hash = "c".repeat(64);
-  const grand = "s_grand001";
-  // A fork whose own thread never finished starting: it was attached to a placeholder.
-  const pending = "s_pend0001";
-  // A fork already on the root's thread, with its own request open beside the root's.
-  const same = "s_same0001";
-  const addSession = v9.prepare("INSERT INTO session(id, project_id, title, brief, created_at) VALUES (?, 'p1', ?, '', ?)");
-  addSession.run(fork, "Darker", at);
-  addSession.run(grand, "Smaller", at);
-  addSession.run(pending, "Rounder", at);
-  addSession.run(same, "Taller", at);
-  v9.prepare("INSERT INTO attachment(session_id, thread_id, attached_at) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?), (?, ?, ?)").run(
-    fork, t2, at, grand, t2, at, pending, `pending:${pending}`, at, same, t1, at,
-  );
-  const iteration = v9.prepare("INSERT INTO iteration(session_id, n, thread_id, slots_json, created_at) VALUES (?, ?, ?, '[]', ?)");
-  for (const n of [1, 2, 3]) iteration.run(session, n, t1, at);
-  for (const n of [1, 2]) iteration.run(fork, n, t2, at);
-  iteration.run(grand, 1, t2, at);
-  iteration.run(pending, 1, t1, at);
-  iteration.run(same, 1, t1, at);
-  const link = v9.prepare("INSERT INTO fork(session_id, parent_id, parent_n, baked_json, created_at) VALUES (?, ?, ?, '[]', ?)");
-  link.run(fork, session, 2, at);
-  link.run(grand, fork, 1, at);
-  link.run(pending, session, 3, at);
-  link.run(same, session, 1, at);
-  // What moves with a fork's iterations: their blocks and proposed components, its pins and their history, and the
-  // requests they answered. The root's own request stays open on the root's thread.
-  v9.prepare("INSERT INTO block_content(hash, source, css, block_json, controls_json, controls_derived, compiled, parts_json) VALUES (?, ?, NULL, ?, NULL, 1, 'x', '[]')").run(
-    hash,
-    "export default () => null;\n",
-    '{ "title": "Neon", "props": { "appearance": {} } }',
-  );
-  v9.prepare("INSERT INTO proposed_content(hash, source, css, json, compiled) VALUES (?, 'x', NULL, '{}', 'x')").run(hash);
-  const block = v9.prepare("INSERT INTO iteration_block(session_id, n, block_id, hash) VALUES (?, ?, 'wheel/neon', ?)");
-  for (const n of [1, 2]) block.run(fork, n, hash);
-  block.run(grand, 1, hash);
-  v9.prepare("INSERT INTO iteration_proposed(session_id, n, name, hash) VALUES (?, 2, 'Dial', ?)").run(fork, hash);
-  v9.prepare("INSERT INTO feedback(session_id, id, block_id, part, text, created_in, created_at) VALUES (?, 1, 'wheel/neon', NULL, 'darker still', 1, ?)").run(fork, at);
-  v9.prepare("INSERT INTO feedback_event(session_id, feedback_id, seq, kind, iteration, at) VALUES (?, 1, 1, 'address', 2, ?)").run(fork, at);
-  const request = v9.prepare(
-    "INSERT INTO request(session_id, n, body_json, feedback_ids_json, base, thread_id, state, fulfilled_in, created_at) VALUES (?, ?, ?, '[]', ?, ?, ?, ?, ?)",
-  );
-  const body = (freetext: string) => JSON.stringify({ scope: { kind: "all" }, freetext });
-  request.run(fork, 1, body("darker"), 1, t2, "fulfilled", 2, at);
-  request.run(fork, 2, body("darker again"), 2, t2, "sent", null, at);
-  request.run(session, 1, body("warmer"), 3, t1, "sent", null, at);
-  request.run(pending, 1, body("rounder"), 1, `pending:${pending}`, "sending", null, at);
-  request.run(same, 1, body("taller"), 1, t1, "sent", null, at);
-  v9.close();
+  const db = new DatabaseSync(path);
+  db.exec(readFileSync(join(import.meta.dirname, "fixtures", "v9-store.sql"), "utf8"));
+  expect(db.prepare("PRAGMA user_version").get()?.user_version).toBe(9);
+  db.close();
+  return path;
+}
 
+const v9 = {
+  root: "s_root0001" as SessionId,
+  fork: "s_fork0001" as SessionId,
+  grand: "s_grand001" as SessionId,
+  pending: "s_pend0001" as SessionId,
+  same: "s_same0001" as SessionId,
+  lost: "s_lost0001" as SessionId,
+  lostFork: "s_lfork001" as SessionId,
+  rootThread: "11111111-1111-1111-1111-111111111111" as ThreadId,
+  forkThread: "f0000000-0000-4000-8000-000000000001" as ThreadId,
+  grandThread: "f0000000-0000-4000-8000-000000000002" as ThreadId,
+  lostThread: "33333333-3333-3333-3333-333333333333" as ThreadId,
+  lostAt: "2026-11-01T09:00:36.000Z",
+};
+const RETRY_THERE = "Brainstorm now keeps every branch on one thread; retry to send it there";
+
+test("a version 9 store turns forks into branches: their iterations continue the parent's numbers, on the root's thread", async () => {
+  const path = v9Store();
   const store = new Store(path);
   expect(store.schemaVersion()).toBe(11);
-  const ns = (id: string) => [1, 2, 3, 4, 5].filter((n) => store.iteration(id as SessionId, n as IterationN) !== null);
-  expect(ns(session)).toEqual([1, 2, 3]);
-  expect(ns(fork), "a fork from 2 starts at 3").toEqual([3, 4]);
-  expect(ns(grand), "its child left it at its first iteration, now 3").toEqual([4]);
-  expect(store.fork(grand as SessionId)?.from).toBe(3);
-  expect(store.attachment(fork as SessionId).threadId).toBe(t1);
-  expect(store.attachment(grand as SessionId).threadId).toBe(t1);
-  expect(store.iterationBlocks(fork as SessionId, 3 as IterationN)).toEqual([{ id: "wheel/neon", hash }]);
-  expect(store.iterationBlocks(fork as SessionId, 4 as IterationN)).toEqual([{ id: "wheel/neon", hash }]);
-  expect(store.iterationBlocks(grand as SessionId, 4 as IterationN)).toEqual([{ id: "wheel/neon", hash }]);
-  expect(store.iterationProposed(fork as SessionId, 4 as IterationN)).toEqual([{ name: "Dial", hash }]);
-  expect(store.feedback(fork as SessionId).map((f) => [f.createdIn, f.history])).toEqual([[3, [{ kind: "address", iteration: 4, at }]]]);
-  expect(store.requests(fork as SessionId).map((r) => [r.n, r.base, r.state])).toEqual([
-    [1, 3, { state: "fulfilled", iteration: 4 }],
-    [2, 4, { state: "send_failed", error: "Brainstorm now keeps every branch on one thread; retry to send it there" }],
+  const ns = (id: SessionId) => [1, 2, 3, 4, 5, 6].filter((n) => store.iteration(id, n as IterationN) !== null);
+  expect(ns(v9.root)).toEqual([1, 2, 3]);
+  expect(ns(v9.fork), "a fork from 2 starts at 3").toEqual([3, 4]);
+  expect(ns(v9.grand), "its child left it at its first iteration, now 3").toEqual([4, 5]);
+  expect(ns(v9.pending), "a fork from 3 starts at 4").toEqual([4]);
+  expect(ns(v9.same), "a fork from 1 starts at 2").toEqual([2]);
+  expect([v9.fork, v9.grand, v9.pending, v9.same].map((id) => store.fork(id)?.from)).toEqual([2, 3, 3, 1]);
+
+  // What moves with a fork's iterations: their blocks and proposed components, its pins and their history, and the
+  // requests they answered. The root's own rows stay where they were.
+  expect(store.iteration(v9.fork, 3 as IterationN)?.threadId, "the iteration the fork copied was written on the root's thread").toBe(v9.rootThread);
+  expect(store.iteration(v9.fork, 4 as IterationN)).toMatchObject({ threadId: v9.forkThread, note: "darker, as a list" });
+  expect(store.iterationBlocks(v9.root, 2 as IterationN)).toEqual([{ id: "home/a", hash: "ff915348d6d67e544be9d425c3c4106d7d1105dbc0129a56d4fb9386a959a1ff" }]);
+  expect(store.iterationBlocks(v9.fork, 3 as IterationN)).toEqual([{ id: "home/a", hash: "ff915348d6d67e544be9d425c3c4106d7d1105dbc0129a56d4fb9386a959a1ff" }]);
+  expect(store.iterationBlocks(v9.fork, 4 as IterationN)).toEqual([{ id: "home/a", hash: "f9f2b96f5bf2b9b360e01a64b5a2ac521cff36dbb54eb9010f0411c9003c0eb5" }]);
+  expect(store.iterationBlocks(v9.grand, 4 as IterationN)).toEqual([{ id: "home/a", hash: "ff915348d6d67e544be9d425c3c4106d7d1105dbc0129a56d4fb9386a959a1ff" }]);
+  expect(store.iterationBlocks(v9.grand, 5 as IterationN)).toEqual([{ id: "home/a", hash: "b66de2195991bb384f59ec2a986351120e7143b5c29947a9a9b859e16b330b0d" }]);
+  expect(store.iterationBlocks(v9.pending, 4 as IterationN)).toEqual([{ id: "home/a", hash: "2a365f4c9bf96a45e860d0f7b7b33ffc173e2524e142be94d18c8a486ae4ca01" }]);
+  expect(store.iterationBlocks(v9.same, 2 as IterationN)).toEqual([{ id: "home/a", hash: "957bae70861cf3c0ef4f039b61703b292df9593b01074d4551acd8fbb2c68085" }]);
+  expect(store.iterationProposed(v9.fork, 4 as IterationN)).toEqual([{ name: "ChoreList", hash: "f4db589a42c1873d8f31fd4f08760a60896434103519454edeb643ed4d44acd1" }]);
+  expect(store.iterationProposed(v9.fork, 2 as IterationN)).toEqual([]);
+  const pins = (id: SessionId) => store.feedback(id).map((f) => [f.id, f.text, f.createdIn, f.history]);
+  expect(pins(v9.root)).toEqual([[1, "darker still", 3, []]]);
+  expect(pins(v9.fork)).toEqual([[1, "darker still", 3, [{ kind: "address", iteration: 4, at: "2026-11-01T09:00:12.000Z" }]]]);
+  expect(pins(v9.pending)).toEqual([[1, "darker still", 4, []]]);
+  expect(pins(v9.same)).toEqual([[1, "darker still", 2, []]]);
+
+  // Every branch is on the root's thread now.
+  for (const id of [v9.root, v9.fork, v9.grand, v9.pending, v9.same]) {
+    expect(store.attachment(id), id).toMatchObject({ threadId: v9.rootThread, lostAt: null });
+  }
+  const requests = (id: SessionId) => store.requests(id).map((r) => [r.n, r.base, r.threadId, r.state]);
+  expect(requests(v9.root)).toEqual([[1, 3, v9.rootThread, { state: "sent" }]]);
+  expect(requests(v9.fork), "the open one waits on its old thread no longer").toEqual([
+    [1, 3, v9.forkThread, { state: "fulfilled", iteration: 4 }],
+    [2, 4, v9.rootThread, { state: "send_failed", error: RETRY_THERE }],
   ]);
-  expect(store.openRequest(fork as SessionId)?.threadId).toBe(t1);
-  expect(store.openRequest(session)).toMatchObject({ n: 1, base: 3, threadId: t1, state: { state: "sent" } });
-  expect(ns(pending), "a fork from 3 starts at 4").toEqual([4]);
-  expect(store.attachment(pending as SessionId).threadId, "a fork whose thread never started joins the root's").toBe(t1);
-  expect(store.requests(pending as SessionId).map((r) => [r.n, r.threadId, r.state])).toEqual([
-    [1, t1, { state: "send_failed", error: "Brainstorm now keeps every branch on one thread; retry to send it there" }],
-  ]);
-  expect(store.requests(same as SessionId).map((r) => [r.n, r.threadId, r.state]), "a fork on the root's thread waits beside the root's request too").toEqual([
-    [1, t1, { state: "send_failed", error: "Brainstorm now keeps every branch on one thread; retry to send it there" }],
+  expect(requests(v9.grand)).toEqual([[1, 4, v9.grandThread, { state: "fulfilled", iteration: 5 }]]);
+  expect(requests(v9.pending), "a fork whose thread never started").toEqual([[1, 4, v9.rootThread, { state: "send_failed", error: RETRY_THERE }]]);
+  expect(requests(v9.same), "a fork on the root's thread waits beside the root's request too").toEqual([
+    [1, 2, v9.rootThread, { state: "send_failed", error: RETRY_THERE }],
   ]);
   store.close();
 
-  // The tree now has two open requests on one thread; the fork's waits for the root's.
+  // The tree now has four open requests on one thread; the root's goes first, and the forks' wait for it.
   const bridge = new FakeBridge();
-  bridge.add(t1, "p1");
+  bridge.add(v9.rootThread, "p1");
   const checker = createChecker({ size: 1 });
   const service = await Brainstorm.open({ dbPath: path, exportsDir: join(path, "..", "exports"), bridge, checker });
-  expect(await service.act(fork as SessionId, { kind: "retry_request" })).toEqual({
+  for (const id of Object.values(v9).filter((v) => v.startsWith("s_"))) expect((await service.view(id as SessionId)).ok, id).toBe(true);
+  expect(await service.act(v9.fork, { kind: "retry_request" })).toEqual({
     ok: false,
-    error: { code: "request_open", message: `branch ${session} has request 1 open on this thread; let it finish or withdraw it first`, n: 1 },
+    error: { code: "request_open", message: `branch ${v9.root} has request 1 open on this thread; let it finish or withdraw it first`, n: 1 },
   });
   expect(bridge.sent).toEqual([]);
 
   // Once the root's request closes, the waiting ones don't hold each other up: the first retried goes, and the
   // others then wait for it.
-  expect(await service.act(session, { kind: "withdraw_request" })).toMatchObject({ ok: true });
-  expect(await service.act(fork as SessionId, { kind: "retry_request" })).toMatchObject({ ok: true });
-  expect(bridge.sent.map((m) => [m.thread, m.message.split("\n")[0]])).toEqual([[t1, `[brainstorm] session ${fork} · request 2 · scope: all · freetext: "darker again"`]]);
-  for (const waiting of [pending, same]) {
-    expect(await service.act(waiting as SessionId, { kind: "retry_request" })).toEqual({
+  expect(await service.act(v9.root, { kind: "withdraw_request" })).toMatchObject({ ok: true });
+  expect(await service.act(v9.fork, { kind: "retry_request" })).toMatchObject({ ok: true });
+  expect(bridge.sent.map((m) => [m.thread, m.message.split("\n")[0]])).toEqual([
+    [v9.rootThread, `[brainstorm] session ${v9.fork} · request 2 · scope: all · freetext: "darker again"`],
+  ]);
+  for (const waiting of [v9.pending, v9.same]) {
+    expect(await service.act(waiting, { kind: "retry_request" })).toEqual({
       ok: false,
-      error: { code: "request_open", message: `branch ${fork} has request 2 open on this thread; let it finish or withdraw it first`, n: 2 },
+      error: { code: "request_open", message: `branch ${v9.fork} has request 2 open on this thread; let it finish or withdraw it first`, n: 2 },
     });
   }
   expect(bridge.sent).toHaveLength(1);
@@ -202,19 +197,10 @@ test("a version 9 store turns forks into branches: their iterations continue the
 });
 
 test("a version 9 fork that joins a lost root thread is lost too", () => {
-  const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
-  seeded(path).close();
-  const v9 = new DatabaseSync(path);
-  v9.exec("DROP TABLE main_choice; DROP TABLE graft; DROP TABLE trashed; DROP TABLE primary_branch; PRAGMA user_version = 9;");
-  const fork = "s_fork0001";
-  v9.prepare("UPDATE attachment SET lost_at = ? WHERE session_id = ?").run(at, session);
-  v9.prepare("INSERT INTO session(id, project_id, title, brief, created_at) VALUES (?, 'p1', 'Darker', '', ?)").run(fork, at);
-  v9.prepare("INSERT INTO attachment(session_id, thread_id, attached_at) VALUES (?, ?, ?)").run(fork, t2, at);
-  v9.prepare("INSERT INTO iteration(session_id, n, thread_id, slots_json, created_at) VALUES (?, 1, ?, '[]', ?)").run(session, t1, at);
-  v9.prepare("INSERT INTO fork(session_id, parent_id, parent_n, baked_json, created_at) VALUES (?, ?, 1, '[]', ?)").run(fork, session, at);
-  v9.close();
-
-  const store = new Store(path);
-  expect(store.attachment(fork as SessionId)).toMatchObject({ threadId: t1, lostAt: at });
+  const store = new Store(v9Store());
+  expect(store.attachment(v9.lost)).toMatchObject({ threadId: v9.lostThread, lostAt: v9.lostAt });
+  expect(store.attachment(v9.lostFork)).toMatchObject({ threadId: v9.lostThread, lostAt: v9.lostAt });
+  expect([1, 2, 3, 4].filter((n) => store.iteration(v9.lostFork, n as IterationN) !== null), "a fork from 1 starts at 2").toEqual([2, 3]);
+  expect(store.requests(v9.lostFork).map((r) => [r.n, r.base, r.state])).toEqual([[1, 2, { state: "fulfilled", iteration: 3 }]]);
   store.close();
 });
