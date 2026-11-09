@@ -123,7 +123,7 @@ Warnings arrive with a saved iteration. Fix the ones you caused and commit again
 | `duplicate_part` | Two elements share a `data-part` in one render. Make the names unique. |
 | `uncontrolled_prop` | An explicit `controls.json` misses an appearance prop. Add the control, or delete `controls.json`. |
 | `vary_mismatch` | A vary request's new variant is missing, has another title, or lacks the target `data-part`. Add the folder under the key `context` named, set that title, or restore the part. |
-| `confirm_mismatch` | A confirm's deleted variant is still there, a new variant sits beside Main, a Main is gone or retitled, Main doesn't render a grafted element's `data-part`, or a Main receiving grafts is unchanged. Delete the extra folders, restore Main under its key and title, or rebuild the grafted element in Main under that name. |
+| `confirm_mismatch` | A confirm's deleted variant is still there, a new variant other than a graft's source sits beside Main, a Main is gone or retitled, Main doesn't render a grafted element's `data-part`, or a Main receiving grafts is unchanged. Delete the extra folders, restore Main under its key and title, or rebuild the grafted element in Main under that name. |
 
 A commit that changes nothing and addresses nothing new returns the latest iteration with `created: false`. That is a safe replay.
 
@@ -182,16 +182,17 @@ Rob picked one element and asked for new variants of its slot that differ only t
 ## Confirm
 
 ```
-[brainstorm] session s_8f2k3a · request 7 · scope: confirm main wheel/neon; graft wheel/calm [spin-button] into wheel; drop wheel/calm
+[brainstorm] session s_8f2k3a · request 7 · scope: confirm main wheel/neon; graft wheel/calm [spin-button] into wheel; drop wheel/reel
 ```
 
 Rob chose a Main for each slot and picked elements from other variants to bring into it. A confirm with nothing to bring in never reaches you: the app writes it itself. `context` lists one line for each part of the work:
 
 - `main of slot <slot>: <block>` is the variant going forward.
 - `graft data-part "<part>" from <block> into <main>` asks you to rebuild that element of the source inside Main, where the quoted instruction says, or where it fits best when there is none. Keep the element's `data-part` name in Main, and change nothing else in Main.
+- `keep <block> as it is` names a graft's source. Leave its folder unchanged, even beside Main: Rob's next confirm deletes it once the graft has landed, and keeps it to try again if it hasn't.
 - `delete <block>` asks you to remove that variant's folder.
 
-The commit warns `confirm_mismatch` when a deleted variant is still there, a new variant sits beside Main, a Main is gone or retitled, Main doesn't render a grafted element's `data-part`, or a Main receiving grafts comes back unchanged. It warns `out_of_scope` for a change to any other block.
+The commit warns `confirm_mismatch` when a deleted variant is still there, a new variant other than a graft's source sits beside Main, a Main is gone or retitled, Main doesn't render a grafted element's `data-part`, or a Main receiving grafts comes back unchanged. It warns `out_of_scope` for a change to any other block, a graft's source included.
 
 ## Add slot
 

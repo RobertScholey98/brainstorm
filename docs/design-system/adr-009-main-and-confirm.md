@@ -37,12 +37,13 @@ Rob marking it again. The same holds once trashing leaves one variant showing: t
 ### Confirm
 
 Confirm, at the foot of the sidebar, locks the marks in. It opens a popover that lists, per slot, what Main will be
-(its variant and grafts) and how many options go, then sends. The new iteration holds only:
+(its variant and grafts), how many options go and which graft sources stay, then sends. The new iteration holds only:
 
 - in a slot with a Main: Main, with its grafts applied
 - in a slot with no Main: its variants that aren't trashed
+- wherever it is, every graft's source, until that graft has landed
 
-Confirm is a request with scope `{ kind: "confirm", mains, grafts, drop }` (`drop` lists every block the confirm removes: trashed options and the options beside a Main), so it shares Regenerate's gate, phases
+Confirm is a request with scope `{ kind: "confirm", mains, grafts, drop }` (`drop` lists every block the confirm removes: trashed options and the options beside a Main, except a graft's source), so it shares Regenerate's gate, phases
 and history origin. One confirm that asks the agent nothing runs no agent turn, so a lost thread doesn't hold it; an
 open request anywhere in the brainstorm still does, since that request's commit could land on top (`confirmGate` in
 `machines.ts`, used by the service and the window).
@@ -51,15 +52,17 @@ open request anywhere in the brainstorm still does, since that request's commit 
   content and Rob's settings as they were, and marks the request fulfilled. No agent turn runs. Its marker and context
   still exist, so the request reads like any other in the history.
 - **Grafts.** The request goes to the agent. `brainstorm context` spells out each graft (source block, part, target
-  slot, instruction) and which variants to delete. A commit that answers it warns `confirm_mismatch` when a slot with
-  a Main still has other variants, a Main is gone or renamed, Main lacks a grafted part, or a Main that receives
+  slot, instruction), which sources to keep and which variants to delete. A confirm doesn't delete a graft's source,
+  so a graft the commit doesn't apply can be tried again; once it has landed the source is an ordinary option, and the
+  next Confirm drops it like any other beside Main. A commit that answers it warns `confirm_mismatch` when a slot with
+  a Main still has other variants than the sources, a Main is gone or renamed, Main lacks a grafted part, or a Main that receives
   grafts comes back unchanged (a vary option's part already renders in Main, and a whole block has no part to look
-  for), and `out_of_scope` when it changes any other block. The settings and pins it drops with the variants are no news, so they raise no
+  for), and `out_of_scope` when it changes any other block, a source included. The settings and pins it drops with the variants are no news, so they raise no
   `override_dropped` or `pin_lost`.
 
 A confirm clears the marks it carried once its iteration lands, except a graft the commit didn't apply (the
-`confirm_mismatch` cases above): that one stays under Main for the next Confirm, with its slot's Main mark kept when the
-commit left other variants beside Main. A graft whose source the commit removed goes, since nothing is left to take it
+`confirm_mismatch` cases above): that one stays under Main for the next Confirm. A slot's Main mark stays while the
+commit leaves other variants beside Main, as a kept source is. A graft whose source the commit removed goes, since nothing is left to take it
 from. While it is open, the marks stay as they were sent and
 Rob can't change them. A graft still waiting for its slot's Main was never part of the confirm, so it stays. A confirm
 Rob withdraws before its commit lands is no longer open, so that commit lands as the agent's own: the confirm stays

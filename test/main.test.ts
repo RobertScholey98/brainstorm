@@ -57,9 +57,36 @@ describe("confirm", () => {
     const picked = withGraft(main("neon"), { from: { blockId: "wheel/calm" as BlockId, part: SPIN }, into: wheel.id, instruction: "under the title" });
     const plan = confirmPlan(slots, picked)!;
     expect(plan.grafts).toEqual([{ from: { blockId: "wheel/calm", part: SPIN }, into: "wheel", instruction: "under the title" }]);
+    expect(plan.drop, "Calm is the pick's source, so it stays").toEqual(["wheel/spin-a"]);
     expect(confirmLines(slots, plan), "every slot, the unchanged one too").toEqual([
-      { slot: "wheel", keeps: ["neon"], grafts: plan.grafts, dropped: 2 },
-      { slot: "result", keeps: ["sheet"], grafts: [], dropped: 0 },
+      { slot: "wheel", keeps: ["neon"], grafts: plan.grafts, dropped: 1, stays: ["wheel/calm"] },
+      { slot: "result", keeps: ["sheet"], grafts: [], dropped: 0, stays: [] },
+    ]);
+  });
+
+  test("keeps a vary option's graft source out of what it drops, beside Main, trashed or not", () => {
+    const grafted = withApproval(main("neon"), wheel, option);
+    expect(confirmPlan(slots, grafted)).toEqual({
+      kind: "confirm",
+      mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }],
+      grafts: [{ from: { blockId: "wheel/spin-a", part: SPIN }, into: "wheel", instruction: null }],
+      drop: ["wheel/calm"],
+    });
+    expect(confirmPlan(slots, withTrash(grafted, "wheel/spin-a" as BlockId, true))?.drop, "a trashed source stays too").toEqual(["wheel/calm"]);
+  });
+
+  test("keeps the source of a pick from another slot's variant that isn't that slot's Main", () => {
+    const picked = withGraft(main("neon"), { from: { blockId: "wheel/calm" as BlockId, part: SPIN }, into: sheet.id, instruction: null });
+    const plan = confirmPlan(slots, picked)!;
+    expect(plan).toEqual({
+      kind: "confirm",
+      mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }],
+      grafts: [{ from: { blockId: "wheel/calm", part: SPIN }, into: "result", instruction: null }],
+      drop: ["wheel/spin-a"],
+    });
+    expect(confirmLines(slots, plan)).toEqual([
+      { slot: "wheel", keeps: ["neon"], grafts: [], dropped: 1, stays: ["wheel/calm"] },
+      { slot: "result", keeps: ["sheet"], grafts: plan.grafts, dropped: 0, stays: [] },
     ]);
   });
 

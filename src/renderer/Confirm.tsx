@@ -10,7 +10,7 @@ import { BlockedHint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { confirmLines, confirmPlan } from "../core/main";
 import { partLabel } from "../core/part";
-import { blockIdOf, type BlockId, type BlockView, type IterationN, type Marks, type SlotView } from "../core/types";
+import { blockIdOf, type BlockId, type BlockView, type ConfirmScope, type IterationN, type Marks, type SlotView } from "../core/types";
 
 /**
  * Confirm, at the foot of the sidebar (ADR 009). At the latest it locks Rob's marks in; on a past iteration it makes a
@@ -93,6 +93,14 @@ function clearOfStrip(trigger: HTMLElement | null): number {
   return Math.max(0, trigger.getBoundingClientRect().bottom - strip.top + STRIP_GAP);
 }
 
+/** What a source gives Main, as the popover's line on it reads: "its spin button is", or "it is" for a whole block. */
+function givenBy(grafts: ConfirmScope["grafts"], source: BlockId): string {
+  const parts = grafts.filter((g) => g.from.blockId === source).map((g) => g.from.part);
+  if (parts.some((p) => p === null)) return "it is";
+  const names = [...new Set(parts.flatMap((p) => (p === null ? [] : [partLabel(p).toLowerCase()])))];
+  return `its ${names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`} ${names.length === 1 ? "is" : "are"}`;
+}
+
 function ConfirmForm({
   slots,
   blocks,
@@ -173,7 +181,14 @@ function ConfirmForm({
                         {line.dropped === 1 ? "1 option goes" : `${line.dropped} options go`}
                       </span>
                     )}
-                    {line.dropped === 0 && line.grafts.length === 0 && (
+                    {/* A source Rob grafts from stays an option until what it gives is in Main, so a graft can be tried
+                        again. It says why the option doesn't go, so it wraps and reads whole. */}
+                    {line.stays.map((b) => (
+                      <span key={b} className="text-xs break-words text-pretty text-fg-muted" data-confirm-stays={b}>
+                        {`${titleOf(b)} stays until ${givenBy(plan?.grafts ?? [], b)} in Main`}
+                      </span>
+                    ))}
+                    {line.dropped === 0 && line.grafts.length === 0 && line.stays.length === 0 && (
                       <span className="text-xs text-fg-muted" data-confirm-unchanged>
                         As it is
                       </span>

@@ -271,8 +271,12 @@ function varyLines(scope: VaryScope): string[] {
   ];
 }
 
-/** What a confirm asks, spelled out: graft each element into its slot's Main, then delete every dropped variant. */
+/**
+ * What a confirm asks, spelled out: graft each element into its slot's Main, keep each graft's source as it is, then
+ * delete every dropped variant.
+ */
 function confirmAgentLines(scope: ConfirmScope): string[] {
+  const sources = [...new Set(scope.grafts.map((g) => g.from.blockId))];
   return [
     ...scope.mains.map((m) => `  main of slot ${m.slot}: ${m.slot}/${m.variant}`),
     ...scope.grafts.map((g) => {
@@ -282,6 +286,7 @@ function confirmAgentLines(scope: ConfirmScope): string[] {
       return `  graft ${what} into ${into}${g.instruction === null ? ", placed where it fits best" : `: ${JSON.stringify(g.instruction)}`}`;
     }),
     ...(scope.grafts.length > 0 ? ["  keep each grafted element's data-part name in main, and change nothing else in it"] : []),
+    ...sources.map((b) => `  keep ${b} as it is: it is a graft's source, so this confirm keeps it`),
     ...scope.drop.map((b) => `  delete ${b}`),
   ];
 }

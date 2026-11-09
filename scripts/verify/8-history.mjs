@@ -1007,7 +1007,8 @@ try {
   );
 
   // Grafts at the latest: with Neon as Main, a vary option's 👍 brings its element in, and Pick brings one from another
-  // slot (ADR 009). Confirm then goes to the agent, which merges them and drops the rest.
+  // slot (ADR 009). Confirm then goes to the agent, which merges them, keeps Spin button B, the source it grafts from, and
+  // drops the rest.
   await showSlot(window, "wheel");
   // Into a slot with no Main, a pick makes the variant showing there its Main first (`withPick`), and says so.
   await window.click("[data-graft-toggle]");
@@ -1112,9 +1113,19 @@ try {
   await window.click("[data-confirm-toggle]");
   await window.waitForSelector("[data-confirm-menu]");
   check(
-    "the confirm popover counts what goes, lists both grafts, and says it goes to the agent",
-    [await window.getAttribute("[data-confirm-dropped]", "data-confirm-dropped"), await window.$$eval("[data-confirm-graft]", (els) => els.length), (await window.textContent("[data-confirm-hint]")).trim()],
-    ["5", 2, "Goes to the agent"],
+    "the confirm popover counts what goes, Spin button B aside, lists both grafts, says B stays until its button is in Main, and says it goes to the agent",
+    [
+      await window.getAttribute("[data-confirm-dropped]", "data-confirm-dropped"),
+      await window.$$eval("[data-confirm-graft]", (els) => els.length),
+      await window.$$eval("[data-confirm-stays]", (els) => els.map((e) => [e.closest("[data-confirm-slot]").dataset.confirmSlot, e.textContent.trim()])),
+      (await window.textContent("[data-confirm-hint]")).trim(),
+    ],
+    ["4", 2, [["wheel", "Spin button B stays until its spin button is in Main"]], "Goes to the agent"],
+  );
+  check(
+    "the line on Spin button B wraps whole, and nothing in the popover runs past its box",
+    [await window.$eval("[data-confirm-stays]", (el) => el.scrollWidth <= el.clientWidth), await outsideBox(window, "[data-confirm-menu]")],
+    [true, []],
   );
   check(
     "the confirm popover ends above the history strip, clear of its top edge",
@@ -1152,10 +1163,23 @@ try {
     ],
     ["neon", beforeHeld, true, ["true", HELD], ["true", HELD]],
   );
+  check(
+    "brainstorm context tells the agent to keep both graft sources as they are and to delete the rest",
+    brainstorm(env, ["context", session]).stdout.split(/\r?\n/).filter((l) => /^\s+(keep|delete) [a-z]+\//.test(l)),
+    [
+      "  keep wheel/spin-button-b as it is: it is a graft's source, so this confirm keeps it",
+      "  keep result/card as it is: it is a graft's source, so this confirm keeps it",
+      "  delete wheel/reel",
+      "  delete wheel/spin-button-a",
+      "  delete wheel/spin-button-c",
+      "  delete wheel/terminal",
+    ],
+  );
   t3.startRun(DEMO_THREAD);
   const merged = agentCommit(session, (copy) => {
     const wheel = join(copy, "slots", "wheel");
-    for (const gone of ["reel", "terminal", "spin-button-a", "spin-button-b", "spin-button-c"]) rmSync(join(wheel, gone), { recursive: true });
+    // Spin button B is the graft's source, so it stays.
+    for (const gone of ["reel", "terminal", "spin-button-a", "spin-button-c"]) rmSync(join(wheel, gone), { recursive: true });
     replaceIn(join(wheel, "neon", "block.tsx"), '<div className="logo" data-part="logo">', '<p className="headline" data-part="headline">Up next</p>\n        <div className="logo" data-part="logo">');
     // Spin button B's button replaces Neon's own, mark and all.
     replaceIn(join(wheel, "neon", "block.tsx"), 'data-part="spin-button"', 'data-part="spin-button" data-option-mark="spin-button-b"');
@@ -1163,15 +1187,57 @@ try {
   t3.endRun(DEMO_THREAD, "completed");
   check("the agent's merge passes the confirm's checks", merged.warnings, []);
   await window.waitForSelector('[data-canvas-iteration="4"]', { timeout: PHASE_MS });
-  check("iteration 4 holds only Main in the wheel, the unmarked result as it was, and the marks are spent", [[...context(session).latest.blocks].sort(), context(session).marks], [["result/card", "result/receipt", "wheel/neon"], { mains: {}, grafts: [], trashed: [] }]);
+  check(
+    "iteration 4 holds Main in the wheel with Spin button B, the graft's source, beside it, and the unmarked result as it was; the grafts are spent and the wheel keeps its Main",
+    [[...context(session).latest.blocks].sort(), context(session).marks],
+    [["result/card", "result/receipt", "wheel/neon", "wheel/spin-button-b"], { mains: { wheel: "neon" }, grafts: [], trashed: [] }],
+  );
   await showSlot(window, "wheel");
   check(
     "Main on the canvas now carries Spin button B's button and the picked headline",
     [await canvas.$eval(inBlock("wheel/neon", "spin-button"), (el) => el.dataset.optionMark ?? null), (await canvas.textContent(inBlock("wheel/neon", "headline")))?.trim()],
     ["spin-button-b", "Up next"],
   );
+  // Its button landed, so Spin button B is an option again: no mark, under Options, and its 👍 would bring its button in
+  // once more.
+  check(
+    "the sidebar keeps Neon as Main and lists Spin button B under Options, unmarked, its 👍 offering its button again",
+    [await rows(window, "data-main-group"), await rows(window, "data-options-group"), await window.$$eval("[data-graft]", (els) => els.length), await window.getAttribute('[data-approve="spin-button-b"]', "data-approve-kind")],
+    [["neon"], ["spin-button-b"], 0, "graft"],
+  );
+
+  // A confirm with nothing to graft needs no agent: the app narrows the iteration itself, Spin button B going like any
+  // option beside Main.
+  await showSlot(window, "result");
+  await mark(window, "trash", "receipt");
+  const sentBeforeConfirm = t3.sent().length;
+  await window.click("[data-confirm-toggle]");
+  await window.waitForSelector("[data-confirm-menu]");
+  check(
+    "the confirm popover counts what goes in each slot, Spin button B now among them, and applies at once",
+    [
+      await window.$$eval("[data-confirm-dropped]", (els) => els.map((e) => [e.closest("[data-confirm-slot]").dataset.confirmSlot, e.dataset.confirmDropped])),
+      await window.$$eval("[data-confirm-stays]", (els) => els.length),
+      (await window.textContent("[data-confirm-hint]")).trim(),
+    ],
+    [
+      [
+        ["wheel", "1"],
+        ["result", "1"],
+      ],
+      0,
+      "Applies at once",
+    ],
+  );
+  // Ctrl+Enter, the key the popover shows beside Confirm, sends it from wherever focus sits.
+  await window.keyboard.press("Control+Enter");
+  await window.waitForSelector('[data-canvas-iteration="5"]', { timeout: PHASE_MS });
+  check("Confirm writes iteration 5 without Spin button B or the trashed receipt, and no agent turn", [[...context(session).latest.blocks].sort(), t3.sent().length - sentBeforeConfirm], [["result/card", "wheel/neon"], 0]);
+  check("the marks are spent", context(session).marks, { mains: {}, grafts: [], trashed: [] });
+  check("the strip opens a new run on the latest confirm, named for it, saying what it kept and dropped", [await window.getAttribute("[data-strip-run]", "data-strip-run"), (await strip(window)).map((e) => [e.n, e.origin])], ["Confirm 2", [[5, "Kept 2 Mains · 2 options dropped"]]]);
   // The wheel's last variant is its Main without a 👍: Main can't be trashed, nor a slot's last variant, so it offers
   // no 🗑, and its 👍 is held, named for why, and does nothing when pressed.
+  await showSlot(window, "wheel");
   await press(window, "approve", "neon");
   await window.waitForTimeout(500);
   check(
@@ -1185,20 +1251,6 @@ try {
     ],
     [true, ["true", "Main, as the only variant left"], { mains: {}, grafts: [], trashed: [] }, ["neon"], true],
   );
-
-  // A confirm with nothing to graft needs no agent: the app narrows the iteration itself.
-  await showSlot(window, "result");
-  await mark(window, "trash", "receipt");
-  const sentBeforeConfirm = t3.sent().length;
-  await window.click("[data-confirm-toggle]");
-  await window.waitForSelector("[data-confirm-menu]");
-  check("the confirm popover counts what goes, and applies at once", [await window.getAttribute("[data-confirm-dropped]", "data-confirm-dropped"), (await window.textContent("[data-confirm-hint]")).trim()], ["1", "Applies at once"]);
-  // Ctrl+Enter, the key the popover shows beside Confirm, sends it from wherever focus sits.
-  await window.keyboard.press("Control+Enter");
-  await window.waitForSelector('[data-canvas-iteration="5"]', { timeout: PHASE_MS });
-  check("Confirm writes iteration 5 without the trashed receipt, and no agent turn", [[...context(session).latest.blocks].sort(), t3.sent().length - sentBeforeConfirm], [["result/card", "wheel/neon"], 0]);
-  check("the marks are spent", context(session).marks, { mains: {}, grafts: [], trashed: [] });
-  check("the strip opens a new run on the latest confirm, named for it, saying what it kept and dropped", [await window.getAttribute("[data-strip-run]", "data-strip-run"), (await strip(window)).map((e) => [e.n, e.origin])], ["Confirm 2", [[5, "Kept Assignment card · 1 option dropped"]]]);
   check(
     "the run toggle reads as the menu it opens, edged like the slot picker and named for the earlier runs behind it",
     await window.$eval("[data-strip-run]", (el) => {
