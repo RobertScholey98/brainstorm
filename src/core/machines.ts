@@ -1,7 +1,9 @@
 import { partLabel } from "./fork";
 import {
+  blockIdOf,
   parseRequestN,
   parseSessionId,
+  splitBlockId,
   type Attachment,
   type IterationN,
   type IterationOrigin,
@@ -113,11 +115,14 @@ export function foldFeedback(events: readonly FeedbackEvent[]): FeedbackStatus {
 /**
  * An open request's actions follow one order: the phase's own step (Retry, Resend or Copy phrase), then Open thread
  * whenever the thread can still be reached, then Withdraw. The bar holds them right to left from Regenerate, so Open
- * thread and Withdraw keep one x across every phase that has them.
+ * thread and Withdraw keep one x across every phase that has them. While another branch's request holds the thread
+ * they share (`busy`), Retry and Resend wait, since the thread works on one thing at a time.
  */
-export function requestPhase(request: Request, attachment: Attachment, observation: Observation | null): RequestPhase {
-  const open = (step: readonly RequestPhaseAction[]): readonly RequestPhaseAction[] =>
-    attachment.lostAt === null ? [...step, "open_thread", "withdraw"] : [...step, "withdraw"];
+export function requestPhase(request: Request, attachment: Attachment, observation: Observation | null, busy = false): RequestPhase {
+  const open = (step: readonly RequestPhaseAction[]): readonly RequestPhaseAction[] => {
+    const own = busy ? step.filter((a) => a !== "retry" && a !== "resend") : step;
+    return attachment.lostAt === null ? [...own, "open_thread", "withdraw"] : [...own, "withdraw"];
+  };
   switch (request.state.state) {
     case "sending":
       return { phase: "sending", actions: [] };
@@ -146,9 +151,12 @@ export function requestPhase(request: Request, attachment: Attachment, observati
 
 /**
  * What Rob reads for a phase. `changed` names the fulfilling iteration's changed blocks by title, and `scope` is the
- * request's, so a vary reads as what it asked for.
+ * request's, so a vary reads as what it asked for. `kept` names a confirm's Mains, as the origin's does.
  */
-export function phaseMessage(phase: RequestPhase, context: { title: string; changed: readonly string[]; scope?: RequestScope }): string {
+export function phaseMessage(
+  phase: RequestPhase,
+  context: { title: string; changed: readonly string[]; kept?: readonly string[]; scope?: RequestScope },
+): string {
   switch (phase.phase) {
     case "sending":
       return "Sending to T3";
@@ -170,7 +178,7 @@ export function phaseMessage(phase: RequestPhase, context: { title: string; chan
     case "no_change":
       return "The agent replied in T3 without changing the design";
     case "fulfilled":
-      return `Iteration ${phase.iteration} · ${fulfilledText(context.scope, context.changed)}`;
+      return `Iteration ${phase.iteration} · ${fulfilledText(context.scope, context.changed, context.kept ?? [])}`;
     case "withdrawn":
       return "Request withdrawn";
   }
@@ -239,7 +247,7 @@ export function originText(origin: IterationOrigin): string {
         const what = scope.target.part === null ? "the block" : partLabel(scope.target.part);
         return `Vary ${what} ×${scope.variants.length}${freetext === null ? "" : ` · ${freetext}`}`;
       }
-      if (scope.kind === "confirm") return confirmText(scope);
+      if (scope.kind === "confirm") return confirmText(scope, origin.kept);
       if (scope.kind === "add_slot") return `New slot · ${freetext}`;
       if (freetext !== null) return freetext;
       // With no words of Rob's, what it changed says more than the scope's name.
@@ -250,19 +258,31 @@ export function originText(origin: IterationOrigin): string {
 }
 
 /** What a fulfilled request did, in the top bar's words. */
-function fulfilledText(scope: RequestScope | undefined, changed: readonly string[]): string {
+function fulfilledText(scope: RequestScope | undefined, changed: readonly string[], kept: readonly string[]): string {
   if (scope?.kind === "vary") return varyLanded(scope, changed);
-  if (scope?.kind === "confirm") return confirmText(scope);
+  if (scope?.kind === "confirm") return confirmText(scope, kept);
   return changedNames(changed);
 }
 
-/** A confirm, as the strip and its dropdown name it: "Confirmed · 3 options dropped, 1 element brought in". */
-export function confirmText(scope: Extract<RequestScope, { kind: "confirm" }>): string {
+/**
+ * A confirm, as the strip, its dropdown and the top bar name it, leading with what it kept: "Kept Neon wheel · 3
+ * options dropped, 1 element brought in". `kept` titles the Mains it narrowed or grafted into; a slot that only kept
+ * its one variant isn't news.
+ */
+export function confirmText(scope: Extract<RequestScope, { kind: "confirm" }>, kept: readonly string[]): string {
   const parts = [
     ...(scope.drop.length === 0 ? [] : [`${scope.drop.length} ${scope.drop.length === 1 ? "option" : "options"} dropped`]),
     ...(scope.grafts.length === 0 ? [] : [`${scope.grafts.length} ${scope.grafts.length === 1 ? "element" : "elements"} brought in`]),
   ];
-  return parts.length === 0 ? "Confirmed" : `Confirmed · ${parts.join(", ")}`;
+  const lead = kept.length === 0 ? "Confirmed" : kept.length === 1 ? `Kept ${kept[0]}` : `Kept ${kept.length} Mains`;
+  return [lead, parts.join(", ")].filter((p) => p !== "").join(" · ");
+}
+
+/** The Mains a confirm changed something about: the slot dropped an option or took a graft. */
+export function keptMains(scope: Extract<RequestScope, { kind: "confirm" }>): BlockId[] {
+  return scope.mains
+    .filter((m) => scope.grafts.some((g) => g.into === m.slot) || scope.drop.some((b) => splitBlockId(b).slot === m.slot))
+    .map((m) => blockIdOf(m.slot, m.variant));
 }
 
 /** A fulfilled vary, by the new variants it asked for that landed: "3 new variants of Spin button". */

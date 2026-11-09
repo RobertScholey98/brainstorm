@@ -1,4 +1,4 @@
-import { cpSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
@@ -33,6 +33,14 @@ function replaceIn(path, from, to) {
 }
 
 const context = (session) => must("context", brainstorm(env, ["context", session, "--json"]));
+
+/** The shot in the light theme it runs in, then its dark twin, so the new surfaces are judged in both. */
+async function shots2(window, shots, name) {
+  await shot(window, shots, name);
+  await window.emulateMedia({ colorScheme: "dark" });
+  await shot(window, shots, `${name}-dark`);
+  await window.emulateMedia({ colorScheme: "light" });
+}
 const stripHeight = (window) => window.$eval("[data-history]", (el) => Math.round(el.getBoundingClientRect().height));
 /** The first frame label's distance below the canvas's top edge, as Rob sees it. */
 const labelOffset = (canvas) => canvas.evaluate(() => Math.round(document.querySelector(".bs-frame-title").getBoundingClientRect().top));
@@ -398,20 +406,21 @@ try {
   await window.click("[data-confirm-toggle]");
   await window.waitForSelector("[data-confirm-menu]");
   check(
-    "its popover is named for the branch and lists what the branch starts with",
+    "its popover is named for the branch and lists what every slot starts with, the unmarked one as it is",
     await window.$eval("[data-confirm-menu]", (el) => [
       el.querySelector("[data-slot=popover-title]").textContent.trim(),
       [...el.querySelectorAll("[data-confirm-slot]")].map((s) => s.dataset.confirmSlot),
       el.querySelector("[data-confirm-dropped]")?.dataset.confirmDropped ?? null,
+      el.querySelector('[data-confirm-slot="result"]').textContent.trim(),
       el.querySelector("[data-confirm-hint]").textContent.trim(),
     ]),
-    ["Confirm as a branch", ["wheel"], "2", "Applies at once"],
+    ["Confirm as a branch", ["wheel", "result"], "2", "The result2 variantsAs it is", "Applies at once"],
   );
   await window.fill("[data-confirm-instruction]", "Try the reel for mornings");
   check("an instruction there goes to the agent instead", (await window.textContent("[data-confirm-hint]")).trim(), "Goes to the agent");
   await window.fill("[data-confirm-instruction]", "");
   check("nothing in the confirm popover runs past its box", await outsideBox(window, "[data-confirm-menu]"), []);
-  await shot(window, shots, "3-confirm-past");
+  await shots2(window, shots, "3-confirm-past");
   await window.keyboard.press("Escape");
   await window.waitForSelector("[data-confirm-menu]", { state: "detached" });
   check("Escape closes the popover and stays in the past", (await canvasAt(window)).past, 1);
@@ -464,7 +473,7 @@ try {
   check("a thumbs up makes Neon Main, at the top, and what shows", [await rows(window, "data-main-group"), await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant")], [["neon"], "neon"]);
   check("both marks are stored, so the agent reads them in context", context(session).marks, { mains: { wheel: "neon" }, grafts: [], trashed: ["wheel/terminal"] });
   check("Confirm is on once there is something to lock in", await window.isDisabled("[data-confirm-toggle]"), false);
-  await shot(window, shots, "5-marks");
+  await shots2(window, shots, "5-marks");
   await mark(window, "approve", "neon");
   await window.waitForSelector("[data-main-empty]");
   await window.click("[data-trashed-fold] button");
@@ -741,7 +750,7 @@ try {
     back,
     [
       [["fork", "iteration 2"], [], 16, 1],
-      [["iteration 1"], [], 16, 1],
+      [["iteration 1", "fork"], [], 16, 1],
     ],
   );
   check("between pages both ends show their cue, and at the start only the end", backCues, [["start", "end"], ["end"]]);
@@ -808,30 +817,97 @@ try {
     ["spin-button-b", "spin-button-c"],
   );
 
-  // Confirm at the latest: Main goes forward, the rest goes, and the strip starts a new run (ADR 009).
+  // Grafts at the latest: with Neon as Main, a vary option's 👍 brings its element in, and Pick brings one from another
+  // slot (ADR 009). Confirm then goes to the agent, which merges them and drops the rest.
   await showSlot(window, "wheel");
   await mark(window, "approve", "neon");
   await window.waitForSelector('[data-main-group] [data-variant="neon"]');
+  check("with Neon as Main, a vary option's 👍 offers to bring its spin button into Main", await window.getAttribute('[data-approve="spin-button-b"]', "data-approve-kind"), "graft");
+  await mark(window, "approve", "spin-button-b");
+  await window.waitForSelector("[data-graft]");
+  await window.click("[data-graft-toggle]");
+  check("Pick into Main starts a pick, with its own hint", (await window.textContent("[data-pick-hint]")).trim(), "Click to pick");
+  await canvas.click(inBlock("result/card", "headline"));
+  await window.waitForSelector("[data-graft-composer]");
+  check("the pick popover lands in the slot open in the sidebar unless Rob chooses another", await window.getAttribute("[data-graft-into]", "data-graft-into"), "wheel");
+  check("nothing in the pick popover runs past its box", await outsideBox(window, "[data-graft-composer]"), []);
+  await window.fill("[data-graft-instruction]", "above the logo");
+  await window.click("[data-graft-add]");
+  await window.waitForSelector("[data-graft-composer]", { state: "detached" });
+  check(
+    "both elements wait for Main, stored so the agent reads them, and the sidebar lists them under it",
+    [context(session).marks.grafts.map((g) => [g.from.blockId, g.from.part, g.into, g.instruction]), await window.$$eval("[data-graft]", (els) => els.length)],
+    [
+      [
+        ["wheel/spin-button-b", "spin-button", "wheel", null],
+        ["result/card", "headline", "wheel", "above the logo"],
+      ],
+      2,
+    ],
+  );
+  await shots2(window, shots, "13-grafts");
+  const sentBeforeMerge = t3.sent().length;
+  await window.click("[data-confirm-toggle]");
+  await window.waitForSelector("[data-confirm-menu]");
+  check(
+    "the confirm popover counts what goes, lists both grafts, and says it goes to the agent",
+    [await window.getAttribute("[data-confirm-dropped]", "data-confirm-dropped"), await window.$$eval("[data-confirm-graft]", (els) => els.length), (await window.textContent("[data-confirm-hint]")).trim()],
+    ["5", 2, "Goes to the agent"],
+  );
+  await shots2(window, shots, "14-confirm-grafts");
+  await window.click("[data-confirm-send]");
+  await window.waitForSelector('[data-request-phase="queued"]', { timeout: PHASE_MS });
+  check(
+    "Confirm sends one confirm request to the agent, and the marks hold while it is open",
+    [t3.sent().length - sentBeforeMerge, t3.sent().at(-1)?.message.split("\n")[0].includes(" · scope: confirm"), await window.getAttribute('[data-approve="neon"]', "aria-disabled")],
+    [1, true, "true"],
+  );
+  t3.startRun(DEMO_THREAD);
+  const merged = agentCommit(session, (copy) => {
+    const wheel = join(copy, "slots", "wheel");
+    for (const gone of ["reel", "terminal", "spin-button-a", "spin-button-b", "spin-button-c"]) rmSync(join(wheel, gone), { recursive: true });
+    replaceIn(join(wheel, "neon", "block.tsx"), '<div className="logo" data-part="logo">', '<p className="headline" data-part="headline">Up next</p>\n        <div className="logo" data-part="logo">');
+  }, ["--note", "Merged the bolder spin button and the headline into Neon"]);
+  t3.endRun(DEMO_THREAD, "completed");
+  check("the agent's merge passes the confirm's checks", merged.warnings, []);
+  await window.waitForSelector('[data-canvas-iteration="4"]', { timeout: PHASE_MS });
+  check("iteration 4 holds only Main in the wheel, the unmarked result as it was, and the marks are spent", [[...context(session).latest.blocks].sort(), context(session).marks], [["result/card", "result/receipt", "wheel/neon"], { mains: {}, grafts: [], trashed: [] }]);
+
+  // A confirm with nothing to graft needs no agent: the app narrows the iteration itself.
+  await showSlot(window, "result");
+  await mark(window, "trash", "receipt");
   const sentBeforeConfirm = t3.sent().length;
   await window.click("[data-confirm-toggle]");
   await window.waitForSelector("[data-confirm-menu]");
-  check("the confirm popover counts what goes, and applies at once", [await window.getAttribute("[data-confirm-dropped]", "data-confirm-dropped"), (await window.textContent("[data-confirm-hint]")).trim()], ["5", "Applies at once"]);
+  check("the confirm popover counts what goes, and applies at once", [await window.getAttribute("[data-confirm-dropped]", "data-confirm-dropped"), (await window.textContent("[data-confirm-hint]")).trim()], ["1", "Applies at once"]);
   await window.click("[data-confirm-send]");
-  await window.waitForSelector('[data-canvas-iteration="4"]', { timeout: PHASE_MS });
-  check("Confirm writes iteration 4 with only Main in the wheel, the unmarked result as it was, and no agent turn", [[...context(session).latest.blocks].sort(), t3.sent().length - sentBeforeConfirm], [["result/card", "result/receipt", "wheel/neon"], 0]);
+  await window.waitForSelector('[data-canvas-iteration="5"]', { timeout: PHASE_MS });
+  check("Confirm writes iteration 5 without the trashed receipt, and no agent turn", [[...context(session).latest.blocks].sort(), t3.sent().length - sentBeforeConfirm], [["result/card", "wheel/neon"], 0]);
   check("the marks are spent", context(session).marks, { mains: {}, grafts: [], trashed: [] });
-  check("the strip opens a new run on the confirm, named for it", [await window.getAttribute("[data-strip-run]", "data-strip-run"), (await strip(window)).map((e) => [e.n, e.origin])], ["Confirm 1", [[4, "Confirmed · 5 options dropped"]]]);
+  check("the strip opens a new run on the latest confirm, named for it, saying what it kept and dropped", [await window.getAttribute("[data-strip-run]", "data-strip-run"), (await strip(window)).map((e) => [e.n, e.origin])], ["Confirm 2", [[5, "Kept Assignment card · 1 option dropped"]]]);
   await window.click("[data-strip-run]");
   await window.waitForSelector("[data-run-option]");
-  check("the run picker lists the runs newest first", await window.$$eval("[data-run-option]", (els) => els.map((e) => e.dataset.runOption)), ["Confirm 1", "Start"]);
+  check("the run picker lists the runs newest first", await window.$$eval("[data-run-option]", (els) => els.map((e) => e.dataset.runOption)), ["Confirm 2", "Confirm 1", "Start"]);
   await shot(window, shots, "11-runs");
   await window.keyboard.press("Escape");
   await window.waitForSelector("[data-run-option]", { state: "hidden" });
 
+  // Add slot asks the agent for a new slot, as a request like any other.
+  await window.click("[data-slot-picker]");
+  await window.click("[data-add-slot]");
+  await window.waitForSelector("[data-add-slot-dialog]");
+  await window.fill("[data-add-slot-prompt]", "A settings sheet for who is on the rota");
+  await shots2(window, shots, "15-add-slot");
+  await window.click("[data-add-slot-send]");
+  await window.waitForSelector('[data-request-phase="queued"]', { timeout: PHASE_MS });
+  check("Add slot sends the agent a request scoped to a new slot", t3.sent().at(-1)?.message.split("\n")[0].includes(" · scope: add_slot"), true);
+  await window.click('[data-request-action="withdraw"]');
+  await window.waitForSelector('[data-request-phase="withdrawn"]', { timeout: PHASE_MS });
+
   // The thread lives in the top bar, with a fresh thread for a clean context.
   await window.click("[data-thread-chip]");
   await window.waitForSelector("[data-thread-menu]");
-  await shot(window, shots, "12-thread-menu");
+  await shots2(window, shots, "12-thread-menu");
   await window.click("[data-refresh-thread]");
   await window.waitForSelector("[data-thread-menu]", { state: "detached" });
   const fresh = t3.started();
@@ -851,7 +927,7 @@ try {
       const rest = await stripRest(window);
       return [rest.inView, rest.cut, rest.shown];
     }),
-    [["iteration 4"], [], true],
+    [["iteration 5"], [], true],
   );
   await shot(window, shots, "10-strip-restart-1100");
 } finally {

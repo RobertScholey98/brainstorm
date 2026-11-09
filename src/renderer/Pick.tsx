@@ -61,6 +61,7 @@ export function PickComposer({
   rect,
   block,
   slots,
+  current,
   bounds,
   onAdd,
   onCancel,
@@ -70,13 +71,15 @@ export function PickComposer({
   rect: CanvasRect;
   block: BlockView | null;
   slots: readonly SlotView[];
+  /** The slot Rob is working on, where a pick goes unless he chooses another. */
+  current: SlotId | null;
   bounds: { width: number; height: number };
   onAdd: (into: SlotId, instruction: string | null) => Promise<void>;
   onCancel: () => void;
 }) {
   const { ref, left, top } = useComposerPlace(at, rect, bounds, POPOVER_WIDTH.md);
-  // Most picks go into the slot they came from; another slot is allowed, and less common.
-  const [into, setInto] = useState<SlotId>(block?.slot ?? slots[0]!.id);
+  // A pick goes into the slot Rob is working on (ADR 009), else the one it came from; another slot is a choice away.
+  const [into, setInto] = useState<SlotId>(current ?? block?.slot ?? slots[0]!.id);
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);
   const field = useRef<HTMLInputElement>(null);

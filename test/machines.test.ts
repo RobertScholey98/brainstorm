@@ -5,6 +5,7 @@ import {
   foldFeedback,
   formatRefreshMessage,
   formatRequestMessage,
+  keptMains,
   observeRequest,
   originText,
   parseRequestMarker,
@@ -13,6 +14,7 @@ import {
   scopeText,
 } from "../src/core/machines";
 import type {
+  ConfirmScope,
   Attachment,
   BlockId,
   FeedbackEvent,
@@ -353,6 +355,26 @@ describe("branches, confirms and fresh threads", () => {
     expect(scopeText({ kind: "add_slot" })).toBe("add_slot");
   });
 
+  test("a confirm's history line leads with the Main it kept, by title, and counts several", () => {
+    const wheel = { slot: "wheel" as SlotId, variant: "neon" as VariantKey };
+    const result = { slot: "result" as SlotId, variant: "sheet" as VariantKey };
+    const drops = ["wheel/calm", "wheel/reel", "wheel/flat", "wheel/dial", "wheel/slot"] as BlockId[];
+    const confirm: ConfirmScope = { kind: "confirm", mains: [wheel, result], grafts: [], drop: drops };
+    expect(keptMains(confirm), "a slot that kept its only variant isn't news").toEqual(["wheel/neon"]);
+    const origin = (scope: ConfirmScope, kept: string[]) => originText({ kind: "request", n: 1 as RequestN, body: { scope, freetext: null }, changed: [], kept });
+    expect(origin(confirm, ["Neon wheel"])).toBe("Kept Neon wheel · 5 options dropped");
+    const both = { ...confirm, drop: [...drops, "result/plain" as BlockId] };
+    expect(keptMains(both)).toEqual(["wheel/neon", "result/sheet"]);
+    expect(origin(both, ["Neon wheel", "Result sheet"])).toBe("Kept 2 Mains · 6 options dropped");
+    const graft: ConfirmScope = { ...confirm, drop: [], grafts: [{ from: { blockId: "wheel/calm" as BlockId, part: "spin-button" as PartName }, into: "wheel" as SlotId, instruction: null }] };
+    expect(keptMains(graft)).toEqual(["wheel/neon"]);
+    expect(origin(graft, ["Neon wheel"])).toBe("Kept Neon wheel · 1 element brought in");
+    expect(origin({ ...confirm, mains: [] }, []), "trashes in a slot with no Main keep no Main").toBe("Confirmed · 5 options dropped");
+    expect(phaseMessage({ phase: "fulfilled", iteration: 4 as IterationN, actions: [] }, { title: "Chore wheel", changed: [], kept: ["Neon wheel"], scope: confirm })).toBe(
+      "Iteration 4 · Kept Neon wheel · 5 options dropped",
+    );
+  });
+
   test("a fresh thread's first message has the new agent attach and read the brainstorm, with no request to answer", () => {
     const message = formatRefreshMessage(session, "Chore wheel", null);
     expect(message).toBe(
@@ -383,16 +405,16 @@ describe("vary and history text", () => {
     expect(originText({ kind: "fork", parent: "Chore wheel", from: 2 as IterationN })).toBe("Branched from iteration 2");
     expect(originText({ kind: "agent", note: null })).toBe("The agent's own commit");
     expect(originText({ kind: "agent", note: "tidied" })).toBe("tidied");
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: null }, changed: ["Neon wheel", "Slot reel", "Assignment card"] })).toBe(
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: null }, changed: ["Neon wheel", "Slot reel", "Assignment card"], kept: [] })).toBe(
       "Changed Neon wheel, Slot reel and 1 more",
     );
     expect(
-      originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null }, changed: ["Neon wheel"] }),
+      originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null }, changed: ["Neon wheel"], kept: [] }),
     ).toBe("Changed Neon wheel");
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null }, changed: [] })).toBe(
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null }, changed: [], kept: [] })).toBe(
       "No blocks changed",
     );
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: "calmer" }, changed: [] })).toBe("calmer");
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: vary, freetext: "bouncier" }, changed: [] })).toBe("Vary Spin button ×2 · bouncier");
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: "calmer" }, changed: [], kept: [] })).toBe("calmer");
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: vary, freetext: "bouncier" }, changed: [], kept: [] })).toBe("Vary Spin button ×2 · bouncier");
   });
 });

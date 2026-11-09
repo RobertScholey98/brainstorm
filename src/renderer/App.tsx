@@ -49,7 +49,7 @@ import { Filmstrip, FilmstripSkeleton, PastBar, type TrailPoint } from "./Histor
 import { AddSlotDialog } from "./AddSlot";
 import { ConfirmButton } from "./Confirm";
 import { PickComposer, PickSection } from "./Pick";
-import { approval, mainOf, trashRefusal, withApproval, withGraft, withTrash } from "../core/main";
+import { approval, showingVariant, trashRefusal, withApproval, withPick, withTrash } from "../core/main";
 import { HeldBar } from "./HeldBar";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
@@ -536,11 +536,12 @@ function SessionWorkspace({
   );
   // While a past iteration loads, the canvas keeps what it showed, so its frame isn't torn down and built again.
   const shown = useRef<IterationView | null>(null);
-  // The past is read-only, so what shows there is the stored iteration with Rob's picks laid over its slots.
+  // The past is read-only, so what shows there is the stored iteration with Rob's picks and marks laid over its slots: a
+  // variant he trashed there leaves the canvas as it does at the latest.
   const iteration = useMemo<IterationView | null>(() => {
     if (past === null) return latest;
     if (past.iteration === null) return shown.current;
-    return { ...past.iteration, slots: past.iteration.slots.map((s) => ({ ...s, active: past.picks[s.id] ?? s.active })) };
+    return { ...past.iteration, slots: past.iteration.slots.map((s) => ({ ...s, active: showingVariant(s, past.marks, past.picks[s.id] ?? s.active) })) };
   }, [past, latest]);
   useEffect(() => {
     shown.current = iteration;
@@ -706,9 +707,13 @@ function SessionWorkspace({
   };
   // With the canvas away in a clean preview window, nothing can take a pick, so none starts: the canvas region says why
   // and offers the way on, and the bar and Pin comment stay as they were.
+  // The slot Rob was working on when he started a pick: the click that picks selects its block, which moves the
+  // sidebar to that block's slot, and a pick into Main goes where he was working (ADR 009).
+  const pickInto = useRef<SlotId | null>(null);
   const togglePick = (kind: PickKind) => {
     if (preview.open && !preview.prefs.here && preview.prefs.look === "clean") return setStuckPick((s) => (s === kind ? null : kind));
     setStuckPick(null);
+    pickInto.current = slot?.id ?? null;
     setInteraction((i) => (i.kind === "picking" && i.for === kind ? { kind: "view" } : { kind: "picking", for: kind }));
   };
   const unrendered = selectedBlock !== null && blockErrors.has(selectedBlock.hash) ? "The block didn't render, so there's nothing to pick" : null;
@@ -760,8 +765,13 @@ function SessionWorkspace({
     if (past === null) return (await send({ kind: "add_graft", from, into, instruction })) !== null;
     const s = shownSlots.find((x) => x.id === into);
     if (s === undefined) return false;
-    // A pick into a slot with no Main lands in what shows there, which becomes its Main, as at the latest.
-    markLocally((m) => withGraft(mainOf(s, m) === null ? { ...m, mains: { ...m.mains, [s.id]: s.active } } : m, { from, into, instruction }));
+    // The service's own rule: a slot with no Main takes what shows there as Main, and Main's own elements are refused.
+    const next = withPick(past.marks, s, from, instruction, s.active);
+    if ("refused" in next) {
+      showNotice({ title: failedTitle({ kind: "add_graft", from, into, instruction }, blocks), detail: next.refused });
+      return false;
+    }
+    markLocally(() => next, next.mains[s.id] === s.active ? undefined : { [s.id]: next.mains[s.id]! });
     return true;
   };
   const confirm = async (instruction: string | null): Promise<boolean> => {
@@ -904,7 +914,6 @@ function SessionWorkspace({
           iteration={iteration}
           past={readOnly}
           selected={selectedBlock?.id ?? null}
-          blockErrors={blockErrors}
           send={send}
           exportHtml={exportHtml}
           panel={{ open: !inspector.rail, onToggle: () => inspector.onRail(!inspector.rail) }}
@@ -1024,9 +1033,14 @@ function SessionWorkspace({
             rect={interaction.rect}
             block={blocks.find((b) => b.id === interaction.pin.blockId) ?? null}
             slots={slots}
+            current={pickInto.current}
             bounds={{ width: canvasArea.current?.clientWidth ?? 0, height: canvasArea.current?.clientHeight ?? 0 }}
             onAdd={async (into, instruction) => {
-              if (await addGraft(interaction.pin, into, instruction)) setInteraction({ kind: "view" });
+              // The pick selected the picked block, which moved the sidebar to its slot; it goes back to the Main that
+              // took it, where the graft now waits.
+              if (!(await addGraft(interaction.pin, into, instruction))) return;
+              setSelectedSlot(into);
+              setInteraction({ kind: "view" });
             }}
             onCancel={() => setInteraction({ kind: "view" })}
           />

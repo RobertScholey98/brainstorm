@@ -272,32 +272,33 @@ try {
     [],
   );
   check(
-    "at 1440 with a short title, the header counts how long a running request has been open, as the sidebar does, an ended one counts nothing, and asking, the longest status beside its actions, gives its time up first",
+    "at 1440 with a short title, the header counts how long a running request has been open, as the sidebar does, and an ended one counts nothing",
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, /^\d+[smh]/.test(results.get(`light 1440 short ${p}`)?.elapsed ?? "")])),
-    Object.fromEntries(Object.keys(PHASES).map((p) => [p, ["sending", "queued", "working", "previous_thread"].includes(p)])),
+    Object.fromEntries(Object.keys(PHASES).map((p) => [p, ["sending", "queued", "working", "asking", "previous_thread"].includes(p)])),
   );
   check(
-    "at 1440 a short title keeps every label until a recovery's three actions fold the thread chip to its dot, and in previous thread the status folds to \"Previous thread\" and Export gives way too, in ADR 003's order, and reads whole in every phase; beside the working and asking statuses only a mark goes",
+    "at 1440 a short title keeps every label while sending, withdrawn or idle; with a request open or fulfilled the thread chip folds to its dot first, in previous thread the status folds to \"Previous thread\" and Export gives way too, in ADR 003's order, and the title reads whole in every phase",
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, [gaveWay(`light 1440 short ${p}`)?.join(), results.get(`light 1440 short ${p}`)?.titleWhole]])),
-    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [{ working: "glyph", asking: "elapsed", run_failed: "thread", no_change: "thread", send_failed: "thread", previous_thread: "glyph,status,thread,export", thread_lost: "glyph" }[p] ?? "", true]])),
+    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [{ queued: "thread", working: "thread", asking: "thread", run_failed: "thread", no_change: "thread", send_failed: "thread", previous_thread: "glyph,thread,status,export", thread_lost: "glyph", fulfilled: "thread" }[p] ?? "", true]])),
   );
   check(
     "at 1440 in previous thread, the room left of Resend is short of Export's label: putting it back cuts \"Chore roulette\" by 20 px or more",
     results.get("light 1440 short previous_thread")?.shortBy >= 20,
     true,
   );
-  check("at 1100 with a short title and a request queued, the marks go, the status drops \"in T3\", the thread chip folds to its dot and Export gives way, so Withdraw and Open thread keep their names and the title reads whole", [gaveWay("light 1100 short queued"), results.get("light 1100 short queued")?.titleWhole], [["glyph", "elapsed", "status", "thread", "export"], true]);
+  check("at 1100 with a short title and a request queued, the marks go, the thread chip folds to its dot, the status drops \"in T3\" and Export gives way, so Withdraw and Open thread keep their names and the title reads whole", [gaveWay("light 1100 short queued"), results.get("light 1100 short queued")?.titleWhole], [["glyph", "elapsed", "thread", "status", "export"], true]);
   check(
     "at 1100 a long title with a send failure keeps 160 px or more, and Retry, the recovery, is the last label to give way",
     [gaveWay("light 1100 long send_failed"), results.get("light 1100 long send_failed")?.titleShown >= TITLE_FLOOR],
     [["thread", "export", "open_thread", "withdraw", "retry"], true],
   );
   check(
-    "at 1440 a branch's title reads whole while nothing fills the bar or beside a recovery, its primary's crumb giving way first, and keeps 160 px in every phase whose status and actions fill it",
+    "at 1440 a branch's title reads whole while idle or beside a recovery, its primary's crumb giving way first, and keeps 160 px in every phase whose status and actions fill it",
     Object.keys(PHASES)
       .filter((p) => !results.get(`light 1440 branch ${p}`)?.titleWhole)
       .map((p) => [p, results.get(`light 1440 branch ${p}`)?.titleShown >= TITLE_FLOOR]),
     [
+      ["sending", true],
       ["queued", true],
       ["working", true],
       ["asking", true],

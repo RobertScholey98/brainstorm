@@ -137,7 +137,6 @@ export function SessionBar({
   iteration,
   past,
   selected,
-  blockErrors: _blockErrors,
   send,
   exportHtml,
   panel,
@@ -153,7 +152,6 @@ export function SessionBar({
   /** The past iteration on the canvas, or null at the latest. */
   past: IterationN | null;
   selected: BlockId | null;
-  blockErrors: ReadonlyMap<ContentHash, string>;
   send: (action: RobAction) => Promise<SessionView | null>;
   exportHtml: () => Promise<ExportResult | null>;
   panel: PanelToggle;
@@ -267,7 +265,8 @@ function ThreadChip({ view, send }: { view: SessionView; send: (action: RobActio
   const phase = openPhase(view);
   const state = lost ? "lost" : (phase ?? "attached");
   const busy = phase !== null || (!view.regenerate.ok && view.regenerate.reason === "branch_busy");
-  const blocked = phase !== null ? "A request is open. Let it finish or withdraw it first." : busy ? "Another branch's request is open on this thread" : null;
+  // A lost thread is the one case a fresh thread may take an open request with it, so then nothing blocks it.
+  const blocked = lost ? null : phase !== null ? "A request is open. Let it finish or withdraw it first." : busy ? "Another branch's request is open on this thread" : null;
   const refresh = async () => {
     setStarting(true);
     const done = await send({ kind: "refresh_thread" });
@@ -293,10 +292,12 @@ function ThreadChip({ view, send }: { view: SessionView; send: (action: RobActio
     );
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint label={lost ? "This brainstorm's thread is gone" : (view.thread?.title ?? "The brainstorm's T3 thread")} side="right">
+      <Hint label={lost ? "This brainstorm's thread is gone" : `${view.thread?.title ?? "This brainstorm's thread"}, in T3`} side="right">
         <PopoverTrigger render={<Button variant="ghost" className={COMPACT} data-collapse={COLLAPSE.thread} data-thread-chip data-thread={state} />}>
           <ThreadDot lost={lost} phase={phase} />
-          <span className={cn(COMPACT_LABEL, lost ? "text-fg" : "text-fg-muted")}>{lost ? "Thread lost" : "Thread"}</span>
+          <Truncate className={cn(COMPACT_LABEL, "max-w-menu", lost ? "text-fg" : "text-fg-muted")} data-thread-title>
+            {lost ? "Thread lost" : (view.thread?.title ?? "Thread")}
+          </Truncate>
         </PopoverTrigger>
       </Hint>
       <PopoverContent align="start" data-thread-menu>

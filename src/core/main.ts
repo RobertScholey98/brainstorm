@@ -58,6 +58,12 @@ export function mainOf(slot: SlotShape, marks: Marks): VariantKey | null {
   return shown.length === 1 ? shown[0]! : null;
 }
 
+/** The variant a slot shows: the one Rob chose while it still shows, else Main, else the first one left. */
+export function showingVariant(slot: SlotShape, marks: Marks, chosen: VariantKey | null): VariantKey {
+  const shown = shownVariants(slot, marks);
+  return chosen !== null && shown.includes(chosen) ? chosen : (mainOf(slot, marks) ?? shown[0]!);
+}
+
 /** What a 👍 on `block` does. The window labels the button with it, and the service applies it. */
 export type Approval =
   | { readonly kind: "main" }

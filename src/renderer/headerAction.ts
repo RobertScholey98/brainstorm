@@ -4,12 +4,15 @@ import type { RequestPhaseAction } from "../core/types";
 
 /**
  * The order the header gives up its words when the breadcrumb runs short, first to last: Regenerate drops its glyph,
- * the request status drops its time, then falls to its short name, then the thread chip folds to its dot, then Export,
- * then the phase actions (see `actionRank`). Each step costs the least where Rob is looking: the chip's word repeats
- * what its dot and the status say, Export matters least while a request is open, and the first phase action is its
- * recovery.
+ * the request status drops its time, the thread chip folds its title to its dot, the status falls to its short name,
+ * then Export, then the phase actions (see `actionRank`). Each step costs the least where Rob is looking: the thread's
+ * name is in its hint and its menu, the status says what the thread is doing, Export matters least while a request is
+ * open, and the first phase action is its recovery.
  */
-export const COLLAPSE = { glyph: 0, elapsed: 1, status: 2, thread: 3, export: 4, action: 10 } as const;
+export const COLLAPSE = { glyph: 0, elapsed: 1, thread: 2, status: 3, export: 4, action: 10 } as const;
+
+/** The first rank that is a label; the ones under it are marks, which come back once a later label frees room. */
+const FIRST_LABEL = COLLAPSE.thread;
 
 /**
  * The order the phase actions give way. Open thread goes first, since its glyph reads alone where Withdraw's would read
@@ -66,7 +69,7 @@ function useFit(ref: RefObject<HTMLElement | null>, fits: (row: HTMLElement) => 
 }
 
 /** The header keeps its breadcrumb's floors, giving up its labels in `COLLAPSE` order. */
-export const useHeaderFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, crumbFits, "[data-header-actions], [data-header-thread], [data-header-status], [data-session-title]", COLLAPSE.status);
+export const useHeaderFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, crumbFits, "[data-header-actions], [data-header-thread], [data-header-status], [data-session-title]", FIRST_LABEL);
 
 /** A list row's title outranks its status: what the row says after the title gives way before the title cuts. */
 const rowFits = (row: HTMLElement): boolean => {

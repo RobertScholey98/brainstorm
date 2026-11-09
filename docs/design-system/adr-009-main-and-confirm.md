@@ -91,14 +91,14 @@ working per branch without change.
 Top to bottom:
 
 - "All brainstorms", as before.
-- **The slot picker**, where the thread was. A dropdown of the slots, each with its variant count, and "Add slot…".
+- **The slot picker**, where the thread was. A dropdown of the slots, each with its count of variants not trashed, and "Add slot…".
   Add slot opens a dialog with a prompt and sends a request with scope `{ kind: "add_slot" }`; a commit that answers
   it warns `out_of_scope` when it changes an existing block, and `not_addressed` when no slot was added. The picker and
   the canvas bar's slot tabs show the same slot.
+- On a branch that isn't primary, its line with Make primary, under the picker, so it reads before the slot it qualifies.
 - **Main** for the picked slot: its variant, then its grafts, each removable.
 - **Options**: the slot's other variants, each with 👍 and 🗑 at the right, shown on hover and focus and always on the
   selected row. Then the trashed fold.
-- On a branch that isn't primary, its line with Make primary.
 - **Confirm**, above Settings at the foot. It is off with a hint while there is nothing to confirm or a request is
   open.
 

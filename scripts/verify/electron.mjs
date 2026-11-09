@@ -119,6 +119,8 @@ export const outsideBox = (window, selector) =>
       const b = box.getBoundingClientRect();
       return [...box.querySelectorAll("*")]
         .filter((el) => el.getClientRects().length > 0)
+        // A form control kept only for its value (a select's native input) is clipped away, so it shows nowhere.
+        .filter((el) => getComputedStyle(el).clipPath !== "inset(50%)")
         .filter((el) => {
           const r = el.getBoundingClientRect();
           return r.left < b.left - 0.5 || r.right > b.right + 0.5 || r.top < b.top - 0.5 || r.bottom > b.bottom + 0.5;

@@ -384,7 +384,7 @@ export function SessionPanel({
         </div>
       ) : (
         <>
-          <SlotPicker slots={slots} slot={slot} onSlot={onSlot} onAddSlot={onAddSlot} canAdd={past === null} />
+          <SlotPicker slots={slots} slot={slot} marks={marks} onSlot={onSlot} onAddSlot={onAddSlot} canAdd={past === null} />
           {view.session.id !== view.tree.primary && <BranchLine view={view} />}
           <SlotMarks
             key={slot.id}
@@ -408,12 +408,15 @@ const ADD_SLOT = "__add_slot";
 function SlotPicker({
   slots,
   slot,
+  marks,
   onSlot,
   onAddSlot,
   canAdd,
 }: {
   slots: readonly SlotView[];
   slot: SlotView;
+  /** A trashed variant has left the list, so the counts leave it out too. */
+  marks: Marks;
   onSlot: (slot: SlotId) => void;
   onAddSlot: () => void;
   canAdd: boolean;
@@ -433,7 +436,7 @@ function SlotPicker({
           <span className="flex min-w-0 flex-1 items-center gap-2">
             <Truncate className="font-medium">{slot.title}</Truncate>
             <Count className="ml-auto" data-slot-count>
-              {slot.variants.length} {slot.variants.length === 1 ? "variant" : "variants"}
+              {shownVariants(slot, marks).length} {shownVariants(slot, marks).length === 1 ? "variant" : "variants"}
             </Count>
           </span>
         </SelectTrigger>
@@ -443,7 +446,7 @@ function SlotPicker({
               <SelectItem key={s.id} value={s.id} data-slot-option={s.id}>
                 <span className="flex min-w-0 flex-1 items-center gap-2">
                   <Truncate>{s.title}</Truncate>
-                  <span className="ml-auto text-xs text-fg-muted tabular-nums">{s.variants.length}</span>
+                  <span className="ml-auto text-xs text-fg-muted tabular-nums">{shownVariants(s, marks).length}</span>
                 </span>
               </SelectItem>
             ))}
@@ -592,10 +595,13 @@ function VariantRow({
 }) {
   const active = variant === slot.active;
   const title = block?.title ?? variant;
+  // The only variant left is Main without a 👍, so its thumb reads pressed and says why there is nothing to undo.
+  const implicit = role === "main" && marks.mains[slot.id] === undefined;
   const verdict = block === undefined ? null : approval(slot, block, marks);
   const trashBlock = trashRefusal(slot, variant, marks);
-  const approveLabel =
-    verdict === null
+  const approveLabel = implicit
+    ? "Main, as the only variant left"
+    : verdict === null
       ? ""
       : verdict.kind === "main"
         ? "Make this Main"
@@ -604,7 +610,7 @@ function VariantRow({
           : verdict.kind === "graft"
             ? `Bring ${partLabel(verdict.from.part!)} into Main`
             : `Take ${partLabel(verdict.graft.from.part!)} back out of Main`;
-  const pressed = verdict?.kind === "unmain" || verdict?.kind === "ungraft";
+  const pressed = implicit || verdict?.kind === "unmain" || verdict?.kind === "ungraft";
   const blocked = marking.blocked;
   return (
     <SidebarMenuItem data-variant-row={variant} data-variant-role={role}>
@@ -649,9 +655,9 @@ function VariantRow({
         {verdict !== null && (
           <RowMark
             label={blocked ?? approveLabel}
-            blocked={blocked !== null}
+            blocked={blocked !== null || implicit}
             pressed={pressed}
-            onClick={() => blocked === null && block !== undefined && marking.onApprove(block)}
+            onClick={() => blocked === null && !implicit && block !== undefined && marking.onApprove(block)}
             data-approve={variant}
             data-approve-kind={verdict.kind}
           >

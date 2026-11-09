@@ -305,7 +305,8 @@ export type NewFork = {
   readonly blocks: readonly IterationBlock[];
   readonly contents: readonly StoredContent[];
   readonly proposed: readonly IterationProposed[];
-  readonly feedback: readonly { readonly pin: Pin; readonly text: string }[];
+  /** Rob's open pins, carried as new feedback; `asked` puts one in request 1, as its scope's rule says. */
+  readonly feedback: readonly { readonly pin: Pin; readonly text: string; readonly asked: boolean }[];
   /** What the branch asks the agent for first, or null when its first iteration is all it needs. */
   readonly request: { readonly body: RequestBody; readonly at: string } | null;
   /** The parent's design system version and theme, which the fork keeps. */
@@ -315,7 +316,8 @@ export type NewFork = {
 
 /**
  * A listing as the store holds it; the service reads an open request's phase from the thread and folds the settle.
- * `woken` is whether anything that brings a settled brainstorm back has happened since `settledAt`.
+ * A brainstorm settles as a whole, so `settledAt` and `unsettledAt` are its root's (ADR 009). `woken` is whether this
+ * branch did anything that brings a settled brainstorm back since then.
  */
 export type StoredListing = Omit<SessionListing, "request" | "settlement"> & {
   /** The session this branch left, or null for a brainstorm's root. */
@@ -524,21 +526,26 @@ export class Store {
   /** `project: null` lists every project's sessions. */
   sessions(project: ProjectId | null): StoredListing[] {
     return this.#all(
-      `SELECT s.id, s.project_id, p.name AS project_name, s.title, s.brief, s.created_at, a.thread_id, a.lost_at,
+      `WITH RECURSIVE up(id, root) AS (
+        SELECT id, id FROM session WHERE id NOT IN (SELECT session_id FROM fork)
+        UNION ALL SELECT f.session_id, up.root FROM fork f JOIN up ON f.parent_id = up.id
+      )
+      SELECT s.id, s.project_id, p.name AS project_name, s.title, s.brief, s.created_at, a.thread_id, a.lost_at,
         (SELECT MAX(n) FROM iteration WHERE session_id = s.id) AS latest_n,
         (SELECT MAX(created_at) FROM iteration WHERE session_id = s.id) AS latest_at,
         (SELECT MAX(created_at) FROM request WHERE session_id = s.id) AS request_at,
         EXISTS (SELECT 1 FROM request WHERE session_id = s.id AND ${OPEN_REQUEST}) AS open_request,
-        s.settled_at, s.unsettled_at,
-        s.settled_at IS NOT NULL AND (
-          EXISTS (SELECT 1 FROM request WHERE session_id = s.id AND created_at > s.settled_at)
+        root.settled_at, root.unsettled_at,
+        root.settled_at IS NOT NULL AND (
+          EXISTS (SELECT 1 FROM request WHERE session_id = s.id AND created_at > root.settled_at)
           OR EXISTS (
-            SELECT 1 FROM iteration i WHERE i.session_id = s.id AND i.created_at > s.settled_at
-              AND NOT EXISTS (SELECT 1 FROM request r WHERE r.session_id = s.id AND r.fulfilled_in = i.n AND r.created_at <= s.settled_at)
+            SELECT 1 FROM iteration i WHERE i.session_id = s.id AND i.created_at > root.settled_at
+              AND NOT EXISTS (SELECT 1 FROM request r WHERE r.session_id = s.id AND r.fulfilled_in = i.n AND r.created_at <= root.settled_at)
           )
         ) AS woken,
         f.parent_id AS fork_parent
       FROM session s JOIN project p ON p.id = s.project_id JOIN attachment a ON a.session_id = s.id AND a.detached_at IS NULL
+        JOIN up ON up.id = s.id JOIN session root ON root.id = up.root
         LEFT JOIN fork f ON f.session_id = s.id
       WHERE s.archived_at IS NULL AND (? IS NULL OR s.project_id = ?)
       ORDER BY s.created_at, s.id`,
@@ -572,7 +579,8 @@ export class Store {
       });
       const ids = input.feedback.map((f) => this.insertFeedback(session.id, { pin: f.pin, text: f.text, createdIn: iteration.n, at: fork.createdAt }));
       if (input.request !== null) {
-        this.insertRequest(session.id, { body: input.request.body, feedbackIds: ids, base: iteration.n, threadId: thread, at: input.request.at });
+        const asked = ids.filter((_, i) => input.feedback[i]?.asked === true);
+        this.insertRequest(session.id, { body: input.request.body, feedbackIds: asked, base: iteration.n, threadId: thread, at: input.request.at });
       }
     });
   }
@@ -646,6 +654,39 @@ export class Store {
     else this.#run("DELETE FROM trashed WHERE session_id = ? AND block_id = ?", session, block);
   }
 
+  /**
+   * Writes what changed from `before` to `after`, both as the rules read them. Rows the rules leave unread, such as a
+   * graft waiting for its slot's Main, are in neither, so they stay as they are.
+   */
+  changeMarks(session: SessionId, before: Marks, after: Marks, at: string): void {
+    this.tx(() => {
+      const slots = new Set([...Object.keys(before.mains), ...Object.keys(after.mains)] as SlotId[]);
+      for (const slot of slots) if (before.mains[slot] !== after.mains[slot]) this.setMain(session, slot, after.mains[slot] ?? null);
+      for (const b of before.trashed) if (!after.trashed.includes(b)) this.setTrashed(session, b, false);
+      for (const b of after.trashed) if (!before.trashed.includes(b)) this.setTrashed(session, b, true);
+      for (const g of before.grafts) if (!after.grafts.some((x) => x.id === g.id)) this.removeGraft(session, g.id);
+      for (const g of after.grafts) if (!before.grafts.some((x) => x.id === g.id)) this.addGraft(session, g, at);
+    });
+  }
+
+  /**
+   * Once an iteration lands, deletes the marks naming a block or slot it doesn't have, so a variant key the agent
+   * reuses later starts unmarked instead of reviving an old trash or Main.
+   */
+  pruneMarks(session: SessionId, blocks: readonly BlockId[], slots: readonly SlotId[]): void {
+    const ids = JSON.stringify(blocks);
+    this.tx(() => {
+      this.#run("DELETE FROM main_choice WHERE session_id = ? AND slot || '/' || variant NOT IN (SELECT value FROM json_each(?))", session, ids);
+      this.#run("DELETE FROM trashed WHERE session_id = ? AND block_id NOT IN (SELECT value FROM json_each(?))", session, ids);
+      this.#run(
+        "DELETE FROM graft WHERE session_id = ? AND (block_id NOT IN (SELECT value FROM json_each(?)) OR into_slot NOT IN (SELECT value FROM json_each(?)))",
+        session,
+        ids,
+        JSON.stringify(slots),
+      );
+    });
+  }
+
   /** A confirm's iteration landed, so the marks it carried are spent. */
   clearMarks(session: SessionId): void {
     this.tx(() => {
@@ -664,6 +705,16 @@ export class Store {
       baked: JSON.parse(str(r.baked_json)) as BakedSetting[],
       createdAt: str(r.created_at),
     };
+  }
+
+  /** Every branch's parent and the iteration it left from, archived branches included, for walking a brainstorm's tree. */
+  forkLinks(): Map<SessionId, { readonly parent: SessionId; readonly from: IterationN }> {
+    return new Map(
+      this.#all("SELECT session_id, parent_id, parent_n FROM fork ORDER BY created_at, session_id").map((r) => [
+        str(r.session_id) as SessionId,
+        { parent: str(r.parent_id) as SessionId, from: num(r.parent_n) as IterationN },
+      ]),
+    );
   }
 
   /** Forks made from `parent` that still exist, oldest first. */

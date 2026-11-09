@@ -501,23 +501,12 @@ export type SendResult = { readonly kind: "sent" } | { readonly kind: "failed"; 
 
 export type StartResult = { readonly kind: "started"; readonly thread: ThreadId } | { readonly kind: "failed"; readonly error: string };
 
-/** A project's threads, newest first. */
-export type ListResult =
-  | { readonly kind: "found"; readonly threads: readonly { readonly threadId: ThreadId; readonly createdAt: string }[] }
-  | { readonly kind: "failed"; readonly error: string };
-
 export interface AgentBridge {
   send(thread: ThreadId, message: string): Promise<SendResult>;
   snapshot(thread: ThreadId, options: { readonly messages: number }): Promise<SnapshotResult>;
   /** Starts a thread in `project` with `message` as its first turn. */
   start(input: { readonly project: ProjectId; readonly title: string; readonly message: string }): Promise<StartResult>;
-  list(project: ProjectId): Promise<ListResult>;
 }
-
-/**
- * A fork is attached to this stand-in until T3 gives it a thread. It can't match THREAD_ID_PATTERN, so no thread can
- * own the fork by accident, and the bridge refuses it before running anything.
- */
 
 export type Observation =
   | { readonly kind: "not_seen" }
@@ -729,7 +718,8 @@ export type Regenerate =
 export type IterationOrigin =
   | { readonly kind: "brief" }
   | { readonly kind: "fork"; readonly parent: string; readonly from: IterationN }
-  | { readonly kind: "request"; readonly n: RequestN; readonly body: RequestBody; readonly changed: readonly string[] }
+  /** `kept` titles a confirm's Mains that it narrowed or grafted into, and is empty for any other request. */
+  | { readonly kind: "request"; readonly n: RequestN; readonly body: RequestBody; readonly changed: readonly string[]; readonly kept: readonly string[] }
   | { readonly kind: "agent"; readonly note: string | null };
 
 /**
@@ -1075,7 +1065,6 @@ export type SessionPreview = {
   readonly system: CanvasSystem | null;
 };
 
-/** A fork's source: an iteration of the parent, and the variant Rob picked per slot there. A slot left out keeps the one it shows. */
 /** A branch from iteration `from`: Rob's marks on that iteration, and optionally what the branch should try. */
 export type ForkInput = {
   readonly from: IterationN;

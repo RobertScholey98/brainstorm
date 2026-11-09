@@ -3,9 +3,12 @@ import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
+import { Brainstorm } from "../src/core/brainstorm";
+import { createChecker } from "../src/core/check";
 import { Store } from "../src/core/store";
 import type { BlockId, ContentHash, IterationN, ProjectId, RequestN, SessionId, ThreadId } from "../src/core/types";
 import { contentHash } from "../src/core/workingCopy";
+import { FakeBridge } from "./fakeBridge";
 
 const session = "s_8f2k3a" as SessionId;
 const t1 = "11111111-1111-1111-1111-111111111111" as ThreadId;
@@ -85,12 +88,13 @@ test("a version 3 store drops variant notes and stores each noted block under th
   expect(columns).not.toContain("about");
 });
 
-test("a version 9 store turns forks into branches: their iterations continue the parent's numbers, on the root's thread", () => {
+test("a version 9 store turns forks into branches: their iterations continue the parent's numbers, on the root's thread", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
   seeded(path).close();
   const v9 = new DatabaseSync(path);
   v9.exec("DROP TABLE main_choice; DROP TABLE graft; DROP TABLE trashed; DROP TABLE primary_branch; PRAGMA user_version = 9;");
   const fork = "s_fork0001";
+  const hash = "c".repeat(64);
   const grand = "s_grand001";
   const addSession = v9.prepare("INSERT INTO session(id, project_id, title, brief, created_at) VALUES (?, 'p1', ?, '', ?)");
   addSession.run(fork, "Darker", at);
@@ -103,9 +107,23 @@ test("a version 9 store turns forks into branches: their iterations continue the
   const link = v9.prepare("INSERT INTO fork(session_id, parent_id, parent_n, baked_json, created_at) VALUES (?, ?, ?, '[]', ?)");
   link.run(fork, session, 2, at);
   link.run(grand, fork, 1, at);
-  v9.prepare(
-    "INSERT INTO request(session_id, n, body_json, feedback_ids_json, base, thread_id, state, created_at) VALUES (?, 1, ?, '[]', 1, ?, 'sent', ?)",
-  ).run(fork, JSON.stringify({ scope: { kind: "all" }, freetext: "darker" }), t2, at);
+  // What moves with a fork's iterations: their blocks and proposed components, its pins and their history, and the
+  // requests they answered. The root's own request stays open on the root's thread.
+  v9.prepare("INSERT INTO block_content(hash, source, css, block_json, controls_json, controls_derived, compiled, parts_json) VALUES (?, 'x', NULL, '{}', NULL, 1, 'x', '[]')").run(hash);
+  v9.prepare("INSERT INTO proposed_content(hash, source, css, json, compiled) VALUES (?, 'x', NULL, '{}', 'x')").run(hash);
+  const block = v9.prepare("INSERT INTO iteration_block(session_id, n, block_id, hash) VALUES (?, ?, 'wheel/neon', ?)");
+  for (const n of [1, 2]) block.run(fork, n, hash);
+  block.run(grand, 1, hash);
+  v9.prepare("INSERT INTO iteration_proposed(session_id, n, name, hash) VALUES (?, 2, 'Dial', ?)").run(fork, hash);
+  v9.prepare("INSERT INTO feedback(session_id, id, block_id, part, text, created_in, created_at) VALUES (?, 1, 'wheel/neon', NULL, 'darker still', 1, ?)").run(fork, at);
+  v9.prepare("INSERT INTO feedback_event(session_id, feedback_id, seq, kind, iteration, at) VALUES (?, 1, 1, 'address', 2, ?)").run(fork, at);
+  const request = v9.prepare(
+    "INSERT INTO request(session_id, n, body_json, feedback_ids_json, base, thread_id, state, fulfilled_in, created_at) VALUES (?, ?, ?, '[]', ?, ?, ?, ?, ?)",
+  );
+  const body = (freetext: string) => JSON.stringify({ scope: { kind: "all" }, freetext });
+  request.run(fork, 1, body("darker"), 1, t2, "fulfilled", 2, at);
+  request.run(fork, 2, body("darker again"), 2, t2, "sent", null, at);
+  request.run(session, 1, body("warmer"), 3, t1, "sent", null, at);
   v9.close();
 
   const store = new Store(path);
@@ -117,10 +135,29 @@ test("a version 9 store turns forks into branches: their iterations continue the
   expect(store.fork(grand as SessionId)?.from).toBe(3);
   expect(store.attachment(fork as SessionId).threadId).toBe(t1);
   expect(store.attachment(grand as SessionId).threadId).toBe(t1);
-  expect(store.openRequest(fork as SessionId)).toMatchObject({
-    base: 3,
-    threadId: t1,
-    state: { state: "send_failed", error: "Brainstorm now keeps every branch on one thread; retry to send it there" },
-  });
+  expect(store.iterationBlocks(fork as SessionId, 3 as IterationN)).toEqual([{ id: "wheel/neon", hash }]);
+  expect(store.iterationBlocks(fork as SessionId, 4 as IterationN)).toEqual([{ id: "wheel/neon", hash }]);
+  expect(store.iterationBlocks(grand as SessionId, 4 as IterationN)).toEqual([{ id: "wheel/neon", hash }]);
+  expect(store.iterationProposed(fork as SessionId, 4 as IterationN)).toEqual([{ name: "Dial", hash }]);
+  expect(store.feedback(fork as SessionId).map((f) => [f.createdIn, f.history])).toEqual([[3, [{ kind: "address", iteration: 4, at }]]]);
+  expect(store.requests(fork as SessionId).map((r) => [r.n, r.base, r.state])).toEqual([
+    [1, 3, { state: "fulfilled", iteration: 4 }],
+    [2, 4, { state: "send_failed", error: "Brainstorm now keeps every branch on one thread; retry to send it there" }],
+  ]);
+  expect(store.openRequest(fork as SessionId)?.threadId).toBe(t1);
+  expect(store.openRequest(session)).toMatchObject({ n: 1, base: 3, threadId: t1, state: { state: "sent" } });
   store.close();
+
+  // The tree now has two open requests on one thread; the fork's waits for the root's.
+  const bridge = new FakeBridge();
+  bridge.add(t1, "p1");
+  const checker = createChecker({ size: 1 });
+  const service = await Brainstorm.open({ dbPath: path, exportsDir: join(path, "..", "exports"), bridge, checker });
+  expect(await service.act(fork as SessionId, { kind: "retry_request" })).toEqual({
+    ok: false,
+    error: { code: "request_open", message: `branch ${session} has request 1 open on this thread; let it finish or withdraw it first`, n: 1 },
+  });
+  expect(bridge.sent).toEqual([]);
+  service.close();
+  await checker.close();
 });

@@ -9,7 +9,6 @@ import {
   parseThreadId,
   THREAD_ID_PATTERN,
   type AgentBridge,
-  type ListResult,
   type SendResult,
   type SnapshotResult,
   type StartResult,
@@ -120,7 +119,6 @@ function runThread(cli: string, args: readonly string[], stdin: string, timeoutM
 }
 
 const startShape = z.object({ threadId: zBranded(z.string(), parseThreadId, "thread id") });
-const listShape = z.array(z.object({ threadId: zBranded(z.string(), parseThreadId, "thread id"), createdAt: z.string() }));
 
 /** T3 project ids seen so far are UUIDs; anything else cmd.exe might misread is refused before it reaches a command line. */
 const PROJECT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -193,15 +191,6 @@ export function createT3Bridge(options: { cli?: string; timeoutMs?: number } = {
       if (run.code !== 0 || run.timedOut) return { kind: "failed", error: describeFailure(run, timeoutMs) };
       const parsed = parseJson(run.stdout, startShape, "start");
       return parsed.ok ? { kind: "started", thread: parsed.value.threadId } : { kind: "failed", error: parsed.error };
-    },
-
-    async list(project): Promise<ListResult> {
-      if (!usable) return { kind: "failed", error: `the t3 CLI path ${JSON.stringify(cli)} contains characters cmd.exe would misread` };
-      if (!PROJECT_PATTERN.test(project)) return { kind: "failed", error: `"${project}" is not a T3 project id` };
-      const run = await runThread(cli, ["list", "--project", project, "--json"], "", timeoutMs);
-      if (run.code !== 0 || run.timedOut) return { kind: "failed", error: describeFailure(run, timeoutMs) };
-      const parsed = parseJson(run.stdout, listShape, "list");
-      return parsed.ok ? { kind: "found", threads: parsed.value } : { kind: "failed", error: parsed.error };
     },
   };
 }

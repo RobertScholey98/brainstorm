@@ -370,12 +370,12 @@ try {
   check("working", await phase("working"), { message: "Agent working", actions: ["open_thread", "withdraw"] });
   check("working shows progress", await window.isVisible("[data-request-phase] [data-progress]"), true);
   check(
-    "the top bar's thread chip says the thread is busy with the pulsing mark home's rows use",
+    "the top bar's thread chip names the thread and says it is busy with the pulsing mark home's rows use",
     await window.$eval('[data-thread-chip][data-thread="working"]', (el) => ({
       text: el.textContent.trim(),
       pulses: el.querySelector(".animate-ping") !== null,
     })),
-    { text: "Thread", pulses: true },
+    { text: "Chore roulette study", pulses: true },
   );
   at.push(await withdrawAt());
   await window.click("[data-back]");
@@ -427,9 +427,11 @@ try {
   check("no change", await phase("no_change"), { message: "The agent replied in T3 without changing the design.", actions: ["retry", "open_thread", "withdraw"] });
   at.push(await withdrawAt());
   check(
-    "Open thread and Withdraw keep one x from queued through working and asking, and once Retry joins them at run failed and no change move only by what the fit takes from the header, never from beside Regenerate",
-    [at.slice(0, 3).map(([x]) => x), at.map(([, fromRegenerate]) => fromRegenerate)],
-    [Array(3).fill(at[0][0]), Array(at.length).fill(at[0][1])],
+    // Their x moves with what the fit takes from the header (the elapsed time and the thread chip come and go), so the
+    // invariant is where they sit beside Regenerate.
+    "Open thread and Withdraw keep their place beside Regenerate from queued through working, asking, run failed and no change",
+    at.map(([, fromRegenerate]) => fromRegenerate),
+    Array(at.length).fill(at[0][1]),
   );
   await window.click('[data-request-action="withdraw"]');
   check("Withdraw closes the request", await phase("withdrawn"), { message: "Request withdrawn", actions: [] });
@@ -475,7 +477,19 @@ try {
   });
   check("the top bar's thread chip reads Thread lost", (await window.textContent("[data-thread-chip]"))?.trim(), "Thread lost");
   check("Regenerate is disabled while the thread is lost", await window.isDisabled("[data-regenerate-toggle]"), true);
+  await window.click("[data-thread-chip]");
+  await window.waitForSelector("[data-thread-menu]");
+  check(
+    "the chip's menu leads with Start a fresh thread, open to press though a request is open, since that request goes with it",
+    await window.$eval("[data-thread-menu]", (menu) => {
+      const fresh = menu.querySelector("[data-refresh-thread]");
+      return [menu.querySelector("button")?.hasAttribute("data-refresh-thread"), fresh?.disabled, menu.querySelector("[data-open-thread]") === null];
+    }),
+    [true, false, true],
+  );
   await shot(window, shots, "8-thread-lost");
+  await window.keyboard.press("Escape");
+  await window.waitForSelector("[data-thread-menu]", { state: "detached" });
   await window.click('[data-request-action="fresh_thread"]');
   await window.waitForSelector('[data-request-phase="queued"]', { timeout: PHASE_MS });
   const fresh = t3.started();

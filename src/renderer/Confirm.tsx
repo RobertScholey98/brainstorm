@@ -129,6 +129,11 @@ function ConfirmForm({
                         {line.dropped === 1 ? "1 option goes" : `${line.dropped} options go`}
                       </span>
                     )}
+                    {line.dropped === 0 && line.grafts.length === 0 && (
+                      <span className="text-xs text-fg-muted" data-confirm-unchanged>
+                        As it is
+                      </span>
+                    )}
                   </dd>
                 </div>
               );

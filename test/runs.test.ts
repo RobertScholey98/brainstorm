@@ -17,6 +17,7 @@ const confirm = (n: number, session = root): HistoryEntry => ({
     n: 1 as RequestN,
     body: { scope: { kind: "confirm", mains: [{ slot: "wheel" as SlotId, variant: "neon" as VariantKey }], grafts: [], drop: ["wheel/flat" as BlockId] }, freetext: null },
     changed: [],
+    kept: [],
   },
 });
 const forked = (n: number, session: SessionId): HistoryEntry => ({
@@ -29,7 +30,7 @@ const regenerate = (n: number): HistoryEntry => ({
   session: root,
   n: n as IterationN,
   createdAt: at,
-  origin: { kind: "request", n: 2 as RequestN, body: { scope: { kind: "all" }, freetext: "warmer" }, changed: [] },
+  origin: { kind: "request", n: 2 as RequestN, body: { scope: { kind: "all" }, freetext: "warmer" }, changed: [], kept: [] },
 });
 
 describe("splitRuns", () => {

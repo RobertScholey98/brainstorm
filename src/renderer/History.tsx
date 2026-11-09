@@ -64,10 +64,11 @@ export function Filmstrip({
   const scroller = useRef<HTMLDivElement>(null);
   const latest = iterations.at(-1);
   const runs = splitRuns(iterations);
-  // The run Rob chose in the dropdown, until the canvas moves; otherwise the run holding what the canvas shows.
+  // The run Rob chose in the dropdown, until the canvas moves or the trail changes under it (another branch, Make
+  // primary); otherwise the run holding what the canvas shows.
   const [chosen, setChosen] = useState<string | null>(null);
   const showingKey = entryKey(showing);
-  useEffect(() => setChosen(null), [showingKey]);
+  useEffect(() => setChosen(null), [showingKey, view.session.id, view.tree.primary]);
   const run = runs.find((r) => r.key === chosen) ?? runOf(runs, showing);
   const entries = run?.entries ?? [];
   const items: StripItem[] = entries.flatMap((entry) => [
@@ -216,7 +217,7 @@ export function Filmstrip({
           {items.map((item, i) => {
             const snap = fit.pages?.includes(i) === true;
             return item.kind === "fork" ? (
-              <Offshoot key={`${item.fork.id}@${entryKey({ session: item.fork.parent, n: item.fork.from })}`} fork={item.fork} snap={snap} onOpen={onOpen} />
+              <Offshoot key={`${item.fork.id}@${entryKey({ session: item.fork.parent, n: item.fork.from })}`} fork={item.fork} first={item.fork.id === view.tree.root.id} snap={snap} onOpen={onOpen} />
             ) : (
               <StillOption
                 key={entryKey(item.entry)}
@@ -466,9 +467,11 @@ function StillOption({
  * more iteration. An ancestor's own continuation past the point this trail left it reads the same way: once another
  * branch is primary, the old primary is one more branch off the trail.
  */
-function Offshoot({ fork, snap, onOpen }: { fork: ForkBranch; snap: boolean; onOpen: (id: SessionId) => void }) {
+function Offshoot({ fork, first, snap, onOpen }: { fork: ForkBranch; first: boolean; snap: boolean; onOpen: (id: SessionId) => void }) {
+  // The brainstorm's first line shares the brainstorm's title, so once another branch is primary it names its place.
+  const name = first ? "The first line" : fork.title;
   return (
-    <Hint label={`Open the branch ${fork.title}`} side="top">
+    <Hint label={`Open ${first ? "the first line" : `the branch ${fork.title}`}`} side="top">
       <button
         type="button"
         onClick={() => onOpen(fork.id)}
@@ -477,7 +480,7 @@ function Offshoot({ fork, snap, onOpen }: { fork: ForkBranch; snap: boolean; onO
         data-history-from={fork.from}
         data-history-continues={fork.id === fork.parent || undefined}
       >
-        <ForkLines first={fork.title} second={`from iteration ${fork.from}`} />
+        <ForkLines first={name} second={`from iteration ${fork.from}`} />
       </button>
     </Hint>
   );
