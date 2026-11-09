@@ -61,6 +61,49 @@ test("one open attachment and one open request per session", () => {
   store.close();
 });
 
+test("a branch joins its tree's thread as it is, lost included, and its request 1 is answered by its first iteration or left open", () => {
+  const store = seeded(join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db"));
+  const lostAt = "2026-11-05T11:00:00.000Z";
+  const empty = { blocks: [], contents: [], proposed: [], proposedContents: [], addresses: [] };
+  store.insertIteration({ session, iteration: { n: 1 as IterationN, threadId: t1, note: null, slots: [], createdAt: at }, ...empty });
+  store.setLost(session, lostAt);
+  const branch = (id: SessionId, answered: boolean) =>
+    store.createBranch(
+      {
+        session: { id, projectId: "p1" as ProjectId, title: "Branch", brief: "", createdAt: at },
+        link: { parent: session, from: 1 as IterationN, baked: [], createdAt: at },
+        iteration: { n: 2 as IterationN, threadId: t1, note: null, slots: [], createdAt: at },
+        blocks: [],
+        contents: [],
+        proposed: [],
+        feedback: [],
+        request: { body: { scope: { kind: "all" }, freetext: null }, at, answered },
+        system: null,
+        theme: [],
+      },
+      store.attachment(session),
+    );
+  const answered = "s_answer01" as SessionId;
+  const asking = "s_asking01" as SessionId;
+  branch(answered, true);
+  branch(asking, false);
+  expect(store.attachment(answered)).toMatchObject({ threadId: t1, lostAt });
+  expect(store.requests(answered).map((r) => [r.n, r.base, r.state])).toEqual([[1, 1, { state: "fulfilled", iteration: 2 }]]);
+  expect(store.requests(asking).map((r) => [r.n, r.base, r.state])).toEqual([[1, 2, { state: "sending" }]]);
+  store.close();
+});
+
+test("a delivery result lands only on a request still sending to that thread", () => {
+  const store = seeded(join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db"));
+  const body = { scope: { kind: "all" as const }, freetext: null };
+  const n = store.insertRequest(session, { body, feedbackIds: [], base: null, threadId: t1, at });
+  expect(store.settleDelivery(session, n, t2, { state: "sent", sentAt: at }), "another thread's send").toBe(false);
+  expect(store.settleDelivery(session, n, t1, { state: "send_failed", error: "timed out" })).toBe(true);
+  expect(store.settleDelivery(session, n, t1, { state: "sent", sentAt: at }), "no longer sending").toBe(false);
+  expect(store.requests(session).map((r) => r.state)).toEqual([{ state: "send_failed", error: "timed out" }]);
+  store.close();
+});
+
 test("a version 3 store drops variant notes and stores each noted block under the hash of its files without the note", () => {
   const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
   seeded(path).close();

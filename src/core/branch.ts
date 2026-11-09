@@ -133,11 +133,11 @@ export class Branches {
   }
 
   /**
-   * Why the branch can't be made now, or null. Its request goes to the thread every branch shares, so the same gate
-   * holds as for any request. A branch that asks the agent nothing passes.
+   * Why the branch can't be made now, or null. Confirm shares Regenerate's gate (ADR 009), so a branch is refused while
+   * a request is open anywhere in the brainstorm or its thread is lost, even one the app answers itself, as a confirm
+   * on the latest iteration is.
    */
-  #gate({ parent, grafting, instruction }: BranchStart): Failure | null {
-    if (!grafting && instruction === null) return null;
+  #gate({ parent }: BranchStart): Failure | null {
     const { store, trees } = this.#deps;
     const busy = trees.openElsewhere(parent.id) ?? store.openRequest(parent.id);
     if (busy !== null) return { code: "request_open", message: `request ${busy.n} is still open on this brainstorm's thread; let it finish or withdraw it first`, n: busy.n };
@@ -206,7 +206,8 @@ export class Branches {
       // The check awaited the worker, so another branch may have opened a request on the thread meanwhile.
       const late = this.#gate(start);
       if (late !== null) return fail(late);
-      // The tree's thread as it is: a branch made while it is lost is lost too, so it never reads as healthy.
+      // The tree's thread as it is. The gate refuses a lost one, but the branch copies whatever it finds, so it never
+      // reads healthier than its tree.
       const shared = store.attachment(parent.id);
       const thread = shared.threadId;
       store.createBranch(

@@ -168,6 +168,8 @@ type Prepared =
       readonly changed: readonly BlockId[];
       readonly removed: readonly BlockId[];
       readonly warnings: readonly Issue[];
+      /** The open request the warnings were read against, which the commit must still answer when it lands. */
+      readonly request: Request | null;
     };
 
 /** The part of a parsed block that depends only on its content, so it can be shared by every block with that hash. */
@@ -534,6 +536,11 @@ export class Brainstorm {
       if (owner !== null) return fail(owner);
       const latest = this.#store.latestIteration(input.session);
       if (latest?.n !== p.latest?.n && latest !== null) return fail(stale(p.draft.manifest.base, latest.n));
+      // Rob may have withdrawn the request, or opened another, meanwhile; the warnings and what the commit lets go of
+      // are the request's, so they must be one request's.
+      const open = this.#store.openRequest(input.session);
+      if (latest !== null && (open?.n ?? null) !== (p.request?.n ?? null)) return fail(staleRequest(input.session, p.request, open, p.draft.manifest.base, latest.n));
+      const scope = p.request?.scope;
       const iteration: StoredIteration = {
         n: ((latest?.n ?? 0) + 1) as IterationN,
         threadId: input.thread,
@@ -543,7 +550,6 @@ export class Brainstorm {
       };
       // A confirm lets go only of what the commit did drop: a variant it kept against the confirm keeps its settings
       // and pins.
-      const scope = this.#store.openRequest(input.session)?.scope;
       this.#land(
         {
           session: input.session,
@@ -618,7 +624,9 @@ export class Brainstorm {
     });
     const adding = addressable.filter((id) => byId.get(id)?.status.state === "open");
 
+    // Read with the latest iteration, before the check awaits the worker; the commit lands only if both still hold.
     const latest = this.#store.latestIteration(session);
+    const request = this.#store.openRequest(session);
     const previous = latest === null ? [] : this.#store.iterationBlocks(session, latest.n);
     const previousHash = new Map(previous.map((b) => [b.id, b.hash]));
     const drafted = new Set<BlockId>(draft.blocks.map((b) => b.id));
@@ -663,10 +671,11 @@ export class Brainstorm {
       schemas: new Map(draft.blocks.map((b) => [b.id, b.props])),
       parts: new Map(draft.blocks.map((b) => [b.id, partsOf(b)])),
     };
-    const request = this.#store.openRequest(session);
     const drawn: Drawn = {
       titles: new Map(draft.blocks.map((b) => [b.id, b.title])),
       titlesBefore: new Map(previous.map((b) => [b.id, this.#load(b).draft.title])),
+      hashes: new Map(draft.blocks.map((b) => [b.id, b.hash])),
+      hashesBefore: previousHash,
       parts: after.parts,
       slotsBefore: new Set((latest?.slots ?? []).map((s) => s.id)),
       newSlots: draft.manifest.slots.filter((s) => !(latest?.slots ?? []).some((x) => x.id === s.id)).length,
@@ -691,6 +700,7 @@ export class Brainstorm {
       changed,
       removed,
       warnings,
+      request,
     });
   }
 
@@ -1518,12 +1528,12 @@ export class Brainstorm {
     const attachment = this.#store.attachment(id);
     const at = this.#now();
     const kept = blocks.filter((b) => !plan.drop.includes(b.id));
+    const n = (latest!.n + 1) as IterationN;
     this.#store.tx(() => {
-      this.#store.insertRequest(id, { body: { scope: plan, freetext: null }, feedbackIds: [], base: latest!.n, threadId: attachment.threadId, at });
       this.#land(
         {
           session: id,
-          iteration: { n: (latest!.n + 1) as IterationN, threadId: attachment.threadId, note: null, slots: latest!.slots, createdAt: at },
+          iteration: { n, threadId: attachment.threadId, note: null, slots: latest!.slots, createdAt: at },
           blocks: kept,
           contents: [],
           proposed: this.#proposedUsedBy(id, latest!.n, kept),
@@ -1532,6 +1542,7 @@ export class Brainstorm {
         },
         { confirmed: latest!, blocks, dropped: plan.drop },
       );
+      this.#store.insertRequest(id, { body: { scope: plan, freetext: null }, feedbackIds: [], base: latest!.n, threadId: attachment.threadId, at, fulfilledIn: n });
     });
     return null;
   }
@@ -1655,33 +1666,34 @@ export class Brainstorm {
     if (!claimed.ok) return claimed.error;
     const { open, thread } = claimed.data;
     this.#emit(id);
+    // The check awaited T3, so the request may have landed, been withdrawn or moved since; then what it found is old news.
     const result = await this.#snapshot(id, thread);
     if (result.kind !== "found") {
       const error = result.kind === "missing" ? "the thread is gone" : `couldn't check whether it already arrived: ${result.error}`;
-      this.#store.setRequestState(id, open.n, { state: "send_failed", error });
+      this.#store.settleDelivery(id, open.n, thread, { state: "send_failed", error });
       return null;
     }
     const seen = observeRequest(id, open.n, result.snapshot).kind;
     if (seen === "queued" || seen === "running") {
-      this.#store.setRequestState(id, open.n, { state: "sent" }, { sentAt: this.#now() });
+      this.#store.settleDelivery(id, open.n, thread, { state: "sent", sentAt: this.#now() });
       return null;
     }
     await this.#send(id, open.n, thread);
     return null;
   }
 
+  /**
+   * Sends request `n`, claimed as `sending` to `thread`, and records how it went. The send awaits T3, and meanwhile a
+   * commit may fulfil the request, Rob withdraw it, or a fresh thread take it over; the store then keeps what happened
+   * and the result is dropped, so a late `sent` never reopens a request or gives a second one the thread.
+   */
   async #send(id: SessionId, n: RequestN, thread: ThreadId): Promise<void> {
     const request = this.#store.openRequest(id);
-    if (request === null || request.n !== n) return;
+    if (request === null || request.n !== n || request.state.state !== "sending" || request.threadId !== thread) return;
     const result = await this.#bridge.send(thread, this.#messageFor(request));
     // The cached snapshot predates the message, so the next view must look again.
     this.#seen.delete(thread);
-    this.#store.setRequestState(
-      id,
-      n,
-      result.kind === "sent" ? { state: "sent" } : { state: "send_failed", error: result.error },
-      result.kind === "sent" ? { sentAt: this.#now() } : {},
-    );
+    this.#store.settleDelivery(id, n, thread, result.kind === "sent" ? { state: "sent", sentAt: this.#now() } : { state: "send_failed", error: result.error });
   }
 
   /** A branch's first request says where it came from, and a resend of it later says so again. */
@@ -1792,11 +1804,12 @@ export class Brainstorm {
     for (const request of this.#store.requestsIn(["sending"])) {
       const result = await this.#snapshot(request.session, request.threadId);
       const arrived = result.kind === "found" && observeRequest(request.session, request.n, result.snapshot).kind !== "not_seen";
-      this.#store.setRequestState(
+      const applied = this.#store.settleDelivery(
         request.session,
         request.n,
+        request.threadId,
         arrived
-          ? { state: "sent" }
+          ? { state: "sent", sentAt: this.#now() }
           : {
               state: "send_failed",
               error:
@@ -1806,9 +1819,8 @@ export class Brainstorm {
                     ? `couldn't check the thread after a restart: ${result.error}`
                     : "Brainstorm stopped before the send finished",
             },
-        arrived ? { sentAt: this.#now() } : {},
       );
-      this.#emit(request.session);
+      if (applied) this.#emit(request.session);
     }
   }
 
@@ -1906,6 +1918,21 @@ function stale(base: IterationN | null, latest: IterationN): Failure {
   };
 }
 
+/**
+ * A commit checked against one open request, which another replaced, or none, before it could land. Requests are
+ * compared by number: a request's body never changes, so only another request changes what the commit answers.
+ */
+function staleRequest(session: SessionId, checked: Request | null, open: Request | null, base: IterationN | null, latest: IterationN): Failure {
+  const was = checked === null ? "no request was open" : `request ${checked.n} was open`;
+  const now = open === null ? "none is" : `request ${open.n} is`;
+  return {
+    code: "stale_working_copy",
+    message: `${was} when this commit was checked, and ${now} now; run brainstorm context ${session} and commit again`,
+    base,
+    latest,
+  };
+}
+
 function droppedOverrides(
   overrides: readonly Override[],
   before: ReadonlyMap<BlockId, PropsSchema>,
@@ -1948,6 +1975,9 @@ type Drawn = {
   readonly titles: ReadonlyMap<BlockId, string>;
   /** The titles in the iteration the commit is based on. */
   readonly titlesBefore: ReadonlyMap<BlockId, string>;
+  /** Each block's content hash, in the commit and in the iteration it is based on. */
+  readonly hashes: ReadonlyMap<BlockId, ContentHash>;
+  readonly hashesBefore: ReadonlyMap<BlockId, ContentHash>;
   readonly parts: ReadonlyMap<BlockId, readonly PartName[]>;
   /** The slots of the iteration the commit is based on. */
   readonly slotsBefore: ReadonlySet<SlotId>;
@@ -2020,8 +2050,8 @@ function besideMain(scope: ConfirmScope, block: BlockId): boolean {
 }
 
 /**
- * A confirm leaves each slot with a Main holding only Main, under the id and title it had, and Main renders every
- * element grafted into it. Every variant it drops is gone.
+ * A confirm leaves each slot with a Main holding only Main, under the id and title it had, and a Main that receives
+ * grafts changes and renders every element grafted into it. Every variant it drops is gone.
  */
 function confirmMismatches(n: RequestN, scope: ConfirmScope, drawn: Drawn): Issue[] {
   const left = [...drawn.titles.keys()]
@@ -2047,17 +2077,29 @@ function confirmMismatches(n: RequestN, scope: ConfirmScope, drawn: Drawn): Issu
       ? []
       : [issue("confirm_mismatch", `${id} is titled "${after}"; request ${n} keeps it as Main titled "${before}"`, { file: blockFile(id, "json") })];
   });
-  const grafts = scope.grafts.flatMap((g) => {
-    const main = scope.mains.find((m) => m.slot === g.into);
-    if (main === undefined || g.from.part === null) return [];
-    const id = blockIdOf(main.slot, main.variant);
+  const grafts = scope.mains.flatMap((m) => {
+    const into = scope.grafts.filter((g) => g.into === m.slot);
+    const id = blockIdOf(m.slot, m.variant);
     // A Main that is gone is named once, above.
-    if (!drawn.titles.has(id)) return [];
-    return (drawn.parts.get(id) ?? []).includes(g.from.part)
-      ? []
-      : [issue("confirm_mismatch", `${id} doesn't render data-part "${g.from.part}", the element request ${n} grafts into it from ${g.from.blockId}`, { file: blockFile(id, "tsx") })];
+    if (into.length === 0 || !drawn.titles.has(id)) return [];
+    // A grafted element can be one Main already renders, as a vary option's is, so only a changed Main shows the agent
+    // merged it. A whole-block graft has no element to look for at all.
+    if (drawn.hashes.get(id) === drawn.hashesBefore.get(id)) {
+      const what = into.map((g) => (g.from.part === null ? `all of ${g.from.blockId}` : `data-part "${g.from.part}" from ${g.from.blockId}`));
+      return [issue("confirm_mismatch", `request ${n} grafts ${listed(what)} into ${id}, and this commit leaves ${id} as it was`, { file: blockFile(id, "tsx") })];
+    }
+    return into.flatMap((g) =>
+      g.from.part === null || (drawn.parts.get(id) ?? []).includes(g.from.part)
+        ? []
+        : [issue("confirm_mismatch", `${id} doesn't render data-part "${g.from.part}", the element request ${n} grafts into it from ${g.from.blockId}`, { file: blockFile(id, "tsx") })],
+    );
   });
   return [...left, ...lost, ...renamed, ...grafts];
+}
+
+/** `a`, `a and b`, `a, b and c`. */
+function listed(items: readonly string[]): string {
+  return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 /** Each variant a vary asked for exists under its key and title, and still renders the element it varies. */
