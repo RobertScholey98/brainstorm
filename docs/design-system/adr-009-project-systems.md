@@ -64,8 +64,8 @@ project_system        project_id -> system_id, set_at
 project               + repo_git, the main checkout's .git
 ```
 
-The migration gives each project that exactly one system came from that system. A project that several came from has
-none until Rob picks. `project` rows are now also made for a system's project on `add`, named after the repo, so the
+The migration gives each project that exactly one system came from that system, so that project's next brainstorm
+builds with it where it was freeform before. A project that several came from has none until Rob picks. `project` rows are now also made for a system's project on `add`, named after the repo, so the
 window can name it; a row made without a path takes the first path a session gives.
 
 ## Alternatives not taken
@@ -102,5 +102,8 @@ window can name it; a row made without a path takes the first path a session giv
 - Round 5 found that a project Brainstorm knows only from a system, added by path from a thread elsewhere, has no folder
   to compare. The repo match also checks each system's own folder. `system add` now says when the agent's project
   keeps the system it had, so a switch the agent assumed shows in its transcript.
+- Round 6 found that the round 5 match could name a project whose repo Brainstorm knows to be another, because it once
+  added a library from this repo. Only a project with no known repo matches by its systems' folders now. The window's
+  route refuses a project Brainstorm doesn't know, which would otherwise show up in every picker.
 - "Unless the project has one already" reads the project as it is now. A project cleared with `project use none`
   takes the next system added from it.

@@ -186,4 +186,28 @@ describe("a project's design system", () => {
       rmSync(repo, { recursive: true, force: true });
     }
   }, 120_000);
+
+  test("doesn't give a library to a project that only added another library from its repo", async () => {
+    const repo = mkdtempSync(join(import.meta.dirname, ".kit-"));
+    execFileSync("git", ["init", "-q", repo]);
+    for (const name of ["forms", "tables"]) {
+      cpSync(join(import.meta.dirname, "kit-lib"), join(repo, name), { recursive: true });
+      const file = join(repo, name, "package.json");
+      writeFileSync(file, readFileSync(file, "utf8").replace("@fixture/kit", `@fixture/${name}`));
+    }
+    try {
+      // proj-a, whose repo Brainstorm knows, adds a library from a repo whose project Brainstorm hasn't met.
+      expect(data(await service.systems.add({ path: join(repo, "forms"), thread: MAIN, projectPath: import.meta.dirname })).system.projectId).toBe("proj-a");
+      // The repo still has no known project, so the next library is the adding project's, not proj-a's.
+      expect(data(await service.systems.add({ path: join(repo, "tables"), thread: SIDE })).system.projectId).toBe("proj-side");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("refuses to set a system for a project Brainstorm doesn't know", () => {
+    const refused = service.systems.setProjectSystem("proj-unknown" as never, "@fixture/kit");
+    expect(refused.ok ? null : refused.error).toEqual({ code: "not_found", entity: "project", message: "Brainstorm doesn't know project proj-unknown" });
+    expect(service.systems.projects().map((p) => p.id)).not.toContain("proj-unknown");
+  });
 });

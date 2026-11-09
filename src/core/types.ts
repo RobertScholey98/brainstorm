@@ -333,7 +333,7 @@ export type Failure =
   | {
       readonly code: "not_found";
       readonly message: string;
-      readonly entity: "session" | "thread" | "iteration" | "block" | "feedback" | "request" | "system" | "theme" | "proposed";
+      readonly entity: "session" | "thread" | "iteration" | "block" | "feedback" | "request" | "system" | "theme" | "proposed" | "project";
     }
   | { readonly code: "validation_failed"; readonly message: string; readonly issues: readonly Issue[] }
   | {

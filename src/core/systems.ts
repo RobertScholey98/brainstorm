@@ -150,6 +150,8 @@ export class Systems {
    * set; brainstorms wait for his confirmation as they do when the agent names it.
    */
   setProjectSystem(project: ProjectId, ref: string | null): Result<ProjectListing> {
+    // The window sets only projects it listed; an agent's project is recorded before it gets here.
+    if (!this.projects().some((p) => p.id === project)) return fail({ code: "not_found", entity: "project", message: `Brainstorm doesn't know project ${project}` });
     let id: SystemId | null = null;
     if (ref !== null) {
       const found = this.find(ref);
@@ -570,6 +572,7 @@ export class Systems {
    */
   async #repoProject(root: string, repo: string | null): Promise<ProjectId | null> {
     if (repo === null) return this.#store.projectsHolding(root)[0] ?? null;
+    const placed = new Set<ProjectId>();
     for (const p of this.#store.projectRepos()) {
       let theirs = p.repoGit;
       // A project stored before repos were: read its folder while it's still there, and keep the answer.
@@ -577,11 +580,14 @@ export class Systems {
         theirs = (await repoAt(p.repoPath))?.git ?? null;
         if (theirs !== null) this.#store.setProjectRepo(p.id, theirs);
       }
-      if (theirs !== null && samePath(theirs, repo)) return p.id;
+      if (theirs === null) continue;
+      if (samePath(theirs, repo)) return p.id;
+      placed.add(p.id);
     }
     // A project known only from a system has no folder; add records this repo for it, so the loop above finds it next.
+    // A project whose repo is known and different only added a library from elsewhere, so its systems don't count.
     for (const s of this.#store.systems()) {
-      if (s.projectId === null || !existsSync(s.source.root)) continue;
+      if (s.projectId === null || placed.has(s.projectId) || !existsSync(s.source.root)) continue;
       const theirs = (await repoAt(s.source.root))?.git ?? null;
       if (theirs !== null && samePath(theirs, repo)) return s.projectId;
     }
