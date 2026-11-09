@@ -35,7 +35,7 @@ import {
   type VariantKey,
 } from "../core/types";
 import { keyEchoesTitle } from "../core/vary";
-import { arrowFocus } from "./Sidebar";
+import { arrowFocus } from "./arrowFocus";
 
 export type MarkHandlers = {
   onApprove: (block: BlockView) => void;
@@ -121,7 +121,7 @@ export function SessionPanel({
         </div>
       ) : (
         <>
-          <SlotPicker slots={slots} slot={slot} marks={marks} onSlot={onSlot} onAddSlot={onAddSlot} canAdd={past === null} />
+          <SlotPicker slots={slots} slot={slot} marks={marks} blocks={byId} onSlot={onSlot} onAddSlot={onAddSlot} canAdd={past === null} />
           {view.session.id !== view.tree.primary && <BranchLine view={view} onOpen={onOpen} onMakePrimary={onMakePrimary} />}
           <SlotMarks
             key={slot.id}
@@ -141,11 +141,25 @@ export function SessionPanel({
 
 const ADD_SLOT = "__add_slot";
 
+/**
+ * What Rob has marked in a slot, for the picker's row: its Main when he chose one or brought elements into it, and how
+ * many he trashed. Null when he hasn't marked it.
+ */
+function markedLine(slot: SlotView, marks: Marks, blocks: ReadonlyMap<string, BlockView>): string | null {
+  const grafts = marks.grafts.filter((g) => g.into === slot.id).length;
+  const trashed = slot.variants.filter((v) => marks.trashed.includes(blockIdOf(slot.id, v))).length;
+  const main = marks.mains[slot.id] !== undefined || grafts > 0 ? mainOf(slot, marks) : null;
+  const brought = grafts === 0 ? "" : ` + ${grafts} ${grafts === 1 ? "element" : "elements"}`;
+  const parts = [...(main === null ? [] : [`Main: ${blocks.get(blockIdOf(slot.id, main))?.title ?? main}${brought}`]), ...(trashed > 0 ? [`${trashed} trashed`] : [])];
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 /** Which slot the panel shows, where the thread used to be. Add slot opens its dialog; adding needs the latest. */
 function SlotPicker({
   slots,
   slot,
   marks,
+  blocks,
   onSlot,
   onAddSlot,
   canAdd,
@@ -154,11 +168,17 @@ function SlotPicker({
   slot: SlotView;
   /** A trashed variant has left the list, so the counts leave it out too. */
   marks: Marks;
+  blocks: ReadonlyMap<string, BlockView>;
   onSlot: (slot: SlotId) => void;
   onAddSlot: () => void;
   canAdd: boolean;
 }) {
   const items = [...slots.map((s) => ({ value: s.id as string, label: s.title })), ...(canAdd ? [{ value: ADD_SLOT, label: "Add slot…" }] : [])];
+  const rows = slots.map((s) => ({ slot: s, count: shownVariants(s, marks).length, marked: markedLine(s, marks, blocks) }));
+  const count = shownVariants(slot, marks).length;
+  // The panel below shows this slot's marks; the trigger notes only that another slot holds some, so a Main made there
+  // isn't out of sight while Rob works here.
+  const elsewhere = rows.filter((r) => r.slot.id !== slot.id && r.marked !== null).map((r) => r.slot.title);
   return (
     <SidebarGroup className="py-1">
       <Select
@@ -173,17 +193,30 @@ function SlotPicker({
           <span className="flex min-w-0 flex-1 items-center gap-2">
             <Truncate className="font-medium">{slot.title}</Truncate>
             <Count className="ml-auto" data-slot-count>
-              {shownVariants(slot, marks).length} {shownVariants(slot, marks).length === 1 ? "variant" : "variants"}
+              {count} {count === 1 ? "variant" : "variants"}
             </Count>
+            {elsewhere.length > 0 && (
+              <span className="flex shrink-0 items-center" data-slot-marks-elsewhere={elsewhere.join(", ")}>
+                <span aria-hidden className="size-1.5 rounded-full bg-accent" />
+                <span className="sr-only">{`, marks in ${elsewhere.join(" and ")}`}</span>
+              </span>
+            )}
           </span>
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            {slots.map((s) => (
+            {rows.map(({ slot: s, count, marked }) => (
               <SelectItem key={s.id} value={s.id} data-slot-option={s.id}>
                 <span className="flex min-w-0 flex-1 items-center gap-2">
-                  <Truncate>{s.title}</Truncate>
-                  <span className="ml-auto text-xs text-fg-muted tabular-nums">{shownVariants(s, marks).length}</span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <Truncate>{s.title}</Truncate>
+                    {marked !== null && (
+                      <Truncate className="text-xs text-fg-muted" data-slot-marks={s.id}>
+                        {marked}
+                      </Truncate>
+                    )}
+                  </span>
+                  <span className="ml-auto text-xs text-fg-muted tabular-nums">{count}</span>
                 </span>
               </SelectItem>
             ))}
@@ -264,6 +297,26 @@ function SlotMarks({
   const grafts = marks.grafts.filter((g) => g.into === slot.id);
   // The variant whose focused 👍 just moved its row, until the row mounts in its other list and takes focus back.
   const refocus = useRef<VariantKey | null>(null);
+  // A focused graft's × that removed it hands focus on once the row is gone: to the next graft's ×, else the one
+  // before, else Main's 👍, so the keyboard isn't dropped to the page.
+  const list = useRef<HTMLDivElement>(null);
+  const afterGraft = useRef<{ removed: StoredGraft["id"]; to: string } | null>(null);
+  useLayoutEffect(() => {
+    const pending = afterGraft.current;
+    if (pending === null || grafts.some((g) => g.id === pending.removed)) return;
+    afterGraft.current = null;
+    const root = list.current;
+    (root?.querySelector<HTMLElement>(pending.to) ?? root?.querySelector<HTMLElement>("[data-main-group] [data-approve]"))?.focus();
+  }, [grafts]);
+  const removeGraft = (g: StoredGraft) => {
+    if (marking.blocked !== null) return;
+    if (document.activeElement?.closest(`[data-graft="${g.id}"]`) != null) {
+      const at = grafts.findIndex((x) => x.id === g.id);
+      const next = grafts[at + 1] ?? grafts[at - 1];
+      afterGraft.current = { removed: g.id, to: next === undefined ? "[data-main-group] [data-approve]" : `[data-remove-graft="${next.id}"]` };
+    }
+    marking.onRemoveGraft(g);
+  };
   const row = (variant: VariantKey, role: "main" | "option") => {
     const block = blocks.get(blockIdOf(slot.id, variant));
     return (
@@ -285,6 +338,7 @@ function SlotMarks({
   // a screen reader meets only radios in it; the grafts and the trashed fold are lists of their own.
   return (
     <div
+      ref={list}
       className="flex flex-col"
       onKeyDown={(e) => {
         const next = arrowFocus(e, "[data-variant]")?.dataset.variant;
@@ -306,7 +360,7 @@ function SlotMarks({
         {grafts.length > 0 && (
           <SidebarMenu aria-label="Going into Main">
             {grafts.map((g) => (
-              <GraftRow key={g.id} graft={g} source={blocks.get(g.from.blockId)} marking={marking} />
+              <GraftRow key={g.id} graft={g} source={blocks.get(g.from.blockId)} blocked={marking.blocked} onRemove={() => removeGraft(g)} />
             ))}
           </SidebarMenu>
         )}
@@ -502,7 +556,7 @@ function RowMark({
 }
 
 /** An element on its way into Main: what it is and where it comes from, with its removal. */
-function GraftRow({ graft, source, marking }: { graft: StoredGraft; source: BlockView | undefined; marking: Marking }) {
+function GraftRow({ graft, source, blocked, onRemove }: { graft: StoredGraft; source: BlockView | undefined; blocked: string | null; onRemove: () => void }) {
   const what = elementName(graft.from, source);
   const from = source?.title ?? graft.from.blockId;
   return (
@@ -523,9 +577,9 @@ function GraftRow({ graft, source, marking }: { graft: StoredGraft; source: Bloc
       <div className="absolute top-1 right-1">
         <RowMark
           label={`Leave ${what} out of Main`}
-          reason={marking.blocked}
-          blocked={marking.blocked !== null}
-          onClick={() => marking.blocked === null && marking.onRemoveGraft(graft)}
+          reason={blocked}
+          blocked={blocked !== null}
+          onClick={onRemove}
           data-remove-graft={String(graft.id)}
         >
           <X aria-hidden />

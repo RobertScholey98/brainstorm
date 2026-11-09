@@ -506,6 +506,35 @@ try {
   check("Confirm is on once there is something to lock in", await window.isDisabled("[data-confirm-toggle]"), false);
   await shots2(window, shots, "5-marks");
   check("the slot picker counts what is left in each slot, the trashed variant out", await window.textContent("[data-slot-count]"), "2 variants");
+  // Marks in another slot stay in sight: the trigger notes them, and the open picker says what each slot holds.
+  await showSlot(window, "result");
+  check(
+    "working in the result, the picker's trigger notes that the wheel holds marks, and names it to a screen reader",
+    await window.$eval("[data-slot-marks-elsewhere]", (el) => [el.dataset.slotMarksElsewhere, el.textContent]),
+    ["The wheel", ", marks in The wheel"],
+  );
+  await window.click("[data-slot-picker]");
+  await window.waitForSelector('[data-slot-marks="wheel"]');
+  check(
+    "the open picker's rows say what each slot holds, whole: the wheel's Main and its trashed option, nothing under the unmarked result",
+    await settled(() =>
+      window.$$eval("[data-slot-option]", (els) =>
+        els.map((e) => {
+          const line = e.querySelector("[data-slot-marks]");
+          return [e.dataset.slotOption, line?.textContent ?? null, line === null ? null : line.dataset.cut === undefined];
+        }),
+      ),
+    ),
+    [
+      ["wheel", "Main: Neon wheel · 1 trashed", true],
+      ["result", null, null],
+    ],
+  );
+  await shots2(window, shots, "17-slot-picker-marks");
+  await window.keyboard.press("Escape");
+  await window.waitForSelector('[data-slot-marks="wheel"]', { state: "hidden" });
+  await showSlot(window, "wheel");
+  check("the trigger notes no other slot's marks from the wheel, since the result has none", await window.$("[data-slot-marks-elsewhere]"), null);
   await mark(window, "approve", "neon");
   await window.waitForSelector("[data-main-empty]");
   await window.click("[data-trashed-fold] button");
@@ -514,6 +543,36 @@ try {
   await window.click('[data-restore="terminal"]');
   await window.waitForSelector("[data-trashed-fold]", { state: "detached" });
   check("a second thumbs up and Restore undo them", context(session).marks, { mains: {}, grafts: [], trashed: [] });
+
+  // Trashing the option on show takes it off the board too: the slot's frame moves to Main, or with none to the first
+  // variant left, as the sidebar's showing row does.
+  const framed = () =>
+    settled(async () => [
+      await canvas.$eval('.bs-frame[data-slot="wheel"] .bs-frame-body > [data-bid]', (el) => el.dataset.bid),
+      await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant"),
+    ]);
+  check("before a trash, the wheel's frame and the sidebar both show Neon", await framed(), ["wheel/neon", "neon"]);
+  await mark(window, "trash", "neon");
+  await window.waitForSelector('[data-trashed-fold="1"]');
+  check("trashing Neon while it shows, with no Main, puts the first variant left, Reel, on the wheel's frame", await framed(), ["wheel/reel", "reel"]);
+  await window.click("[data-trashed-fold] button");
+  await window.click('[data-restore="neon"]');
+  await window.waitForSelector("[data-trashed-fold]", { state: "detached" });
+  await mark(window, "approve", "terminal");
+  await window.waitForSelector('[data-main-group] [data-variant="terminal"]');
+  await window.click('[data-slot-id="wheel"] [data-variant="neon"]');
+  await window.waitForSelector('[data-slot-id="wheel"] [data-showing][data-variant="neon"]');
+  await mark(window, "trash", "neon");
+  await window.waitForSelector('[data-trashed-fold="1"]');
+  check("trashing Neon while it shows beside a Main puts Main, Terminal, on the wheel's frame", await framed(), ["wheel/terminal", "terminal"]);
+  await window.click("[data-trashed-fold] button");
+  await window.click('[data-restore="neon"]');
+  await window.waitForSelector("[data-trashed-fold]", { state: "detached" });
+  await mark(window, "approve", "terminal");
+  await window.waitForSelector("[data-main-empty]");
+  await window.click('[data-slot-id="wheel"] [data-variant="neon"]');
+  await window.waitForSelector('[data-slot-id="wheel"] [data-showing][data-variant="neon"]');
+  check("Restore and a second thumbs up leave no marks", context(session).marks, { mains: {}, grafts: [], trashed: [] });
 
   // Keyboard alone: arrows move along the rows, Tab reaches the row's 👍, Enter presses it.
   await window.focus('[data-slot-id="wheel"] [data-showing]');
@@ -964,6 +1023,36 @@ try {
     ],
   );
   await shots2(window, shots, "13-grafts");
+  // Leaving a graft out hands focus on, so the keyboard isn't dropped to the page: to the graft before it, and from the
+  // last one to Main's 👍. Both come back the way they went in.
+  const graftIds = await window.$$eval("[data-graft]", (els) => els.map((e) => e.dataset.graft));
+  await window.focus(`[data-remove-graft="${graftIds[1]}"]`);
+  await window.keyboard.press("Enter");
+  await window.waitForFunction(() => document.querySelectorAll("[data-graft]").length === 1);
+  const afterOne = await window.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? null);
+  await window.keyboard.press("Enter");
+  await window.waitForSelector("[data-graft]", { state: "detached" });
+  check(
+    "removing a graft by its × moves focus to the graft's × before it, and removing the last to Main's 👍",
+    [afterOne, await window.evaluate(() => [document.activeElement?.dataset.approve ?? null, document.activeElement?.closest("[data-main-group]") !== null])],
+    ["Leave Spin button out of Main", ["neon", true]],
+  );
+  await mark(window, "approve", "spin-button-b");
+  await window.waitForSelector("[data-graft]");
+  await window.click("[data-graft-toggle]");
+  await canvas.click(inBlock("result/card", "headline"));
+  await window.waitForSelector("[data-graft-composer]");
+  await window.fill("[data-graft-instruction]", "above the logo");
+  await window.click("[data-graft-add]");
+  await window.waitForSelector("[data-graft-composer]", { state: "detached" });
+  check(
+    "both grafts come back as they were",
+    context(session).marks.grafts.map((g) => [g.from.blockId, g.from.part, g.into, g.instruction]),
+    [
+      ["wheel/spin-button-b", "spin-button", "wheel", null],
+      ["result/card", "headline", "wheel", "above the logo"],
+    ],
+  );
   const sentBeforeMerge = t3.sent().length;
   await window.click("[data-confirm-toggle]");
   await window.waitForSelector("[data-confirm-menu]");
@@ -971,6 +1060,11 @@ try {
     "the confirm popover counts what goes, lists both grafts, and says it goes to the agent",
     [await window.getAttribute("[data-confirm-dropped]", "data-confirm-dropped"), await window.$$eval("[data-confirm-graft]", (els) => els.length), (await window.textContent("[data-confirm-hint]")).trim()],
     ["5", 2, "Goes to the agent"],
+  );
+  check(
+    "the confirm popover ends above the history strip, clear of its top edge",
+    await settled(() => window.evaluate(() => document.querySelector("[data-history]").getBoundingClientRect().top - document.querySelector("[data-confirm-menu]").getBoundingClientRect().bottom >= 4)),
+    true,
   );
   await shots2(window, shots, "14-confirm-grafts");
   await window.click("[data-confirm-send]");
@@ -1050,6 +1144,14 @@ try {
   check("Confirm writes iteration 5 without the trashed receipt, and no agent turn", [[...context(session).latest.blocks].sort(), t3.sent().length - sentBeforeConfirm], [["result/card", "wheel/neon"], 0]);
   check("the marks are spent", context(session).marks, { mains: {}, grafts: [], trashed: [] });
   check("the strip opens a new run on the latest confirm, named for it, saying what it kept and dropped", [await window.getAttribute("[data-strip-run]", "data-strip-run"), (await strip(window)).map((e) => [e.n, e.origin])], ["Confirm 2", [[5, "Kept Assignment card · 1 option dropped"]]]);
+  check(
+    "the run toggle reads as the menu it opens, edged like the slot picker and named for the earlier runs behind it",
+    await window.$eval("[data-strip-run]", (el) => {
+      const edge = getComputedStyle(el).borderTopColor;
+      return [el.getAttribute("aria-label"), edge !== "rgba(0, 0, 0, 0)" && edge !== "transparent", el.querySelector("svg") !== null];
+    }),
+    ["History run: Confirm 2, 1 iteration. Show earlier runs", true, true],
+  );
   await window.click("[data-strip-run]");
   await window.waitForSelector("[data-run-option]");
   check("the run picker lists the runs newest first", await window.$$eval("[data-run-option]", (els) => els.map((e) => e.dataset.runOption)), ["Confirm 2", "Confirm 1", "Start"]);

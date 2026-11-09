@@ -321,17 +321,15 @@ function StripHead({ children, steps, ref }: { children: ReactNode; steps?: Reac
 function RunPicker({ runs, run, now, onRun }: { runs: readonly Run[]; run: Run; now: number; onRun: (key: string) => void }) {
   const newestFirst = [...runs].reverse();
   const items = newestFirst.map((r) => ({ value: r.key, label: r.label }));
+  const count = `${run.entries.length} ${run.entries.length === 1 ? "iteration" : "iterations"}`;
+  // It reads as the menu it opens, edged and with its chevron, so the earlier runs a confirm put behind it are findable.
+  const others = run === runs.at(-1) ? "earlier runs" : "other runs";
   return (
     <Select items={items} value={run.key} onValueChange={(key) => key !== null && onRun(key)}>
-      <SelectTrigger
-        size="sm"
-        aria-label={`History run: ${run.label}`}
-        className="h-6 w-max border-transparent bg-transparent px-1 py-0 text-xs text-fg-muted hover:text-fg"
-        data-strip-run={run.label}
-      >
+      <SelectTrigger size="sm" aria-label={`History run: ${run.label}, ${count}. Show ${others}`} className="h-6 w-max px-1.5 py-0 text-xs" data-strip-run={run.label}>
         <span className="whitespace-nowrap">
-          {run.label}
-          <span className="tabular-nums">{` · ${run.entries.length} ${run.entries.length === 1 ? "iteration" : "iterations"}`}</span>
+          <span className="font-medium text-fg">{run.label}</span>
+          <span className="tabular-nums">{` · ${count}`}</span>
         </span>
       </SelectTrigger>
       <SelectContent align="start" className="w-auto">

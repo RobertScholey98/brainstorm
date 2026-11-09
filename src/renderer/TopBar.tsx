@@ -84,7 +84,9 @@ export function TopBar({
           <Mark size={20} />
         </div>
       )}
-      {children}
+      {/* The thread chip's hint opens off the same row as the cluster's, so it covers neither the status beside it nor
+          half a word of the title. */}
+      <HintAnchor.Provider value={row}>{children}</HintAnchor.Provider>
       {/* Its hints open left of the whole cluster and the status, over the title, so none covers a control or the status. */}
       <div ref={cluster} className="ml-auto flex shrink-0 items-center gap-2" data-header-actions>
         <HintAnchor.Provider value={row}>
@@ -262,6 +264,9 @@ function openPhase(view: SessionView): OpenPhase | null {
  */
 function ThreadChip({ view, send }: { view: SessionView; send: (action: RobAction) => Promise<SessionView | null> }) {
   const [open, setOpen] = useState(false);
+  // Closing the menu hands focus back to the chip; its hint stays shut until focus leaves or the pointer comes back, so
+  // it doesn't pop up over the title just because the menu closed.
+  const [quiet, setQuiet] = useState(false);
   const [starting, setStarting] = useState(false);
   const lost = view.attachment.lostAt !== null;
   const phase = openPhase(view);
@@ -275,10 +280,29 @@ function ThreadChip({ view, send }: { view: SessionView; send: (action: RobActio
     if (done !== null) setOpen(false);
   };
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      {/* A lost chip has Start a fresh thread beside it, so its hint opens left over the title, as the bar's own do. */}
-      <Hint label={lost ? "This brainstorm's thread is gone" : `${view.thread?.title ?? "This brainstorm's thread"}, in T3`} side={lost ? "left" : "right"}>
-        <PopoverTrigger render={<Button variant="ghost" className={COMPACT} data-collapse={COLLAPSE.thread} data-thread-chip data-thread={state} />}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuiet(true);
+      }}
+    >
+      {/* The status and the bar's actions stand to its right, so its hint opens left off the header's row, over the
+          title from its start, as the bar's own do. */}
+      <Hint label={lost ? "This brainstorm's thread is gone" : `${view.thread?.title ?? "This brainstorm's thread"}, in T3`} side="left" disabled={open || quiet}>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="ghost"
+              className={COMPACT}
+              onPointerEnter={() => setQuiet(false)}
+              onBlur={() => setQuiet(false)}
+              data-collapse={COLLAPSE.thread}
+              data-thread-chip
+              data-thread={state}
+            />
+          }
+        >
           <ThreadDot lost={lost} phase={phase} />
           <Truncate className={cn(COMPACT_LABEL, "max-w-menu", lost ? TONE_TEXT[PHASE.thread_lost.tone] : "text-fg-muted")} data-thread-title>
             {lost ? "Thread lost" : (view.thread?.title ?? "Thread")}

@@ -50,7 +50,8 @@ import { Filmstrip, FilmstripSkeleton, PastBar, type TrailPoint } from "./Histor
 import { AddSlotDialog } from "./AddSlot";
 import { ConfirmButton } from "./Confirm";
 import { PickComposer, PickSection } from "./Pick";
-import { approval, liveMarks, showingVariant, trashRefusal, withApproval, withPick, withTrash } from "../core/main";
+import { liveMarks, showingVariant } from "../core/main";
+import { markPast, type PastMark } from "./pastMarks";
 import { HeldBar } from "./HeldBar";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
@@ -743,40 +744,34 @@ function SessionWorkspace({
   // Confirm and Add slot send to the thread, so they wait while it is busy or gone, like any request.
   const sendBlocked = view !== null && !view.regenerate.ok && view.regenerate.reason !== "no_iteration" ? blockedMessage(view.regenerate.reason, view.request?.request.n) : null;
   const shownSlots = iteration?.slots ?? NO_SLOTS;
-  const markLocally = (change: (m: Marks) => Marks, picks?: Readonly<Record<string, VariantKey>>) =>
-    setPast((p) => (p === null ? p : { ...p, marks: change(p.marks), picks: { ...p.picks, ...picks } }));
-  const markHandlers: MarkHandlers = {
-    onApprove: (b) => {
-      const s = shownSlots.find((x) => x.id === b.slot);
-      if (s === undefined) return;
-      if (past === null) return void send({ kind: "approve", blockId: b.id });
-      // As at the latest, a variant made Main is also the one that shows.
-      const main = approval(s, b, past.marks).kind === "main";
-      markLocally((m) => withApproval(m, s, b), main ? { [s.id]: b.variant } : undefined);
-    },
-    onTrash: (b) => {
-      if (past === null) return void send({ kind: "trash", blockId: b.id });
-      const s = shownSlots.find((x) => x.id === b.slot);
-      const refusal = s === undefined ? null : trashRefusal(s, b.variant, past.marks);
-      if (refusal !== null) return showNotice({ title: failedTitle({ kind: "trash", blockId: b.id }, blocks), detail: refusal });
-      markLocally((m) => withTrash(m, b.id, true));
-    },
-    onRestore: (b) => (past === null ? void send({ kind: "restore", blockId: b.id }) : markLocally((m) => withTrash(m, b.id, false))),
-    onRemoveGraft: (g: StoredGraft) =>
-      past === null ? void send({ kind: "remove_graft", id: g.id }) : markLocally((m) => ({ ...m, grafts: m.grafts.filter((x) => x.id !== g.id) })),
-  };
-  const addGraft = async (from: Pin, into: SlotId, instruction: string | null): Promise<boolean> => {
-    if (past === null) return (await send({ kind: "add_graft", from, into, instruction })) !== null;
-    const s = shownSlots.find((x) => x.id === into);
-    if (s === undefined) return false;
-    // The service's own rule: a slot with no Main takes what shows there as Main, and Main's own elements are refused.
-    const next = withPick(past.marks, s, from, instruction, s.active);
+  // On a past iteration the window keeps the marks itself (`pastMarks.ts`); a refusal shows as the service's would.
+  const markPastIteration = (mark: PastMark, action: RobAction): boolean => {
+    if (past === null) return false;
+    const next = markPast(past, shownSlots, mark);
+    if (next === null) return false;
     if ("refused" in next) {
-      showNotice({ title: failedTitle({ kind: "add_graft", from, into, instruction }, blocks), detail: next.refused });
+      showNotice({ title: failedTitle(action, blocks), detail: next.refused });
       return false;
     }
-    markLocally(() => next, next.mains[s.id] === s.active ? undefined : { [s.id]: next.mains[s.id]! });
+    setPast((p) => (p === null ? p : { ...p, ...next }));
     return true;
+  };
+  const markHandlers: MarkHandlers = {
+    onApprove: (b) => {
+      if (!shownSlots.some((x) => x.id === b.slot)) return;
+      if (past === null) return void send({ kind: "approve", blockId: b.id });
+      markPastIteration({ kind: "approve", block: b }, { kind: "approve", blockId: b.id });
+    },
+    onTrash: (b) => (past === null ? void send({ kind: "trash", blockId: b.id }) : void markPastIteration({ kind: "trash", block: b }, { kind: "trash", blockId: b.id })),
+    onRestore: (b) =>
+      past === null ? void send({ kind: "restore", blockId: b.id }) : void markPastIteration({ kind: "restore", block: b.id }, { kind: "restore", blockId: b.id }),
+    onRemoveGraft: (g: StoredGraft) =>
+      past === null ? void send({ kind: "remove_graft", id: g.id }) : void markPastIteration({ kind: "remove_graft", graft: g.id }, { kind: "remove_graft", id: g.id }),
+  };
+  const addGraft = async (from: Pin, into: SlotId, instruction: string | null): Promise<boolean> => {
+    const action: RobAction = { kind: "add_graft", from, into, instruction };
+    if (past === null) return (await send(action)) !== null;
+    return markPastIteration({ kind: "pick", from, into, instruction }, action);
   };
   const confirm = async (instruction: string | null): Promise<boolean> => {
     if (past === null) return (await send({ kind: "confirm" })) !== null;
