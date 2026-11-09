@@ -67,7 +67,7 @@ const data = <T,>(result: Result<T>): T => {
   return result.data;
 };
 
-async function setup(clockMs?: () => number, now: () => string = () => AT) {
+async function setup(clockMs?: () => number, now: () => string = () => AT, check: Checker = checker) {
   const home = mkdtempSync(join(tmpdir(), "bs-service-"));
   const dbPath = join(home, "brainstorm.db");
   const exportsDir = join(home, "exports");
@@ -76,7 +76,7 @@ async function setup(clockMs?: () => number, now: () => string = () => AT) {
   bridge.add(T2, "proj-a", "Takeover thread");
   bridge.add(T3, "proj-b", "Other project");
   const ids = ["s_wheel01", "s_onbrd02", "s_onbrd03"] as SessionId[];
-  const open = () => Brainstorm.open({ dbPath, exportsDir, bridge, checker, now, clockMs, newSessionId: () => ids.shift() ?? ("s_spare99" as SessionId) });
+  const open = () => Brainstorm.open({ dbPath, exportsDir, bridge, checker: check, now, clockMs, newSessionId: () => ids.shift() ?? ("s_spare99" as SessionId) });
   const service = await open();
   return { service, bridge, open, exportsDir, dbPath };
 }
@@ -728,6 +728,79 @@ describe("request phases", () => {
     restarted.close();
   });
 
+  test("a send that finishes after the agent's commit fulfilled its confirm leaves it fulfilled, and the marks spent", async () => {
+    const { service, bridge } = await withTwoWheels();
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    data(await service.act(S, { kind: "add_graft", from: { blockId: CALM, part: SPIN }, into: WHEEL, instruction: null }));
+    bridge.sendMode = "hang";
+    const confirming = service.act(S, { kind: "confirm" });
+    data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED }), addresses: [], note: null }));
+    bridge.sendMode = "deliver";
+    bridge.release();
+    data(await confirming);
+    const view = data(await service.view(S));
+    expect([view.request?.request.n, view.request?.request.state, view.marks, view.regenerate]).toEqual([1, { state: "fulfilled", iteration: 3 }, NONE, { ok: true }]);
+    expect(await holders(service, [S])).toEqual([]);
+  });
+
+  test("a send that finishes after Rob withdrew its request leaves it withdrawn", async () => {
+    const { service, bridge } = await withIteration();
+    bridge.sendMode = "hang";
+    const regenerating = service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: "warmer" });
+    data(await service.act(S, { kind: "withdraw_request" }));
+    bridge.sendMode = "deliver";
+    bridge.release();
+    data(await regenerating);
+    const view = data(await service.view(S));
+    expect([view.request?.request.n, view.request?.request.state, view.regenerate]).toEqual([1, { state: "withdrawn" }, { ok: true }]);
+  });
+
+  test("a send to a lost thread that fails after a fresh thread took its request over leaves it sent there", async () => {
+    const { service, bridge } = await withIteration();
+    bridge.sendMode = "hang";
+    const regenerating = service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: "warmer" });
+    bridge.thread(T1).missing = true;
+    data(await service.act(S, { kind: "check_thread" }));
+    bridge.sendMode = "deliver";
+    data(await service.act(S, { kind: "refresh_thread" }));
+    const fresh = bridge.started[0]!.thread;
+    bridge.sendMode = "fail";
+    bridge.release();
+    data(await regenerating);
+    expect(data(await service.view(S)).request?.request).toMatchObject({ n: 1, threadId: fresh, state: { state: "sent" } });
+    expect(await holders(service, [S])).toEqual([[S, 1]]);
+  });
+
+  test("a branch's send that finishes after a fresh thread gave the root's request the thread leaves the branch's waiting", async () => {
+    const { service, bridge, dbPath } = await withPastTwoWheels();
+    bridge.sendMode = "hang";
+    const branching = service.branch(S, { from: 2 as IterationN, marks: NONE, instruction: "Try a slot machine" });
+    await vi.waitFor(async () => expect((await phaseOf(service, F))?.phase).toBe("sending"));
+    // What migration 11 can leave: the root's request open beside the branch's.
+    const db = new DatabaseSync(dbPath);
+    db.prepare("INSERT INTO request(session_id, n, body_json, feedback_ids_json, base, thread_id, state, created_at) VALUES (?, 1, ?, '[]', 3, ?, 'sent', ?)").run(
+      S,
+      JSON.stringify({ scope: { kind: "all" }, freetext: null }),
+      T1,
+      AT,
+    );
+    db.close();
+    bridge.thread(T1).missing = true;
+    data(await service.act(S, { kind: "check_thread" }));
+    bridge.sendMode = "deliver";
+    data(await service.act(S, { kind: "refresh_thread" }));
+    const fresh = bridge.started[0]!.thread;
+    bridge.release();
+    data(await branching);
+    expect(data(await service.view(F)).request?.request).toMatchObject({
+      n: 1,
+      threadId: fresh,
+      state: { state: "send_failed", error: "the fresh thread takes one request at a time, and another branch's went first; retry once it is done" },
+    });
+    expect(data(await service.view(S)).request?.request).toMatchObject({ n: 1, threadId: fresh, state: { state: "sent" } });
+    expect(await holders(service, [S, F]), "only the root's request holds the fresh thread").toEqual([[S, 1]]);
+  });
+
   test("a branch's request waits while another branch's holds the thread: no Retry, and a retry is refused", async () => {
     const { service, bridge, dbPath } = await withPastTwoWheels();
     bridge.sendMode = "fail";
@@ -996,12 +1069,48 @@ const phaseOf = async (service: Brainstorm, id: SessionId) => {
   return r === null ? null : { phase: r.phase.phase, actions: r.phase.actions, message: r.message };
 };
 
+/** The requests among `ids` that hold the brainstorm's thread: being sent to it, or queued or worked there. */
+async function holders(service: Brainstorm, ids: readonly SessionId[]): Promise<[SessionId, number][]> {
+  const out: [SessionId, number][] = [];
+  for (const id of ids) {
+    const view = await service.view(id);
+    const r = view.ok ? view.data.request : null;
+    if (r !== null && ["sending", "queued", "asking", "working"].includes(r.phase.phase)) out.push([id, r.request.n]);
+  }
+  return out;
+}
+
+/** The shared checker, except that a check waits while held, so a test can act while a commit's check is out. */
+function holdingChecker() {
+  let hold: Promise<void> | null = null;
+  let release = () => {};
+  const held: Checker = {
+    checkBlocks: async (blocks, overrides, env) => {
+      if (hold !== null) await hold;
+      return checker.checkBlocks(blocks, overrides, env);
+    },
+    checkSource: (input) => checker.checkSource(input),
+    inspectKit: (kit) => checker.inspectKit(kit),
+    close: async () => {},
+  };
+  return {
+    held,
+    hold: () => void (hold = new Promise<void>((resolve) => (release = resolve))),
+    release: () => {
+      hold = null;
+      release();
+    },
+  };
+}
+
 const NONE: Marks = { mains: {}, grafts: [], trashed: [] };
 const KEEP_NEON: Marks = { ...NONE, mains: { ["wheel" as SlotId]: "neon" as VariantKey } };
 const SPIN = "spin-button" as PartName;
 const WHEEL = "wheel" as SlotId;
 const REEL = "wheel/reel" as BlockId;
 const slotReelJson = JSON.stringify({ title: "Slot reel", props: wheelProps });
+/** Neon as the agent leaves it once it has merged a graft in. */
+const MERGED = { tsx: neonTsx.replace(">Spin<", ">SPIN<"), json: neonJson };
 
 /** Iteration 3 changes only the result sheet, so iteration 2, with both wheels, is in the past. */
 async function withPastTwoWheels() {
@@ -1074,7 +1183,7 @@ describe("marks and confirm", () => {
     const context = data(await service.context(S, T1));
     expect(context.marks.grafts.map((g) => g.from)).toEqual([{ blockId: CALM, part: SPIN }]);
 
-    const result = data(await service.commit({ session: S, thread: T1, files: copy(2), addresses: [], note: "spin button from Calm" }));
+    const result = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED }), addresses: [], note: "spin button from Calm" }));
     expect(result.warnings).toEqual([]);
     expect(data(await service.view(S)).marks, "the marks are spent once the confirm lands").toEqual(NONE);
 
@@ -1119,7 +1228,7 @@ describe("marks and confirm", () => {
       return ctx.service;
     };
     const service = await confirmed();
-    expect(data(await service.commit({ session: S, thread: T1, files: copy(2), addresses: [], note: null })).warnings).toEqual([]);
+    expect(data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED }), addresses: [], note: null })).warnings).toEqual([]);
     const view = data(await service.view(S));
     expect([view.overrides.applicable.map((o) => [o.blockId, o.prop]), view.overrides.inapplicable]).toEqual([
       [
@@ -1131,8 +1240,7 @@ describe("marks and confirm", () => {
     expect(view.feedback.map((f) => f.id)).toEqual([1, 3]);
 
     const other = await confirmed();
-    const merged = { tsx: neonTsx.replace(">Spin<", ">SPIN<"), json: neonJson };
-    const kept = data(await other.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": merged, "wheel/calm": { tsx: neonTsx, json: calmJson } }), addresses: [], note: null }));
+    const kept = data(await other.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED,"wheel/calm": { tsx: neonTsx, json: calmJson } }), addresses: [], note: null }));
     expect(kept.warnings.map((w) => w.code)).toEqual(["confirm_mismatch"]);
     const after = data(await other.view(S));
     expect(after.overrides.applicable.map((o) => [o.blockId, o.prop])).toEqual([
@@ -1153,7 +1261,7 @@ describe("marks and confirm", () => {
     };
     const service = await confirmed();
     const big = { tsx: sheetTsx.replace("<section", '<section className="big"'), json: sheetJson };
-    const result = data(await service.commit({ session: S, thread: T1, files: copy(2, { "result/sheet": big }), addresses: [], note: null }));
+    const result = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED, "result/sheet": big }), addresses: [], note: null }));
     expect(result.warnings.map((w) => [w.code, w.message])).toEqual([
       ["out_of_scope", "result/sheet changed, but request 1 asked only for the grafts into Main and the dropped variants"],
     ]);
@@ -1178,7 +1286,7 @@ describe("marks and confirm", () => {
       return ctx.service;
     };
     const service = await confirmed();
-    const beside = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/reel": { tsx: neonTsx, json: slotReelJson } }), addresses: [], note: null }));
+    const beside = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED, "wheel/reel": { tsx: neonTsx, json: slotReelJson } }), addresses: [], note: null }));
     expect(beside.warnings.map((w) => [w.code, w.message])).toEqual([
       ["confirm_mismatch", "request 1 keeps only Main in slot wheel, and this commit has wheel/reel beside it"],
     ]);
@@ -1321,6 +1429,70 @@ describe("marks and confirm", () => {
       ok: false,
       error: { code: "invalid_action", message: "a confirm is open; its marks change once it lands or you withdraw it" },
     });
+  });
+
+  test("a whole-block graft the commit leaves unapplied warns, though the commit drops what it should", async () => {
+    const { service } = await withTwoWheels();
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    data(await service.act(S, { kind: "add_graft", from: { blockId: CALM, part: null }, into: WHEEL, instruction: "its calm colours" }));
+    data(await service.act(S, { kind: "confirm" }));
+    const result = data(await service.commit({ session: S, thread: T1, files: copy(2), addresses: [], note: null }));
+    expect(result.warnings.map((w) => [w.code, w.file, w.message])).toEqual([
+      ["confirm_mismatch", "slots/wheel/neon/block.tsx", "request 1 grafts all of wheel/calm into wheel/neon, and this commit leaves wheel/neon as it was"],
+    ]);
+    expect(data(await service.view(S)).request?.request.state, "a warning, not a refusal").toEqual({ state: "fulfilled", iteration: 3 });
+  });
+
+  test("a confirm's commit is refused as stale when Rob withdraws the confirm and opens another request while it is checked", async () => {
+    const check = holdingChecker();
+    const { service } = await setup(undefined, undefined, check.held);
+    data(await service.newSession({ title: "Chore wheel", brief: "", thread: T1, projectPath: null }));
+    data(await service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: null }));
+    data(await service.commit({ session: S, thread: T1, files: copy(1, { "wheel/calm": { tsx: neonTsx, json: calmJson } }), addresses: [], note: null }));
+    data(await service.act(S, { kind: "set_override", blockId: CALM, prop: "spinSeconds" as PropName, value: 3 }));
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    data(await service.act(S, { kind: "add_graft", from: { blockId: CALM, part: SPIN }, into: WHEEL, instruction: null }));
+    data(await service.act(S, { kind: "confirm" }));
+
+    check.hold();
+    const committing = service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED }), addresses: [], note: null });
+    data(await service.act(S, { kind: "withdraw_request" }));
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: "warmer" }));
+    check.release();
+    expect(await committing).toEqual({
+      ok: false,
+      error: {
+        code: "stale_working_copy",
+        message: `request 1 was open when this commit was checked, and request 2 is now; run brainstorm context ${S} and commit again`,
+        base: 2,
+        latest: 2,
+      },
+    });
+    const view = data(await service.view(S));
+    expect([view.iteration?.n, view.request?.request.n, view.request?.request.state]).toEqual([2, 2, { state: "sent" }]);
+    expect(view.overrides.applicable.map((o) => [o.blockId, o.prop]), "nothing was let go of").toEqual([[CALM, "spinSeconds"]]);
+  });
+
+  test("a confirm Rob withdrew before its commit lands: the commit is the agent's own, and the marks stay but for blocks it removed", async () => {
+    const { service } = await withTwoWheels();
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    data(await service.act(S, { kind: "add_graft", from: { blockId: CALM, part: SPIN }, into: WHEEL, instruction: null }));
+    data(await service.act(S, { kind: "confirm" }));
+    data(await service.act(S, { kind: "withdraw_request" }));
+    const result = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED }), addresses: [], note: "spin button from Calm" }));
+    expect(result.warnings.map((w) => [w.code, w.message]), "nothing is let go of, so the agent hears of what Calm loses").toEqual([
+      ["override_dropped", "Rob set spinSeconds = 3 on wheel/calm, and it no longer applies (block_removed); he'll see it flagged"],
+      ["pin_lost", 'feedback #2 ("too grey") is pinned to wheel/calm, which this commit no longer renders'],
+    ]);
+    const view = data(await service.view(S));
+    expect([view.iteration?.n, view.request?.request.n, view.request?.request.state, view.history.iterations.at(-1)?.origin]).toEqual([
+      3,
+      1,
+      { state: "withdrawn" },
+      { kind: "agent", note: "spin button from Calm" },
+    ]);
+    expect(view.marks, "Main stays; the graft from Calm went with Calm").toEqual({ mains: { wheel: "neon" }, grafts: [], trashed: [] });
+    expect([view.overrides.inapplicable.map((o) => o.override.blockId), view.feedback.map((f) => f.id)]).toEqual([[CALM], [1, 2, 3]]);
   });
 
   test("add slot asks the agent for a new slot, and warns when the commit adds none", async () => {
@@ -1519,16 +1691,23 @@ describe("branches", () => {
     expect(data(await service.view(S)).history.branches).toEqual([]);
   });
 
-  test("a branch the app answers while the brainstorm's thread is lost is lost too", async () => {
+  test("a branch the app would answer shares Confirm's gate: refused while the thread is lost or a request is open in the brainstorm", async () => {
     const { service, bridge } = await withPastTwoWheels();
     bridge.thread(T1).missing = true;
     data(await service.act(S, { kind: "check_thread" }));
     expect(data(await service.view(S)).attachment.lostAt).toBe(AT);
-    data(await service.branch(S, { from: 2 as IterationN, marks: KEEP_NEON, instruction: null }));
-    const view = data(await service.view(F));
-    expect([view.attachment.threadId, view.attachment.lostAt, view.regenerate]).toEqual([T1, AT, { ok: false, reason: "thread_lost" }]);
-    data(await service.act(F, { kind: "make_primary" }));
-    expect(data(await service.listSessions(null)).map((l) => [l.id, l.lost]), "home reads the primary branch").toEqual([[F, true]]);
+    expect(await service.branch(S, { from: 2 as IterationN, marks: KEEP_NEON, instruction: null })).toEqual({
+      ok: false,
+      error: { code: "thread_lost", message: `thread ${T1} is gone; start a fresh thread first`, thread: T1 },
+    });
+    bridge.thread(T1).missing = false;
+    data(await service.act(S, { kind: "check_thread" }));
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: "warmer" }));
+    expect(await service.branch(S, { from: 2 as IterationN, marks: KEEP_NEON, instruction: null })).toEqual({
+      ok: false,
+      error: { code: "request_open", message: "request 1 is still open on this brainstorm's thread; let it finish or withdraw it first", n: 1 },
+    });
+    expect(data(await service.view(S)).history.branches).toEqual([]);
   });
 
   test("a branch's first iteration is on the thread the tree shares, not the one its source was made on", async () => {
@@ -1548,6 +1727,76 @@ describe("branches", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.message).toMatch(/^Neon wheel doesn't render with your settings as its defaults \(.*no black.*\)\. Reset the setting that breaks it, or keep another variant\.$/);
     expect(data(await service.view(S)).history.branches).toEqual([]);
+  });
+
+  test("every way a request opens or reopens leaves at most one request in the brainstorm holding its thread", async () => {
+    const { service, bridge } = await withPastTwoWheels();
+    data(await service.branch(S, { from: 2 as IterationN, marks: KEEP_NEON, instruction: null }));
+    const tree = [S, F, G];
+    const held = () => holders(service, tree);
+    const tries = async (id: SessionId): Promise<(() => Promise<Result<unknown>>)[]> => {
+      const from = data(await service.view(id)).iteration!.n;
+      return [
+        () => service.act(id, { kind: "regenerate", scope: { kind: "all" }, freetext: "again" }),
+        () => service.act(id, { kind: "vary", target: { blockId: NEON, part: SPIN }, count: 1, direction: null }),
+        () => service.act(id, { kind: "add_slot", prompt: "The empty state" }),
+        () => service.act(id, { kind: "confirm" }),
+        () => service.branch(id, { from, marks: NONE, instruction: "Try a slot machine" }),
+        () => service.act(id, { kind: "retry_request" }),
+        () => service.act(id, { kind: "refresh_thread" }),
+      ];
+    };
+    /** While `holder` holds the thread, every way from every branch is refused, and it still holds it alone. */
+    const othersWait = async (holder: [SessionId, number]) => {
+      for (const id of [S, F]) {
+        for (const attempt of await tries(id)) expect((await attempt()).ok).toBe(false);
+      }
+      expect(await held()).toEqual([holder]);
+    };
+
+    // Regenerate, then Resend once the thread is taken over.
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: "warmer" }));
+    await othersWait([S, 1]);
+    data(await service.attach({ ref: S, thread: T2 }));
+    expect(await held(), "a request on the previous thread holds nothing").toEqual([]);
+    expect((await service.act(F, { kind: "regenerate", scope: { kind: "all" }, freetext: null })).ok, "but it is still open").toBe(false);
+    data(await service.act(S, { kind: "retry_request" }));
+    await othersWait([S, 1]);
+    data(await service.act(S, { kind: "withdraw_request" }));
+
+    // Vary and add slot, on the branch.
+    data(await service.act(F, { kind: "vary", target: { blockId: NEON, part: SPIN }, count: 1, direction: null }));
+    await othersWait([F, 2]);
+    data(await service.act(F, { kind: "withdraw_request" }));
+    data(await service.act(F, { kind: "add_slot", prompt: "The empty state" }));
+    await othersWait([F, 3]);
+    data(await service.act(F, { kind: "withdraw_request" }));
+
+    // A confirm with a graft, then a fresh thread once its thread is lost.
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    data(await service.act(S, { kind: "add_graft", from: { blockId: CALM, part: SPIN }, into: WHEEL, instruction: null }));
+    data(await service.act(S, { kind: "confirm" }));
+    await othersWait([S, 2]);
+    bridge.thread(T2).missing = true;
+    data(await service.act(F, { kind: "check_thread" }));
+    expect(await held(), "a request on a lost thread holds nothing").toEqual([]);
+    data(await service.act(F, { kind: "refresh_thread" }));
+    await othersWait([S, 2]);
+    data(await service.act(S, { kind: "withdraw_request" }));
+
+    // Retry of a send that failed.
+    bridge.sendMode = "fail";
+    data(await service.act(S, { kind: "regenerate", scope: { kind: "all" }, freetext: "warmer" }));
+    expect(await held()).toEqual([]);
+    bridge.sendMode = "deliver";
+    expect((await service.act(F, { kind: "retry_request" })).ok).toBe(false);
+    data(await service.act(S, { kind: "retry_request" }));
+    await othersWait([S, 3]);
+    data(await service.act(S, { kind: "withdraw_request" }));
+
+    // A branch with an instruction.
+    data(await service.branch(S, { from: 3 as IterationN, marks: NONE, instruction: "Try a slot machine" }));
+    await othersWait([G, 1]);
   });
 
   test("make primary puts a branch on the home row, and the old main line becomes an offshoot", async () => {
@@ -1664,6 +1913,31 @@ describe("vary", () => {
     expect(marks.grafts.map(({ from, into, instruction }) => ({ from, into, instruction }))).toEqual([{ from: { blockId: option, part: "spin-button" }, into: "wheel", instruction: null }]);
     data(await service.act(S, { kind: "approve", blockId: option }));
     expect(data(await service.view(S)).marks.grafts).toEqual([]);
+  });
+
+  test("a confirm whose commit leaves Main as it was warns that a vary option's graft never landed, and one that changes Main passes", async () => {
+    const grafted = async () => {
+      const { service } = await withIteration();
+      data(await service.act(S, { kind: "vary", target: { blockId: NEON, part: SPIN }, count: 2, direction: null }));
+      const added = Object.fromEntries(["a", "b"].map((l) => [`wheel/spin-button-${l}`, { tsx: spinTsx(l), json: spinJson(`Spin button ${l.toUpperCase()}`) }]));
+      data(await service.commit({ session: S, thread: T1, files: copy(1, added), addresses: [], note: null }));
+      data(await service.act(S, { kind: "approve", blockId: NEON }));
+      data(await service.act(S, { kind: "approve", blockId: "wheel/spin-button-b" as BlockId }));
+      data(await service.act(S, { kind: "confirm" }));
+      return service;
+    };
+    // Neon already renders a spin-button, so the element alone can't show the graft went in.
+    const untouched = await grafted();
+    expect(data(await untouched.commit({ session: S, thread: T1, files: copy(2), addresses: [], note: null })).warnings.map((w) => [w.code, w.file, w.message])).toEqual([
+      [
+        "confirm_mismatch",
+        "slots/wheel/neon/block.tsx",
+        'request 2 grafts data-part "spin-button" from wheel/spin-button-b into wheel/neon, and this commit leaves wheel/neon as it was',
+      ],
+    ]);
+
+    const merged = await grafted();
+    expect(data(await merged.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED }), addresses: [], note: null })).warnings).toEqual([]);
   });
 
   test("a vary option a confirm dropped is forgotten, so a later variant with its key becomes Main on a 👍", async () => {

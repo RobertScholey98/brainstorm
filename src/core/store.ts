@@ -495,6 +495,11 @@ export class Store {
     this.#statement(sql).run(...params);
   }
 
+  /** Runs a write and says how many rows it changed. */
+  #changes(sql: string, ...params: (string | number | null)[]): number {
+    return Number(this.#statement(sql).run(...params).changes);
+  }
+
   uiPrefRows(): { key: string; json: string }[] {
     return this.#all("SELECT key, value_json FROM ui_pref ORDER BY key").map((r) => ({ key: str(r.key), json: str(r.value_json) }));
   }
@@ -572,9 +577,9 @@ export class Store {
   }
 
   /**
-   * The branch, its first iteration with carried feedback, then request 1, so the iteration can't fulfil the request. An
-   * answered request goes in before the iteration instead, so the iteration does fulfil it. The branch joins the thread
-   * its tree shares as it is, lost included, as migration 11 joins an old fork to it.
+   * The branch, its first iteration with carried feedback, then request 1: an answered one already fulfilled by that
+   * iteration, any other open. The branch joins the thread its tree shares as it is, lost included, as migration 11
+   * joins an old fork to it.
    */
   createBranch(input: NewBranch, shared: Pick<Attachment, "threadId" | "lostAt">): void {
     const { session, link, iteration, request } = input;
@@ -591,8 +596,6 @@ export class Store {
         JSON.stringify(link.baked),
         link.createdAt,
       );
-      // It was made on the parent's iteration, so that is its base.
-      if (request?.answered === true) this.insertRequest(session.id, { body: request.body, feedbackIds: [], base: link.from, threadId: thread, at: request.at });
       this.insertIteration({
         session: session.id,
         iteration,
@@ -603,6 +606,10 @@ export class Store {
         addresses: [],
       });
       const ids = input.feedback.map((f) => this.insertFeedback(session.id, { pin: f.pin, text: f.text, createdIn: iteration.n, at: link.createdAt }));
+      // An answered confirm was made on the parent's iteration, so that is its base.
+      if (request?.answered === true) {
+        this.insertRequest(session.id, { body: request.body, feedbackIds: [], base: link.from, threadId: thread, at: request.at, fulfilledIn: iteration.n });
+      }
       if (request !== null && !request.answered) {
         const asked = ids.filter((_, i) => input.feedback[i]?.asked === true);
         this.insertRequest(session.id, { body: request.body, feedbackIds: asked, base: iteration.n, threadId: thread, at: request.at });
@@ -1018,26 +1025,56 @@ export class Store {
     return this.#all(`SELECT * FROM request WHERE state IN (${marks}) ORDER BY session_id, n`, ...states).map(toRequest);
   }
 
-  /** Inserts the next request in state `sending`. The one_open_request index refuses a second open one. */
+  /**
+   * Inserts the next request in state `sending`, or, with `fulfilledIn`, one the app has already answered with that
+   * iteration. The one_open_request index refuses a second open one.
+   */
   insertRequest(
     session: SessionId,
-    input: { body: RequestBody; feedbackIds: readonly FeedbackId[]; base: IterationN | null; threadId: ThreadId; at: string },
+    input: { body: RequestBody; feedbackIds: readonly FeedbackId[]; base: IterationN | null; threadId: ThreadId; at: string; fulfilledIn?: IterationN },
   ): RequestN {
     return this.tx(() => {
       const next = num(this.#get("SELECT COALESCE(MAX(n), 0) + 1 AS next FROM request WHERE session_id = ?", session)?.next);
       this.#run(
-        `INSERT INTO request(session_id, n, body_json, feedback_ids_json, base, thread_id, state, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'sending', ?)`,
+        `INSERT INTO request(session_id, n, body_json, feedback_ids_json, base, thread_id, state, fulfilled_in, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         session,
         next,
         JSON.stringify({ scope: input.body.scope, freetext: input.body.freetext }),
         JSON.stringify(input.feedbackIds),
         input.base,
         input.threadId,
+        input.fulfilledIn === undefined ? "sending" : "fulfilled",
+        input.fulfilledIn ?? null,
         input.at,
       );
       return next as RequestN;
     });
+  }
+
+  /**
+   * Records what became of sending request `n` to `thread`, and says whether it applied. It applies only while the
+   * request is still `sending` to that thread: a send awaits T3, and meanwhile a commit may have fulfilled the request,
+   * Rob withdrawn it, or a fresh thread taken it over, and then this result is old news.
+   */
+  settleDelivery(
+    session: SessionId,
+    n: RequestN,
+    thread: ThreadId,
+    outcome: { readonly state: "sent"; readonly sentAt: string } | { readonly state: "send_failed"; readonly error: string },
+  ): boolean {
+    return (
+      this.#changes(
+        `UPDATE request SET state = ?, error = ?, sent_at = COALESCE(?, sent_at)
+         WHERE session_id = ? AND n = ? AND state = 'sending' AND thread_id = ?`,
+        outcome.state,
+        outcome.state === "send_failed" ? outcome.error : null,
+        outcome.state === "sent" ? outcome.sentAt : null,
+        session,
+        n,
+        thread,
+      ) === 1
+    );
   }
 
   setRequestState(
