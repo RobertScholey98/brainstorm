@@ -69,12 +69,12 @@ export function requestFeedback(feedback: readonly Feedback[], scope: RequestSco
 export function regenerateGate(state: {
   readonly hasIteration: boolean;
   readonly open: Request | null;
-  readonly busy?: boolean;
+  readonly busy: boolean;
   readonly attachment: Attachment;
 }): Regenerate {
   if (!state.hasIteration) return { ok: false, reason: "no_iteration" };
   if (state.open !== null) return { ok: false, reason: "request_open" };
-  if (state.busy === true) return { ok: false, reason: "branch_busy" };
+  if (state.busy) return { ok: false, reason: "branch_busy" };
   if (state.attachment.lostAt !== null) return { ok: false, reason: "thread_lost" };
   return { ok: true };
 }
@@ -113,12 +113,12 @@ export function foldFeedback(events: readonly FeedbackEvent[]): FeedbackStatus {
 }
 
 /**
- * An open request's actions follow one order: the phase's own step (Retry, Resend or Copy phrase), then Open thread
- * whenever the thread can still be reached, then Withdraw. The bar holds them right to left from Regenerate, so Open
- * thread and Withdraw keep one x across every phase that has them. While another branch's request holds the thread
+ * An open request's actions follow one order: the phase's own step (Retry, Resend or Start a fresh thread), then Open
+ * thread whenever the thread can still be reached, then Withdraw. The bar holds them right to left from Regenerate, so
+ * Open thread and Withdraw keep one x across every phase that has them. While another branch's request holds the thread
  * they share (`busy`), Retry and Resend wait, since the thread works on one thing at a time.
  */
-export function requestPhase(request: Request, attachment: Attachment, observation: Observation | null, busy = false): RequestPhase {
+export function requestPhase(request: Request, attachment: Attachment, observation: Observation | null, busy: boolean): RequestPhase {
   const open = (step: readonly RequestPhaseAction[]): readonly RequestPhaseAction[] => {
     const own = busy ? step.filter((a) => a !== "retry" && a !== "resend") : step;
     return attachment.lostAt === null ? [...own, "open_thread", "withdraw"] : [...own, "withdraw"];

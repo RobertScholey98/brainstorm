@@ -488,9 +488,9 @@ try {
     [true, false, true],
   );
   await shot(window, shots, "8-thread-lost");
-  await window.keyboard.press("Escape");
-  await window.waitForSelector("[data-thread-menu]", { state: "detached" });
-  await window.click('[data-request-action="fresh_thread"]');
+  // The recovery from the chip, where Rob looks for the thread; the strip offers the same action.
+  await window.click("[data-thread-menu] [data-refresh-thread]");
+  await window.waitForSelector("[data-thread-menu]", { state: "hidden" });
   await window.waitForSelector('[data-request-phase="queued"]', { timeout: PHASE_MS });
   const fresh = t3.started();
   check("Start a fresh thread starts one T3 thread, and the open request follows to it", [fresh.length, markers(fresh[0]?.thread, 3)], [1, 1]);

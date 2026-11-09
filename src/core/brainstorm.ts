@@ -103,6 +103,7 @@ import {
   type SlotId,
   type SlotView,
   type SnapshotResult,
+  type StartResult,
   type ThreadId,
   type ThreadInfo,
   type ThreadSnapshot,
@@ -190,6 +191,8 @@ export class Brainstorm {
   readonly #systems: Systems;
   /** Background checks of each session's latest iteration against its system's newest version (ADR 008). */
   readonly #upgradeChecks = new Map<string, UpgradeCheck>();
+  /** The brainstorms, by root, whose fresh thread is starting in T3, so a second press can't start another. */
+  readonly #refreshing = new Set<SessionId>();
   #ticking = false;
 
   private constructor(options: BrainstormOptions) {
@@ -390,7 +393,8 @@ export class Brainstorm {
     const request = this.#store.openRequest(id);
     if (request === null) return null;
     const snapshot = this.#seen.get(request.threadId)?.snapshot ?? null;
-    const { phase } = requestPhase(request, this.#store.attachment(id), snapshot === null ? null : observeRequest(id, request.n, snapshot));
+    const observation = snapshot === null ? null : observeRequest(id, request.n, snapshot);
+    const { phase } = requestPhase(request, this.#store.attachment(id), observation, this.#busyElsewhere(id) !== null);
     return phase === "fulfilled" || phase === "withdrawn" ? null : phase;
   }
 
@@ -542,8 +546,6 @@ export class Brainstorm {
       if (owner !== null) return fail(owner);
       const latest = this.#store.latestIteration(input.session);
       if (latest?.n !== p.latest?.n && latest !== null) return fail(stale(p.draft.manifest.base, latest.n));
-      // A confirm's marks are spent once its iteration lands.
-      if (this.#store.openRequest(input.session)?.scope.kind === "confirm") this.#store.clearMarks(input.session);
       const iteration: StoredIteration = {
         n: ((latest?.n ?? 0) + 1) as IterationN,
         threadId: input.thread,
@@ -551,6 +553,13 @@ export class Brainstorm {
         slots: p.draft.manifest.slots,
         createdAt: this.#now(),
       };
+      // A confirm's marks are spent once its iteration lands, and what it dropped takes Rob's settings and pins with it.
+      // Only what the commit did drop: a variant it kept against the confirm keeps them.
+      const scope = this.#store.openRequest(input.session)?.scope;
+      if (scope?.kind === "confirm") {
+        this.#store.clearMarks(input.session);
+        this.#letGo(input.session, p.removed.filter((b) => scope.drop.includes(b)), iteration.createdAt);
+      }
       this.#store.insertIteration({
         session: input.session,
         iteration,
@@ -674,7 +683,7 @@ export class Brainstorm {
     const drawn: Drawn = {
       titles: new Map(draft.blocks.map((b) => [b.id, b.title])),
       parts: after.parts,
-      before: new Set(previous.map((b) => b.id)),
+      slotsBefore: new Set((latest?.slots ?? []).map((s) => s.id)),
       newSlots: draft.manifest.slots.filter((s) => !(latest?.slots ?? []).some((x) => x.id === s.id)).length,
     };
     // A confirm drops the variants Rob let go, so their settings and pins going with them is no news to the agent.
@@ -1248,8 +1257,11 @@ export class Brainstorm {
         return this.#mark(id, action, latest, blockIds);
       case "confirm":
         return this.#confirm(id, latest, blockIds);
-      case "add_slot":
-        return this.#request(id, { scope: { kind: "add_slot" }, freetext: action.prompt }, latest, blockIds);
+      case "add_slot": {
+        const prompt = action.prompt.trim();
+        if (prompt === "") return invalid("say what the new slot is for");
+        return this.#request(id, { scope: { kind: "add_slot" }, freetext: prompt }, latest, blockIds);
+      }
       case "make_primary":
         this.#store.setPrimary(this.#rootOf(id), id);
         for (const member of this.#treeOf(id)) this.#emit(member);
@@ -1550,29 +1562,63 @@ export class Brainstorm {
         addresses: [],
       });
       this.#store.clearMarks(id);
+      this.#letGo(id, plan.drop, at);
     });
     return null;
   }
 
   /**
+   * What goes with the variants a confirm drops (ADR 009): Rob's settings on them, and his open pins, which no request
+   * could address once the variant is gone. A pin goes as when Rob deletes it, so its history stays in the store.
+   */
+  #letGo(id: SessionId, drop: readonly BlockId[], at: string): void {
+    for (const o of this.#store.overrides(id)) {
+      if (drop.includes(o.blockId)) this.#store.deleteOverride(id, o.blockId, o.prop);
+    }
+    for (const f of this.#feedback(id)) {
+      if (f.status.state === "open" && drop.includes(f.pin.blockId)) this.#store.deleteFeedback(id, f.id, at);
+    }
+  }
+
+  /**
    * Starts a new T3 thread for the brainstorm and moves every branch to it, so the agent works on with a fresh context.
    * The new agent's own attach moves them too, so a start whose reply is lost still ends attached. While the thread
-   * works a request it waits; once the thread is gone, this is the way on, and the open request follows to the new one.
+   * works a request it waits; once the thread is gone, this is the way on, and the open requests follow to the new one.
+   * One start runs per brainstorm at a time, so a second press can't make a second thread.
    */
   async #refreshThread(session: SessionSummary): Promise<Failure | null> {
+    const root = this.#rootOf(session.id);
+    if (this.#refreshing.has(root)) return invalid("a fresh thread is already starting for this brainstorm");
     const open = this.#store.openRequest(session.id) ?? this.#busyElsewhere(session.id);
     const lost = this.#store.attachment(session.id).lostAt !== null;
     if (open !== null && !lost) return { code: "request_open", message: `request ${open.n} is still open; let it finish or withdraw it first`, n: open.n };
-    const root = this.#rootOf(session.id);
     const title = this.#store.sessionName(root)?.title ?? session.title;
-    const result = await this.#bridge.start({ project: session.projectId, title, message: formatRefreshMessage(session.id, title, this.#agentHome) });
-    if (result.kind === "failed") return { code: "unavailable", message: `couldn't start a T3 thread: ${result.error}` };
-    this.#moveTree(session.id, result.thread);
-    if (open !== null) {
-      this.#store.setRequestState(open.session, open.n, { state: "sending" }, { threadId: result.thread });
-      this.#emit(open.session);
-      await this.#send(open.session, open.n, result.thread);
+    this.#refreshing.add(root);
+    let result: StartResult;
+    try {
+      result = await this.#bridge.start({ project: session.projectId, title, message: formatRefreshMessage(session.id, title, this.#agentHome) });
+    } finally {
+      this.#refreshing.delete(root);
     }
+    if (result.kind === "failed") return { code: "unavailable", message: `couldn't start a T3 thread: ${result.error}` };
+    const thread = result.thread;
+    // Read the open requests again: the start awaited T3, so one may have opened, or been withdrawn, meanwhile. Every
+    // one still open moves. The thread takes one at a time, so the first goes now, this branch's if it has one, and
+    // the rest wait for Rob's retry, as migration 11 leaves a second one.
+    const moved = this.#store.tx(() => {
+      this.#moveTree(session.id, thread);
+      const open = this.#treeOf(session.id).flatMap((m) => {
+        const r = this.#store.openRequest(m);
+        return r === null ? [] : [r];
+      });
+      const [first, ...rest] = [...open.filter((r) => r.session === session.id), ...open.filter((r) => r.session !== session.id)];
+      if (first !== undefined) this.#store.setRequestState(first.session, first.n, { state: "sending" }, { threadId: thread });
+      const error = "the fresh thread takes one request at a time, and another branch's went first; retry once it is done";
+      for (const r of rest) this.#store.setRequestState(r.session, r.n, { state: "send_failed", error }, { threadId: thread });
+      return { open, first };
+    });
+    for (const r of moved.open) this.#emit(r.session);
+    if (moved.first !== undefined) await this.#send(moved.first.session, moved.first.n, thread);
     return null;
   }
 
@@ -1631,7 +1677,8 @@ export class Brainstorm {
    * Confirms on a past iteration (ADR 009): a new branch of the brainstorm, on its thread, that continues from iteration
    * \`from\` of \`parentId\`. Its first iteration is that one narrowed by Rob's marks, with his settings baked in as
    * defaults and his open pins carried. With grafts, the narrowing waits for the agent: the first iteration keeps every
-   * variant, and request 1 is the confirm. An instruction asks the agent to try it on the branch.
+   * variant, and request 1 is the confirm. An instruction asks the agent to try it on the branch. With neither, request
+   * 1 is still the confirm, fulfilled by the first iteration, as an app-applied confirm is.
    */
   async fork(parentId: SessionId, input: ForkInput): Promise<Result<{ readonly fork: SessionId }>> {
     const parent = this.#store.session(parentId);
@@ -1700,7 +1747,15 @@ export class Brainstorm {
     const at = this.#now();
     const keptIds = new Set(kept.map((b) => b.id));
     const pins = this.#feedback(parentId).filter((f) => f.status.state === "open" && keptIds.has(f.pin.blockId));
-    const body: RequestBody | null = grafting ? { scope: plan!, freetext: instruction } : instruction !== null ? { scope: { kind: "all" }, freetext: instruction } : null;
+    // Request 1 is the confirm, unless only an instruction goes to the agent. With no grafts and no instruction the
+    // first iteration already carries the confirm out, so it fulfils the request (`answered`).
+    const body: RequestBody | null =
+      plan !== null && (grafting || instruction === null)
+        ? { scope: plan, freetext: instruction }
+        : instruction !== null
+          ? { scope: { kind: "all" }, freetext: instruction }
+          : null;
+    const answered = !grafting && instruction === null;
     const asked = new Set(body === null ? [] : requestFeedback(pins, body.scope).map((f) => f.id));
     const written = this.#store.tx((): Result<ThreadId> => {
       // The check awaited the worker, so another branch may have opened a request on the thread meanwhile.
@@ -1720,7 +1775,7 @@ export class Brainstorm {
           feedback: pins.map((f) => ({ pin: f.pin, text: f.text, asked: asked.has(f.id) })),
           system,
           theme: this.#store.sessionTheme(parentId),
-          request: body === null ? null : { body, at },
+          request: body === null ? null : { body, at, answered },
         },
         thread,
       );
@@ -2004,8 +2059,8 @@ function lostPins(
 type Drawn = {
   readonly titles: ReadonlyMap<BlockId, string>;
   readonly parts: ReadonlyMap<BlockId, readonly PartName[]>;
-  /** The blocks of the iteration the commit is based on. */
-  readonly before: ReadonlySet<BlockId>;
+  /** The slots of the iteration the commit is based on. */
+  readonly slotsBefore: ReadonlySet<SlotId>;
   /** How many slots the commit adds. */
   readonly newSlots: number;
 };
@@ -2026,7 +2081,8 @@ function requestWarnings(
         : scope.kind === "confirm"
           ? [...scope.mains.filter((m) => scope.grafts.some((g) => g.into === m.slot)).map((m) => blockIdOf(m.slot, m.variant)), ...scope.drop]
           : scope.kind === "add_slot"
-            ? touched.filter((b) => !drawn.before.has(b))
+            ? // Only the new slot's blocks: a new variant in a slot that was already there is another change.
+              touched.filter((b) => !drawn.slotsBefore.has(splitBlockId(b).slot))
             : null;
   const asked =
     scope.kind === "vary"
@@ -2061,18 +2117,27 @@ function requestWarnings(
   return [...outOfScope, ...specific, ...notAddressed];
 }
 
-/** A confirm leaves each slot with a Main holding only Main, and Main renders every element grafted into it. */
+/**
+ * A confirm leaves each slot with a Main holding only Main, under the id it had, and Main renders every element grafted
+ * into it.
+ */
 function confirmMismatches(n: RequestN, scope: ConfirmScope, drawn: Drawn): Issue[] {
   const kept = scope.drop.filter((b) => drawn.titles.has(b)).map((b) => issue("confirm_mismatch", `request ${n} drops ${b}, and this commit still has it`, { file: blockFile(b, "tsx") }));
+  const lost = scope.mains
+    .map((m) => blockIdOf(m.slot, m.variant))
+    .filter((id) => !drawn.titles.has(id))
+    .map((id) => issue("confirm_mismatch", `request ${n} keeps ${id} as Main, and this commit no longer has it`, { file: "brainstorm.json" }));
   const grafts = scope.grafts.flatMap((g) => {
     const main = scope.mains.find((m) => m.slot === g.into);
     if (main === undefined || g.from.part === null) return [];
     const id = blockIdOf(main.slot, main.variant);
+    // A Main that is gone is named once, above.
+    if (!drawn.titles.has(id)) return [];
     return (drawn.parts.get(id) ?? []).includes(g.from.part)
       ? []
       : [issue("confirm_mismatch", `${id} doesn't render data-part "${g.from.part}", the element request ${n} grafts into it from ${g.from.blockId}`, { file: blockFile(id, "tsx") })];
   });
-  return [...kept, ...grafts];
+  return [...kept, ...lost, ...grafts];
 }
 
 /** Each variant a vary asked for exists under its key and title, and still renders the element it varies. */

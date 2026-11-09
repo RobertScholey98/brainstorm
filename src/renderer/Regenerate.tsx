@@ -293,9 +293,9 @@ const ACTION_ICON: Partial<Record<RequestPhaseAction, LucideIcon>> = {
 };
 
 /**
- * Phases that need more than the bar has room for: an error, the takeover phrase, the agent's reply, or what the next
- * step does. The bar names the phase and the strip under it says the rest, in the phase's tone, so nothing Rob has to
- * read or copy is cut off. `own` is an action the strip carries instead of the bar, beside what it acts on.
+ * Phases that need more than the bar has room for: an error, the agent's reply, or what the next step does. The bar
+ * names the phase and the strip under it says the rest, in the phase's tone, so nothing Rob has to read is cut off.
+ * `own` is an action the strip carries instead of the bar, beside what it acts on.
  */
 const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; readonly note?: string; readonly own?: RequestPhaseAction }>> = {
   send_failed: { label: "Send failed" },

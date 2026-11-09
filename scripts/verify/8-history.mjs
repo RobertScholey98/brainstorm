@@ -508,7 +508,7 @@ try {
   check("the open pin carries over, and no request is open", [branched.feedback.open.map((f) => [f.text, f.pin.blockId]), branched.request], [[["Make the headline louder", "result/card"]], null]);
   if ((await window.$("[data-history]")) === null) await window.click("[data-history-toggle]");
   await window.waitForSelector("[data-history]");
-  check("its strip shows the branch's own run, which starts with the confirm that made it", [await window.getAttribute("[data-strip-run]", "data-strip-run"), (await strip(window)).map((e) => [e.n, e.origin])], ["Confirm 1", [[2, "Branched from iteration 1"]]]);
+  check("its strip shows the branch's own run, which starts with the confirm that made it, the app's answer saying what it kept", [await window.getAttribute("[data-strip-run]", "data-strip-run"), (await strip(window)).map((e) => [e.n, e.origin])], ["Confirm 1", [[2, "Kept Slot reel · 2 options dropped"]]]);
   await shot(window, shots, "6-branch");
   await window.click("[data-strip-run]");
   await window.click('[data-run-option="Start"]');
@@ -615,6 +615,8 @@ try {
       cpSync(join(slot, "neon"), join(slot, key), { recursive: true });
       const json = JSON.parse(readFileSync(join(slot, key, "block.json"), "utf8"));
       writeFileSync(join(slot, key, "block.json"), JSON.stringify({ ...json, title }, null, 2));
+      // Each option's spin button carries its own mark, so a merge that brings one into Main shows which it brought.
+      replaceIn(join(slot, key, "block.tsx"), 'data-part="spin-button"', `data-part="spin-button" data-option-mark="${key}"`);
     }
   }, ["--note", "Three bolder spin buttons"]);
   t3.endRun(DEMO_THREAD, "completed");
@@ -858,20 +860,33 @@ try {
   await window.click("[data-confirm-send]");
   await window.waitForSelector('[data-request-phase="queued"]', { timeout: PHASE_MS });
   check(
-    "Confirm sends one confirm request to the agent, and the marks hold while it is open",
-    [t3.sent().length - sentBeforeMerge, t3.sent().at(-1)?.message.split("\n")[0].includes(" · scope: confirm"), await window.getAttribute('[data-approve="neon"]', "aria-disabled")],
-    [1, true, "true"],
+    "Confirm sends one confirm request to the agent, and the marks hold while it is open, each still named for what it does with the reason as its description",
+    [
+      t3.sent().length - sentBeforeMerge,
+      t3.sent().at(-1)?.message.split("\n")[0].includes(" · scope: confirm"),
+      await window.$eval('[data-approve="neon"]', (b) => [b.getAttribute("aria-disabled"), b.getAttribute("aria-label"), b.getAttribute("aria-description")]),
+      await window.$eval("[data-remove-graft]", (b) => b.getAttribute("aria-label")),
+    ],
+    [1, true, ["true", "Stop keeping this as Main", "The confirm is with the agent, so its marks hold until it lands or you withdraw it"], "Leave Spin button out of Main"],
   );
   t3.startRun(DEMO_THREAD);
   const merged = agentCommit(session, (copy) => {
     const wheel = join(copy, "slots", "wheel");
     for (const gone of ["reel", "terminal", "spin-button-a", "spin-button-b", "spin-button-c"]) rmSync(join(wheel, gone), { recursive: true });
     replaceIn(join(wheel, "neon", "block.tsx"), '<div className="logo" data-part="logo">', '<p className="headline" data-part="headline">Up next</p>\n        <div className="logo" data-part="logo">');
+    // Spin button B's button replaces Neon's own, mark and all.
+    replaceIn(join(wheel, "neon", "block.tsx"), 'data-part="spin-button"', 'data-part="spin-button" data-option-mark="spin-button-b"');
   }, ["--note", "Merged the bolder spin button and the headline into Neon"]);
   t3.endRun(DEMO_THREAD, "completed");
   check("the agent's merge passes the confirm's checks", merged.warnings, []);
   await window.waitForSelector('[data-canvas-iteration="4"]', { timeout: PHASE_MS });
   check("iteration 4 holds only Main in the wheel, the unmarked result as it was, and the marks are spent", [[...context(session).latest.blocks].sort(), context(session).marks], [["result/card", "result/receipt", "wheel/neon"], { mains: {}, grafts: [], trashed: [] }]);
+  await showSlot(window, "wheel");
+  check(
+    "Main on the canvas now carries Spin button B's button and the picked headline",
+    [await canvas.$eval(inBlock("wheel/neon", "spin-button"), (el) => el.dataset.optionMark ?? null), (await canvas.textContent(inBlock("wheel/neon", "headline")))?.trim()],
+    ["spin-button-b", "Up next"],
+  );
 
   // A confirm with nothing to graft needs no agent: the app narrows the iteration itself.
   await showSlot(window, "result");
@@ -880,7 +895,8 @@ try {
   await window.click("[data-confirm-toggle]");
   await window.waitForSelector("[data-confirm-menu]");
   check("the confirm popover counts what goes, and applies at once", [await window.getAttribute("[data-confirm-dropped]", "data-confirm-dropped"), (await window.textContent("[data-confirm-hint]")).trim()], ["1", "Applies at once"]);
-  await window.click("[data-confirm-send]");
+  // Ctrl+Enter, the key the popover shows beside Confirm, sends it from wherever focus sits.
+  await window.keyboard.press("Control+Enter");
   await window.waitForSelector('[data-canvas-iteration="5"]', { timeout: PHASE_MS });
   check("Confirm writes iteration 5 without the trashed receipt, and no agent turn", [[...context(session).latest.blocks].sort(), t3.sent().length - sentBeforeConfirm], [["result/card", "wheel/neon"], 0]);
   check("the marks are spent", context(session).marks, { mains: {}, grafts: [], trashed: [] });

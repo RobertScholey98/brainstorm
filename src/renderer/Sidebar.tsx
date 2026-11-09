@@ -25,7 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { Count } from "@/components/ui/count";
-import { blockIdOf, type BlockView, type ContentHash, type IterationN, type Marks, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type StoredGraft, type VariantKey } from "../core/types";
+import { blockIdOf, type BlockView, type ContentHash, type IterationN, type Marks, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type Pin, type StoredGraft, type VariantKey } from "../core/types";
 import { approval, mainOf, shownVariants, trashRefusal } from "../core/main";
 import { partLabel } from "../core/part";
 import { keyEchoesTitle } from "../core/fork";
@@ -344,8 +344,8 @@ export function SessionPanel({
   onSlot: (slot: SlotId) => void;
   onVariant: (slot: SlotId, variant: VariantKey) => void;
   onAddSlot: () => void;
-  /** Null while the marks can't change: a confirm is open. The reason shows on the buttons. */
-  marking: (MarkHandlers & { blocked: null }) | { blocked: string };
+  /** Held while the marks can't change (a confirm is open); the reason shows on the buttons. */
+  marking: Marking;
   /** Confirm, at the panel's foot. */
   confirm: ReactNode;
 }) {
@@ -482,6 +482,7 @@ function BranchLine({ view }: { view: SessionView }) {
 /** Make primary is the session's own action, sent through the panel's context so the line needs no handler threading. */
 function MakePrimary() {
   const act = useContext(PanelActions);
+  if (act === null) throw new Error("MakePrimary needs PanelActions");
   return (
     <Hint label="Make this branch the brainstorm's main line" side="right">
       <Button variant="outline" size="xs" onClick={act.onMakePrimary} data-make-primary>
@@ -491,7 +492,14 @@ function MakePrimary() {
   );
 }
 
-export const PanelActions = createContext<{ onMakePrimary: () => void }>({ onMakePrimary: () => {} });
+/** The session panel's actions that reach past it. App provides them; a panel rendered without them is a wiring bug. */
+export const PanelActions = createContext<{ onMakePrimary: () => void } | null>(null);
+
+/** What a mark can do: the handlers while marking is open, or why it is held. */
+export type Marking = (MarkHandlers & { blocked: null }) | { blocked: string };
+
+/** What an element on its way into Main is called: its part, or the whole block's title. */
+const elementName = (pin: Pin, source: BlockView | undefined) => (pin.part === null ? (source?.title ?? pin.blockId) : partLabel(pin.part));
 
 /**
  * The picked slot: Main and what goes into it, then the other variants as options, then the ones Rob trashed. Up and
@@ -510,7 +518,7 @@ function SlotMarks({
   blockErrors: ReadonlyMap<ContentHash, string>;
   marks: Marks;
   onVariant: (variant: VariantKey) => void;
-  marking: (MarkHandlers & { blocked: null }) | { blocked: string };
+  marking: Marking;
 }) {
   const main = mainOf(slot, marks);
   const shown = shownVariants(slot, marks);
@@ -591,7 +599,7 @@ function VariantRow({
   role: "main" | "option";
   marks: Marks;
   onVariant: (variant: VariantKey) => void;
-  marking: (MarkHandlers & { blocked: null }) | { blocked: string };
+  marking: Marking;
 }) {
   const active = variant === slot.active;
   const title = block?.title ?? variant;
@@ -608,8 +616,8 @@ function VariantRow({
         : verdict.kind === "unmain"
           ? "Stop keeping this as Main"
           : verdict.kind === "graft"
-            ? `Bring ${partLabel(verdict.from.part!)} into Main`
-            : `Take ${partLabel(verdict.graft.from.part!)} back out of Main`;
+            ? `Bring ${elementName(verdict.from, block)} into Main`
+            : `Take ${elementName(verdict.graft.from, block)} back out of Main`;
   const pressed = implicit || verdict?.kind === "unmain" || verdict?.kind === "ungraft";
   const blocked = marking.blocked;
   return (
@@ -640,9 +648,14 @@ function VariantRow({
           </Hint>
         )}
         {!keyEchoesTitle(variant, title) && (
-          <Truncate className="flex-1 text-right text-xs font-normal text-fg-muted" data-variant-key>
-            {variant}
-          </Truncate>
+          // The key shows whole or not at all: a cut key ("ca…") names nothing. Beside a zero-width first item it either
+          // fits on the one line the row shows, or wraps onto a second line that the box clips.
+          <span className="flex h-4 min-w-0 flex-1 flex-wrap justify-end overflow-hidden">
+            <span aria-hidden className="h-4" />
+            <span className="text-xs font-normal whitespace-nowrap text-fg-muted" data-variant-key>
+              {variant}
+            </span>
+          </span>
         )}
       </SidebarMenuButton>
       <div
@@ -654,7 +667,8 @@ function VariantRow({
       >
         {verdict !== null && (
           <RowMark
-            label={blocked ?? approveLabel}
+            label={approveLabel}
+            reason={blocked}
             blocked={blocked !== null || implicit}
             pressed={pressed}
             onClick={() => blocked === null && !implicit && block !== undefined && marking.onApprove(block)}
@@ -666,7 +680,8 @@ function VariantRow({
         )}
         {role === "option" && (
           <RowMark
-            label={blocked ?? trashBlock ?? "Trash this option"}
+            label="Trash this option"
+            reason={blocked ?? trashBlock}
             blocked={blocked !== null || trashBlock !== null}
             onClick={() => blocked === null && trashBlock === null && block !== undefined && marking.onTrash(block)}
             data-trash={variant}
@@ -679,9 +694,13 @@ function VariantRow({
   );
 }
 
-/** A row's 24 px icon action, named by its hint, which says why when it can't act. */
+/**
+ * A row's 24 px icon action. Its name is always what it does, so a screen reader tells 👍 from 🗑 even while they are
+ * held; when it can't act, the hint shows why and the reason is its description.
+ */
 function RowMark({
   label,
+  reason = null,
   blocked,
   pressed,
   onClick,
@@ -689,17 +708,19 @@ function RowMark({
   ...data
 }: {
   label: string;
+  reason?: string | null;
   blocked: boolean;
   pressed?: boolean;
   onClick: () => void;
   children: ReactNode;
 } & Record<`data-${string}`, string | undefined>) {
   return (
-    <Hint label={label} side="right">
+    <Hint label={reason ?? label} side="right">
       <Button
         variant="ghost"
         size="icon-xs"
         aria-label={label}
+        aria-description={reason ?? undefined}
         aria-pressed={pressed}
         aria-disabled={blocked || undefined}
         onClick={(e) => {
@@ -715,8 +736,8 @@ function RowMark({
 }
 
 /** An element on its way into Main: what it is and where it comes from, with its removal. */
-function GraftRow({ graft, source, marking }: { graft: StoredGraft; source: BlockView | undefined; marking: (MarkHandlers & { blocked: null }) | { blocked: string } }) {
-  const what = graft.from.part === null ? (source?.title ?? graft.from.blockId) : partLabel(graft.from.part);
+function GraftRow({ graft, source, marking }: { graft: StoredGraft; source: BlockView | undefined; marking: Marking }) {
+  const what = elementName(graft.from, source);
   const from = source?.title ?? graft.from.blockId;
   return (
     <SidebarMenuItem data-graft={graft.id}>
@@ -724,12 +745,19 @@ function GraftRow({ graft, source, marking }: { graft: StoredGraft; source: Bloc
         <CornerDownRight aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-muted" />
         <span className="flex min-w-0 flex-col">
           <Truncate>{what}</Truncate>
-          <Truncate className="text-xs text-fg-muted">{graft.instruction === null ? `from ${from}` : `from ${from} · ${graft.instruction}`}</Truncate>
+          <Truncate className="text-xs text-fg-muted">{`from ${from}`}</Truncate>
+          {/* Rob's words for where it goes are what the agent reads, so they wrap and read whole. */}
+          {graft.instruction !== null && (
+            <span className="text-xs break-words text-fg-muted" data-graft-instruction-text>
+              “{graft.instruction}”
+            </span>
+          )}
         </span>
       </div>
       <div className="absolute top-1 right-1">
         <RowMark
-          label={marking.blocked ?? `Leave ${what} out of Main`}
+          label={`Leave ${what} out of Main`}
+          reason={marking.blocked}
           blocked={marking.blocked !== null}
           onClick={() => marking.blocked === null && marking.onRemoveGraft(graft)}
           data-remove-graft={String(graft.id)}
@@ -751,7 +779,7 @@ function TrashedFold({
   slot: SlotView;
   variants: readonly VariantKey[];
   blocks: ReadonlyMap<string, BlockView>;
-  marking: (MarkHandlers & { blocked: null }) | { blocked: string };
+  marking: Marking;
 }) {
   return (
     <Collapsible className="group/trashed" data-trashed-fold={variants.length}>
@@ -772,7 +800,8 @@ function TrashedFold({
                   </div>
                   <div className="absolute top-1 right-1">
                     <RowMark
-                      label={marking.blocked ?? `Bring ${title} back`}
+                      label={`Bring ${title} back`}
+                      reason={marking.blocked}
                       blocked={marking.blocked !== null}
                       onClick={() => marking.blocked === null && block !== undefined && marking.onRestore(block)}
                       data-restore={v}

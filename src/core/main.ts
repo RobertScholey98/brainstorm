@@ -122,10 +122,10 @@ export type ConfirmLine = {
 };
 
 export function confirmLines(slots: readonly SlotShape[], plan: ConfirmScope): ConfirmLine[] {
-  return slots.flatMap((slot) => {
+  return slots.map((slot) => {
     const dropped = plan.drop.filter((b) => splitBlockId(b).slot === slot.id).length;
     const grafts = plan.grafts.filter((g) => g.into === slot.id);
-    return [{ slot: slot.id, keeps: slot.variants.filter((v) => !plan.drop.includes(blockIdOf(slot.id, v))), grafts, dropped }];
+    return { slot: slot.id, keeps: slot.variants.filter((v) => !plan.drop.includes(blockIdOf(slot.id, v))), grafts, dropped };
   });
 }
 

@@ -50,10 +50,17 @@ and history origin.
   still exist, so the request reads like any other in the history.
 - **Grafts.** The request goes to the agent. `brainstorm context` spells out each graft (source block, part, target
   slot, instruction) and which variants to delete. A commit that answers it warns `confirm_mismatch` when a slot with
-  a Main still has other variants, or Main lacks a grafted part, and `out_of_scope` when it changes any other block.
+  a Main still has other variants, a Main is gone or renamed, or Main lacks a grafted part, and `out_of_scope` when it
+  changes any other block. The settings and pins it drops with the variants are no news, so they raise no
+  `override_dropped` or `pin_lost`.
 
 A confirm clears the marks it carried once its iteration lands. While it is open, the marks stay as they were sent and
 Rob can't change them.
+
+When its iteration lands, a confirm also lets go of what belonged to the variants it dropped: Rob's settings on them,
+and his open pins, which are deleted as when he deletes one. No later request asks the agent about a block that is
+gone, and no setting shows as kept but not applied. On the agent path only the variants the commit did drop go; one it
+kept against the confirm keeps its settings and pins.
 
 ### Confirms are like commits
 
@@ -71,8 +78,11 @@ working per branch without change.
 - **Making one.** Going back in history and confirming there makes a branch. Rob can 👍, pick and trash on the past
   iteration (kept in the renderer, as ADR 005's past picks are), and Confirm reads "Confirm as a branch". The branch's
   first iteration is that iteration narrowed by the marks, with Rob's settings baked in as defaults, as a fork's was.
-  With grafts, its request 1 is the confirm and goes to the thread; without, the app answers it. The Fork button goes;
-  its optional "what to try" box moves into the confirm popover and names the branch.
+  With grafts, its request 1 is the confirm and goes to the thread; without, the app answers it: request 1 is the
+  confirm, fulfilled by the branch's first iteration, so that iteration reads as the confirm in the strip and the top
+  bar. With an instruction and no grafts, request 1 is the instruction instead, and the first iteration reads as the
+  branch point. The Fork button goes; its optional "what to try" box moves into the confirm popover and names the
+  branch.
 - **One thread.** Every branch of a brainstorm uses its one T3 thread. The attachment rows move together: an attach,
   an adopt or a refresh writes the same thread to every session in the tree. Only one request is open per brainstorm,
   since one thread works on one thing at a time. A branch starts no thread of its own.
@@ -92,8 +102,9 @@ Top to bottom:
 
 - "All brainstorms", as before.
 - **The slot picker**, where the thread was. A dropdown of the slots, each with its count of variants not trashed, and "Add slot…".
-  Add slot opens a dialog with a prompt and sends a request with scope `{ kind: "add_slot" }`; a commit that answers
-  it warns `out_of_scope` when it changes an existing block, and `not_addressed` when no slot was added. The picker and
+  Add slot opens a dialog with a prompt, which can't be blank, and sends a request with scope `{ kind: "add_slot" }`; a
+  commit that answers it warns `out_of_scope` when it changes or adds a block in a slot that was already there, and
+  `not_addressed` when no slot was added. The picker and
   the canvas bar's slot tabs show the same slot.
 - On a branch that isn't primary, its line with Make primary, under the picker, so it reads before the slot it qualifies.
 - **Main** for the picked slot: its variant, then its grafts, each removable.
@@ -108,6 +119,12 @@ The thread becomes a chip in the top bar, beside the request status: its state d
 menu with **Start a fresh thread**. That starts a new T3 thread on the project whose first message tells the agent to
 attach to this brainstorm and read its context, then adopts it for every branch, as a fork's start did. It is off
 while a request is open. It is also the way back from a lost thread, in place of copying the takeover phrase.
+
+Once the new thread has started, the app reads the brainstorm's open requests again, since one may have opened or been
+withdrawn while T3 started it, and moves every one still open to the new thread. A withdrawn request stays withdrawn.
+The thread takes one request at a time, so the branch's own request is sent, or the first one when it has none, and
+any other waits as send failed for Rob's retry. One start runs per brainstorm at a time; a second press while it runs
+is refused.
 
 ## Alternatives not taken
 
@@ -125,7 +142,9 @@ while a request is open. It is also the way back from a lost thread, in place of
 
 - `test/main.test.ts`: which variant is a slot's Main, what a 👍 does on a top-level variant and on a vary option, what
   Confirm narrows each slot to, and dropping marks whose block is gone.
-- `test/brainstorm.test.ts`: the marks, a confirm the app answers, a confirm with grafts and its warnings, add slot,
-  a branch from a past iteration on the parent's thread, renumbering, one open request per brainstorm, make primary
-  and the primary's trail, start a fresh thread, and home's one row per brainstorm.
+- `test/brainstorm.test.ts`: the marks, a confirm the app answers, a confirm with grafts and its warnings, what a
+  confirm lets go of on either path, add slot, a branch from a past iteration on the parent's thread and its answered
+  confirm, renumbering, one open request per brainstorm, make primary and the primary's trail, start a fresh thread
+  and the requests it moves, and home's one row per brainstorm.
+- `test/store.test.ts`: migration 11, including a fork whose own thread never started.
 - `verify:8` drives the sidebar's marks, Confirm, the confirms dropdown, a branch and Make primary in the window.

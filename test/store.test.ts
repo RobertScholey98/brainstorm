@@ -96,17 +96,22 @@ test("a version 9 store turns forks into branches: their iterations continue the
   const fork = "s_fork0001";
   const hash = "c".repeat(64);
   const grand = "s_grand001";
+  // A fork whose own thread never finished starting: it was attached to a placeholder.
+  const pending = "s_pend0001";
   const addSession = v9.prepare("INSERT INTO session(id, project_id, title, brief, created_at) VALUES (?, 'p1', ?, '', ?)");
   addSession.run(fork, "Darker", at);
   addSession.run(grand, "Smaller", at);
-  v9.prepare("INSERT INTO attachment(session_id, thread_id, attached_at) VALUES (?, ?, ?), (?, ?, ?)").run(fork, t2, at, grand, t2, at);
+  addSession.run(pending, "Rounder", at);
+  v9.prepare("INSERT INTO attachment(session_id, thread_id, attached_at) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)").run(fork, t2, at, grand, t2, at, pending, `pending:${pending}`, at);
   const iteration = v9.prepare("INSERT INTO iteration(session_id, n, thread_id, slots_json, created_at) VALUES (?, ?, ?, '[]', ?)");
   for (const n of [1, 2, 3]) iteration.run(session, n, t1, at);
   for (const n of [1, 2]) iteration.run(fork, n, t2, at);
   iteration.run(grand, 1, t2, at);
+  iteration.run(pending, 1, t1, at);
   const link = v9.prepare("INSERT INTO fork(session_id, parent_id, parent_n, baked_json, created_at) VALUES (?, ?, ?, '[]', ?)");
   link.run(fork, session, 2, at);
   link.run(grand, fork, 1, at);
+  link.run(pending, session, 3, at);
   // What moves with a fork's iterations: their blocks and proposed components, its pins and their history, and the
   // requests they answered. The root's own request stays open on the root's thread.
   v9.prepare("INSERT INTO block_content(hash, source, css, block_json, controls_json, controls_derived, compiled, parts_json) VALUES (?, 'x', NULL, '{}', NULL, 1, 'x', '[]')").run(hash);
@@ -124,6 +129,7 @@ test("a version 9 store turns forks into branches: their iterations continue the
   request.run(fork, 1, body("darker"), 1, t2, "fulfilled", 2, at);
   request.run(fork, 2, body("darker again"), 2, t2, "sent", null, at);
   request.run(session, 1, body("warmer"), 3, t1, "sent", null, at);
+  request.run(pending, 1, body("rounder"), 1, `pending:${pending}`, "sending", null, at);
   v9.close();
 
   const store = new Store(path);
@@ -146,6 +152,11 @@ test("a version 9 store turns forks into branches: their iterations continue the
   ]);
   expect(store.openRequest(fork as SessionId)?.threadId).toBe(t1);
   expect(store.openRequest(session)).toMatchObject({ n: 1, base: 3, threadId: t1, state: { state: "sent" } });
+  expect(ns(pending), "a fork from 3 starts at 4").toEqual([4]);
+  expect(store.attachment(pending as SessionId).threadId, "a fork whose thread never started joins the root's").toBe(t1);
+  expect(store.requests(pending as SessionId).map((r) => [r.n, r.threadId, r.state])).toEqual([
+    [1, t1, { state: "send_failed", error: "Brainstorm now keeps every branch on one thread; retry to send it there" }],
+  ]);
   store.close();
 
   // The tree now has two open requests on one thread; the fork's waits for the root's.

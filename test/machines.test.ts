@@ -116,7 +116,7 @@ const seen = (
   observation: Observation | null,
   threadId = threadA,
 ) => {
-  const phase = requestPhase(request(state, threadId), attachment, observation);
+  const phase = requestPhase(request(state, threadId), attachment, observation, false);
   return {
     phase: phase.phase,
     actions: phase.actions,
@@ -137,6 +137,12 @@ describe("requestPhase, one test per design.md row", () => {
       actions: ["retry", "open_thread", "withdraw"],
       message: "Couldn't send (t3 exited 1). The request is saved.",
     });
+  });
+
+  test("while another branch's request holds the shared thread, Retry and Resend wait", () => {
+    const busy = (state: RequestState, threadId = threadA) => requestPhase(request(state, threadId), attached, null, true);
+    expect(busy({ state: "send_failed", error: "t3 exited 1" })).toEqual({ phase: "send_failed", error: "t3 exited 1", actions: ["open_thread", "withdraw"] });
+    expect(busy(sent, threadB)).toEqual({ phase: "previous_thread", actions: ["open_thread", "withdraw"] });
   });
 
   test("send_failed to a lost thread offers no way to open it", () => {
@@ -207,7 +213,7 @@ describe("requestPhase, one test per design.md row", () => {
   });
 
   test("fulfilled names two changed blocks, then counts the rest", () => {
-    const fulfilled = requestPhase(request({ state: "fulfilled", iteration: it(3) }), attached, null);
+    const fulfilled = requestPhase(request({ state: "fulfilled", iteration: it(3) }), attached, null, false);
     const message = (changed: string[]) => phaseMessage(fulfilled, { title: "Chore wheel", changed });
     expect([message([]), message(["Neon wheel", "Card"]), message(["Neon wheel", "Card", "Slot reel", "Receipt"])]).toEqual([
       "Iteration 3 · no blocks changed",
@@ -217,7 +223,7 @@ describe("requestPhase, one test per design.md row", () => {
   });
 
   test("a fulfilled vary counts the new variants that landed, by the element", () => {
-    const fulfilled = requestPhase(request({ state: "fulfilled", iteration: it(4) }), attached, null);
+    const fulfilled = requestPhase(request({ state: "fulfilled", iteration: it(4) }), attached, null, false);
     const variants = [
       { key: "spin-button-a", title: "Spin button A" },
       { key: "spin-button-b", title: "Spin button B" },

@@ -57,7 +57,7 @@ export function AddSlotDialog({
           </label>
           <div className="flex items-center gap-2">
             <span className="mr-auto text-xs text-fg-muted" data-add-slot-hint>
-              {blocked ?? "The agent adds it with its own designs, in the brainstorm's thread"}
+              {blocked ?? "The agent adds it, in this thread"}
             </span>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel

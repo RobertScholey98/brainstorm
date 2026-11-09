@@ -1,5 +1,5 @@
 import { Check, GitBranch } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SubmitKey } from "@/components/ui/kbd";
 import { FieldLabel } from "@/components/ui/label";
@@ -10,7 +10,7 @@ import { BlockedHint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { confirmLines, confirmPlan } from "../core/main";
 import { partLabel } from "../core/part";
-import { blockIdOf, type BlockView, type IterationN, type Marks, type SlotView } from "../core/types";
+import { blockIdOf, type BlockId, type BlockView, type IterationN, type Marks, type SlotView } from "../core/types";
 
 /**
  * Confirm, at the foot of the sidebar (ADR 009). At the latest it locks Rob's marks in; on a past iteration it makes a
@@ -90,7 +90,7 @@ function ConfirmForm({
   const [sending, setSending] = useState(false);
   const plan = confirmPlan(slots, marks);
   const lines = plan === null ? [] : confirmLines(slots, plan);
-  const title = (slot: SlotView, variant: string) => blocks.find((b) => b.id === blockIdOf(slot.id, variant as SlotView["active"]))?.title ?? variant;
+  const titleOf = (id: BlockId) => blocks.find((b) => b.id === id)?.title ?? id;
   const grafting = plan !== null && plan.grafts.length > 0;
   const instruction = text.trim() === "" ? null : text.trim();
   const ready = plan !== null || instruction !== null;
@@ -102,6 +102,21 @@ function ConfirmForm({
     setSending(false);
     if (ok) onClose();
   };
+  // Ctrl+Enter sends while the popover is open, wherever focus sits in it, as the key beside Confirm says. The form is
+  // mounted only while the popover shows, so the listener lives exactly as long.
+  const latest = useRef(submit);
+  useEffect(() => {
+    latest.current = submit;
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.key !== "Enter" || !(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      void latest.current();
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, []);
   return (
     <>
       <div className="grid gap-1.5" data-confirm-lines={lines.length}>
@@ -118,11 +133,13 @@ function ConfirmForm({
                     <Truncate>{slot.title}</Truncate>
                   </dt>
                   <dd className="grid min-w-0 gap-0.5">
-                    <Truncate>{line.keeps.length === 1 ? title(slot, line.keeps[0]!) : `${line.keeps.length} variants`}</Truncate>
+                    <Truncate>{line.keeps.length === 1 ? titleOf(blockIdOf(slot.id, line.keeps[0]!)) : `${line.keeps.length} variants`}</Truncate>
                     {line.grafts.map((g, i) => (
-                      <Truncate key={i} className="text-xs" data-confirm-graft>
-                        {`+ ${g.from.part === null ? (blocks.find((b) => b.id === g.from.blockId)?.title ?? g.from.blockId) : partLabel(g.from.part)} from ${blocks.find((b) => b.id === g.from.blockId)?.title ?? g.from.blockId}`}
-                      </Truncate>
+                      <span key={i} className="grid text-xs" data-confirm-graft>
+                        <Truncate>{`+ ${g.from.part === null ? titleOf(g.from.blockId) : partLabel(g.from.part)} from ${titleOf(g.from.blockId)}`}</Truncate>
+                        {/* What Rob asked of the agent for it, whole, since this is the last look before it goes. */}
+                        {g.instruction !== null && <span className="pl-3 break-words text-fg-muted">“{g.instruction}”</span>}
+                      </span>
                     ))}
                     {line.dropped > 0 && (
                       <span className="text-xs text-fg-muted" data-confirm-dropped={line.dropped}>
@@ -148,7 +165,6 @@ function ConfirmForm({
             rows={3}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && void submit()}
             placeholder="A darker take on the result sheet"
             className="resize-none"
             data-confirm-instruction

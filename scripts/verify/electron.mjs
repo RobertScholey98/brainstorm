@@ -252,18 +252,21 @@ export async function paneFeet(window) {
 }
 
 export async function shot(window, shots, name) {
-  // A popover still fading in or out reads as a defect in a still, so the shot waits out every finite animation that
-  // is running, for a second at most: a paused one would never finish.
-  await window.evaluate(() =>
-    Promise.race([
-      Promise.all(
-        document
-          .getAnimations()
-          .filter((a) => a.playState === "running" && a.effect?.getTiming().iterations !== Infinity)
-          .map((a) => a.finished.catch(() => {})),
-      ),
-      new Promise((done) => setTimeout(done, 1000)),
-    ]),
-  );
+  // A popover still fading in or out reads as a defect in a still, so the shot waits until two frames pass with no
+  // finite animation running, for two seconds at most: a paused one would never finish. One wait isn't enough, because a
+  // theme switch cascades: each nested `transition: color` starts only once its parent's color has moved, after a single
+  // wait has already collected what was running.
+  await window.evaluate(async () => {
+    const until = performance.now() + 2000;
+    const frame = () => new Promise((done) => requestAnimationFrame(() => done()));
+    const running = () => document.getAnimations().filter((a) => a.playState === "running" && a.effect?.getTiming().iterations !== Infinity);
+    while (performance.now() < until) {
+      await frame();
+      await frame();
+      const now = running();
+      if (now.length === 0) return;
+      await Promise.race([Promise.all(now.map((a) => a.finished.catch(() => {}))), new Promise((done) => setTimeout(done, until - performance.now()))]);
+    }
+  });
   await window.screenshot({ path: join(shots, `${name}.png`) });
 }

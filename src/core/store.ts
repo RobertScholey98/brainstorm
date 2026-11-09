@@ -307,8 +307,11 @@ export type NewFork = {
   readonly proposed: readonly IterationProposed[];
   /** Rob's open pins, carried as new feedback; `asked` puts one in request 1, as its scope's rule says. */
   readonly feedback: readonly { readonly pin: Pin; readonly text: string; readonly asked: boolean }[];
-  /** What the branch asks the agent for first, or null when its first iteration is all it needs. */
-  readonly request: { readonly body: RequestBody; readonly at: string } | null;
+  /**
+   * The branch's request 1, or null when it has none. An `answered` one is a confirm the first iteration already carries
+   * out, so that iteration fulfils it; any other goes to the agent.
+   */
+  readonly request: { readonly body: RequestBody; readonly at: string; readonly answered: boolean } | null;
   /** The parent's design system version and theme, which the fork keeps. */
   readonly system: SessionSystem | null;
   readonly theme: readonly { readonly key: string; readonly value: string }[];
@@ -554,9 +557,12 @@ export class Store {
     ).map(toListing);
   }
 
-  /** The fork, its iteration 1 with carried feedback, then request 1, so the iteration can't fulfil the request. */
+  /**
+   * The fork, its first iteration with carried feedback, then request 1, so the iteration can't fulfil the request. An
+   * answered request goes in before the iteration instead, so the iteration does fulfil it.
+   */
   createFork(input: NewFork, thread: ThreadId): void {
-    const { session, fork, iteration } = input;
+    const { session, fork, iteration, request } = input;
     this.tx(() => {
       this.createSession(session, thread, input.system);
       for (const t of input.theme) this.setSessionTheme(session.id, t.key, t.value, fork.createdAt);
@@ -568,6 +574,8 @@ export class Store {
         JSON.stringify(fork.baked),
         fork.createdAt,
       );
+      // It was made on the parent's iteration, so that is its base.
+      if (request?.answered === true) this.insertRequest(session.id, { body: request.body, feedbackIds: [], base: fork.from, threadId: thread, at: request.at });
       this.insertIteration({
         session: session.id,
         iteration,
@@ -578,9 +586,9 @@ export class Store {
         addresses: [],
       });
       const ids = input.feedback.map((f) => this.insertFeedback(session.id, { pin: f.pin, text: f.text, createdIn: iteration.n, at: fork.createdAt }));
-      if (input.request !== null) {
+      if (request !== null && !request.answered) {
         const asked = ids.filter((_, i) => input.feedback[i]?.asked === true);
-        this.insertRequest(session.id, { body: input.request.body, feedbackIds: asked, base: iteration.n, threadId: thread, at: input.request.at });
+        this.insertRequest(session.id, { body: request.body, feedbackIds: asked, base: iteration.n, threadId: thread, at: request.at });
       }
     });
   }
@@ -726,14 +734,10 @@ export class Store {
     ).map((r) => ({ id: str(r.id) as SessionId, title: str(r.title), from: num(r.parent_n) as IterationN }));
   }
 
-  /** A session's title and whether it is gone, read even once archived, so a fork can still name its parent. */
-  sessionName(id: SessionId): { title: string; gone: boolean } | null {
-    const r = this.#get("SELECT title, archived_at FROM session WHERE id = ?", id);
-    return r === undefined ? null : { title: str(r.title), gone: r.archived_at !== null };
-  }
-
-  archive(session: SessionId, at: string): void {
-    this.#run("UPDATE session SET archived_at = ? WHERE id = ?", at, session);
+  /** A session's title, read even once archived, so a branch can still name its parent. */
+  sessionName(id: SessionId): { title: string } | null {
+    const r = this.#get("SELECT title FROM session WHERE id = ?", id);
+    return r === undefined ? null : { title: str(r.title) };
   }
 
   /** Each block id's first iteration, for whether it is new. */
