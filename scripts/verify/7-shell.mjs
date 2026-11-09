@@ -1361,12 +1361,26 @@ try {
   await window.setViewportSize({ width: 1440, height: 900 });
   await window.waitForSelector("[data-home-overview]");
   await window.click(`[data-session="${loose}"]`);
-  // The thread lives in the top bar's chip (ADR 009), which says when it is gone and leads with the way on.
+  // The thread lives in the top bar's chip (ADR 009), which says when it is gone; the way on stands beside it.
   await window.waitForFunction(() => document.querySelector("[data-thread-chip]")?.textContent.trim() === "Thread lost");
   check("a brainstorm whose thread is gone says Thread lost on the top bar's thread chip", (await window.textContent("[data-thread-chip]"))?.trim(), "Thread lost");
+  // Rebaselined for ADR 009, the chip carries the thread's state: with no request open the bar still offers Start a
+  // fresh thread, once, beside the chip, so the chip's menu no longer repeats it and only says what happened.
+  check(
+    "with no request open, the bar offers Start a fresh thread once beside the chip, and says Thread lost nowhere else",
+    await window.evaluate(() => [
+      [...document.querySelectorAll("[data-topbar] [data-request-action]")].map((el) => el.dataset.requestAction),
+      document.querySelectorAll("[data-topbar] [data-request-phase], [data-request-detail]").length,
+    ]),
+    [["fresh_thread"], 0],
+  );
   await window.click("[data-thread-chip]");
   await window.waitForSelector("[data-thread-menu]");
-  check("the chip's menu leads with Start a fresh thread", await window.$eval("[data-thread-menu]", (menu) => menu.querySelector("button")?.hasAttribute("data-refresh-thread")), true);
+  check(
+    "the chip's menu says the thread is gone, with no second Start a fresh thread",
+    await window.$eval("[data-thread-menu]", (menu) => [menu.querySelector("[data-slot=popover-title]")?.textContent, menu.querySelectorAll("button, a").length]),
+    ["Thread lost", 0],
+  );
   await window.keyboard.press("Escape");
   await window.waitForSelector("[data-thread-menu]", { state: "hidden" });
   check(

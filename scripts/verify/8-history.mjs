@@ -223,10 +223,34 @@ const canvasAt = (window) =>
   window.$eval("[data-canvas-iteration]", (el) => ({ n: Number(el.dataset.canvasIteration), past: el.dataset.canvasPast === undefined ? null : Number(el.dataset.canvasPast) }));
 const pool = (canvas) => canvas.textContent(inBlock("wheel/neon", "pool"));
 const rows = (window, group) => window.$$eval(`[${group}] [data-variant]`, (els) => els.map((e) => e.dataset.variant));
+/**
+ * Each line of the pick popover's note and whether it reads whole: no line or box around it wider or taller than it
+ * shows, none cut to an ellipsis, none past the popover's edge. "Runs past its box" passed while the note was cut.
+ */
+const pickNote = () =>
+  settled(() =>
+    window.$eval("[data-graft-composer]", (composer) => {
+      const box = composer.getBoundingClientRect();
+      const cut = (el) => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight;
+      return [...composer.querySelectorAll("[data-graft-note] p")].map((p) => {
+        const ink = document.createRange();
+        ink.selectNodeContents(p);
+        const r = ink.getBoundingClientRect();
+        let whole = !p.textContent.trim().endsWith("…") && r.left >= box.left && r.right <= box.right && r.bottom <= box.bottom;
+        for (let el = p; el !== composer; el = el.parentElement) whole &&= !cut(el) && getComputedStyle(el).textOverflow !== "ellipsis";
+        return [p.textContent.trim(), whole];
+      });
+    }),
+  );
 /** A row's marks show on hover, as T3 Code's row actions do. */
 async function mark(window, kind, variant) {
   await window.hover(`[data-slot-id] [data-variant="${variant}"]`);
   await window.click(`[data-${kind}="${variant}"]`);
+}
+/** A held mark is `aria-disabled`, which Playwright won't press, so the pointer presses it as Rob's would. */
+async function press(window, kind, variant) {
+  await window.hover(`[data-slot-id] [data-variant="${variant}"]`);
+  await window.click(`[data-${kind}="${variant}"]`, { force: true });
 }
 
 let { app, window, errors } = await launch(home, env);
@@ -527,6 +551,21 @@ try {
   await window.waitForSelector("[data-branch-line]");
   const branchId = await window.getAttribute("[data-branch-line]", "data-branch-line");
   check("the window opened the branch, which says where it left from and offers Make primary", [(await window.textContent("[data-branch-line]")).replace("Make primary", "").trim(), (await window.$("[data-make-primary]")) !== null], ["Branch from iteration 1", true]);
+  check(
+    "the branch line's way back leads with the back chevron All brainstorms has, so it reads as a way back rather than a label",
+    await window.evaluate(() => {
+      const glyph = (sel) => [...document.querySelector(`${sel} svg`).classList].find((c) => c.startsWith("lucide-"));
+      return [glyph("[data-branch-back]"), glyph("[data-back]")];
+    }),
+    ["lucide-chevron-left", "lucide-chevron-left"],
+  );
+  await window.hover("[data-branch-back]");
+  check(
+    "and its hint still names the line it opens",
+    await window.waitForSelector('[data-slot="tooltip-content"]', { state: "visible" }).then((h) => h.evaluate((el) => el.textContent.trim())),
+    "Open Chore roulette, the line this branch left",
+  );
+  await window.mouse.move(1, 1);
   check("keeping a Main needs no agent and no new thread", [t3.sent().length - sentBefore, t3.started()], [0, []]);
   const branched = context(branchId);
   check("the branch is on the brainstorm's own thread", branched.attachedThread, DEMO_THREAD);
@@ -856,6 +895,23 @@ try {
   // Grafts at the latest: with Neon as Main, a vary option's 👍 brings its element in, and Pick brings one from another
   // slot (ADR 009). Confirm then goes to the agent, which merges them and drops the rest.
   await showSlot(window, "wheel");
+  // Into a slot with no Main, a pick makes the variant showing there its Main first (`withPick`), and says so.
+  await window.click("[data-graft-toggle]");
+  await canvas.click(inBlock("result/card", "headline"));
+  await window.waitForSelector("[data-graft-composer]");
+  check(
+    "picked into the wheel while it has no Main, the popover says the pick makes Spin button A, the variant showing, its Main, every line of its note whole",
+    await pickNote(),
+    [
+      ["Makes Spin button A Main of The wheel", true],
+      ["Without a word, the agent places it where it fits best. Applied when you confirm.", true],
+    ],
+  );
+  await shots2(window, shots, "16-pick-makes-main");
+  await window.keyboard.press("Escape");
+  await window.waitForSelector("[data-graft-composer]", { state: "detached" });
+  check("Escape closes it with no mark made", context(session).marks, { mains: {}, grafts: [], trashed: [] });
+  await showSlot(window, "wheel");
   await mark(window, "approve", "neon");
   await window.waitForSelector('[data-main-group] [data-variant="neon"]');
   check("with Neon as Main, a vary option's 👍 offers to bring its spin button into Main", await window.getAttribute('[data-approve="spin-button-b"]', "data-approve-kind"), "graft");
@@ -867,6 +923,31 @@ try {
   await window.waitForSelector("[data-graft-composer]");
   check("the pick popover lands in the slot open in the sidebar unless Rob chooses another", await window.getAttribute("[data-graft-into]", "data-graft-into"), "wheel");
   check("nothing in the pick popover runs past its box", await outsideBox(window, "[data-graft-composer]"), []);
+  // Its note is the one place a pick says nothing runs until Confirm, so every line of it reads whole.
+  const notes = [];
+  for (const theme of ["light", "dark"]) {
+    await window.emulateMedia({ colorScheme: theme });
+    for (const [width, height] of [
+      [1440, 900],
+      [1100, 720],
+    ]) {
+      await window.setViewportSize({ width, height });
+      for (const words of ["", "above the logo"]) {
+        await window.fill("[data-graft-instruction]", words);
+        notes.push([`${theme} ${width} ${words === "" ? "no instruction" : "instruction"}`, ...(await pickNote())]);
+      }
+    }
+  }
+  await window.emulateMedia({ colorScheme: "light" });
+  await window.setViewportSize({ width: 1440, height: 900 });
+  const NO_WORD = ["Without a word, the agent places it where it fits best. Applied when you confirm.", true];
+  const WORDS = ["Applied when you confirm.", true];
+  check(
+    "the pick popover's note reads whole, with and without an instruction, in both themes, at 1440 and 1100, and says it applies when you confirm",
+    notes,
+    ["light", "dark"].flatMap((t) => [1440, 1100].flatMap((w) => [[`${t} ${w} no instruction`, NO_WORD], [`${t} ${w} instruction`, WORDS]])),
+  );
+  check("the wheel has Neon as Main, so the pick says nothing about making one", await window.$("[data-graft-makes-main]"), null);
   await window.fill("[data-graft-instruction]", "above the logo");
   await shots2(window, shots, "16-pick");
   await window.click("[data-graft-add]");
@@ -904,6 +985,24 @@ try {
     ],
     [1, true, ["true", "Stop keeping this as Main", "The confirm is with the agent, so its marks hold until it lands or you withdraw it"], "Leave Spin button out of Main"],
   );
+  // Pressing a held mark does nothing: no mark moves, no request goes, no notice rises, and it still says why.
+  const HELD = "The confirm is with the agent, so its marks hold until it lands or you withdraw it";
+  const heldState = async () => [context(session).marks, await rows(window, "data-main-group"), await rows(window, "data-options-group"), t3.sent().length];
+  const beforeHeld = await heldState();
+  await press(window, "trash", "reel");
+  await press(window, "approve", "neon");
+  await window.waitForTimeout(500);
+  check(
+    "a held 🗑 and a held 👍, pressed while the confirm is with the agent (the press lands: the 👍 takes focus), change nothing and raise no notice, each giving its reason as its description",
+    [
+      await window.evaluate(() => document.activeElement?.dataset.approve ?? null),
+      await heldState(),
+      (await window.$("[data-slot=toast]")) === null,
+      await window.$eval('[data-trash="reel"]', (b) => [b.getAttribute("aria-disabled"), b.getAttribute("aria-description")]),
+      await window.$eval('[data-approve="neon"]', (b) => [b.getAttribute("aria-disabled"), b.getAttribute("aria-description")]),
+    ],
+    ["neon", beforeHeld, true, ["true", HELD], ["true", HELD]],
+  );
   t3.startRun(DEMO_THREAD);
   const merged = agentCommit(session, (copy) => {
     const wheel = join(copy, "slots", "wheel");
@@ -921,6 +1020,21 @@ try {
     "Main on the canvas now carries Spin button B's button and the picked headline",
     [await canvas.$eval(inBlock("wheel/neon", "spin-button"), (el) => el.dataset.optionMark ?? null), (await canvas.textContent(inBlock("wheel/neon", "headline")))?.trim()],
     ["spin-button-b", "Up next"],
+  );
+  // The wheel's last variant is its Main without a 👍: Main can't be trashed, nor a slot's last variant, so it offers
+  // no 🗑, and its 👍 is held, named for why, and does nothing when pressed.
+  await press(window, "approve", "neon");
+  await window.waitForTimeout(500);
+  check(
+    "the wheel's last variant, Main with no 👍, offers no 🗑, and its held 👍, pressed, keeps the marks as they were and raises no notice",
+    [
+      (await window.$('[data-trash="neon"]')) === null,
+      await window.$eval('[data-approve="neon"]', (b) => [b.getAttribute("aria-disabled"), b.getAttribute("aria-label")]),
+      context(session).marks,
+      await rows(window, "data-main-group"),
+      (await window.$("[data-slot=toast]")) === null,
+    ],
+    [true, ["true", "Main, as the only variant left"], { mains: {}, grafts: [], trashed: [] }, ["neon"], true],
   );
 
   // A confirm with nothing to graft needs no agent: the app narrows the iteration itself.

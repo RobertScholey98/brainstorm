@@ -61,7 +61,8 @@ import { failedTitle, type Notice } from "./notice";
 import { PendingOverrides } from "./overrides";
 import { PresentControls } from "./PresentControls";
 import { WAITING } from "./Preview";
-import { AppSidebar, HomePanel, SessionPanel, type MarkHandlers } from "./Sidebar";
+import { AppSidebar, HomePanel } from "./Sidebar";
+import { SessionPanel, type MarkHandlers } from "./SessionPanel";
 import { RequestDetail } from "./Regenerate";
 import { settleUndoes, useSettleShortcut } from "./settle";
 import { SessionBar, TopBar } from "./TopBar";
@@ -734,7 +735,8 @@ function SessionWorkspace({
   // What the sidebar and Confirm show: the service already reads its marks live, and the past's local marks are read the
   // same way, so a graft whose Main was taken back waits out of sight there too. The raw ones stay in `past`, where
   // choosing a Main again brings the graft back.
-  const marks = past !== null ? liveMarks(past.marks, iteration?.slots ?? NO_SLOTS) : (view?.marks ?? NO_MARKS);
+  // Held across renders, since the preview window's scene carries them for its pick popover.
+  const marks = useMemo(() => (past !== null ? liveMarks(past.marks, iteration?.slots ?? NO_SLOTS) : (view?.marks ?? NO_MARKS)), [past, iteration, view?.marks]);
   const confirmOpen = past === null && view?.request != null && view.request.request.scope.kind === "confirm" && isOpenRequest(view.request.request.state.state);
   const marksBlocked = confirmOpen ? "The confirm is with the agent, so its marks hold until it lands or you withdraw it" : null;
   const pickBlocked = iteration === null ? "There is nothing on the canvas to pick from yet" : (marksBlocked ?? unrendered);
@@ -806,8 +808,9 @@ function SessionWorkspace({
       hovered: hoveredFeedback,
       past: readOnly,
       pinBlocked,
+      marks,
     }),
-    [sessionId, view?.session.title, title, slots, frames, canvasSystem, frameProps, selectedBlock?.id, slot?.id, shownView, picking, pins, focusedFeedback, hoveredFeedback, readOnly, pinBlocked],
+    [sessionId, view?.session.title, title, slots, frames, canvasSystem, frameProps, selectedBlock?.id, slot?.id, shownView, picking, pins, focusedFeedback, hoveredFeedback, readOnly, pinBlocked, marks],
   );
   const { link } = preview;
   useEffect(() => link.blocks(blocks), [link, blocks]);
@@ -1035,6 +1038,8 @@ function SessionWorkspace({
             rect={interaction.rect}
             block={blocks.find((b) => b.id === interaction.pin.blockId) ?? null}
             slots={slots}
+            blocks={blocks}
+            marks={marks}
             current={pickInto.current}
             bounds={{ width: canvasArea.current?.clientWidth ?? 0, height: canvasArea.current?.clientHeight ?? 0 }}
             onAdd={async (into, instruction) => {

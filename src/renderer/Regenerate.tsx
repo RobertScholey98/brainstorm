@@ -300,7 +300,8 @@ const ACTION_ICON: Partial<Record<RequestPhaseAction, LucideIcon>> = {
 const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; readonly note?: string; readonly own?: RequestPhaseAction }>> = {
   send_failed: { label: "Send failed" },
   run_failed: { label: "Run failed", note: "The agent's run failed in T3. Open the thread to see why, or Retry." },
-  thread_lost: { label: "Thread lost", note: "This brainstorm's thread is gone. Start a fresh thread, and the open request goes to it." },
+  // A lost thread has no strip: the thread chip carries it, its menu says the rest, and Start a fresh thread stands
+  // beside it in the bar (ADR 009).
   previous_thread: { label: "Sent to the previous thread", note: "Another thread took this brainstorm over. Resend sends the request to it." },
   no_change: { label: "No change", note: "The agent replied in T3 without changing the design." },
 };
@@ -312,20 +313,18 @@ const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; re
  */
 export function RequestStatus({ view }: { view: SessionView }) {
   const request = view.request;
-  // A lost thread stays named once its request closes, since nothing can be sent until it is taken over.
-  const lost = view.attachment.lostAt !== null && (request === null || request.phase.actions.length === 0);
-  const counting = !lost && request !== null && PHASE[request.phase.phase].ended !== true;
+  // The thread's own state, a lost one included, is the thread chip's to say (ADR 009); this says the request's.
+  const counting = request !== null && PHASE[request.phase.phase].ended !== true;
   const now = useNow(counting ? 1_000 : undefined);
-  if (!lost && request === null) return null;
-  const phase = lost ? "thread_lost" : request!.phase.phase;
+  if (request === null) return null;
+  const phase = request.phase.phase;
   const detail = DETAIL[phase];
-  const long = detail?.label ?? request!.message;
+  const long = detail?.label ?? request.message;
   const short = PHASE[phase].short;
   return (
     <div
       className={`grid-phase grid items-center gap-2 text-sm ${TONE_TEXT[PHASE[phase].tone]}`}
-      data-request-phase={request?.phase.phase}
-      data-thread-lost={lost || undefined}
+      data-request-phase={phase}
       data-collapse={short === long ? undefined : COLLAPSE.status}
     >
       <PhaseIcon phase={phase} />
@@ -341,16 +340,19 @@ export function RequestStatus({ view }: { view: SessionView }) {
           {short}
         </Truncate>
       )}
-      {counting && <Elapsed since={request!.request.sentAt ?? request!.request.createdAt} now={now} rank={COLLAPSE.elapsed} />}
+      {counting && <Elapsed since={request.request.sentAt ?? request.request.createdAt} now={now} rank={COLLAPSE.elapsed} />}
     </div>
   );
 }
 
-/** The phase's actions that the bar shows; one the strip under the bar holds itself stays there. */
+/**
+ * The phase's actions that the bar shows; one the strip under the bar holds itself stays there. A lost thread's way
+ * back stands in the bar whether or not a request is open, beside the chip that says the thread is lost (ADR 009).
+ */
 export function phaseActions(view: SessionView): readonly RequestPhaseAction[] {
-  if (view.request === null) return [];
-  const own = DETAIL[view.request.phase.phase]?.own;
-  return view.request.phase.actions.filter((action) => action !== own);
+  const own = view.request === null ? undefined : DETAIL[view.request.phase.phase]?.own;
+  const actions = (view.request?.phase.actions ?? []).filter((action) => action !== own);
+  return view.attachment.lostAt !== null && !actions.includes("fresh_thread") ? ["fresh_thread", ...actions] : actions;
 }
 
 /**
@@ -413,7 +415,15 @@ function PhaseAction({
     case "open_thread":
       return <OpenThread view={view} rank={rank} />;
     case "fresh_thread":
-      return <ActionButton action={action} rank={rank} onClick={() => void send({ kind: "refresh_thread" })} />;
+      // With no request open there is nothing to send on, only the thread to carry on in.
+      return (
+        <ActionButton
+          action={action}
+          rank={rank}
+          hint={view.request?.phase.actions.includes("withdraw") === true ? undefined : "Carry on in a new T3 thread, and every branch with it"}
+          onClick={() => void send({ kind: "refresh_thread" })}
+        />
+      );
   }
 }
 
@@ -429,9 +439,9 @@ function OpenThread({ view, rank }: { view: SessionView; rank: number }) {
 }
 
 /** Phase actions are full-height outline buttons, the same size as Regenerate and Export beside them. */
-function ActionButton({ action, rank, onClick }: { action: keyof typeof ACTION_HINT; rank: number; onClick: () => void }) {
+function ActionButton({ action, rank, hint = ACTION_HINT[action], onClick }: { action: keyof typeof ACTION_HINT; rank: number; hint?: string; onClick: () => void }) {
   return (
-    <Hint name={ACTION_LABEL[action]} label={ACTION_HINT[action]} side="left">
+    <Hint name={ACTION_LABEL[action]} label={hint} side="left">
       <Button variant="outline" className={COMPACT} onClick={onClick} data-collapse={rank} data-request-action={action}>
         <ActionLabel action={action} />
       </Button>
