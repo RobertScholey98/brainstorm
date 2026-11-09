@@ -76,7 +76,7 @@ const ui = async (method, path, body) => {
 };
 
 try {
-  const added = cli(["system", "add", kit, "--thread", MAIN], { thread: MAIN, cwd: mainCheckout });
+  const added = cli(["system", "add", kit], { thread: MAIN, cwd: mainCheckout });
   const system = added.out[0]?.match(/\bds_[a-z0-9]+/)?.[0];
   check("system add makes the new system its project's", [added.code, added.out.slice(-2)], [
     0,
@@ -93,16 +93,16 @@ try {
 
   check("Rob confirms the system in the window", (await ui("POST", `/v1/ui/systems/${system}/review`, { kind: "confirm" })).data?.review?.state, "confirmed");
   const inWorktree = cli(["session", "new", "--title", "In a worktree"], { thread: WORKTREE, cwd: worktree });
-  check("a brainstorm in a worktree builds with the project's system", [inWorktree.code, inWorktree.out[2]], [0, "design system: @fixture/kit v1, this project's"]);
+  check("a brainstorm in a worktree builds with the project's system", [inWorktree.code, inWorktree.out[2]], [0, `design system: @fixture/kit (${system}) v1, this project's`]);
   const inMain = cli(["session", "new", "--title", "In the main checkout"], { thread: MAIN, cwd: mainCheckout });
-  check("so does one in the main checkout", inMain.out[2], "design system: @fixture/kit v1, this project's");
+  check("so does one in the main checkout", inMain.out[2], `design system: @fixture/kit (${system}) v1, this project's`);
 
   const before = cli(["session", "new", "--title", "New project"], { thread: FRESH, cwd: fresh });
   check("a new project has no system", before.out[2], "design system: none; this project has none set (brainstorm project use <system> sets one)");
   const use = cli(["project", "use", "@fixture/kit"], { thread: FRESH, cwd: fresh });
   check("project use sets it from the new project's thread", [use.code, use.out], [0, [`this project: brainstorms build with @fixture/kit (${system})`]]);
   const after = cli(["session", "new", "--title", "New project again"], { thread: FRESH, cwd: fresh });
-  check("and the new project's next brainstorm builds with it", after.out[2], "design system: @fixture/kit v1, this project's");
+  check("and the new project's next brainstorm builds with it", after.out[2], `design system: @fixture/kit (${system}) v1, this project's`);
 
   const projects = await ui("GET", "/v1/ui/projects");
   check(

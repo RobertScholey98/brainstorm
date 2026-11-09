@@ -35,7 +35,7 @@ test("a version 1 store gains a null name for the projects it already has", () =
   const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
   seeded(path).close();
   const v1 = new DatabaseSync(path);
-  v1.exec("ALTER TABLE project DROP COLUMN name; DROP TABLE ui_pref; ALTER TABLE block_content ADD COLUMN about TEXT; ALTER TABLE session DROP COLUMN settled_at; ALTER TABLE session DROP COLUMN unsettled_at; DROP TABLE fork; DROP TABLE variant_seen; DROP TABLE promotion; DROP TABLE iteration_proposed; DROP TABLE proposed_content; DROP TABLE session_theme; ALTER TABLE session DROP COLUMN system_n; ALTER TABLE session DROP COLUMN system_id; DROP TABLE design_system_theme; DROP TABLE design_system_version; DROP TABLE project_system; DROP TABLE design_system; DROP TABLE system_import; PRAGMA user_version = 1;");
+  v1.exec("ALTER TABLE project DROP COLUMN name; DROP TABLE ui_pref; ALTER TABLE block_content ADD COLUMN about TEXT; ALTER TABLE session DROP COLUMN settled_at; ALTER TABLE session DROP COLUMN unsettled_at; DROP TABLE fork; DROP TABLE variant_seen; DROP TABLE promotion; DROP TABLE iteration_proposed; DROP TABLE proposed_content; DROP TABLE session_theme; ALTER TABLE session DROP COLUMN system_n; ALTER TABLE session DROP COLUMN system_id; DROP TABLE design_system_theme; DROP TABLE design_system_version; DROP TABLE project_system; ALTER TABLE project DROP COLUMN repo_git; DROP TABLE design_system; DROP TABLE system_import; PRAGMA user_version = 1;");
   v1.close();
   const store = new Store(path);
   expect(store.schemaVersion()).toBe(10);
@@ -62,7 +62,7 @@ test("a version 3 store drops variant notes and stores each noted block under th
   const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
   seeded(path).close();
   const v3 = new DatabaseSync(path);
-  v3.exec("ALTER TABLE block_content ADD COLUMN about TEXT; ALTER TABLE session DROP COLUMN settled_at; ALTER TABLE session DROP COLUMN unsettled_at; DROP TABLE fork; DROP TABLE variant_seen; DROP TABLE promotion; DROP TABLE iteration_proposed; DROP TABLE proposed_content; DROP TABLE session_theme; ALTER TABLE session DROP COLUMN system_n; ALTER TABLE session DROP COLUMN system_id; DROP TABLE design_system_theme; DROP TABLE design_system_version; DROP TABLE project_system; DROP TABLE design_system; DROP TABLE system_import; PRAGMA user_version = 3;");
+  v3.exec("ALTER TABLE block_content ADD COLUMN about TEXT; ALTER TABLE session DROP COLUMN settled_at; ALTER TABLE session DROP COLUMN unsettled_at; DROP TABLE fork; DROP TABLE variant_seen; DROP TABLE promotion; DROP TABLE iteration_proposed; DROP TABLE proposed_content; DROP TABLE session_theme; ALTER TABLE session DROP COLUMN system_n; ALTER TABLE session DROP COLUMN system_id; DROP TABLE design_system_theme; DROP TABLE design_system_version; DROP TABLE project_system; ALTER TABLE project DROP COLUMN repo_git; DROP TABLE design_system; DROP TABLE system_import; PRAGMA user_version = 3;");
   const files = { tsx: "export default () => null;\n", json: '{ "title": "Neon" }\n', css: null, controls: null };
   const insert = v3.prepare(
     "INSERT INTO block_content(hash, source, css, block_json, controls_json, controls_derived, about, compiled, parts_json) VALUES (?, ?, NULL, ?, NULL, 1, ?, 'compiled', '[]')",
@@ -89,7 +89,7 @@ test("a version 9 store gives each project its system when exactly one system ca
   const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
   seeded(path).close();
   const v9 = new DatabaseSync(path);
-  v9.exec("DROP TABLE project_system; PRAGMA user_version = 9;");
+  v9.exec("DROP TABLE project_system; ALTER TABLE project DROP COLUMN repo_git; PRAGMA user_version = 9;");
   const insert = v9.prepare("INSERT INTO design_system(id, name, source_json, project_id, created_at) VALUES (?, ?, '{}', ?, ?)");
   insert.run("ds_one", "One", "proj-one", at);
   insert.run("ds_twoa", "Two A", "proj-two", at);

@@ -406,7 +406,8 @@ const COMMANDS: Record<string, Command> = {
         name: str(flags, "name") ?? null,
         frame: str(flags, "frame") ?? null,
         thread,
-        projectPath: thread === null ? null : resolve("."),
+        // This folder is the thread's only when the thread is this agent's own; --thread can name any thread.
+        projectPath: thread !== null && str(flags, "thread") === undefined ? resolve(".") : null,
       });
       if (!result.ok) return { result, lines: [] };
       const s = result.data.system;
@@ -519,7 +520,7 @@ const COMMANDS: Record<string, Command> = {
           session.id,
           `created "${session.title}" in project ${session.projectId}, attached to thread ${attachment.threadId}`,
           chosen !== null
-            ? `design system: ${chosen.name} v${chosen.n}${chosen.from === "project" ? ", this project's" : ""}`
+            ? `design system: ${chosen.name} (${chosen.id}) v${chosen.n}${chosen.from === "project" ? ", this project's" : ""}`
             : system.kind === "none"
               ? "design system: none, as asked"
               : "design system: none; this project has none set (brainstorm project use <system> sets one)",

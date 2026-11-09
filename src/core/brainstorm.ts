@@ -17,7 +17,7 @@ import {
   settlementOf,
 } from "./machines";
 import { prefRows, readPrefs, type UiPrefs, type UiPrefsPatch } from "./prefs";
-import { projectNameAt } from "./projectName";
+import { repoAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { exportFileName } from "./fileName";
 import { bakeDefaults, carryOver, forkTitle, VARY_MAX, varyNames } from "./fork";
@@ -262,7 +262,7 @@ export class Brainstorm {
     const chosen = this.#systems.forNewSession(thread.data.projectId, input.system ?? { kind: "project" });
     if (!chosen.ok) return chosen;
     const system = chosen.data;
-    const name = input.projectPath === null ? null : await projectNameAt(input.projectPath);
+    const repo = input.projectPath === null ? null : await repoAt(input.projectPath);
     const session: SessionSummary = {
       id: this.#newSessionId(),
       projectId: thread.data.projectId,
@@ -271,8 +271,8 @@ export class Brainstorm {
       createdAt: this.#now(),
     };
     this.#store.tx(() => {
-      this.#store.ensureProject(session.projectId, input.projectPath, session.createdAt);
-      if (name !== null) this.#store.nameProject(session.projectId, name);
+      this.#store.ensureProject(session.projectId, input.projectPath, session.createdAt, repo?.git ?? null);
+      if (repo?.name != null) this.#store.nameProject(session.projectId, repo.name);
       this.#store.createSession(session, input.thread, system === null ? null : { id: system.id, n: system.n });
     });
     this.#emit(session.id);
@@ -298,10 +298,10 @@ export class Brainstorm {
       const found = this.#systems.find(input.system);
       if (!found.ok) return found;
     }
-    const name = input.projectPath === null ? null : await projectNameAt(input.projectPath);
+    const repo = input.projectPath === null ? null : await repoAt(input.projectPath);
     this.#store.tx(() => {
-      this.#store.ensureProject(project, input.projectPath, this.#now());
-      if (name !== null) this.#store.nameProject(project, name);
+      this.#store.ensureProject(project, input.projectPath, this.#now(), repo?.git ?? null);
+      if (repo?.name != null) this.#store.nameProject(project, repo.name);
     });
     return this.#systems.setProjectSystem(project, input.system);
   }

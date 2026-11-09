@@ -595,7 +595,12 @@ const projectLabel = (p: { name: string | null }) => p.name ?? "Other project";
 function SystemProjects({ api, view, showNotice }: { api: Api; view: SystemView; showNotice: (notice: Notice) => void }) {
   const [projects, setProjects] = useState<readonly ProjectListing[] | null>(null);
   const [busy, setBusy] = useState<ProjectId | null>(null);
-  const load = useCallback(() => void api.projects().then((r) => r.ok && setProjects(r.data)), [api]);
+  // Reads overlap when the view changes while the menu opens; only the newest one's answer is shown.
+  const latest = useRef(0);
+  const load = useCallback(() => {
+    const n = ++latest.current;
+    void api.projects().then((r) => r.ok && n === latest.current && setProjects(r.data));
+  }, [api]);
   // The view comes back after every change to a system or a project, so the list follows it. A project Brainstorm
   // first sees in a new brainstorm changes no system, so opening the menu reads the list again too.
   useEffect(load, [load, view]);
@@ -644,7 +649,7 @@ function SystemProjects({ api, view, showNotice }: { api: Api; view: SystemView;
         {/* T3 can't list its projects, so this says how to reach one the list hasn't met yet. */}
         <p className="text-xs text-fg-muted" data-system-projects-new>
           Brainstorm lists a project once a brainstorm or a design system comes from it. For a project not listed, ask its agent to run{" "}
-          <span className="font-mono">{`brainstorm project use "${view.name}"`}</span>.
+          <span className="font-mono">{`brainstorm project use ${view.id}`}</span>.
         </p>
       </PopoverContent>
     </Popover>

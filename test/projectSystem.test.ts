@@ -16,6 +16,7 @@ const FRESH = "33333333-3333-3333-3333-333333333333" as ThreadId;
 const GHOST = "44444444-4444-4444-4444-444444444444" as ThreadId;
 const LIB = "55555555-5555-5555-5555-555555555555" as ThreadId;
 const SIDE = "66666666-6666-6666-6666-666666666666" as ThreadId;
+const GONE = "77777777-7777-7777-7777-777777777777" as ThreadId;
 const AT = "2026-11-09T01:00:00.000Z";
 
 // Copies inside the repo, so each library resolves react and tailwindcss from the repo's node_modules.
@@ -50,6 +51,7 @@ beforeAll(async () => {
   bridge.add(GHOST, "proj-ghost", "A project nobody set");
   bridge.add(LIB, "proj-lib", "The library's own project");
   bridge.add(SIDE, "proj-side", "An app that adds the library");
+  bridge.add(GONE, "proj-gone", "A project last seen in a worktree since removed");
   let id = 0;
   service = await Brainstorm.open({
     dbPath: join(home, "brainstorm.db"),
@@ -129,9 +131,37 @@ describe("a project's design system", () => {
     expect(data(await service.projectSystem(FRESH)).system).toBeNull();
   });
 
+  test("says how to use a system Brainstorm already has", async () => {
+    const again = await service.systems.add({ path: kit, thread: FRESH });
+    expect(again.ok ? null : again.error.message).toBe(
+      `${kit} is already the design system "@fixture/kit" (${system}); sync it instead, or run brainstorm project use ${system} for this project's brainstorms to build with it`,
+    );
+  });
+
   test("refuses a system Brainstorm doesn't have, and records nothing", async () => {
     const refused = await service.setProjectSystem({ thread: GHOST, projectPath: import.meta.dirname, system: "@fixture/nope" });
     expect(refused.ok ? null : refused.error.message).toBe('no design system @fixture/nope; Brainstorm has "@fixture/kit", "@fixture/other"');
     expect(service.systems.projects().map((p) => p.id)).not.toContain("proj-ghost");
   });
+
+  test("finds a library's project from a worktree that's gone, and a project with a system keeps it", async () => {
+    const third = mkdtempSync(join(import.meta.dirname, ".kit-"));
+    cpSync(join(import.meta.dirname, "kit-lib"), third, { recursive: true });
+    writeFileSync(join(third, "package.json"), readFileSync(join(third, "package.json"), "utf8").replace("@fixture/kit", "@fixture/third"));
+    execFileSync("git", ["init", "-q", third]);
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"], { cwd: third });
+    const worktree = join(mkdtempSync(join(tmpdir(), "bs-gone-")), "t3-gone");
+    execFileSync("git", ["worktree", "add", "-q", worktree], { cwd: third });
+    try {
+      // Brainstorm met the library's project only in a worktree, which T3 removes once its thread is done.
+      data(await service.newSession({ title: "Gone", brief: "", thread: GONE, projectPath: worktree, system: { kind: "none" } }));
+      execFileSync("git", ["worktree", "remove", "--force", worktree], { cwd: third });
+      const added = data(await service.systems.add({ path: third, thread: MAIN, projectPath: import.meta.dirname })).system;
+      expect([added.projectId, added.projects.map((p) => p.id)]).toEqual(["proj-gone", ["proj-gone"]]);
+      // proj-a added it too, but builds with the system it had.
+      expect(data(await service.projectSystem(MAIN)).system?.id).toBe(system);
+    } finally {
+      rmSync(third, { recursive: true, force: true });
+    }
+  }, 120_000);
 });

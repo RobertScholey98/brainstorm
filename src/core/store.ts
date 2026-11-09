@@ -114,8 +114,10 @@ const MIGRATIONS: readonly Migration[] = [
   `,
   // Each project's design system (ADR 009), keyed by T3 project so every worktree of the project shares it. A project
   // that one system came from starts with that system; a project that several came from waits for Rob to pick.
+  // `repo_git` is the repo's main `.git`, read while a folder of the project exists: worktrees come and go.
   `
   CREATE TABLE project_system(project_id TEXT PRIMARY KEY, system_id TEXT NOT NULL REFERENCES design_system, set_at TEXT NOT NULL);
+  ALTER TABLE project ADD COLUMN repo_git TEXT;
   INSERT INTO project_system(project_id, system_id, set_at)
     SELECT project_id, MIN(id), MIN(created_at) FROM design_system WHERE project_id IS NOT NULL GROUP BY project_id HAVING COUNT(*) = 1;
   `,
@@ -429,13 +431,18 @@ export class Store {
     return num(this.#get("PRAGMA user_version")?.user_version);
   }
 
-  /** Records a project. One first seen without a path, such as a project a system came from, takes the next path given. */
-  ensureProject(id: ProjectId, repoPath: string | null, at: string): void {
+  /**
+   * Records a project. One first seen without a path, such as a project a system came from, takes the next path given,
+   * and one without a repo takes the next repo given.
+   */
+  ensureProject(id: ProjectId, repoPath: string | null, at: string, repoGit: string | null = null): void {
     this.#run(
-      "INSERT INTO project(id, repo_path, created_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET repo_path = COALESCE(project.repo_path, excluded.repo_path)",
+      `INSERT INTO project(id, repo_path, created_at, repo_git) VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET repo_path = COALESCE(project.repo_path, excluded.repo_path), repo_git = COALESCE(project.repo_git, excluded.repo_git)`,
       id,
       repoPath,
       at,
+      repoGit,
     );
   }
 
@@ -1109,12 +1116,17 @@ export class Store {
     );
   }
 
-  /** Every project with a stored folder, which may be its main checkout or any worktree of it. */
-  projectPaths(): { readonly id: ProjectId; readonly repoPath: string }[] {
-    return this.#all("SELECT id, repo_path FROM project WHERE repo_path IS NOT NULL ORDER BY created_at, id").map((r) => ({
+  /** Every project with a stored repo or folder. The folder may be a worktree that is gone by now. */
+  projectRepos(): { readonly id: ProjectId; readonly repoPath: string | null; readonly repoGit: string | null }[] {
+    return this.#all("SELECT id, repo_path, repo_git FROM project WHERE repo_path IS NOT NULL OR repo_git IS NOT NULL ORDER BY created_at, id").map((r) => ({
       id: str(r.id) as ProjectId,
-      repoPath: str(r.repo_path),
+      repoPath: strOrNull(r.repo_path),
+      repoGit: strOrNull(r.repo_git),
     }));
+  }
+
+  setProjectRepo(id: ProjectId, repoGit: string): void {
+    this.#run("UPDATE project SET repo_git = COALESCE(repo_git, ?) WHERE id = ?", repoGit, id);
   }
 
   /** Projects whose stored repo path holds `path`, longest first, to find the T3 project a library lives in. */

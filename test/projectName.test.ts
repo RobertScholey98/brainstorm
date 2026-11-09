@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { projectNameAt } from "../src/core/projectName";
+import { repoAt } from "../src/core/projectName";
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "ignore" });
 
@@ -18,7 +18,7 @@ test("names the main checkout from the repo, a subfolder and a worktree, and not
   const outside = join(base, "loose");
   mkdirSync(outside);
 
-  expect(await Promise.all([repo, join(repo, "src"), join(base, "t3-1cb06952"), outside, join(base, "missing")].map(projectNameAt))).toEqual([
+  expect(await Promise.all([repo, join(repo, "src"), join(base, "t3-1cb06952"), outside, join(base, "missing")].map(async (dir) => (await repoAt(dir))?.name ?? null))).toEqual([
     "chore-app",
     "chore-app",
     "chore-app",

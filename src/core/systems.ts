@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { basename, relative, resolve } from "node:path";
 import { observeWork } from "./agentWork";
-import { gitCommonDir, projectNameAt } from "./projectName";
+import { repoAt } from "./projectName";
 import { PLAIN_ENV, type CheckEnv, type Checker } from "./check";
 import type { Store, SessionSystem, StoredSystem, StoredSystemVersion } from "./store";
 import { catalogMarkdown } from "./system/catalog";
@@ -40,6 +40,11 @@ import type { SystemManifest, Tier } from "./system/model";
 const ok = <T>(data: T): Result<T> => ({ ok: true, data });
 const fail = (error: Failure): { ok: false; error: Failure } => ({ ok: false, error });
 const noSystem = (id: string): Failure => ({ code: "not_found", entity: "system", message: `no design system ${id}` });
+// An agent adding a system Brainstorm has, from another project, most likely wants this project to build with it.
+const alreadyAdded = (root: string, s: { readonly id: SystemId; readonly name: string }): Failure => ({
+  code: "invalid_action",
+  message: `${root} is already the design system "${s.name}" (${s.id}); sync it instead, or run brainstorm project use ${s.id} for this project's brainstorms to build with it`,
+});
 
 const randomSystemId = (): SystemId => {
   const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -212,8 +217,8 @@ export class Systems {
   /**
    * Finds the system in `path`, syncs its first version and saves it. A system that fails its first sync isn't saved.
    * A folder with no package and no adapter fails with `no_system`, which the window answers with an import.
+   * `thread` and `projectPath` are the adding agent's thread and folder; the window gives neither.
    */
-  /** `thread` and `projectPath` are the adding agent's thread and folder; the window gives neither. */
   async add(input: {
     path: string;
     name?: string | null;
@@ -226,7 +231,7 @@ export class Systems {
     if (!existsSync(root) || !statSync(root).isDirectory()) return fail({ code: "usage", message: `${root} isn't a folder` });
     const existing = this.#store.systems().find((s) => samePath(s.source.root, root));
     if (existing !== undefined) {
-      return fail({ code: "invalid_action", message: `${root} is already the design system "${existing.name}" (${existing.id}); sync it instead` });
+      return fail(alreadyAdded(root, existing));
     }
     const overrides: SourceOverrides = { name: input.name ?? null, frame: input.frame ?? null, ...(input.stubs === undefined ? {} : { stubs: input.stubs }) };
     const source = detectSource(root, overrides);
@@ -235,15 +240,14 @@ export class Systems {
     // that added it wants it too, which differs when an agent adds a library from another repo.
     const adder = input.thread == null ? null : await this.#threadProject(input.thread);
     const adderPath = adder === null ? null : (input.projectPath ?? null);
-    const repo = await gitCommonDir(root);
+    // Each project is named after its own repo: the library's from the library's folder, the adder's from its own.
+    const repo = await repoAt(root);
+    const adderRepo = adderPath === null ? null : await repoAt(adderPath);
     // An agent adding a library from its own repo is in the library's project, known to Brainstorm or not.
-    const sameRepo = repo !== null && adderPath !== null && samePath((await gitCommonDir(adderPath)) ?? "", repo);
-    const home = sameRepo ? adder : await this.#repoProject(root);
+    const sameRepo = repo !== null && adderRepo !== null && samePath(adderRepo.git, repo.git);
+    const home = sameRepo ? adder : await this.#repoProject(root, repo?.git ?? null);
     const projectId = home ?? adder;
     const users = [...new Set([home, adder].filter((p): p is ProjectId => p !== null))];
-    // Each project is named after its own repo: the library's from the library's folder, the adder's from its own.
-    const homeName = home === null ? null : await projectNameAt(root);
-    const adderName = adderPath === null ? null : await projectNameAt(adderPath);
     const synced = await syncSystem(source.value, this.#checker);
     if (!synced.ok) return fail(syncFailed(synced.issues));
     const id = this.#newId();
@@ -265,11 +269,11 @@ export class Systems {
       this.#store.insertSystemVersion({ system: id, n: 1 as SystemVersionN, ...synced.value, syncedAt: at });
       // Each of those projects builds with it from now on, in every worktree, unless it has a system already.
       for (const project of users) {
-        this.#store.ensureProject(project, project === adder ? adderPath : null, at);
+        const own = project === home ? repo : adderRepo;
+        this.#store.ensureProject(project, project === adder ? adderPath : null, at, own?.git ?? null);
+        if (own?.name != null && this.#store.projectName(project) === null) this.#store.nameProject(project, own.name);
         if (this.#store.projectSystem(project) === null) this.#store.setProjectSystem(project, id, at);
       }
-      if (home !== null && homeName !== null && this.#store.projectName(home) === null) this.#store.nameProject(home, homeName);
-      if (adder !== null && adderName !== null && adder !== home && this.#store.projectName(adder) === null) this.#store.nameProject(adder, adderName);
       // The import an agent ran for this folder is done once the system it wrote is added.
       if (imported !== undefined) this.#store.deleteImport(imported.root);
     });
@@ -400,7 +404,7 @@ export class Systems {
     if (repairing === null) {
       const existing = this.#store.systems().find((s) => samePath(s.source.root, root));
       if (existing !== undefined) {
-        return fail({ code: "invalid_action", message: `${root} is already the design system "${existing.name}" (${existing.id}); sync it instead` });
+        return fail(alreadyAdded(root, existing));
       }
     }
     const projectId = repairing?.projectId ?? this.#store.projectsHolding(root)[0] ?? null;
@@ -560,12 +564,17 @@ export class Systems {
    * The known project whose repo holds `root`. Repos are compared by their main checkout's `.git`, so a project known
    * from a worktree matches its library in the main checkout, and a project whose folder merely contains `root`, such
    * as a parent folder of several repos, doesn't. Outside git, a stored folder that holds `root` is the best there is.
+   * A project's repo is stored when its folder is first seen, so a project known only from a deleted worktree matches.
    */
-  async #repoProject(root: string): Promise<ProjectId | null> {
-    const repo = await gitCommonDir(root);
+  async #repoProject(root: string, repo: string | null): Promise<ProjectId | null> {
     if (repo === null) return this.#store.projectsHolding(root)[0] ?? null;
-    for (const p of this.#store.projectPaths()) {
-      const theirs = await gitCommonDir(p.repoPath);
+    for (const p of this.#store.projectRepos()) {
+      let theirs = p.repoGit;
+      // A project stored before repos were: read its folder while it's still there, and keep the answer.
+      if (theirs === null && p.repoPath !== null) {
+        theirs = (await repoAt(p.repoPath))?.git ?? null;
+        if (theirs !== null) this.#store.setProjectRepo(p.id, theirs);
+      }
       if (theirs !== null && samePath(theirs, repo)) return p.id;
     }
     return null;

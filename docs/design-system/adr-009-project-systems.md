@@ -36,7 +36,8 @@ project, which is why `docs/design.md` keys sessions by it and never by path.
 - **`system add`** makes the new system its project's, unless the project has one already. This covers an imported
   system and every worktree after it with no extra step. A system belongs to the known project whose repo holds it,
   compared by the main checkout's `.git`, so a project known from a worktree matches and a parent folder doesn't;
-  Promote and reviews start their threads there. When an agent on another project adds it, as with a shared library
+  Promote and reviews start their threads there. Brainstorm stores each project's `.git` when it first sees a folder
+  of the project, so the match holds after T3 removes the worktree. When an agent on another project adds it, as with a shared library
   in its own repo, that project builds with it too. Without a match, the adding thread's project is the system's.
 - **`brainstorm project use <system|none>`** sets or clears it from any thread on the project. This is how a new
   project starts from a system Rob already has: he tells the agent once, and the choice is stored, not remembered.
@@ -60,6 +61,7 @@ Store migration 10 (`src/core/store.ts`):
 
 ```
 project_system        project_id -> system_id, set_at
+project               + repo_git, the main checkout's .git
 ```
 
 The migration gives each project that exactly one system came from that system. A project that several came from has
@@ -90,3 +92,7 @@ window can name it; a row made without a path takes the first path a session giv
 - The skill's one-line reply names the design system a brainstorm builds with, or says it has none.
 - The council review found that round 1's "the adding thread's project wins" sent Promote to the wrong repo for a
   library in another repo; the repo comparison replaced it, and `test/projectSystem.test.ts` covers that case.
+- Round 3 found that a project known only from a removed worktree no longer matched, since its folder was gone. The
+  stored `repo_git` fixes it. `system add` sends the agent's folder only for the agent's own thread, since
+  `--thread` can name another project's. Adding a folder that is already a system says how to use it with
+  `project use`.
