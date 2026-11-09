@@ -333,7 +333,7 @@ export type Failure =
   | {
       readonly code: "not_found";
       readonly message: string;
-      readonly entity: "session" | "thread" | "iteration" | "block" | "feedback" | "request" | "system" | "theme" | "proposed";
+      readonly entity: "session" | "thread" | "iteration" | "block" | "feedback" | "request" | "system" | "theme" | "proposed" | "project";
     }
   | { readonly code: "validation_failed"; readonly message: string; readonly issues: readonly Issue[] }
   | {
@@ -579,7 +579,25 @@ export type Settlement =
 /** The phases of a request that is still open. A fulfilled or withdrawn request has closed. */
 export type OpenPhase = Exclude<RequestPhase["phase"], "fulfilled" | "withdrawn">;
 
-export type NewSessionResult = { readonly session: SessionSummary; readonly attachment: Attachment };
+/**
+ * Which design system a new session builds with (ADR 009): its project's, none, or one the agent names for this
+ * brainstorm only.
+ */
+export type SystemChoice = { readonly kind: "project" } | { readonly kind: "none" } | { readonly kind: "named"; readonly ref: string };
+
+/** The system a new session was made with, and whether the agent named it or it is the project's. */
+export type ChosenSystem = { readonly id: SystemId; readonly name: string; readonly n: SystemVersionN; readonly from: "named" | "project" };
+
+export type NewSessionResult = { readonly session: SessionSummary; readonly attachment: Attachment; readonly system: ChosenSystem | null };
+
+/** A project Brainstorm knows, and the design system its brainstorms build with (ADR 009). */
+export type ProjectListing = {
+  readonly id: ProjectId;
+  /** The repo's name, or the folder of a system that came from it, or null when Brainstorm has seen neither. */
+  readonly name: string | null;
+  /** `awaitingReview` means its brainstorms are refused until Rob confirms the system (ADR 008). */
+  readonly system: { readonly id: SystemId; readonly name: string; readonly awaitingReview: boolean } | null;
+};
 
 /** `previous` is the thread that owned the session before, or null when the caller already owned it. */
 export type AttachResult = {
@@ -749,6 +767,8 @@ export type SystemListing = {
   readonly adapter: boolean;
   /** Rob's review of the import (ADR 008). A system added before reviews existed has none, and counts as confirmed. */
   readonly review: SystemReview | null;
+  /** The projects whose brainstorms build with it unless told otherwise (ADR 009). */
+  readonly projects: readonly { readonly id: ProjectId; readonly name: string | null }[];
 };
 
 /** A note Rob raised in a review: on one component, or on the whole system when `name` is null. */

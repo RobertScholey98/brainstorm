@@ -33,7 +33,8 @@
     "verify:8": "node scripts/verify/8-history.mjs",
     "verify:9": "node scripts/verify/9-header.mjs",
     "verify:update": "node scripts/verify/update.mjs",
-    "verify:settings": "node scripts/verify/11-settings.mjs"
+    "verify:settings": "node scripts/verify/11-settings.mjs",
+    "verify:projects": "node scripts/verify/12-project-system.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",

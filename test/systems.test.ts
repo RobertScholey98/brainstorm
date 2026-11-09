@@ -161,7 +161,7 @@ describe("a design system", () => {
 
   test("awaits Rob's review, and no brainstorm builds with it until he confirms it", async () => {
     expect(data(service.systems.view(system)).review).toMatchObject({ state: "pending", tiers: {}, issues: [], thread: null, confirmed: null });
-    const early = await service.newSession({ title: "Early", brief: "", thread: T1, projectPath: null, system: "@fixture/kit" });
+    const early = await service.newSession({ title: "Early", brief: "", thread: T1, projectPath: null, system: { kind: "named", ref: "@fixture/kit" } });
     expect(early.ok ? "" : early.error.message).toContain(`Rob hasn't confirmed the design system "@fixture/kit" yet`);
     // An agent can still read it by name while it waits.
     expect(service.systems.find("@fixture/kit").ok).toBe(true);
@@ -174,7 +174,7 @@ describe("a design system", () => {
 
 describe("a session with a design system", () => {
   test("builds blocks from the kit, and pull gives the agent the catalog and stories", async () => {
-    data(await service.newSession({ title: "Chores", brief: "", thread: T1, projectPath: null, system: "@fixture/kit" }));
+    data(await service.newSession({ title: "Chores", brief: "", thread: T1, projectPath: null, system: { kind: "named", ref: "@fixture/kit" } }));
     const committed = data(await service.commit({ session: S, thread: T1, files: copy(null, kitBlock), addresses: [], note: null }));
     expect(committed.created).toBe(true);
     const { files } = data(await service.pull(S));

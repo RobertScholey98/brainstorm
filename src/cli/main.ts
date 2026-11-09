@@ -20,12 +20,14 @@ import {
   type Issue,
   type IterationSummary,
   type NewSessionResult,
+  type ProjectListing,
   type PullResult,
   type Result,
   type SessionId,
   type SessionListing,
   type ThreadId,
   type SystemCheck,
+  type SystemChoice,
   type SystemImport,
   type SystemListing,
   type SystemView,
@@ -44,7 +46,7 @@ const HEALTH_TIMEOUT_MS = 1500;
 const EXIT = { ok: 0, rejected: 1, usage: 2, unavailable: 3 } as const;
 
 const USAGE = `usage:
-  brainstorm session new     --title <t> [--brief -|<text>] [--thread <id>] [--project <path>] [--system <id|name>]
+  brainstorm session new     --title <t> [--brief -|<text>] [--thread <id>] [--project <path>] [--system <id|name|none>]
   brainstorm session list    [--thread <id>]
   brainstorm session attach  <id|title> [--thread <id>]
   brainstorm context         <session> [--thread <id>]
@@ -57,7 +59,10 @@ const USAGE = `usage:
   brainstorm system show     <system>
   brainstorm system check    <project root>
   brainstorm system import   <folder>
-Every command takes --json. --thread defaults to $T3CODE_THREAD_ID; --out and --from default to .brainstorm/<session>.`;
+  brainstorm project show    [--thread <id>]
+  brainstorm project use     <system|none> [--thread <id>] [--project <path>]
+Every command takes --json. --thread defaults to $T3CODE_THREAD_ID; --out and --from default to .brainstorm/<session>.
+session new builds with the project's design system (project show) unless --system names another, or none.`;
 
 /** `exit` overrides the code the result gives, for a command that succeeds in reporting a failure, like `system check`. */
 type Output = { readonly result: Result<unknown>; readonly lines: readonly string[]; readonly exit?: number };
@@ -330,6 +335,17 @@ function threadFrom(flags: Flags, { required }: { required: boolean }): ThreadId
   return parseThreadId(raw) ?? usage(`"${raw}" is not a T3 thread id`);
 }
 
+/**
+ * The thread's project folder: --project, or this folder when the thread is the agent's own. --thread can name another
+ * project's thread, and this folder would then name the wrong repo for it.
+ */
+const folderOf = (flags: Flags): string | null => {
+  const named = str(flags, "project");
+  if (named !== undefined) return resolve(named);
+  const thread = str(flags, "thread");
+  return thread === undefined || thread === process.env.T3CODE_THREAD_ID ? resolve(".") : null;
+};
+
 function sessionFrom(raw: string | undefined): SessionId | Failure {
   return parseSessionId(raw ?? "") ?? usage(`"${raw}" is not a session id (s_…)`);
 }
@@ -364,6 +380,16 @@ function syncLines({ system, created, warnings }: SyncOutcome, verb: string): st
 
 const systemRef = (raw: string | undefined) => encodeURIComponent(raw ?? "");
 
+/** `--system` and `project use` take "none", in any case, for no design system. A system named so is reachable by its id. */
+const isNone = (ref: string) => ref.trim().toLowerCase() === "none";
+
+const projectLine = (p: ProjectListing): string =>
+  `${p.name === null ? "this project" : `project ${p.name}`}: ${
+    p.system === null
+      ? "no design system; its brainstorms are freeform"
+      : `brainstorms build with ${p.system.name} (${p.system.id})${p.system.awaitingReview ? ", once Rob confirms it on Brainstorm's Design systems page" : ""}`
+  }`;
+
 const COMMANDS: Record<string, Command> = {
   "system list": {
     options: {},
@@ -391,12 +417,28 @@ const COMMANDS: Record<string, Command> = {
         name: str(flags, "name") ?? null,
         frame: str(flags, "frame") ?? null,
         thread,
+        projectPath: thread === null ? null : folderOf(flags),
       });
-      const next =
-        result.ok && result.data.system.review?.state === "pending"
-          ? "next: report to Rob and wait; Rob's review may send changes back to this thread"
-          : `next: brainstorm session new --title <t> --system ${result.ok ? result.data.system.id : ""}`;
-      return { result, lines: result.ok ? [...syncLines(result.data, "added"), next] : [] };
+      if (!result.ok) return { result, lines: [] };
+      const s = result.data.system;
+      const projects = s.projects.map((p) => p.name ?? p.id).join(", ");
+      // A project with a system keeps it, so say so rather than let the agent assume the new one took over.
+      const own = thread === null ? null : await call<ProjectListing>("GET", `/v1/agent/project-system?thread=${thread}`);
+      const kept = own?.ok === true && own.data.system !== null && own.data.system.id !== s.id ? own.data.system : null;
+      return {
+        result,
+        lines: [
+          ...syncLines(result.data, "added"),
+          ...(kept !== null
+            ? [`this project keeps ${kept.name} (${kept.id}); brainstorm project use ${s.id} switches it`]
+            : projects === ""
+              ? [`no project builds with it yet; brainstorm project use ${s.id} sets one`]
+              : []),
+          ...(projects === "" ? [] : [`brainstorms on ${projects} build with it`]),
+          // A new system always awaits Rob's review, and brainstorms refuse it until he confirms it.
+          "next: report to Rob and wait; Rob's review may send changes back to this thread",
+        ],
+      };
     },
   },
   "system sync": {
@@ -476,23 +518,55 @@ const COMMANDS: Record<string, Command> = {
       if (isFailure(thread)) return failed(thread);
       const briefFlag = str(flags, "brief");
       const brief = briefFlag === "-" ? (await readStdin()).trim() : (briefFlag ?? "");
+      const named = str(flags, "system");
+      const system: SystemChoice = named === undefined ? { kind: "project" } : isNone(named) ? { kind: "none" } : { kind: "named", ref: named };
       const result = await call<NewSessionResult>("POST", "/v1/agent/sessions", {
         title,
         brief,
         thread,
-        project: resolve(str(flags, "project") ?? "."),
-        system: str(flags, "system") ?? null,
+        project: folderOf(flags),
+        system,
       });
+      if (!result.ok) return { result, lines: [] };
+      const { session, attachment, system: chosen } = result.data;
       return {
         result,
-        lines: result.ok
-          ? [
-              result.data.session.id,
-              `created "${result.data.session.title}" in project ${result.data.session.projectId}, attached to thread ${result.data.attachment.threadId}`,
-              `next: brainstorm pull ${result.data.session.id}`,
-            ]
-          : [],
+        lines: [
+          session.id,
+          `created "${session.title}" in project ${session.projectId}, attached to thread ${attachment.threadId}`,
+          chosen !== null
+            ? `design system: ${chosen.name} (${chosen.id}) v${chosen.n}${chosen.from === "project" ? ", this project's" : ""}`
+            : system.kind === "none"
+              ? "design system: none, as asked"
+              : "design system: none; this project has none set (brainstorm project use <system> sets one)",
+          `next: brainstorm pull ${session.id}`,
+        ],
       };
+    },
+  },
+  "project show": {
+    options: threadOption,
+    positionals: [],
+    async run({ flags }) {
+      const thread = threadFrom(flags, { required: true });
+      if (isFailure(thread)) return failed(thread);
+      const result = await call<ProjectListing>("GET", `/v1/agent/project-system?thread=${thread}`);
+      return { result, lines: result.ok ? [projectLine(result.data)] : [] };
+    },
+  },
+  "project use": {
+    options: { project: { type: "string" }, ...threadOption },
+    positionals: ["system|none"],
+    async run({ flags, positionals }) {
+      const thread = threadFrom(flags, { required: true });
+      if (isFailure(thread)) return failed(thread);
+      const ref = positionals[0] ?? "";
+      const result = await call<ProjectListing>("POST", "/v1/agent/project-system", {
+        thread,
+        project: folderOf(flags),
+        system: isNone(ref) ? null : ref,
+      });
+      return { result, lines: result.ok ? [projectLine(result.data)] : [] };
     },
   },
   "session list": {
@@ -625,7 +699,7 @@ const exitFor = (result: Result<unknown>): number =>
   result.ok ? EXIT.ok : result.error.code === "usage" ? EXIT.usage : result.error.code === "unavailable" ? EXIT.unavailable : EXIT.rejected;
 
 async function main(argv: readonly string[]): Promise<number> {
-  const grouped = argv[0] === "session" || argv[0] === "system";
+  const grouped = argv[0] === "session" || argv[0] === "system" || argv[0] === "project";
   const name = grouped ? `${argv[0]} ${argv[1] ?? ""}` : (argv[0] ?? "");
   const rest = argv.slice(grouped ? 2 : 1);
   const wantsJson = rest.includes("--json");

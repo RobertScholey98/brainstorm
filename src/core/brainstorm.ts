@@ -17,7 +17,7 @@ import {
   settlementOf,
 } from "./machines";
 import { prefRows, readPrefs, type UiPrefs, type UiPrefsPatch } from "./prefs";
-import { projectNameAt } from "./projectName";
+import { repoAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { exportFileName } from "./fileName";
 import { bakeDefaults, carryOver, forkTitle, VARY_MAX, varyNames } from "./fork";
@@ -73,6 +73,8 @@ import {
   type Override,
   type PartName,
   type ProjectId,
+  type ProjectListing,
+  type SystemChoice,
   type ProposedDraft,
   type ProposedName,
   type ProposedView,
@@ -252,18 +254,15 @@ export class Brainstorm {
     brief: string;
     thread: ThreadId;
     projectPath: string | null;
-    /** A design system's id or name; the session builds with its newest version. */
-    system?: string | null;
+    /** The project's design system unless the agent names one or asks for none; it builds with the newest version. */
+    system?: SystemChoice;
   }): Promise<Result<NewSessionResult>> {
-    let system: SessionSystem | null = null;
-    if (input.system !== undefined && input.system !== null) {
-      const found = this.#systems.forSession(input.system);
-      if (!found.ok) return found;
-      system = found.data;
-    }
     const thread = await this.#resolveThread(input.thread);
     if (!thread.ok) return thread;
-    const name = input.projectPath === null ? null : await projectNameAt(input.projectPath);
+    const chosen = this.#systems.forNewSession(thread.data.projectId, input.system ?? { kind: "project" });
+    if (!chosen.ok) return chosen;
+    const system = chosen.data;
+    const repo = input.projectPath === null ? null : await repoAt(input.projectPath);
     const session: SessionSummary = {
       id: this.#newSessionId(),
       projectId: thread.data.projectId,
@@ -272,12 +271,39 @@ export class Brainstorm {
       createdAt: this.#now(),
     };
     this.#store.tx(() => {
-      this.#store.ensureProject(session.projectId, input.projectPath, session.createdAt);
-      if (name !== null) this.#store.nameProject(session.projectId, name);
-      this.#store.createSession(session, input.thread, system);
+      this.#store.ensureProject(session.projectId, input.projectPath, session.createdAt, repo?.git ?? null);
+      if (repo?.name != null) this.#store.nameProject(session.projectId, repo.name);
+      this.#store.createSession(session, input.thread, system === null ? null : { id: system.id, n: system.n });
     });
     this.#emit(session.id);
-    return ok({ session, attachment: this.#store.attachment(session.id) });
+    return ok({ session, attachment: this.#store.attachment(session.id), system });
+  }
+
+  /** The design system of the thread's project (ADR 009). */
+  async projectSystem(thread: ThreadId): Promise<Result<ProjectListing>> {
+    const info = await this.#resolveThread(thread);
+    return info.ok ? ok(this.#systems.project(info.data.projectId)) : info;
+  }
+
+  /**
+   * Sets the design system of the thread's project, or clears it with null. `projectPath` is the agent's folder, which
+   * names a project Brainstorm hasn't seen yet so the window can list it.
+   */
+  async setProjectSystem(input: { thread: ThreadId; projectPath: string | null; system: string | null }): Promise<Result<ProjectListing>> {
+    const info = await this.#resolveThread(input.thread);
+    if (!info.ok) return info;
+    const project = info.data.projectId;
+    // A system Brainstorm doesn't have changes nothing, not even which projects it knows.
+    if (input.system !== null) {
+      const found = this.#systems.find(input.system);
+      if (!found.ok) return found;
+    }
+    const repo = input.projectPath === null ? null : await repoAt(input.projectPath);
+    this.#store.tx(() => {
+      this.#store.ensureProject(project, input.projectPath, this.#now(), repo?.git ?? null);
+      if (repo?.name != null) this.#store.nameProject(project, repo.name);
+    });
+    return this.#systems.setProjectSystem(project, input.system);
   }
 
   /** The sessions in the thread's project, or every session when `thread` is null. */

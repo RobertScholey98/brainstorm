@@ -112,6 +112,15 @@ const MIGRATIONS: readonly Migration[] = [
   `
   ALTER TABLE design_system ADD COLUMN review_json TEXT;
   `,
+  // Each project's design system (ADR 009), keyed by T3 project so every worktree of the project shares it. A project
+  // that one system came from starts with that system; a project that several came from waits for Rob to pick.
+  // `repo_git` is the repo's main `.git`, read while a folder of the project exists: worktrees come and go.
+  `
+  CREATE TABLE project_system(project_id TEXT PRIMARY KEY, system_id TEXT NOT NULL REFERENCES design_system, set_at TEXT NOT NULL);
+  ALTER TABLE project ADD COLUMN repo_git TEXT;
+  INSERT INTO project_system(project_id, system_id, set_at)
+    SELECT project_id, MIN(id), MIN(created_at) FROM design_system WHERE project_id IS NOT NULL GROUP BY project_id HAVING COUNT(*) = 1;
+  `,
 ];
 
 /**
@@ -184,6 +193,8 @@ export type StoredSystem = {
 export type { SystemInputs } from "./system/inputs";
 import type { SystemInputs } from "./system/inputs";
 export type SyncError = { readonly message: string; readonly issues: readonly Issue[]; readonly at: string };
+export type StoredProject = { readonly id: ProjectId; readonly name: string | null; readonly system: SystemId | null };
+
 export type StoredImport = { readonly root: string; readonly projectId: ProjectId; readonly at: string } & PromotionState;
 
 export type StoredSystemVersion = {
@@ -420,8 +431,24 @@ export class Store {
     return num(this.#get("PRAGMA user_version")?.user_version);
   }
 
-  ensureProject(id: ProjectId, repoPath: string | null, at: string): void {
-    this.#run("INSERT OR IGNORE INTO project(id, repo_path, created_at) VALUES (?, ?, ?)", id, repoPath, at);
+  /**
+   * Records a project. One first seen without a path, such as a project a system came from, takes the next path given,
+   * and one without a repo takes the next repo given.
+   */
+  ensureProject(id: ProjectId, repoPath: string | null, at: string, repoGit: string | null = null): void {
+    this.#run(
+      `INSERT INTO project(id, repo_path, created_at, repo_git) VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET repo_path = COALESCE(project.repo_path, excluded.repo_path), repo_git = COALESCE(project.repo_git, excluded.repo_git)`,
+      id,
+      repoPath,
+      at,
+      repoGit,
+    );
+  }
+
+  projectName(id: ProjectId): string | null {
+    const r = this.#get("SELECT name FROM project WHERE id = ?", id);
+    return r === undefined ? null : strOrNull(r.name);
   }
 
   nameProject(id: ProjectId, name: string): void {
@@ -915,6 +942,35 @@ export class Store {
     this.#run("DELETE FROM system_import WHERE root = ?", root);
   }
 
+  /** The design system a project's brainstorms build with unless the agent names another (ADR 009), or null. */
+  projectSystem(project: ProjectId): SystemId | null {
+    const r = this.#get("SELECT system_id FROM project_system WHERE project_id = ?", project);
+    return r === undefined ? null : (str(r.system_id) as SystemId);
+  }
+
+  setProjectSystem(project: ProjectId, system: SystemId | null, at: string): void {
+    if (system === null) {
+      this.#run("DELETE FROM project_system WHERE project_id = ?", project);
+      return;
+    }
+    this.#run(
+      "INSERT INTO project_system(project_id, system_id, set_at) VALUES (?, ?, ?) ON CONFLICT(project_id) DO UPDATE SET system_id = excluded.system_id, set_at = excluded.set_at",
+      project,
+      system,
+      at,
+    );
+  }
+
+  /** Every project Brainstorm knows: those with a brainstorm, those a system came from, and those with a system set. */
+  projects(): StoredProject[] {
+    return this.#all(
+      `WITH ids AS (SELECT id FROM project UNION SELECT project_id FROM project_system
+                    UNION SELECT project_id FROM design_system WHERE project_id IS NOT NULL)
+       SELECT ids.id, p.name, ps.system_id FROM ids LEFT JOIN project p ON p.id = ids.id LEFT JOIN project_system ps ON ps.project_id = ids.id
+       ORDER BY ids.id`,
+    ).map((r) => ({ id: str(r.id) as ProjectId, name: strOrNull(r.name), system: r.system_id === null ? null : (str(r.system_id) as SystemId) }));
+  }
+
   systems(): StoredSystem[] {
     return this.#all("SELECT * FROM design_system ORDER BY created_at, id").map(toSystem);
   }
@@ -1058,6 +1114,19 @@ export class Store {
       state.state === "failed" ? state.error : null,
       at,
     );
+  }
+
+  /** Every project with a stored repo or folder. The folder may be a worktree that is gone by now. */
+  projectRepos(): { readonly id: ProjectId; readonly repoPath: string | null; readonly repoGit: string | null }[] {
+    return this.#all("SELECT id, repo_path, repo_git FROM project WHERE repo_path IS NOT NULL OR repo_git IS NOT NULL ORDER BY created_at, id").map((r) => ({
+      id: str(r.id) as ProjectId,
+      repoPath: strOrNull(r.repo_path),
+      repoGit: strOrNull(r.repo_git),
+    }));
+  }
+
+  setProjectRepo(id: ProjectId, repoGit: string): void {
+    this.#run("UPDATE project SET repo_git = COALESCE(repo_git, ?) WHERE id = ?", repoGit, id);
   }
 
   /** Projects whose stored repo path holds `path`, longest first, to find the T3 project a library lives in. */

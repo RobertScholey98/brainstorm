@@ -5,14 +5,23 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 
 /**
- * The folder name of the main checkout of the repo at `dir`, or null outside a git repo. The common dir is the main
- * checkout's `.git` even from a worktree, so an agent's worktree still reports its repo's name.
+ * The `.git` folder of the main checkout of the repo at `dir`, or null outside a git repo or for a folder that's gone.
+ * It is the same from the main checkout and from every worktree, so it says which repo a folder belongs to.
  */
-export async function projectNameAt(dir: string): Promise<string | null> {
+async function gitCommonDir(dir: string): Promise<string | null> {
   try {
     const { stdout } = await run("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: dir, encoding: "utf8", windowsHide: true });
-    return basename(dirname(stdout.trim())) || null;
+    return stdout.trim() || null;
   } catch {
     return null;
   }
+}
+
+/**
+ * The repo that holds `dir`, by its main checkout's `.git`, and its name, the main checkout's folder name. A worktree
+ * reports its repo's name too. Null outside git, so read it while the folder exists.
+ */
+export async function repoAt(dir: string): Promise<{ readonly git: string; readonly name: string | null } | null> {
+  const git = await gitCommonDir(dir);
+  return git === null ? null : { git, name: basename(dirname(git)) || null };
 }

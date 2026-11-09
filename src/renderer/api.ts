@@ -11,6 +11,8 @@ import type {
   IterationN,
   IterationView,
   KitPayload,
+  ProjectId,
+  ProjectListing,
   Result,
   RobAction,
   SessionId,
@@ -57,6 +59,10 @@ export type Api = {
   systemImports(): Promise<Result<SystemImport[]>>;
   dismissImport(path: string): Promise<Result<null>>;
   reviewSystem(id: SystemId, action: ReviewAction): Promise<Result<SystemView>>;
+  /** Every project Brainstorm knows, and the design system its brainstorms build with (ADR 009). */
+  projects(): Promise<Result<ProjectListing[]>>;
+  /** Sets the design system a project's brainstorms build with, or clears it with null. */
+  setProjectSystem(project: ProjectId, system: SystemId | null): Promise<Result<ProjectListing>>;
   /** What the agent in a thread is doing with the work Brainstorm handed it. */
   agentWork(thread: ThreadId): Promise<Result<AgentWork>>;
   kit(id: SystemId, n: SystemVersionN): Promise<Result<KitPayload>>;
@@ -154,6 +160,8 @@ export function createApi(token: string): Api {
     systemImports: () => call("GET", "/v1/ui/system-imports"),
     dismissImport: (path) => call("POST", "/v1/ui/system-imports/dismiss", { path }),
     reviewSystem: (id, action) => call("POST", `/v1/ui/systems/${id}/review`, action),
+    projects: () => call("GET", "/v1/ui/projects"),
+    setProjectSystem: (project, system) => call("POST", `/v1/ui/projects/${encodeURIComponent(project)}/system`, { system }),
     agentWork: (thread) => call("GET", `/v1/ui/threads/${encodeURIComponent(thread)}/work`),
     kit: (id, n) => call("GET", `/v1/ui/systems/${id}/kit/${n}`),
     prefs: () => call("GET", "/v1/ui/prefs"),
