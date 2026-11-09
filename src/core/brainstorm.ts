@@ -8,6 +8,7 @@ import {
   canAppend,
   FEEDBACK_ACTIONS,
   foldFeedback,
+  formatRefreshMessage,
   formatRequestMessage,
   observeRequest,
   phaseMessage,
@@ -20,7 +21,8 @@ import { prefRows, readPrefs, type UiPrefs, type UiPrefsPatch } from "./prefs";
 import { projectNameAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { exportFileName } from "./fileName";
-import { bakeDefaults, carryOver, forkTitle, VARY_MAX, varyNames } from "./fork";
+import { bakeDefaults, forkTitle, VARY_MAX, varyNames } from "./fork";
+import { approval, confirmPlan, liveMarks, mainOf, shownVariants, trashRefusal } from "./main";
 import {
   Store,
   type FeedbackRecord,
@@ -28,7 +30,6 @@ import {
   type IterationProposed,
   type SessionSystem,
   type StoredContent,
-  type StoredFork,
   type StoredIteration,
   type StoredProposedContent,
 } from "./store";
@@ -41,8 +42,7 @@ import {
   framesOf,
   issue,
   isError,
-  isPendingThread,
-  pendingThreadOf,
+  NO_MARKS,
   splitBlockId,
   type AgentBridge,
   type AgentContext,
@@ -59,8 +59,9 @@ import {
   type FeedbackAction,
   type FeedbackId,
   type FileMap,
+  type ConfirmScope,
+  type ForkBranch,
   type ForkInput,
-  type ForkLink,
   type HistoryEntry,
   type Issue,
   type IterationContents,
@@ -68,10 +69,12 @@ import {
   type IterationOrigin,
   type IterationSummary,
   type IterationView,
+  type Marks,
   type NewSessionResult,
   type OpenPhase,
   type Override,
   type PartName,
+  type Pin,
   type ProjectId,
   type ProposedDraft,
   type ProposedName,
@@ -102,6 +105,7 @@ import {
   type ThreadInfo,
   type ThreadSnapshot,
   type ValidateResult,
+  type VariantKey,
   type VaryScope,
   type WorkingCopyDraft,
 } from "./types";
@@ -110,8 +114,6 @@ import { blockFile, emitWorkingCopy, proposedFile, readStoredBlock, readStoredPr
 const SNAPSHOT_MESSAGES = 30;
 const UNREACHABLE_TTL_MS = 10_000;
 /** A retried fork looks for its thread among the project's threads made from a minute before its request on. */
-const FORK_LOOKBACK_MS = 60_000;
-const FORK_LOOKUP_THREADS = 10;
 
 export type BrainstormOptions = {
   readonly dbPath: string;
@@ -291,12 +293,96 @@ export class Brainstorm {
     return ok(this.#listings(project));
   }
 
+  /**
+   * One row per brainstorm (ADR 009): its root's title, and everything else from its primary branch, which the row
+   * opens. Activity and an open request count from any branch, since they share one thread.
+   */
   #listings(project: ProjectId | null): SessionListing[] {
-    return this.#store.sessions(project).map(({ openRequest, settledAt, unsettledAt, woken, ...listing }) => ({
-      ...listing,
-      request: openRequest ? this.#openPhase(listing.id) : null,
-      settlement: settlementOf({ settledAt, unsettledAt, woken, openRequest }),
-    }));
+    const all = this.#store.sessions(project);
+    const byId = new Map(all.map((s) => [s.id, s]));
+    const children = new Map<SessionId, SessionId[]>();
+    for (const s of all) if (s.parent !== null) children.set(s.parent, [...(children.get(s.parent) ?? []), s.id]);
+    const treeOf = (root: SessionId): SessionId[] => {
+      const out: SessionId[] = [];
+      const queue = [root];
+      while (queue.length > 0 && out.length < 512) {
+        const at = queue.shift()!;
+        out.push(at);
+        queue.push(...(children.get(at) ?? []));
+      }
+      return out;
+    };
+    return all
+      .filter((s) => s.parent === null)
+      .map((root) => {
+        const tree = treeOf(root.id).flatMap((id) => {
+          const s = byId.get(id);
+          return s === undefined ? [] : [s];
+        });
+        const chosen = this.#store.primaryOf(root.id);
+        const primary = tree.find((s) => s.id === chosen) ?? root;
+        const { openRequest: _o, settledAt, unsettledAt, woken, parent: _p, ...listing } = primary;
+        const open = tree.find((s) => s.openRequest);
+        return {
+          ...listing,
+          title: root.title,
+          activeAt: tree.reduce((max, s) => (s.activeAt > max ? s.activeAt : max), listing.activeAt),
+          request: open === undefined ? null : this.#openPhase(open.id),
+          settlement: settlementOf({ settledAt, unsettledAt, woken, openRequest: open !== undefined }),
+        };
+      });
+  }
+
+  /** The brainstorm a branch belongs to, by its root: the session with no parent. */
+  #rootOf(id: SessionId): SessionId {
+    let at = id;
+    for (let i = 0; i < 64; i += 1) {
+      const fork = this.#store.fork(at);
+      if (fork === null) return at;
+      at = fork.parent;
+    }
+    return at;
+  }
+
+  /** Every live branch of `id`'s brainstorm, root first. */
+  #treeOf(id: SessionId): SessionId[] {
+    const out: SessionId[] = [];
+    const queue = [this.#rootOf(id)];
+    while (queue.length > 0 && out.length < 512) {
+      const at = queue.shift()!;
+      if (this.#store.session(at) !== null) out.push(at);
+      queue.push(...this.#store.forksOf(at).map((f) => f.id));
+    }
+    return out;
+  }
+
+  #primaryOf(root: SessionId): SessionId {
+    const chosen = this.#store.primaryOf(root);
+    return chosen !== null && this.#store.session(chosen) !== null ? chosen : root;
+  }
+
+  /** Another branch's open request, which holds the thread they share. */
+  #busyElsewhere(id: SessionId): Request | null {
+    for (const other of this.#treeOf(id)) {
+      if (other === id) continue;
+      const open = this.#store.openRequest(other);
+      if (open !== null) return open;
+    }
+    return null;
+  }
+
+  /** Moves every branch of the brainstorm to `thread`. Attaching, and a fresh thread, both land here. */
+  #moveTree(id: SessionId, thread: ThreadId): void {
+    const at = this.#now();
+    this.#store.tx(() => {
+      for (const member of this.#treeOf(id)) {
+        const current = this.#store.attachment(member);
+        if (current.threadId !== thread) this.#store.reattach(member, thread, at);
+        else if (current.lostAt !== null) this.#store.setLost(member, null);
+      }
+    });
+    this.#seen.delete(thread);
+    for (const member of this.#treeOf(id)) this.#emit(member);
   }
 
   /**
@@ -338,20 +424,12 @@ export class Brainstorm {
       });
     }
     const current = this.#store.attachment(session.id);
-    const pending = isPendingThread(current.threadId);
-    if (current.threadId === input.thread) {
-      if (current.lostAt !== null) this.#store.setLost(session.id, null);
-    } else if (pending) {
-      // A fork's new agent got here before the app heard back from T3, or the app never did.
-      this.#adopt(session.id, input.thread);
-    } else {
-      this.#store.reattach(session.id, input.thread, this.#now());
-    }
-    this.#emit(session.id);
+    // Every branch of a brainstorm shares one thread, so taking one over takes them all (ADR 009).
+    this.#moveTree(session.id, input.thread);
     return ok({
       session,
       attachment: this.#store.attachment(session.id),
-      previous: current.threadId === input.thread || pending ? null : current.threadId,
+      previous: current.threadId === input.thread ? null : current.threadId,
     });
   }
 
@@ -387,10 +465,21 @@ export class Brainstorm {
     const { applicable } = classifyOverrides(schemas, this.#store.overrides(id));
     const feedback = this.#feedback(id);
     const open = this.#store.openRequest(id);
-    // A vary's new variants start from the block they copy, as Rob sees it, so its settings are in scope.
-    const inScope = (block: BlockId) =>
-      open === null ||
-      (open.scope.kind === "blocks" ? open.scope.blocks.includes(block) : open.scope.kind === "vary" ? open.scope.target.blockId === block : true);
+    // A vary's new variants start from the block they copy, as Rob sees it, so its settings are in scope; a confirm's
+    // Mains are what the agent edits.
+    const inScope = (block: BlockId) => {
+      if (open === null) return true;
+      switch (open.scope.kind) {
+        case "blocks":
+          return open.scope.blocks.includes(block);
+        case "vary":
+          return open.scope.target.blockId === block;
+        case "confirm":
+          return open.scope.mains.some((m) => blockIdOf(m.slot, m.variant) === block);
+        default:
+          return true;
+      }
+    };
     const attached = thread !== null && thread === attachment.threadId;
     const addresses = open?.feedbackIds ?? [];
     const fork = this.#store.fork(id);
@@ -417,6 +506,7 @@ export class Brainstorm {
         open: feedback.filter((f) => f.status.state === "open"),
         addressed: feedback.filter((f) => f.status.state === "addressed"),
       },
+      marks: latest === null ? NO_MARKS : liveMarks(this.#store.marks(id), this.#slotShapes(latest, blocks)),
       controlVocabulary: controlVocabulary(),
       system: this.#agentSystem(id),
       next: [
@@ -467,6 +557,8 @@ export class Brainstorm {
       if (owner !== null) return fail(owner);
       const latest = this.#store.latestIteration(input.session);
       if (latest?.n !== p.latest?.n && latest !== null) return fail(stale(p.draft.manifest.base, latest.n));
+      // A confirm's marks are spent once its iteration lands.
+      if (this.#store.openRequest(input.session)?.scope.kind === "confirm") this.#store.clearMarks(input.session);
       const iteration: StoredIteration = {
         n: ((latest?.n ?? 0) + 1) as IterationN,
         threadId: input.thread,
@@ -589,7 +681,12 @@ export class Brainstorm {
       parts: new Map(draft.blocks.map((b) => [b.id, partsOf(b)])),
     };
     const request = this.#store.openRequest(session);
-    const drawn = { titles: new Map(draft.blocks.map((b) => [b.id, b.title])), parts: after.parts };
+    const drawn: Drawn = {
+      titles: new Map(draft.blocks.map((b) => [b.id, b.title])),
+      parts: after.parts,
+      before: new Set(previous.map((b) => b.id)),
+      newSlots: draft.manifest.slots.filter((s) => !(latest?.slots ?? []).some((x) => x.id === s.id)).length,
+    };
     const warnings = [
       ...parsed.warnings,
       ...checkIssues,
@@ -759,18 +856,25 @@ export class Brainstorm {
     const { iteration, overrides } = this.#current(id, latest);
     const request = this.#store.latestRequest(id);
     const fork = this.#store.fork(id);
+    const root = this.#rootOf(id);
     return ok({
       session,
-      fork: fork === null ? null : { parent: this.#parentOf(session, fork.parent), from: fork.from },
-      lineage: this.#lineage(fork),
-      history: { iterations: this.#history(id, fork), forks: this.#store.forksOf(id) },
+      tree: { root: { id: root, title: this.#store.sessionName(root)?.title ?? session.title }, primary: this.#primaryOf(root) },
+      fork: fork === null ? null : { parent: { id: fork.parent, title: this.#store.sessionName(fork.parent)?.title ?? fork.parent }, from: fork.from },
+      history: this.#trail(id),
       attachment,
       thread: this.#seen.get(attachment.threadId)?.snapshot?.thread ?? null,
       iteration,
+      marks: iteration === null ? NO_MARKS : liveMarks(this.#store.marks(id), iteration.slots),
       overrides,
       feedback: this.#feedback(id),
       request: request === null ? null : this.#requestView(session, request, attachment, iteration),
-      regenerate: regenerateGate({ hasIteration: latest !== null, open: this.#store.openRequest(id), attachment }),
+      regenerate: regenerateGate({
+        hasIteration: latest !== null,
+        open: this.#store.openRequest(id),
+        busy: this.#busyElsewhere(id) !== null,
+        attachment,
+      }),
       system: this.#sessionSystemView(id, iteration),
     });
   }
@@ -883,36 +987,65 @@ export class Brainstorm {
     return issues.filter(isError);
   }
 
-  #parentOf(session: SessionSummary, parent: SessionId): ForkLink["parent"] {
-    const name = this.#store.sessionName(parent);
-    if (name === null || name.gone) return { id: parent, title: name?.title ?? parent, state: "gone" };
-    const listing = this.#listings(session.projectId).find((s) => s.id === parent);
-    return { id: parent, title: name.title, state: listing?.settlement.state === "active" ? "active" : "settled" };
-  }
-
-  #lineage(fork: StoredFork | null): SessionView["lineage"] {
-    const out: { id: SessionId; title: string; gone: boolean }[] = [];
-    for (let at = fork; at !== null && out.length < 64; at = this.#store.fork(at.parent)) {
-      const name = this.#store.sessionName(at.parent);
-      out.unshift({ id: at.parent, title: name?.title ?? at.parent, gone: name?.gone ?? true });
+  /**
+   * A branch's trail (ADR 009): its ancestors' iterations up to each branch point, then its own. Every other branch
+   * hangs off the trail iteration it left from, and so does an ancestor's own continuation past the point this trail
+   * left it, so the old primary still shows once another branch is made primary.
+   */
+  #trail(id: SessionId): SessionView["history"] {
+    const chain: { session: SessionId; upTo: IterationN | null }[] = [{ session: id, upTo: null }];
+    for (let at = this.#store.fork(id); at !== null && chain.length < 64; at = this.#store.fork(at.parent)) {
+      chain.unshift({ session: at.parent, upTo: at.from });
     }
-    return out;
+    const iterations: HistoryEntry[] = [];
+    const forks: ForkBranch[] = [];
+    chain.forEach(({ session, upTo }, i) => {
+      if (this.#store.sessionName(session) === null) return;
+      const own = this.#history(session).filter((e) => upTo === null || e.n <= upTo);
+      iterations.push(...own);
+      const next = chain[i + 1]?.session;
+      for (const f of this.#store.forksOf(session)) {
+        if (f.id !== next && (upTo === null || f.from <= upTo)) forks.push({ id: f.id, title: f.title, parent: session, from: f.from });
+      }
+      const latest = this.#store.latestIteration(session);
+      if (upTo !== null && latest !== null && latest.n > upTo) {
+        forks.push({ id: session, title: this.#store.sessionName(session)?.title ?? session, parent: session, from: upTo });
+      }
+    });
+    return { iterations, forks };
   }
 
-  #history(id: SessionId, fork: StoredFork | null): HistoryEntry[] {
+  #history(id: SessionId): HistoryEntry[] {
+    const fork = this.#store.fork(id);
     const byIteration = new Map(this.#store.requests(id).flatMap((r) => (r.state.state === "fulfilled" ? [[r.state.iteration, r]] : [])));
-    return this.#store.iterations(id).map((i): HistoryEntry => {
+    return this.#store.iterations(id).map((i, index): HistoryEntry => {
       const request = byIteration.get(i.n);
       const origin: IterationOrigin =
         request !== undefined
           ? { kind: "request", n: request.n, body: requestBody(request), changed: request.freetext === null ? this.#changedTitles(id, i.n) : [] }
-          : i.n === 1 && fork !== null
+          : index === 0 && fork !== null
             ? { kind: "fork", parent: this.#store.sessionName(fork.parent)?.title ?? fork.parent, from: fork.from }
-            : i.n === 1
+            : index === 0
               ? { kind: "brief" }
               : { kind: "agent", note: i.note };
-      return { n: i.n, createdAt: i.createdAt, origin };
+      return { session: id, n: i.n, createdAt: i.createdAt, origin };
     });
+  }
+
+  /** The slots of a stored iteration, in the shape the marks' rules read. */
+  #slotShapes(iteration: StoredIteration, blocks: readonly IterationBlock[]): { id: SlotId; variants: VariantKey[] }[] {
+    return iteration.slots.map((s) => ({ id: s.id, variants: blocks.map((b) => splitBlockId(b.id)).filter((b) => b.slot === s.id).map((b) => b.variant) }));
+  }
+
+  /** Which of the session's variants a vary made, and from what: the block it copied and the element it varied. */
+  #variedFrom(id: SessionId): Map<BlockId, Pin> {
+    const out = new Map<BlockId, Pin>();
+    for (const r of this.#store.requests(id)) {
+      if (r.scope.kind !== "vary" || r.state.state !== "fulfilled") continue;
+      const { slot } = splitBlockId(r.scope.target.blockId);
+      for (const v of r.scope.variants) out.set(blockIdOf(slot, v.key), r.scope.target);
+    }
+    return out;
   }
 
   #current(id: SessionId, latest: StoredIteration | null): { iteration: IterationView | null; overrides: SessionView["overrides"] } {
@@ -929,14 +1062,21 @@ export class Brainstorm {
     const choices = this.#store.slotChoices(id);
     const introduced = isLatest ? this.#store.introducedIn(id) : new Map<BlockId, IterationN>();
     const seen = isLatest ? this.#store.seen(id) : new Set<BlockId>();
+    // A branch's first iteration is its starting point, so only what came after it is new.
+    const first = this.#store.iterations(id)[0]?.n ?? latest.n;
+    const varied = this.#variedFrom(id);
     const { slots: _slots, blocks: _blocks, ...summary } = this.#summary(id, latest, blocks);
     const loaded = blocks.map((b) => ({ id: b.id, ...splitBlockId(b.id), ...this.#load(b) }));
+    const marks = isLatest ? liveMarks(this.#store.marks(id), this.#slotShapes(latest, blocks)) : NO_MARKS;
     const slots: SlotView[] = latest.slots.flatMap((s) => {
-      const [first, ...rest] = loaded.filter((l) => l.slot === s.id).map((l) => l.variant);
-      if (first === undefined) return [];
+      const [head, ...rest] = loaded.filter((l) => l.slot === s.id).map((l) => l.variant);
+      if (head === undefined) return [];
       const chosen = choices.get(s.id);
-      const variants = [first, ...rest] as const;
-      return [{ ...s, variants, active: chosen !== undefined && variants.includes(chosen) ? chosen : first }];
+      const variants = [head, ...rest] as const;
+      // A trashed variant never shows; the slot falls back to its Main, then to the first one left.
+      const shown = shownVariants({ id: s.id, variants }, marks);
+      const active = chosen !== undefined && shown.includes(chosen) ? chosen : (mainOf({ id: s.id, variants }, marks) ?? shown[0] ?? head);
+      return [{ ...s, variants, active }];
     });
     const views: BlockView[] = loaded.map(({ id: blockId, slot, variant, draft, content }) => ({
       id: blockId,
@@ -953,7 +1093,8 @@ export class Brainstorm {
         draft.props,
         applicable.filter((o) => o.blockId === blockId),
       ),
-      isNew: (introduced.get(blockId) ?? 1) > 1 && !seen.has(blockId),
+      isNew: (introduced.get(blockId) ?? first) > first && !seen.has(blockId),
+      variedFrom: varied.get(blockId) ?? null,
     }));
     const proposed = this.#store.iterationProposed(id, latest.n).map((p) => {
       const stored = this.#store.proposedContent(p.hash);
@@ -1086,12 +1227,27 @@ export class Brainstorm {
         this.#store.markSeen(id, action.blocks);
         return null;
       }
+      case "approve":
+      case "trash":
+      case "restore":
+      case "add_graft":
+      case "remove_graft":
+        return this.#mark(id, action, latest, blockIds);
+      case "confirm":
+        return this.#confirm(id, latest, blockIds);
+      case "add_slot":
+        return this.#request(id, { scope: { kind: "add_slot" }, freetext: action.prompt }, latest, blockIds);
+      case "make_primary":
+        this.#store.setPrimary(this.#rootOf(id), id);
+        for (const member of this.#treeOf(id)) this.#emit(member);
+        return null;
+      case "refresh_thread":
+        return this.#refreshThread(session);
       case "retry_request":
         return this.#retry(session);
       case "withdraw_request": {
         const open = this.#store.openRequest(id);
         if (open === null) return invalid(`${id} has no open request to withdraw`);
-        if (isPendingThread(open.threadId)) return invalid(`${id} is a fork whose thread hasn't started; retry or discard it`);
         this.#store.setRequestState(id, open.n, { state: "withdrawn" });
         return null;
       }
@@ -1255,25 +1411,9 @@ export class Brainstorm {
     latest: StoredIteration | null,
     blocks: readonly IterationBlock[],
   ): Promise<Failure | null> {
-    const open = this.#store.openRequest(id);
+    const gated = this.#gate(id, latest);
+    if (gated !== null) return gated;
     const attachment = this.#store.attachment(id);
-    const gate = regenerateGate({ hasIteration: latest !== null, open, attachment });
-    if (!gate.ok) {
-      switch (gate.reason) {
-        case "no_iteration":
-          return notFound("iteration", `${id} has no iteration to regenerate yet`);
-        case "request_open": {
-          const n = open!.n;
-          return { code: "request_open", message: `request ${n} is still open; withdraw it first`, n };
-        }
-        case "thread_lost":
-          return {
-            code: "thread_lost",
-            message: `thread ${attachment.threadId} is gone; take the session over from a T3 thread on this project first`,
-            thread: attachment.threadId,
-          };
-      }
-    }
     if (body.scope.kind === "blocks") {
       const missing = body.scope.blocks.find((b) => !blocks.some((x) => x.id === b));
       if (missing !== undefined) return notFound("block", `${missing} is not in the latest iteration of ${id}`);
@@ -1283,6 +1423,146 @@ export class Brainstorm {
     const n = this.#store.insertRequest(id, { body, feedbackIds, base: latest?.n ?? null, threadId: thread, at: this.#now() });
     this.#emit(id);
     await this.#send(id, n, thread);
+    return null;
+  }
+
+  /** Why a new request can't open now, as a failure, or null when it can. */
+  #gate(id: SessionId, latest: StoredIteration | null): Failure | null {
+    const open = this.#store.openRequest(id);
+    const busy = this.#busyElsewhere(id);
+    const attachment = this.#store.attachment(id);
+    const gate = regenerateGate({ hasIteration: latest !== null, open, busy: busy !== null, attachment });
+    if (gate.ok) return null;
+    switch (gate.reason) {
+      case "no_iteration":
+        return notFound("iteration", `${id} has no iteration to regenerate yet`);
+      case "request_open":
+        return { code: "request_open", message: `request ${open!.n} is still open; withdraw it first`, n: open!.n };
+      case "branch_busy":
+        return { code: "request_open", message: `branch ${busy!.session} has request ${busy!.n} open on this thread; let it finish or withdraw it first`, n: busy!.n };
+      case "thread_lost":
+        return {
+          code: "thread_lost",
+          message: `thread ${attachment.threadId} is gone; start a fresh thread for the brainstorm first`,
+          thread: attachment.threadId,
+        };
+    }
+  }
+
+  /**
+   * Rob's marks (ADR 009). They describe the latest iteration and change nothing the agent made. While a confirm is
+   * open they are what it was sent with, so they hold still until it lands or he withdraws it.
+   */
+  #mark(
+    id: SessionId,
+    action: Extract<RobAction, { kind: "approve" | "trash" | "restore" | "add_graft" | "remove_graft" }>,
+    latest: StoredIteration | null,
+    blocks: readonly IterationBlock[],
+  ): Failure | null {
+    if (latest === null) return notFound("iteration", `${id} has no iteration to mark yet`);
+    if (this.#store.openRequest(id)?.scope.kind === "confirm") return invalid("a confirm is open; its marks change once it lands or you withdraw it");
+    const slots = this.#slotShapes(latest, blocks);
+    const marks = liveMarks(this.#store.marks(id), slots);
+    const slotOf = (b: BlockId) => slots.find((s) => s.id === splitBlockId(b).slot);
+    const has = (b: BlockId) => blocks.some((x) => x.id === b);
+    switch (action.kind) {
+      case "approve": {
+        const slot = slotOf(action.blockId);
+        if (slot === undefined || !has(action.blockId)) return notFound("block", `${action.blockId} is not in the latest iteration of ${id}`);
+        const { variant } = splitBlockId(action.blockId);
+        const verdict = approval(slot, { id: action.blockId, slot: slot.id, variant, variedFrom: this.#variedFrom(id).get(action.blockId) ?? null }, marks);
+        switch (verdict.kind) {
+          case "main":
+            this.#store.tx(() => {
+              this.#store.setMain(id, slot.id, variant);
+              this.#store.setTrashed(id, action.blockId, false);
+              this.#store.setSlotChoice(id, slot.id, variant);
+            });
+            return null;
+          case "unmain":
+            this.#store.setMain(id, slot.id, null);
+            return null;
+          case "graft":
+            this.#store.addGraft(id, { from: verdict.from, into: slot.id, instruction: null }, this.#now());
+            return null;
+          case "ungraft":
+            this.#store.removeGraft(id, verdict.graft.id);
+            return null;
+        }
+        return null;
+      }
+      case "trash": {
+        const slot = slotOf(action.blockId);
+        if (slot === undefined || !has(action.blockId)) return notFound("block", `${action.blockId} is not in the latest iteration of ${id}`);
+        const refusal = trashRefusal(slot, splitBlockId(action.blockId).variant, marks);
+        if (refusal !== null) return invalid(refusal);
+        this.#store.setTrashed(id, action.blockId, true);
+        return null;
+      }
+      case "restore":
+        this.#store.setTrashed(id, action.blockId, false);
+        return null;
+      case "add_graft": {
+        const into = slots.find((s) => s.id === action.into);
+        if (into === undefined) return notFound("block", `slot ${action.into} is not in the latest iteration of ${id}`);
+        if (!has(action.from.blockId)) return notFound("block", `${action.from.blockId} is not in the latest iteration of ${id}`);
+        let main = mainOf(into, marks);
+        if (main === null) {
+          // A pick into a slot with no Main lands in what Rob is looking at there, which becomes its Main.
+          main = this.#store.slotChoices(id).get(into.id) ?? shownVariants(into, marks)[0]!;
+          this.#store.setMain(id, into.id, main);
+        }
+        if (action.from.blockId === blockIdOf(into.id, main)) return invalid("that element is already in Main");
+        this.#store.addGraft(id, { from: action.from, into: action.into, instruction: action.instruction }, this.#now());
+        return null;
+      }
+      case "remove_graft":
+        if (!marks.grafts.some((g) => g.id === action.id)) return notFound("block", `no graft ${action.id} in ${id}`);
+        this.#store.removeGraft(id, action.id);
+        return null;
+    }
+  }
+
+  /**
+   * Locks Rob's marks in (ADR 009). With nothing to graft the app writes the narrowed iteration itself, as a request it
+   * fulfils at once, so history reads it like any other. With grafts the agent does the merge.
+   */
+  async #confirm(id: SessionId, latest: StoredIteration | null, blocks: readonly IterationBlock[]): Promise<Failure | null> {
+    const gated = this.#gate(id, latest);
+    if (gated !== null) return gated;
+    const plan = confirmPlan(this.#slotShapes(latest!, blocks), this.#store.marks(id));
+    if (plan === null) return invalid("there is nothing to confirm: choose a Main, trash a variant or pick an element first");
+    if (plan.grafts.length > 0) return this.#request(id, { scope: plan, freetext: null }, latest, blocks);
+    const attachment = this.#store.attachment(id);
+    const at = this.#now();
+    this.#store.tx(() => {
+      this.#store.insertRequest(id, { body: { scope: plan, freetext: null }, feedbackIds: [], base: latest!.n, threadId: attachment.threadId, at });
+      this.#store.insertIteration({
+        session: id,
+        iteration: { n: (latest!.n + 1) as IterationN, threadId: attachment.threadId, note: null, slots: latest!.slots, createdAt: at },
+        blocks: blocks.filter((b) => !plan.drop.includes(b.id)),
+        contents: [],
+        proposed: this.#store.iterationProposed(id, latest!.n),
+        proposedContents: [],
+        addresses: [],
+      });
+      this.#store.clearMarks(id);
+    });
+    return null;
+  }
+
+  /**
+   * Starts a new T3 thread for the brainstorm and moves every branch to it, so the agent works on with a fresh context.
+   * The new agent's own attach moves them too, so a start whose reply is lost still ends attached.
+   */
+  async #refreshThread(session: SessionSummary): Promise<Failure | null> {
+    const open = this.#store.openRequest(session.id) ?? this.#busyElsewhere(session.id);
+    if (open !== null) return { code: "request_open", message: `request ${open.n} is still open; let it finish or withdraw it first`, n: open.n };
+    const root = this.#rootOf(session.id);
+    const title = this.#store.sessionName(root)?.title ?? session.title;
+    const result = await this.#bridge.start({ project: session.projectId, title, message: formatRefreshMessage(session.id, title, this.#agentHome) });
+    if (result.kind === "failed") return { code: "unavailable", message: `couldn't start a T3 thread: ${result.error}` };
+    this.#moveTree(session.id, result.thread);
     return null;
   }
 
@@ -1297,10 +1577,6 @@ export class Brainstorm {
     const thread = this.#store.attachment(id).threadId;
     this.#store.setRequestState(id, open.n, { state: "sending" }, { threadId: thread });
     this.#emit(id);
-    if (isPendingThread(thread)) {
-      await this.#start(id, true);
-      return null;
-    }
     const result = await this.#snapshot(id, thread);
     if (result.kind !== "found") {
       const error = result.kind === "missing" ? "the thread is gone" : `couldn't check whether it already arrived: ${result.error}`;
@@ -1330,19 +1606,17 @@ export class Brainstorm {
     );
   }
 
-  /**
-   * A fork's first request says where it came from, and a resend of it later says so again. It goes to a thread the
-   * app started, so it also names a home other than the default; a thread that made its own brainstorm already knows.
-   */
+  /** A branch's first request says where it came from, and a resend of it later says so again. */
   #messageFor(request: Request): string {
     const fork = request.n === 1 ? this.#store.fork(request.session) : null;
-    return formatRequestMessage(request, fork === null ? {} : { fork: { parent: fork.parent, from: fork.from }, home: this.#agentHome });
+    return formatRequestMessage(request, fork === null ? {} : { fork: { parent: fork.parent, from: fork.from } });
   }
 
   /**
-   * Makes a new brainstorm from one iteration of `parentId`: each slot narrowed to its picked variant, Rob's settings
-   * baked in as that variant's defaults, and his open pins on it carried. Then it starts the fork's T3 thread, whose
-   * first message is the fork's request 1. A start that fails leaves the fork saved, with Retry and Discard.
+   * Confirms on a past iteration (ADR 009): a new branch of the brainstorm, on its thread, that continues from iteration
+   * \`from\` of \`parentId\`. Its first iteration is that one narrowed by Rob's marks, with his settings baked in as
+   * defaults and his open pins carried. With grafts, the narrowing waits for the agent: the first iteration keeps every
+   * variant, and request 1 is the confirm. An instruction asks the agent to try it on the branch.
    */
   async fork(parentId: SessionId, input: ForkInput): Promise<Result<{ readonly fork: SessionId }>> {
     const parent = this.#store.session(parentId);
@@ -1350,20 +1624,38 @@ export class Brainstorm {
     const source = this.#store.iteration(parentId, input.from);
     if (source === null) return fail(notFound("iteration", `${parentId} has no iteration ${input.from}`));
     const blocks = this.#store.iterationBlocks(parentId, source.n);
-    const { applicable } = classifyOverrides(this.#schemas(blocks), this.#store.overrides(parentId));
-    const view = this.#iterationView(parentId, source, blocks, applicable, false);
-    const carried = carryOver({ slots: view.slots, blocks: view.blocks, picks: input.picks, applicable, feedback: this.#feedback(parentId) });
-    if (!carried.ok) return fail(notFound("block", carried.message));
-    const { slots, settings, pins } = carried.value;
+    const slotShapes = this.#slotShapes(source, blocks);
+    const marks = liveMarks(input.marks, slotShapes);
+    for (const b of [...Object.entries(marks.mains).map(([s, v]) => blockIdOf(s as SlotId, v!)), ...marks.trashed, ...marks.grafts.map((g) => g.from.blockId)]) {
+      if (!blocks.some((x) => x.id === b)) return fail(notFound("block", `${b} is not in iteration ${source.n}`));
+    }
+    const instruction = input.instruction?.trim() || null;
+    const plan = confirmPlan(slotShapes, marks);
+    const grafting = plan !== null && plan.grafts.length > 0;
+    if (plan === null && instruction === null) return fail(invalid("say what the branch should try, or mark what it keeps"));
+    // The branch's request goes to the thread every branch shares, so the same gate holds as for any request.
+    if (grafting || instruction !== null) {
+      const busy = this.#busyElsewhere(parentId) ?? this.#store.openRequest(parentId);
+      if (busy !== null) return fail({ code: "request_open", message: `request ${busy.n} is still open on this brainstorm's thread; let it finish or withdraw it first`, n: busy.n });
+      const attachment = this.#store.attachment(parentId);
+      if (attachment.lostAt !== null) return fail({ code: "thread_lost", message: `thread ${attachment.threadId} is gone; start a fresh thread first`, thread: attachment.threadId });
+    }
 
-    const baked = slots.map(({ blockId, title }) => {
-      const stored = blocks.find((b) => b.id === blockId)!;
-      const mine = settings.filter((s) => s.blockId === blockId);
-      if (mine.length === 0) return { id: blockId, title, hash: stored.hash, draft: null };
+    const kept = grafting || plan === null ? blocks : blocks.filter((b) => !plan.drop.includes(b.id));
+    const { applicable } = classifyOverrides(this.#schemas(blocks), this.#store.overrides(parentId));
+    const settings = applicable.flatMap((o) => {
+      const stored = kept.find((b) => b.id === o.blockId);
+      const spec = stored === undefined ? undefined : appearanceProp(this.#load(stored).draft.props, o.prop);
+      return spec === undefined || spec.default === o.value ? [] : [{ blockId: o.blockId, prop: o.prop, value: o.value }];
+    });
+    const baked = kept.map((stored) => {
+      const mine = settings.filter((s) => s.blockId === stored.id);
+      const title = this.#load(stored).draft.title;
+      if (mine.length === 0) return { id: stored.id, title, hash: stored.hash, draft: null };
       const files = this.#load(stored).content.files;
-      const draft = readStoredBlock({ id: blockId, files: { ...files, json: bakeDefaults(files.json, mine) } });
-      if (draft === null) throw new Error(`${blockId} no longer parses with Rob's settings baked in`);
-      return { id: blockId, title, hash: draft.hash, draft };
+      const draft = readStoredBlock({ id: stored.id, files: { ...files, json: bakeDefaults(files.json, mine) } });
+      if (draft === null) throw new Error(`${stored.id} no longer parses with Rob's settings baked in`);
+      return { id: stored.id, title, hash: draft.hash, draft };
     });
     const system = this.#store.sessionSystem(parentId);
     const parentProposed = this.#store.iterationProposed(parentId, source.n);
@@ -1379,100 +1671,45 @@ export class Brainstorm {
     );
     const broken = issues.find(isError);
     if (broken !== undefined) {
-      const title = baked.find((b) => broken.file?.startsWith(`slots/${b.id}/`))?.title ?? "A picked variant";
-      return fail(invalid(`${title} doesn't render with your settings as its defaults (${broken.message}). Reset the setting that breaks it, or pick another variant.`));
+      const title = baked.find((b) => broken.file?.startsWith(`slots/${b.id}/`))?.title ?? "A kept variant";
+      return fail(invalid(`${title} doesn't render with your settings as its defaults (${broken.message}). Reset the setting that breaks it, or keep another variant.`));
     }
 
     const id = this.#newSessionId();
     const at = this.#now();
-    const instruction = input.instruction.trim();
-    this.#store.createFork(
-      {
-        session: { id, projectId: parent.projectId, title: forkTitle(instruction), brief: parent.brief, createdAt: at },
-        fork: { parent: parentId, from: source.n, baked: settings.map(({ blockId, prop, value }) => ({ blockId, prop, value })), createdAt: at },
-        // The parent's thread wrote these blocks; the fork's own thread writes the next iteration.
-        iteration: { n: 1 as IterationN, threadId: source.threadId, note: null, slots: slots.map(({ slot }) => ({ id: slot.id, title: slot.title, frame: slot.frame })), createdAt: at },
-        blocks: baked.map((b) => ({ id: b.id, hash: b.hash })),
-        contents: [...contents.values()],
-        proposed: parentProposed,
-        feedback: pins.map((f) => ({ pin: f.pin, text: f.text })),
-        system,
-        theme: this.#store.sessionTheme(parentId),
-        request: { body: { scope: { kind: "all" }, freetext: instruction }, at },
-      },
-      pendingThreadOf(id),
-    );
+    const thread = this.#store.attachment(parentId).threadId;
+    const keptIds = new Set(kept.map((b) => b.id));
+    const pins = this.#feedback(parentId).filter((f) => f.status.state === "open" && keptIds.has(f.pin.blockId));
+    const body: RequestBody | null = grafting ? { scope: plan!, freetext: instruction } : instruction !== null ? { scope: { kind: "all" }, freetext: instruction } : null;
+    this.#store.tx(() => {
+      this.#store.createFork(
+        {
+          session: { id, projectId: parent.projectId, title: instruction === null ? `Branch from iteration ${source.n}` : forkTitle(instruction), brief: parent.brief, createdAt: at },
+          fork: { parent: parentId, from: source.n, baked: settings, createdAt: at },
+          // A branch continues its source's numbers, so a trail reads 1, 2, 3, 4 whichever branch it ends on.
+          iteration: { n: (source.n + 1) as IterationN, threadId: source.threadId, note: null, slots: source.slots, createdAt: at },
+          blocks: baked.map((b) => ({ id: b.id, hash: b.hash })),
+          contents: [...contents.values()],
+          proposed: parentProposed,
+          feedback: pins.map((f) => ({ pin: f.pin, text: f.text })),
+          system,
+          theme: this.#store.sessionTheme(parentId),
+          request: body === null ? null : { body, at },
+        },
+        thread,
+      );
+      // While the agent merges, the branch shows the marks it was confirmed with.
+      if (grafting) {
+        for (const [slot, variant] of Object.entries(marks.mains)) this.#store.setMain(id, slot as SlotId, variant!);
+        for (const g of marks.grafts) this.#store.addGraft(id, g, at);
+        for (const b of marks.trashed) this.#store.setTrashed(id, b, true);
+      }
+    });
     this.#emit(id);
     this.#emit(parentId);
-    await this.#start(id, false);
-    return ok({ fork: id });
-  }
-
-  /**
-   * Starts a fork's thread with its request 1 as the first message. `lookFirst` is for a retry or a restart: T3 may
-   * have started the thread while its reply was lost, so the project's newer threads are searched for the request's
-   * marker first, and a failed search starts nothing.
-   */
-  async #start(id: SessionId, lookFirst: boolean): Promise<void> {
-    const session = this.#store.session(id);
     const request = this.#store.openRequest(id);
-    if (session === null || request === null || !isPendingThread(this.#store.attachment(id).threadId)) return;
-    if (lookFirst) {
-      const found = await this.#findStarted(session.projectId, request);
-      if (found.kind === "failed") {
-        this.#store.setRequestState(id, request.n, { state: "send_failed", error: `couldn't check whether its thread already started: ${found.error}` });
-        this.#emit(id);
-        return;
-      }
-      if (found.kind === "found") return this.#adopt(id, found.thread);
-    }
-    const result = await this.#bridge.start({ project: session.projectId, title: session.title, message: this.#messageFor(request) });
-    if (result.kind === "started") return this.#adopt(id, result.thread);
-    this.#store.setRequestState(id, request.n, { state: "send_failed", error: result.error });
-    this.#emit(id);
-  }
-
-  async #findStarted(project: ProjectId, request: Request): Promise<{ kind: "found"; thread: ThreadId } | { kind: "none" } | { kind: "failed"; error: string }> {
-    const listed = await this.#bridge.list(project);
-    if (listed.kind === "failed") return listed;
-    const since = new Date(Date.parse(request.createdAt) - FORK_LOOKBACK_MS).toISOString();
-    const recent = listed.threads.filter((t) => t.createdAt >= since).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    for (const t of recent.slice(0, FORK_LOOKUP_THREADS)) {
-      const shown = await this.#bridge.snapshot(t.threadId, { messages: SNAPSHOT_MESSAGES });
-      if (shown.kind === "found" && observeRequest(request.session, request.n, shown.snapshot).kind !== "not_seen") return { kind: "found", thread: t.threadId };
-    }
-    return { kind: "none" };
-  }
-
-  /**
-   * The fork's thread is `thread` from now on. The app's start and the new agent's attach both land here, and the
-   * second one changes nothing.
-   */
-  #adopt(id: SessionId, thread: ThreadId): void {
-    this.#store.tx(() => {
-      if (isPendingThread(this.#store.attachment(id).threadId)) this.#store.reattach(id, thread, this.#now());
-      const open = this.#store.openRequest(id);
-      if (open !== null && isPendingThread(open.threadId)) {
-        this.#store.setRequestState(id, open.n, { state: "sent" }, { threadId: this.#store.attachment(id).threadId, sentAt: this.#now() });
-      }
-    });
-    this.#seen.delete(thread);
-    this.#emit(id);
-  }
-
-  /** Throws away a fork whose thread never started. Once it has one, Rob settles it like any other brainstorm. */
-  discard(id: SessionId): Result<{ readonly parent: SessionId | null }> {
-    if (this.#store.session(id) === null) return fail(notFound("session", `no session ${id}`));
-    if (!isPendingThread(this.#store.attachment(id).threadId)) return fail(invalid(`${id}'s thread has started; settle it instead`));
-    const parent = this.#store.fork(id)?.parent ?? null;
-    this.#store.tx(() => {
-      const open = this.#store.openRequest(id);
-      if (open !== null) this.#store.setRequestState(id, open.n, { state: "withdrawn" });
-      this.#store.archive(id, this.#now());
-    });
-    this.#emit(id);
-    if (parent !== null) this.#emit(parent);
-    return ok({ parent });
+    if (request !== null) await this.#send(id, request.n, thread);
+    return ok({ fork: id });
   }
 
   /** A still: the slot `at.slot` (else the first) of iteration `at.n` (else the latest), showing its selected variant. */
@@ -1524,7 +1761,6 @@ export class Brainstorm {
   }
 
   #shouldPoll(thread: ThreadId): boolean {
-    if (isPendingThread(thread)) return false;
     const seen = this.#seen.get(thread);
     return seen === undefined || (seen.snapshot === null && this.#clockMs() - seen.checkedAt >= UNREACHABLE_TTL_MS);
   }
@@ -1546,23 +1782,20 @@ export class Brainstorm {
   }
 
   async #snapshot(id: SessionId, thread: ThreadId): Promise<SnapshotResult> {
-    if (isPendingThread(thread)) return { kind: "failed", error: "the fork's thread hasn't started" };
     const result = await this.#bridge.snapshot(thread, { messages: SNAPSHOT_MESSAGES });
-    const attachment = this.#store.attachment(id);
     this.#remember(thread, result);
-    if (attachment.threadId === thread) {
-      if (result.kind === "found" && attachment.lostAt !== null) this.#store.setLost(id, null);
-      if (result.kind === "missing" && attachment.lostAt === null) this.#store.setLost(id, this.#now());
+    // The branches share the thread, so it is lost or found for all of them.
+    for (const member of this.#treeOf(id)) {
+      const attachment = this.#store.attachment(member);
+      if (attachment.threadId !== thread) continue;
+      if (result.kind === "found" && attachment.lostAt !== null) this.#store.setLost(member, null);
+      if (result.kind === "missing" && attachment.lostAt === null) this.#store.setLost(member, this.#now());
     }
     return result;
   }
 
   async #reconcile(): Promise<void> {
     for (const request of this.#store.requestsIn(["sending"])) {
-      if (isPendingThread(request.threadId)) {
-        await this.#reconcileFork(request);
-        continue;
-      }
       const result = await this.#snapshot(request.session, request.threadId);
       const arrived = result.kind === "found" && observeRequest(request.session, request.n, result.snapshot).kind !== "not_seen";
       this.#store.setRequestState(
@@ -1583,17 +1816,6 @@ export class Brainstorm {
       );
       this.#emit(request.session);
     }
-  }
-
-  /** A fork that was starting when Brainstorm stopped: adopt its thread if T3 made one, and never start one unasked. */
-  async #reconcileFork(request: Request): Promise<void> {
-    const session = this.#store.session(request.session);
-    if (session === null) return;
-    const found = await this.#findStarted(session.projectId, request);
-    if (found.kind === "found") return this.#adopt(request.session, found.thread);
-    const error = found.kind === "failed" ? `couldn't check T3 after a restart: ${found.error}` : "Brainstorm stopped before its thread started";
-    this.#store.setRequestState(request.session, request.n, { state: "send_failed", error });
-    this.#emit(request.session);
   }
 
   async #resolveThread(thread: ThreadId): Promise<Result<ThreadInfo>> {
@@ -1672,7 +1894,7 @@ const FEEDBACK_VERB: Record<
 };
 
 const requestBody = (request: Request): RequestBody =>
-  request.scope.kind === "described"
+  request.scope.kind === "described" || request.scope.kind === "add_slot"
     ? { scope: request.scope, freetext: request.freetext ?? "" }
     : { scope: request.scope, freetext: request.freetext };
 
@@ -1728,7 +1950,14 @@ function lostPins(
     );
 }
 
-type Drawn = { readonly titles: ReadonlyMap<BlockId, string>; readonly parts: ReadonlyMap<BlockId, readonly PartName[]> };
+type Drawn = {
+  readonly titles: ReadonlyMap<BlockId, string>;
+  readonly parts: ReadonlyMap<BlockId, readonly PartName[]>;
+  /** The blocks of the iteration the commit is based on. */
+  readonly before: ReadonlySet<BlockId>;
+  /** How many slots the commit adds. */
+  readonly newSlots: number;
+};
 
 function requestWarnings(
   request: Request,
@@ -1743,8 +1972,19 @@ function requestWarnings(
       ? scope.blocks
       : scope.kind === "vary"
         ? scope.variants.map((v) => blockIdOf(splitBlockId(scope.target.blockId).slot, v.key))
-        : null;
-  const asked = scope.kind === "vary" ? `new variants of ${scope.target.blockId}: ${allowed?.join(", ")}` : allowed?.join(", ");
+        : scope.kind === "confirm"
+          ? [...scope.mains.filter((m) => scope.grafts.some((g) => g.into === m.slot)).map((m) => blockIdOf(m.slot, m.variant)), ...scope.drop]
+          : scope.kind === "add_slot"
+            ? touched.filter((b) => !drawn.before.has(b))
+            : null;
+  const asked =
+    scope.kind === "vary"
+      ? `new variants of ${scope.target.blockId}: ${allowed?.join(", ")}`
+      : scope.kind === "confirm"
+        ? "the grafts into Main and the dropped variants"
+        : scope.kind === "add_slot"
+          ? "a new slot"
+          : allowed?.join(", ");
   const outOfScope =
     allowed === null
       ? []
@@ -1759,7 +1999,29 @@ function requestWarnings(
         `request ${request.n} asked about feedback #${fid}, and this commit doesn't address it; pass --addresses ${fid} if it does`,
       ),
     );
-  return [...outOfScope, ...(scope.kind === "vary" ? varyMismatches(request.n, scope, drawn) : []), ...notAddressed];
+  const specific =
+    scope.kind === "vary"
+      ? varyMismatches(request.n, scope, drawn)
+      : scope.kind === "confirm"
+        ? confirmMismatches(request.n, scope, drawn)
+        : scope.kind === "add_slot" && drawn.newSlots === 0
+          ? [issue("not_addressed", `request ${request.n} asked for a new slot, and this commit adds none to brainstorm.json`, { file: "brainstorm.json" })]
+          : [];
+  return [...outOfScope, ...specific, ...notAddressed];
+}
+
+/** A confirm leaves each slot with a Main holding only Main, and Main renders every element grafted into it. */
+function confirmMismatches(n: RequestN, scope: ConfirmScope, drawn: Drawn): Issue[] {
+  const kept = scope.drop.filter((b) => drawn.titles.has(b)).map((b) => issue("confirm_mismatch", `request ${n} drops ${b}, and this commit still has it`, { file: blockFile(b, "tsx") }));
+  const grafts = scope.grafts.flatMap((g) => {
+    const main = scope.mains.find((m) => m.slot === g.into);
+    if (main === undefined || g.from.part === null) return [];
+    const id = blockIdOf(main.slot, main.variant);
+    return (drawn.parts.get(id) ?? []).includes(g.from.part)
+      ? []
+      : [issue("confirm_mismatch", `${id} doesn't render data-part "${g.from.part}", the element request ${n} grafts into it from ${g.from.blockId}`, { file: blockFile(id, "tsx") })];
+  });
+  return [...kept, ...grafts];
 }
 
 /** Each variant a vary asked for exists under its key and title, and still renders the element it varies. */

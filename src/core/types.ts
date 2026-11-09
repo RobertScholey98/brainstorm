@@ -25,6 +25,7 @@ export type PartName = Brand<string, "PartName">;
 export type IterationN = Brand<number, "IterationN">;
 export type RequestN = Brand<number, "RequestN">;
 export type FeedbackId = Brand<number, "FeedbackId">;
+export type GraftId = Brand<number, "GraftId">;
 export type ContentHash = Brand<string, "ContentHash">;
 
 export const SESSION_ID_PATTERN = /^s_[0-9a-z]{6,16}$/;
@@ -65,6 +66,7 @@ export const parsePartName = nonEmpty<PartName>();
 export const parseIterationN = positiveInt<IterationN>();
 export const parseRequestN = positiveInt<RequestN>();
 export const parseFeedbackId = positiveInt<FeedbackId>();
+export const parseGraftId = positiveInt<GraftId>();
 
 export function blockIdOf(slot: SlotId, variant: VariantKey): BlockId {
   return `${slot}/${variant}` as BlockId;
@@ -256,6 +258,7 @@ const ISSUE_SEVERITY = {
   out_of_scope: "warning",
   not_addressed: "warning",
   vary_mismatch: "warning",
+  confirm_mismatch: "warning",
   // Design systems (ADR 007): syncing one, and holding a design in a session with one to it.
   system_source: "error",
   system_bundle_failed: "error",
@@ -401,13 +404,45 @@ export type VaryVariant = { readonly key: VariantKey; readonly title: string };
  */
 export type VaryScope = { readonly kind: "vary"; readonly target: Pin; readonly variants: NonEmpty<VaryVariant> };
 
-/** A vary request's `freetext` is Rob's optional direction. */
+/**
+ * An element Rob is bringing into a slot's Main (ADR 009): a vary option's varied part, or anything he picked from any
+ * variant. `part: null` brings the whole block. `instruction` is his optional word on where it goes.
+ */
+export type Graft = { readonly from: Pin; readonly into: SlotId; readonly instruction: string | null };
+
+export type StoredGraft = Graft & { readonly id: GraftId };
+
+/**
+ * Rob's marks on an iteration (ADR 009): each slot's chosen Main, the grafts going into them, and the variants he
+ * trashed. None of them runs the agent; Confirm locks them in.
+ */
+export type Marks = {
+  readonly mains: Readonly<Partial<Record<SlotId, VariantKey>>>;
+  readonly grafts: readonly StoredGraft[];
+  readonly trashed: readonly BlockId[];
+};
+
+export const NO_MARKS: Marks = { mains: {}, grafts: [], trashed: [] };
+
+/**
+ * What a confirm locks in: each slot's Main, the grafts the agent applies to them, and every variant that goes. With no
+ * grafts the app writes the narrowed iteration itself.
+ */
+export type ConfirmScope = {
+  readonly kind: "confirm";
+  readonly mains: readonly { readonly slot: SlotId; readonly variant: VariantKey }[];
+  readonly grafts: readonly Graft[];
+  readonly drop: readonly BlockId[];
+};
+
+/** A vary request's `freetext` is Rob's optional direction; a confirm's is what a new branch should try. */
 export type RequestBody =
   | {
-      readonly scope: { readonly kind: "all" } | { readonly kind: "blocks"; readonly blocks: NonEmpty<BlockId> } | VaryScope;
+      readonly scope: { readonly kind: "all" } | { readonly kind: "blocks"; readonly blocks: NonEmpty<BlockId> } | VaryScope | ConfirmScope;
       readonly freetext: string | null;
     }
-  | { readonly scope: { readonly kind: "described" }; readonly freetext: string };
+  /** An add-slot request's freetext is Rob's prompt for the new slot. */
+  | { readonly scope: { readonly kind: "described" } | { readonly kind: "add_slot" }; readonly freetext: string };
 
 export type RequestScope = RequestBody["scope"];
 
@@ -483,8 +518,6 @@ export interface AgentBridge {
  * A fork is attached to this stand-in until T3 gives it a thread. It can't match THREAD_ID_PATTERN, so no thread can
  * own the fork by accident, and the bridge refuses it before running anything.
  */
-export const pendingThreadOf = (session: SessionId): ThreadId => `pending:${session}` as ThreadId;
-export const isPendingThread = (thread: ThreadId): boolean => thread.startsWith("pending:");
 
 export type Observation =
   | { readonly kind: "not_seen" }
@@ -492,14 +525,11 @@ export type Observation =
   | { readonly kind: "running"; readonly pendingRequestCount: number }
   | { readonly kind: "ended"; readonly failed: boolean };
 
-export type RequestPhaseAction = "retry" | "resend" | "withdraw" | "open_thread" | "copy_phrase" | "discard";
+export type RequestPhaseAction = "retry" | "resend" | "withdraw" | "open_thread" | "copy_phrase";
 
 export type RequestPhase = { readonly actions: readonly RequestPhaseAction[] } & (
   | { readonly phase: "sending" }
   | { readonly phase: "send_failed"; readonly error: string }
-  /** A fork's first request while T3 starts its thread, and once that failed. */
-  | { readonly phase: "starting" }
-  | { readonly phase: "start_failed"; readonly error: string }
   | { readonly phase: "previous_thread" }
   | { readonly phase: "thread_lost" }
   | { readonly phase: "queued" }
@@ -526,6 +556,20 @@ export type RobAction =
   | { readonly kind: "vary"; readonly target: Pin; readonly count: number; readonly direction: string | null }
   /** New variants that have now been on Rob's canvas. */
   | { readonly kind: "mark_seen"; readonly blocks: NonEmpty<BlockId> }
+  // Main and confirm (ADR 009). Marks are Rob's and instant; confirm and add_slot are requests.
+  /** 👍: the variant becomes its slot's Main, or a vary option's element goes into Main. Again undoes it. */
+  | { readonly kind: "approve"; readonly blockId: BlockId }
+  | { readonly kind: "trash"; readonly blockId: BlockId }
+  | { readonly kind: "restore"; readonly blockId: BlockId }
+  /** Pick: an element of any variant into a slot's Main. */
+  | { readonly kind: "add_graft"; readonly from: Pin; readonly into: SlotId; readonly instruction: string | null }
+  | { readonly kind: "remove_graft"; readonly id: GraftId }
+  | { readonly kind: "confirm" }
+  | { readonly kind: "add_slot"; readonly prompt: string }
+  /** This branch becomes the brainstorm's primary. */
+  | { readonly kind: "make_primary" }
+  /** Starts a new T3 thread for the brainstorm and moves every branch to it. */
+  | { readonly kind: "refresh_thread" }
   | { readonly kind: "retry_request" }
   | { readonly kind: "withdraw_request" }
   | { readonly kind: "check_thread" }
@@ -562,8 +606,6 @@ export type SessionListing = SessionSummary & {
   /** The open Regenerate request's phase, or null when none is open. */
   readonly request: OpenPhase | null;
   readonly settlement: Settlement;
-  /** Set on a fork. Home lists forks flat, each naming its parent. */
-  readonly fork: { readonly parentTitle: string; readonly from: IterationN } | null;
 };
 
 /**
@@ -618,7 +660,7 @@ export type RequestContext = RequestBody & {
   readonly overrides: readonly Override[];
 };
 
-/** What an agent needs to know about a fork: where it came from, and which of its defaults are Rob's settings. */
+/** What an agent needs to know about a branch: where it came from, and which of its defaults are Rob's settings. */
 export type ForkContext = {
   readonly parent: { readonly id: SessionId; readonly title: string };
   readonly from: IterationN;
@@ -635,6 +677,8 @@ export type AgentContext = {
   readonly attachedThread: ThreadId;
   readonly request: RequestContext | null;
   readonly feedback: { readonly open: readonly Feedback[]; readonly addressed: readonly Feedback[] };
+  /** Rob's marks on the latest iteration: what each slot's Main is, and what he trashed. */
+  readonly marks: Marks;
   readonly controlVocabulary: string;
   /** The session's design system, or null for a freeform session. `catalog` is the text the agent reads. */
   readonly system: { readonly id: SystemId; readonly name: string; readonly n: SystemVersionN; readonly catalog: string } | null;
@@ -655,6 +699,8 @@ export type BlockView = {
   readonly effectiveProps: Props;
   /** Added after the first iteration and not yet on Rob's canvas. Always false in a past iteration. */
   readonly isNew: boolean;
+  /** The block and element a vary request copied this variant from, so a 👍 brings that element into Main. */
+  readonly variedFrom: Pin | null;
 };
 
 export type SlotView = {
@@ -674,35 +720,40 @@ export type IterationView = Omit<IterationSummary, "slots" | "blocks"> & {
   readonly blocks: readonly BlockView[];
 };
 
-export type Regenerate = { readonly ok: true } | { readonly ok: false; readonly reason: "no_iteration" | "request_open" | "thread_lost" };
+/** `branch_busy`: another branch of the brainstorm has a request open on the thread they share. */
+export type Regenerate =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: "no_iteration" | "request_open" | "branch_busy" | "thread_lost" };
 
-/** What produced an iteration, for the filmstrip: the brief, a fork, one of Rob's requests, or the agent unasked. */
+/** What produced an iteration, for the filmstrip: the brief, a branch, one of Rob's requests, or the agent unasked. */
 export type IterationOrigin =
   | { readonly kind: "brief" }
   | { readonly kind: "fork"; readonly parent: string; readonly from: IterationN }
   | { readonly kind: "request"; readonly n: RequestN; readonly body: RequestBody; readonly changed: readonly string[] }
   | { readonly kind: "agent"; readonly note: string | null };
 
-export type HistoryEntry = { readonly n: IterationN; readonly createdAt: string; readonly origin: IterationOrigin };
+/**
+ * One iteration on a branch's trail. `session` is the branch it belongs to: a trail runs through its ancestors'
+ * iterations up to each branch point, then its own.
+ */
+export type HistoryEntry = { readonly session: SessionId; readonly n: IterationN; readonly createdAt: string; readonly origin: IterationOrigin };
 
-/** A fork made from this brainstorm, drawn as an offshoot of the still it came from. */
-export type ForkBranch = { readonly id: SessionId; readonly title: string; readonly from: IterationN };
+/** A branch that leaves the trail at iteration `from` of `parent`, drawn as an offshoot of that still. */
+export type ForkBranch = { readonly id: SessionId; readonly title: string; readonly parent: SessionId; readonly from: IterationN };
 
-/** A fork's parent, as its strip's first stub names it. A gone parent can't be opened. */
-export type ForkLink = {
-  readonly parent: { readonly id: SessionId; readonly title: string; readonly state: "active" | "settled" | "gone" };
-  readonly from: IterationN;
-};
+/** Where a branch left its parent. */
+export type ForkLink = { readonly parent: { readonly id: SessionId; readonly title: string }; readonly from: IterationN };
 
 export type SessionView = {
   readonly session: SessionSummary;
+  /** The brainstorm this branch belongs to: its root (whose title it goes by) and its primary branch. */
+  readonly tree: { readonly root: { readonly id: SessionId; readonly title: string }; readonly primary: SessionId };
   readonly fork: ForkLink | null;
-  /** The fork's ancestors, root first, for the breadcrumb. Empty for a brainstorm that isn't a fork. */
-  readonly lineage: readonly { readonly id: SessionId; readonly title: string; readonly gone: boolean }[];
   readonly history: { readonly iterations: readonly HistoryEntry[]; readonly forks: readonly ForkBranch[] };
   readonly attachment: Attachment;
   readonly thread: ThreadInfo | null;
   readonly iteration: IterationView | null;
+  readonly marks: Marks;
   readonly overrides: { readonly applicable: readonly Override[]; readonly inapplicable: readonly InapplicableOverride[] };
   readonly feedback: readonly Feedback[];
   readonly request: { readonly request: Request; readonly phase: RequestPhase; readonly message: string } | null;
@@ -1025,10 +1076,11 @@ export type SessionPreview = {
 };
 
 /** A fork's source: an iteration of the parent, and the variant Rob picked per slot there. A slot left out keeps the one it shows. */
+/** A branch from iteration `from`: Rob's marks on that iteration, and optionally what the branch should try. */
 export type ForkInput = {
   readonly from: IterationN;
-  readonly picks: Readonly<Record<string, VariantKey>>;
-  readonly instruction: string;
+  readonly marks: Marks;
+  readonly instruction: string | null;
 };
 
 export type CanvasRect = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };

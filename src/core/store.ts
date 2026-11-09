@@ -8,7 +8,9 @@ import type {
   ContentHash,
   FeedbackEvent,
   FeedbackId,
+  GraftId,
   IterationN,
+  Marks,
   Override,
   PartName,
   Pin,
@@ -30,6 +32,7 @@ import type {
   SessionSummary,
   SlotId,
   SlotManifest,
+  StoredGraft,
   ThreadId,
   VariantKey,
   Issue,
@@ -112,7 +115,73 @@ const MIGRATIONS: readonly Migration[] = [
   `
   ALTER TABLE design_system ADD COLUMN review_json TEXT;
   `,
+  // Main, confirm and branches (ADR 009): Rob's marks, the primary branch, and forks become branches of one tree.
+  `
+  CREATE TABLE main_choice(session_id TEXT NOT NULL REFERENCES session, slot TEXT NOT NULL, variant TEXT NOT NULL,
+    PRIMARY KEY(session_id, slot));
+  CREATE TABLE graft(session_id TEXT NOT NULL REFERENCES session, id INTEGER NOT NULL, block_id TEXT NOT NULL, part TEXT,
+    into_slot TEXT NOT NULL, instruction TEXT, created_at TEXT NOT NULL, PRIMARY KEY(session_id, id));
+  CREATE TABLE trashed(session_id TEXT NOT NULL REFERENCES session, block_id TEXT NOT NULL, PRIMARY KEY(session_id, block_id));
+  CREATE TABLE primary_branch(root_id TEXT PRIMARY KEY REFERENCES session, session_id TEXT NOT NULL REFERENCES session);
+  `,
+  forksBecomeBranches,
 ];
+
+/**
+ * A fork used to number its iterations from 1 and run on a thread of its own. As a branch it continues its parent's
+ * numbers, so a fork from iteration 3 now starts at 4, and it shares its root's thread. Parents are renumbered before
+ * their children, since a child's offset is where it left its parent after the parent moved.
+ */
+function forksBecomeBranches(db: DatabaseSync): void {
+  db.exec("PRAGMA defer_foreign_keys = ON");
+  const forks = db.prepare("SELECT session_id, parent_id, parent_n FROM fork ORDER BY created_at, session_id").all() as Row[];
+  const parentOf = new Map(forks.map((f) => [str(f.session_id), { parent: str(f.parent_id), from: num(f.parent_n) }]));
+  const depth = (id: string): number => {
+    let d = 0;
+    for (let at = parentOf.get(id); at !== undefined && d < 64; at = parentOf.get(at.parent)) d += 1;
+    return d;
+  };
+  const rootOf = (id: string): string => {
+    let at = id;
+    for (let i = 0; i < 64 && parentOf.has(at); i += 1) at = parentOf.get(at)!.parent;
+    return at;
+  };
+  const shift = (session: string, by: number) => {
+    if (by === 0) return;
+    // Through negatives, so no row ever collides with one not yet moved.
+    for (const sign of [-1, 1]) {
+      const n = sign === -1 ? "-(n + ?)" : "-n";
+      const args = sign === -1 ? [by, session] : [session];
+      db.prepare(`UPDATE iteration SET n = ${n} WHERE session_id = ?`).run(...args);
+      db.prepare(`UPDATE iteration_block SET n = ${n} WHERE session_id = ?`).run(...args);
+      db.prepare(`UPDATE iteration_proposed SET n = ${n} WHERE session_id = ?`).run(...args);
+    }
+    db.prepare("UPDATE request SET base = base + ? WHERE session_id = ? AND base IS NOT NULL").run(by, session);
+    db.prepare("UPDATE request SET fulfilled_in = fulfilled_in + ? WHERE session_id = ? AND fulfilled_in IS NOT NULL").run(by, session);
+    db.prepare("UPDATE feedback SET created_in = created_in + ? WHERE session_id = ?").run(by, session);
+    db.prepare("UPDATE feedback_event SET iteration = iteration + ? WHERE session_id = ? AND iteration IS NOT NULL").run(by, session);
+    db.prepare("UPDATE fork SET parent_n = parent_n + ? WHERE parent_id = ?").run(by, session);
+  };
+  const ordered = [...parentOf.keys()].sort((a, b) => depth(a) - depth(b));
+  for (const id of ordered) {
+    // Read again: the parent's renumbering moved parent_n.
+    const row = db.prepare("SELECT parent_n FROM fork WHERE session_id = ?").get(id) as Row;
+    shift(id, num(row.parent_n));
+    const root = rootOf(id);
+    const thread = db.prepare("SELECT thread_id FROM attachment WHERE session_id = ? AND detached_at IS NULL").get(root) as Row | undefined;
+    const mine = db.prepare("SELECT thread_id FROM attachment WHERE session_id = ? AND detached_at IS NULL").get(id) as Row | undefined;
+    if (thread === undefined || mine === undefined || str(mine.thread_id) === str(thread.thread_id)) continue;
+    const at = new Date().toISOString();
+    db.prepare("UPDATE attachment SET detached_at = ? WHERE session_id = ? AND detached_at IS NULL").run(at, id);
+    db.prepare("INSERT INTO attachment(session_id, thread_id, attached_at) VALUES (?, ?, ?)").run(id, str(thread.thread_id), at);
+    // A request still waiting on the fork's own thread goes to the shared one, by Rob's retry.
+    db.prepare(
+      `UPDATE request SET thread_id = ?, state = 'send_failed',
+         error = 'Brainstorm now keeps every branch on one thread; retry to send it there'
+       WHERE session_id = ? AND state IN ('sending','sent','send_failed')`,
+    ).run(str(thread.thread_id), id);
+  }
+}
 
 /**
  * Variant notes left the format. A note was part of its block's content hash, so each block that had one is stored
@@ -237,7 +306,8 @@ export type NewFork = {
   readonly contents: readonly StoredContent[];
   readonly proposed: readonly IterationProposed[];
   readonly feedback: readonly { readonly pin: Pin; readonly text: string }[];
-  readonly request: { readonly body: RequestBody; readonly at: string };
+  /** What the branch asks the agent for first, or null when its first iteration is all it needs. */
+  readonly request: { readonly body: RequestBody; readonly at: string } | null;
   /** The parent's design system version and theme, which the fork keeps. */
   readonly system: SessionSystem | null;
   readonly theme: readonly { readonly key: string; readonly value: string }[];
@@ -248,6 +318,8 @@ export type NewFork = {
  * `woken` is whether anything that brings a settled brainstorm back has happened since `settledAt`.
  */
 export type StoredListing = Omit<SessionListing, "request" | "settlement"> & {
+  /** The session this branch left, or null for a brainstorm's root. */
+  readonly parent: SessionId | null;
   readonly openRequest: boolean;
   readonly settledAt: string | null;
   readonly unsettledAt: string | null;
@@ -267,7 +339,7 @@ const toListing = (r: Row): StoredListing => {
     settledAt: strOrNull(r.settled_at),
     unsettledAt: strOrNull(r.unsettled_at),
     woken: num(r.woken) === 1,
-    fork: r.fork_from === null ? null : { parentTitle: str(r.fork_parent_title), from: num(r.fork_from) as IterationN },
+    parent: r.fork_parent === null ? null : (str(r.fork_parent) as SessionId),
   };
 };
 
@@ -465,7 +537,7 @@ export class Store {
               AND NOT EXISTS (SELECT 1 FROM request r WHERE r.session_id = s.id AND r.fulfilled_in = i.n AND r.created_at <= s.settled_at)
           )
         ) AS woken,
-        f.parent_n AS fork_from, (SELECT title FROM session WHERE id = f.parent_id) AS fork_parent_title
+        f.parent_id AS fork_parent
       FROM session s JOIN project p ON p.id = s.project_id JOIN attachment a ON a.session_id = s.id AND a.detached_at IS NULL
         LEFT JOIN fork f ON f.session_id = s.id
       WHERE s.archived_at IS NULL AND (? IS NULL OR s.project_id = ?)
@@ -499,7 +571,87 @@ export class Store {
         addresses: [],
       });
       const ids = input.feedback.map((f) => this.insertFeedback(session.id, { pin: f.pin, text: f.text, createdIn: iteration.n, at: fork.createdAt }));
-      this.insertRequest(session.id, { body: input.request.body, feedbackIds: ids, base: iteration.n, threadId: thread, at: input.request.at });
+      if (input.request !== null) {
+        this.insertRequest(session.id, { body: input.request.body, feedbackIds: ids, base: iteration.n, threadId: thread, at: input.request.at });
+      }
+    });
+  }
+
+  primaryOf(root: SessionId): SessionId | null {
+    const r = this.#get("SELECT session_id FROM primary_branch WHERE root_id = ?", root);
+    return r === undefined ? null : (str(r.session_id) as SessionId);
+  }
+
+  setPrimary(root: SessionId, session: SessionId): void {
+    this.#run(
+      "INSERT INTO primary_branch(root_id, session_id) VALUES (?, ?) ON CONFLICT(root_id) DO UPDATE SET session_id = excluded.session_id",
+      root,
+      session,
+    );
+  }
+
+  // --- Rob's marks (ADR 009) ------------------------------------------------------------------------------------------
+
+  marks(session: SessionId): Marks {
+    const mains = Object.fromEntries(
+      this.#all("SELECT slot, variant FROM main_choice WHERE session_id = ?", session).map((r) => [str(r.slot), str(r.variant) as VariantKey]),
+    ) as Marks["mains"];
+    const grafts = this.#all("SELECT * FROM graft WHERE session_id = ? ORDER BY id", session).map(
+      (r): StoredGraft => ({
+        id: num(r.id) as GraftId,
+        from: { blockId: str(r.block_id) as BlockId, part: strOrNull(r.part) as PartName | null },
+        into: str(r.into_slot) as SlotId,
+        instruction: strOrNull(r.instruction),
+      }),
+    );
+    const trashed = this.#all("SELECT block_id FROM trashed WHERE session_id = ? ORDER BY block_id", session).map((r) => str(r.block_id) as BlockId);
+    return { mains, grafts, trashed };
+  }
+
+  setMain(session: SessionId, slot: SlotId, variant: VariantKey | null): void {
+    if (variant === null) this.#run("DELETE FROM main_choice WHERE session_id = ? AND slot = ?", session, slot);
+    else {
+      this.#run(
+        "INSERT INTO main_choice(session_id, slot, variant) VALUES (?, ?, ?) ON CONFLICT(session_id, slot) DO UPDATE SET variant = excluded.variant",
+        session,
+        slot,
+        variant,
+      );
+    }
+  }
+
+  addGraft(session: SessionId, graft: { from: Pin; into: SlotId; instruction: string | null }, at: string): GraftId {
+    return this.tx(() => {
+      const next = num(this.#get("SELECT COALESCE(MAX(id), 0) + 1 AS next FROM graft WHERE session_id = ?", session)?.next);
+      this.#run(
+        "INSERT INTO graft(session_id, id, block_id, part, into_slot, instruction, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        session,
+        next,
+        graft.from.blockId,
+        graft.from.part,
+        graft.into,
+        graft.instruction,
+        at,
+      );
+      return next as GraftId;
+    });
+  }
+
+  removeGraft(session: SessionId, id: GraftId): void {
+    this.#run("DELETE FROM graft WHERE session_id = ? AND id = ?", session, id);
+  }
+
+  setTrashed(session: SessionId, block: BlockId, trashed: boolean): void {
+    if (trashed) this.#run("INSERT OR IGNORE INTO trashed(session_id, block_id) VALUES (?, ?)", session, block);
+    else this.#run("DELETE FROM trashed WHERE session_id = ? AND block_id = ?", session, block);
+  }
+
+  /** A confirm's iteration landed, so the marks it carried are spent. */
+  clearMarks(session: SessionId): void {
+    this.tx(() => {
+      this.#run("DELETE FROM main_choice WHERE session_id = ?", session);
+      this.#run("DELETE FROM graft WHERE session_id = ?", session);
+      this.#run("DELETE FROM trashed WHERE session_id = ?", session);
     });
   }
 

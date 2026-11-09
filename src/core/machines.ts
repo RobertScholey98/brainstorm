@@ -1,6 +1,5 @@
 import { partLabel } from "./fork";
 import {
-  isPendingThread,
   parseRequestN,
   parseSessionId,
   type Attachment,
@@ -55,15 +54,25 @@ export function canAppend(status: FeedbackStatus, kind: FeedbackEventKind): bool
   return LEGAL_EVENTS[status.state].includes(kind);
 }
 
-/** A vary request carries no feedback: its new variants can't address pins on the block they copy. */
+/**
+ * A vary request carries no feedback: its new variants can't address pins on the block they copy. Nor do a confirm and
+ * an add-slot: they ask for one specific change, and the open pins wait for a regenerate.
+ */
 export function requestFeedback(feedback: readonly Feedback[], scope: RequestScope): Feedback[] {
-  if (scope.kind === "vary") return [];
+  if (scope.kind === "vary" || scope.kind === "confirm" || scope.kind === "add_slot") return [];
   return feedback.filter((f) => f.status.state === "open" && (scope.kind !== "blocks" || scope.blocks.includes(f.pin.blockId)));
 }
 
-export function regenerateGate(state: { readonly hasIteration: boolean; readonly open: Request | null; readonly attachment: Attachment }): Regenerate {
+/** `busy` is whether another branch of the brainstorm has a request open on the thread they share. */
+export function regenerateGate(state: {
+  readonly hasIteration: boolean;
+  readonly open: Request | null;
+  readonly busy?: boolean;
+  readonly attachment: Attachment;
+}): Regenerate {
   if (!state.hasIteration) return { ok: false, reason: "no_iteration" };
   if (state.open !== null) return { ok: false, reason: "request_open" };
+  if (state.busy === true) return { ok: false, reason: "branch_busy" };
   if (state.attachment.lostAt !== null) return { ok: false, reason: "thread_lost" };
   return { ok: true };
 }
@@ -74,8 +83,10 @@ export function blockedMessage(reason: Extract<Regenerate, { ok: false }>["reaso
       return "Needs a first iteration";
     case "request_open":
       return `Request ${openRequest} is still open`;
+    case "branch_busy":
+      return "Another branch's request is open on this thread";
     case "thread_lost":
-      return "This session's thread is gone. Take it over from a T3 thread first.";
+      return "This brainstorm's thread is gone. Start a fresh thread from the top bar.";
   }
 }
 
@@ -107,11 +118,6 @@ export function foldFeedback(events: readonly FeedbackEvent[]): FeedbackStatus {
 export function requestPhase(request: Request, attachment: Attachment, observation: Observation | null): RequestPhase {
   const open = (step: readonly RequestPhaseAction[]): readonly RequestPhaseAction[] =>
     attachment.lostAt === null ? [...step, "open_thread", "withdraw"] : [...step, "withdraw"];
-  // A fork without its thread has nothing to open or withdraw to: it starts, or Rob discards it.
-  if (isPendingThread(request.threadId)) {
-    if (request.state.state === "sending") return { phase: "starting", actions: [] };
-    if (request.state.state === "send_failed") return { phase: "start_failed", error: request.state.error, actions: ["retry", "discard"] };
-  }
   switch (request.state.state) {
     case "sending":
       return { phase: "sending", actions: [] };
@@ -153,10 +159,6 @@ export function phaseMessage(phase: RequestPhase, context: { title: string; chan
     case "send_failed":
       // The reason in brackets, so its own colons never read as part of the sentence.
       return `Couldn't send (${phase.error}). The request is saved.`;
-    case "starting":
-      return "Starting a T3 thread";
-    case "start_failed":
-      return `Couldn't start a T3 thread (${phase.error}). The fork is saved.`;
     case "previous_thread":
       return "Sent to the previous thread";
     case "thread_lost":
@@ -172,7 +174,7 @@ export function phaseMessage(phase: RequestPhase, context: { title: string; chan
     case "no_change":
       return "The agent replied in T3 without changing the design";
     case "fulfilled":
-      return `Iteration ${phase.iteration} · ${context.scope?.kind === "vary" ? varyLanded(context.scope, context.changed) : changedNames(context.changed)}`;
+      return `Iteration ${phase.iteration} · ${fulfilledText(context.scope, context.changed)}`;
     case "withdrawn":
       return "Request withdrawn";
   }
@@ -210,8 +212,18 @@ export function scopeText(scope: RequestScope): string {
       return scope.blocks.join(", ");
     case "vary":
       return `vary ${scope.target.blockId}${scope.target.part === null ? "" : ` [${scope.target.part}]`} as ${scope.variants.map((v) => v.key).join(", ")}`;
+    case "confirm": {
+      const mains = scope.mains.map((m) => `${m.slot}/${m.variant}`);
+      const grafts = scope.grafts.map((g) => `${g.from.blockId}${g.from.part === null ? "" : ` [${g.from.part}]`} into ${g.into}`);
+      return [
+        `confirm${mains.length === 0 ? "" : ` main ${mains.join(", ")}`}`,
+        ...(grafts.length === 0 ? [] : [`graft ${grafts.join(", ")}`]),
+        `drop ${scope.drop.length === 0 ? "none" : scope.drop.join(", ")}`,
+      ].join("; ");
+    }
     case "all":
     case "described":
+    case "add_slot":
       return scope.kind;
   }
 }
@@ -232,12 +244,30 @@ export function originText(origin: IterationOrigin): string {
         const what = scope.target.part === null ? "the block" : partLabel(scope.target.part);
         return `Vary ${what} ×${scope.variants.length}${freetext === null ? "" : ` · ${freetext}`}`;
       }
+      if (scope.kind === "confirm") return confirmText(scope);
+      if (scope.kind === "add_slot") return `New slot · ${freetext}`;
       if (freetext !== null) return freetext;
       // With no words of Rob's, what it changed says more than the scope's name.
       const changed = changedNames(origin.changed);
       return changed.charAt(0).toUpperCase() + changed.slice(1);
     }
   }
+}
+
+/** What a fulfilled request did, in the top bar's words. */
+function fulfilledText(scope: RequestScope | undefined, changed: readonly string[]): string {
+  if (scope?.kind === "vary") return varyLanded(scope, changed);
+  if (scope?.kind === "confirm") return confirmText(scope);
+  return changedNames(changed);
+}
+
+/** A confirm, as the strip and its dropdown name it: "Confirmed · 3 options dropped, 1 element brought in". */
+export function confirmText(scope: Extract<RequestScope, { kind: "confirm" }>): string {
+  const parts = [
+    ...(scope.drop.length === 0 ? [] : [`${scope.drop.length} ${scope.drop.length === 1 ? "option" : "options"} dropped`]),
+    ...(scope.grafts.length === 0 ? [] : [`${scope.grafts.length} ${scope.grafts.length === 1 ? "element" : "elements"} brought in`]),
+  ];
+  return parts.length === 0 ? "Confirmed" : `Confirmed · ${parts.join(", ")}`;
 }
 
 /** A fulfilled vary, by the new variants it asked for that landed: "3 new variants of Spin button". */
@@ -259,28 +289,35 @@ export const changedText = (changed: readonly string[]): string =>
   changed.length === 0 ? "no blocks changed" : `changed ${changed.join(", ")}`;
 
 /**
- * `fork` makes it a fork's first message: the thread is new, so the agent attaches first, which is a no-op once the
- * app has adopted the thread and adopts it otherwise. `home` is named when the app runs on a home of its own, because
- * T3 starts agents with its own environment and their CLI would otherwise look for the default one.
+ * `fork` makes it a branch's first request: the segment tells the agent the session is a new branch of the brainstorm
+ * it already works on, in the same thread.
  */
 export function formatRequestMessage(
   request: RequestMessageFields,
-  options: { readonly fork?: { readonly parent: SessionId; readonly from: IterationN }; readonly home?: string | null } = {},
+  options: { readonly fork?: { readonly parent: SessionId; readonly from: IterationN } } = {},
 ): string {
-  const { fork, home = null } = options;
+  const { fork } = options;
   const segments = [
     `[brainstorm] session ${request.session}`,
     `request ${request.n}`,
-    ...(fork === undefined ? [] : [`fork of ${fork.parent} iteration ${fork.from}`]),
+    ...(fork === undefined ? [] : [`branch of ${fork.parent} iteration ${fork.from}`]),
     `scope: ${scopeText(request.scope)}`,
     ...(request.feedbackIds.length > 0 ? [`feedback: ${request.feedbackIds.map((id) => `#${id}`).join(" ")}`] : []),
     ...(request.freetext !== null ? [`freetext: ${JSON.stringify(request.freetext)}`] : []),
   ];
-  const run =
-    fork === undefined
-      ? `run \`brainstorm context ${request.session}\`.`
-      : `this thread is new, so run \`brainstorm session attach ${request.session}\`, then \`brainstorm context ${request.session}\`.`;
-  const lines = [segments.join(" · "), `Handle with the use-brainstorm skill: ${run}`];
+  return [segments.join(" · "), `Handle with the use-brainstorm skill: run \`brainstorm context ${request.session}\`.`].join("\n");
+}
+
+/**
+ * The first message of a fresh thread Rob started for a brainstorm. It is no request, so it carries no request marker.
+ * `home` is named when the app runs on a home of its own, because T3 starts agents with its own environment and their
+ * CLI would otherwise look for the default one.
+ */
+export function formatRefreshMessage(session: SessionId, title: string, home: string | null): string {
+  const lines = [
+    `[brainstorm] session ${session} · fresh thread for "${title}"`,
+    `Handle with the use-brainstorm skill: this thread is new, so run \`brainstorm session attach ${session}\`, then \`brainstorm context ${session}\`, and reply in one line once you have read it.`,
+  ];
   if (home !== null) {
     lines.push(`Brainstorm runs with BRAINSTORM_HOME=${home}. Set it on every brainstorm command: in PowerShell, start each with \`$env:BRAINSTORM_HOME = '${home}';\`; in a POSIX shell, with \`BRAINSTORM_HOME='${home}'\`.`);
   }
