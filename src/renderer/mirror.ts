@@ -1,5 +1,5 @@
 import type { PreviewPrefs } from "../core/prefs";
-import { blockIdOf, type BlockId, type BlockView, type CanvasFrame, type CanvasPin, type CanvasSystem, type FeedbackId, type IterationN, type Props, type SessionId, type SlotId, type SlotView } from "../core/types";
+import { blockIdOf, type BlockId, type BlockView, type CanvasFrame, type CanvasPin, type CanvasSystem, type FeedbackId, type IterationN, type Marks, type Props, type SessionId, type SlotId, type SlotView } from "../core/types";
 
 /**
  * The preview window mirrors the main window's canvas (ADR 007). The two are pages of one origin in one Electron
@@ -34,6 +34,8 @@ export type MirrorScene = {
   readonly past: IterationN | null;
   /** Why a comment can't be pinned now, in the Inspector's words, or null when it can. */
   readonly pinBlocked: string | null;
+  /** Rob's marks on the iteration showing, so a pick into Main here says when it makes the slot's Main too (ADR 009). */
+  readonly marks: Marks;
 };
 
 export type PreviewSettings = { readonly look: PreviewPrefs["look"]; readonly hold: boolean };

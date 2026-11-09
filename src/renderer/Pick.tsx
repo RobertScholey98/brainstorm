@@ -8,7 +8,8 @@ import { OverlayHeader, OverlayPanel, PopoverFooter } from "@/components/ui/popo
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
-import type { BlockView, CanvasRect, Pin, SlotId, SlotView } from "../core/types";
+import { mainOf, withPick } from "../core/main";
+import { blockIdOf, type BlockView, type CanvasRect, type Marks, type Pin, type SlotId, type SlotView } from "../core/types";
 import { POPOVER_WIDTH } from "./placement";
 import { useComposerPlace } from "./useComposerPlace";
 import { varyTarget } from "./Vary";
@@ -61,6 +62,8 @@ export function PickComposer({
   rect,
   block,
   slots,
+  blocks,
+  marks,
   current,
   bounds,
   onAdd,
@@ -71,6 +74,10 @@ export function PickComposer({
   rect: CanvasRect;
   block: BlockView | null;
   slots: readonly SlotView[];
+  /** The iteration's blocks, which name the variant a pick makes Main. */
+  blocks: readonly BlockView[];
+  /** The marks on the iteration showing, which say whether the slot has a Main yet. */
+  marks: Marks;
   /** The slot Rob is working on, where a pick goes unless he chooses another. */
   current: SlotId | null;
   bounds: { width: number; height: number };
@@ -86,6 +93,15 @@ export function PickComposer({
   useLayoutEffect(() => field.current?.focus(), []);
   const what = varyTarget(pin, block);
   const items = slots.map((s) => ({ value: s.id as string, label: s.title }));
+  // A slot with no Main takes the variant showing there as its Main first (`withPick`), so the popover says so.
+  const target = slots.find((s) => s.id === into);
+  const makesMain = (() => {
+    if (target === undefined || mainOf(target, marks) !== null) return null;
+    const next = withPick(marks, target, pin, null, target.active);
+    if ("refused" in next) return null;
+    const variant = next.mains[target.id];
+    return variant === undefined ? null : (blocks.find((b) => b.id === blockIdOf(target.id, variant))?.title ?? variant);
+  })();
 
   const add = async () => {
     if (busy) return;
@@ -133,7 +149,16 @@ export function PickComposer({
           <FieldLabel aside="optional">Where it goes</FieldLabel>
           <Input ref={field} value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="under the title, in place of the old one…" data-graft-instruction />
         </label>
-        <PopoverFooter hint={<span data-graft-hint>{instruction.trim() === "" ? "Without a word, the agent places it where it fits best" : "Applied when you confirm"}</span>}>
+        {/* Its own lines, wrapping rather than cut: this is where a pick says what it does and that nothing runs until Confirm. */}
+        <div className="grid gap-1 text-xs text-fg-muted" data-graft-note>
+          {makesMain !== null && (
+            <p className="text-fg" data-graft-makes-main>
+              Makes {makesMain} Main of {target?.title ?? into}
+            </p>
+          )}
+          <p data-graft-hint>{instruction.trim() === "" ? "Without a word, the agent places it where it fits best. Applied when you confirm." : "Applied when you confirm."}</p>
+        </div>
+        <PopoverFooter>
           <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>

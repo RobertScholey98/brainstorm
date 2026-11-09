@@ -471,26 +471,43 @@ try {
   check("Resend sends it to the new thread", [await phase("queued"), markers(TAKEOVER, 3)], [{ message: "Queued in T3", actions: ["open_thread", "withdraw"] }, 1]);
 
   t3.setMissing(TAKEOVER, true);
-  check("missing thread", await phase("thread_lost"), {
-    message: "This brainstorm's thread is gone. Start a fresh thread, and the open request goes to it.",
-    actions: ["fresh_thread", "withdraw"],
-  });
-  check("the top bar's thread chip reads Thread lost", (await window.textContent("[data-thread-chip]"))?.trim(), "Thread lost");
+  // Rebaselined for ADR 009, the chip carries the thread's state: a request waiting on a lost thread used to say so
+  // four times (the chip, a status beside it, a strip under the bar, and Start a fresh thread both in the bar and in
+  // the chip's menu). Now the chip alone says Thread lost, and Start a fresh thread stands once in the bar beside it.
+  await window.waitForSelector('[data-thread-chip][data-thread="lost"]', { timeout: PHASE_MS });
+  check(
+    "missing thread: the chip reads Thread lost in the warning's hue, the bar has no status or strip of its own, and offers Start a fresh thread, on though a request is open since that request goes with it, then Withdraw",
+    await window.evaluate(() => {
+      const chip = document.querySelector("[data-thread-chip]");
+      const probe = document.body.appendChild(Object.assign(document.createElement("i"), { style: "color: var(--warning)" }));
+      const warning = getComputedStyle(probe).color;
+      probe.remove();
+      const fresh = document.querySelector('[data-topbar] [data-request-action="fresh_thread"]');
+      return {
+        chip: chip.textContent.trim(),
+        tone: getComputedStyle(chip.querySelector("[data-thread-title]")).color === warning,
+        said: document.querySelectorAll("[data-topbar] [data-request-phase], [data-request-detail]").length,
+        actions: [...document.querySelectorAll("[data-phase-actions] [data-request-action]")].map((e) => e.dataset.requestAction),
+        fresh: [document.querySelectorAll('[data-topbar] [data-request-action="fresh_thread"], [data-refresh-thread]').length, fresh?.disabled],
+      };
+    }),
+    { chip: "Thread lost", tone: true, said: 0, actions: ["fresh_thread", "withdraw"], fresh: [1, false] },
+  );
   check("Regenerate is disabled while the thread is lost", await window.isDisabled("[data-regenerate-toggle]"), true);
+  check("the lost chip's hint covers no header control, Start a fresh thread beside it least of all", await coveredBy("[data-thread-chip]"), []);
+  await shot(window, shots, "8-thread-lost");
   await window.click("[data-thread-chip]");
   await window.waitForSelector("[data-thread-menu]");
   check(
-    "the chip's menu leads with Start a fresh thread, open to press though a request is open, since that request goes with it",
-    await window.$eval("[data-thread-menu]", (menu) => {
-      const fresh = menu.querySelector("[data-refresh-thread]");
-      return [menu.querySelector("button")?.hasAttribute("data-refresh-thread"), fresh?.disabled, menu.querySelector("[data-open-thread]") === null];
-    }),
-    [true, false, true],
+    "the chip's menu says what happened and that the open request goes with a fresh thread, with no second Start a fresh thread and no Open in T3",
+    await window.$eval("[data-thread-menu]", (menu) => [menu.querySelector("[data-slot=popover-description]")?.textContent, menu.querySelectorAll("button, a").length]),
+    ["This brainstorm's thread is gone. Start a fresh thread and every branch carries on there, the open request with it.", 0],
   );
-  await shot(window, shots, "8-thread-lost");
-  // The recovery from the chip, where Rob looks for the thread; the strip offers the same action.
-  await window.click("[data-thread-menu] [data-refresh-thread]");
+  await shot(window, shots, "8-thread-lost-menu");
+  await window.keyboard.press("Escape");
   await window.waitForSelector("[data-thread-menu]", { state: "hidden" });
+  // Escape hands focus back to the chip, whose hint then shows; the bar's Start a fresh thread stays clear of it.
+  await window.click('[data-topbar] [data-request-action="fresh_thread"]');
   await window.waitForSelector('[data-request-phase="queued"]', { timeout: PHASE_MS });
   const fresh = t3.started();
   check("Start a fresh thread starts one T3 thread, and the open request follows to it", [fresh.length, markers(fresh[0]?.thread, 3)], [1, 1]);

@@ -1,4 +1,4 @@
-import { ChevronRight, Download, ExternalLink, History, PanelRight, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronRight, Download, ExternalLink, History, PanelRight, RefreshCw } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import { COLLAPSE, COMPACT, COMPACT_LABEL, useHeaderFit } from "./headerAction";
 import { Mark } from "./Mark";
 import { PhaseActions, phaseActions, Regenerate, RegenerateLabel, RequestStatus } from "./Regenerate";
 import { PhaseDot } from "./SessionStatus";
-import { echoTone } from "./status";
+import { echoTone, PHASE, TONE_TEXT } from "./status";
 
 /** The right panel's toggle, as T3 Code has it: pressed while the panel shows. */
 export type PanelToggle = {
@@ -235,8 +235,9 @@ export function SessionBar({
             <ThreadChip view={view} send={send} />
           </div>
         )}
-        {/* In the past the badge names the iteration shown, so a closed request's result, about the latest, steps aside. */}
-        {view !== null && (view.attachment.lostAt !== null || (view.request !== null && (past === null || view.request.phase.actions.length > 0))) && (
+        {/* In the past the badge names the iteration shown, so a closed request's result, about the latest, steps aside.
+            A request waiting on a lost thread says nothing the chip doesn't, so the chip says it alone (ADR 009). */}
+        {view !== null && view.request !== null && view.request.phase.phase !== "thread_lost" && (past === null || view.request.phase.actions.length > 0) && (
           <div className="flex shrink-0 items-center gap-2" data-header-status>
             <Separator orientation="vertical" />
             <RequestStatus view={view} />
@@ -255,8 +256,9 @@ function openPhase(view: SessionView): OpenPhase | null {
 
 /**
  * The brainstorm's T3 thread, which every branch shares (ADR 009): its state as a dot and a word, and a menu that
- * opens the thread in T3 or starts a fresh one, which moves every branch to it. A fresh thread is also the way back
- * from a lost one, so then the chip says so and the menu leads with it.
+ * opens the thread in T3 or starts a fresh one, which moves every branch to it. The chip alone says a thread is lost,
+ * in the warning's hue; its way back, Start a fresh thread, stands beside it in the bar, so the menu then only says
+ * what happened and what the fresh thread carries.
  */
 function ThreadChip({ view, send }: { view: SessionView; send: (action: RobAction) => Promise<SessionView | null> }) {
   const [open, setOpen] = useState(false);
@@ -265,37 +267,20 @@ function ThreadChip({ view, send }: { view: SessionView; send: (action: RobActio
   const phase = openPhase(view);
   const state = lost ? "lost" : (phase ?? "attached");
   const busy = phase !== null || (!view.regenerate.ok && view.regenerate.reason === "branch_busy");
-  // A lost thread is the one case a fresh thread may take an open request with it, so then nothing blocks it.
-  const blocked = lost ? null : phase !== null ? "A request is open. Let it finish or withdraw it first." : busy ? "Another branch's request is open on this thread" : null;
+  const blocked = phase !== null ? "A request is open. Let it finish or withdraw it first." : busy ? "Another branch's request is open on this thread" : null;
   const refresh = async () => {
     setStarting(true);
     const done = await send({ kind: "refresh_thread" });
     setStarting(false);
     if (done !== null) setOpen(false);
   };
-  const fresh = (
-    <FreshThread key="fresh" blocked={blocked} starting={starting} primary={lost} onClick={() => void refresh()} />
-  );
-  const link =
-    view.thread === null || lost ? null : (
-      <Button
-        key="open"
-        variant="outline"
-        className="w-full"
-        nativeButton={false}
-        render={<a href={view.thread.link} target="_blank" rel="noreferrer" />}
-        data-open-thread
-      >
-        <ExternalLink data-icon="inline-start" aria-hidden />
-        Open in T3
-      </Button>
-    );
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint label={lost ? "This brainstorm's thread is gone" : `${view.thread?.title ?? "This brainstorm's thread"}, in T3`} side="right">
+      {/* A lost chip has Start a fresh thread beside it, so its hint opens left over the title, as the bar's own do. */}
+      <Hint label={lost ? "This brainstorm's thread is gone" : `${view.thread?.title ?? "This brainstorm's thread"}, in T3`} side={lost ? "left" : "right"}>
         <PopoverTrigger render={<Button variant="ghost" className={COMPACT} data-collapse={COLLAPSE.thread} data-thread-chip data-thread={state} />}>
           <ThreadDot lost={lost} phase={phase} />
-          <Truncate className={cn(COMPACT_LABEL, "max-w-menu", lost ? "text-fg" : "text-fg-muted")} data-thread-title>
+          <Truncate className={cn(COMPACT_LABEL, "max-w-menu", lost ? TONE_TEXT[PHASE.thread_lost.tone] : "text-fg-muted")} data-thread-title>
             {lost ? "Thread lost" : (view.thread?.title ?? "Thread")}
           </Truncate>
         </PopoverTrigger>
@@ -305,27 +290,37 @@ function ThreadChip({ view, send }: { view: SessionView; send: (action: RobActio
           heading={lost ? "Thread lost" : (view.thread?.title ?? "T3 thread")}
           description={
             lost
-              ? "This brainstorm's thread is gone. Start a fresh one, and every branch carries on there."
+              ? `This brainstorm's thread is gone. Start a fresh thread and every branch carries on there${phase !== null ? ", the open request with it" : ""}.`
               : "Every branch of this brainstorm works in this thread. A fresh one gives the agent a clean context."
           }
         />
-        <div className="flex flex-col gap-1.5">{lost ? [fresh, link] : [link, fresh]}</div>
+        {!lost && (
+          <div className="flex flex-col gap-1.5">
+            {view.thread !== null && (
+              <Button variant="outline" className="w-full" nativeButton={false} render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-open-thread>
+                <ExternalLink data-icon="inline-start" aria-hidden />
+                Open in T3
+              </Button>
+            )}
+            <FreshThread blocked={blocked} starting={starting} onClick={() => void refresh()} />
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
 }
 
-/** Green while the thread is attached and idle, the phase's dot while a request is open, muted once it is lost. */
+/** Green while the thread is attached and idle, the phase's dot while a request is open, the warning sign once it is lost. */
 function ThreadDot({ lost, phase }: { lost: boolean; phase: OpenPhase | null }) {
-  if (lost) return <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-fg-muted" />;
+  if (lost) return <AlertTriangle aria-hidden className={cn("size-3 shrink-0", TONE_TEXT[PHASE.thread_lost.tone])} data-thread-lost />;
   if (phase === null) return <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-success" />;
   return <PhaseDot phase={phase} tone={echoTone(phase)} />;
 }
 
-function FreshThread({ blocked, starting, primary, onClick }: { blocked: string | null; starting: boolean; primary: boolean; onClick: () => void }) {
+function FreshThread({ blocked, starting, onClick }: { blocked: string | null; starting: boolean; onClick: () => void }) {
   const button = (
     <Button
-      variant={primary ? "accent" : "outline"}
+      variant="outline"
       className="w-full"
       disabled={blocked !== null || starting}
       onClick={onClick}

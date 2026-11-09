@@ -241,6 +241,8 @@ export function PreviewWindow({ api }: { api: Api }) {
               rect={composing.rect}
               block={blockOf(composing.pin)}
               slots={scene.slots}
+              blocks={blocks}
+              marks={scene.marks}
               current={composing.slot}
               bounds={bounds}
               onAdd={async (into, instruction) => {
