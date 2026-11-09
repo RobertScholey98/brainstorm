@@ -1,5 +1,6 @@
 import { ChevronRight, CircleCheck, Component, LayoutGrid, Undo2 } from "lucide-react";
-import { useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
+import { arrowFocus } from "./arrowFocus";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ResizeHandle } from "@/components/ui/resize-handle";
 import {
@@ -62,19 +63,6 @@ export function AppSidebar({
       )}
     </Sidebar>
   );
-}
-
-/** Up and down move between the rows `selector` matches, for lists Rob scans with the keyboard. */
-export function arrowFocus(e: KeyboardEvent<HTMLElement>, selector: string): HTMLElement | null {
-  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return null;
-  const rows = [...e.currentTarget.querySelectorAll<HTMLElement>(selector)];
-  const at = rows.indexOf(document.activeElement as HTMLElement);
-  if (at < 0) return null;
-  const next = rows[at + (e.key === "ArrowDown" ? 1 : -1)];
-  if (next === undefined) return null;
-  e.preventDefault();
-  next.focus();
-  return next;
 }
 
 export function HomePanel({

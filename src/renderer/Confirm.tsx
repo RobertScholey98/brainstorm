@@ -40,8 +40,9 @@ export function ConfirmButton({
   const label = branching ? "Confirm as a branch" : "Confirm";
   const nothing = plan === null && !branching ? "Nothing to confirm yet: give a design a thumbs up, trash an option or pick an element" : null;
   const reason = blocked ?? nothing;
+  const foot = useRef<HTMLButtonElement>(null);
   const trigger = (
-    <Button variant="accent" className="w-full" disabled={reason !== null} data-confirm-toggle={branching ? "branch" : "latest"}>
+    <Button ref={foot} variant="accent" className="w-full" disabled={reason !== null} data-confirm-toggle={branching ? "branch" : "latest"}>
       {branching ? <GitBranch data-icon="inline-start" aria-hidden /> : <Check data-icon="inline-start" aria-hidden />}
       {label}
     </Button>
@@ -56,7 +57,7 @@ export function ConfirmButton({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger render={trigger} />
-      <PopoverContent size="md" side="right" align="end" data-confirm-menu>
+      <PopoverContent size="md" side="right" align="end" alignOffset={() => clearOfStrip(foot.current)} data-confirm-menu>
         <PopoverHeader
           heading={label}
           description={
@@ -69,6 +70,19 @@ export function ConfirmButton({
       </PopoverContent>
     </Popover>
   );
+}
+
+/** The popover's gap above the history strip, the popover's own gap from its trigger. */
+const STRIP_GAP = 6;
+
+/**
+ * How far the popover rises from Confirm's foot so it ends above the history strip, which runs level with the sidebar's
+ * foot, rather than sitting on the strip's edge. Nothing while the strip is shut or already below it.
+ */
+function clearOfStrip(trigger: HTMLElement | null): number {
+  const strip = document.querySelector("[data-history]")?.getBoundingClientRect();
+  if (trigger === null || strip === undefined) return 0;
+  return Math.max(0, trigger.getBoundingClientRect().bottom - strip.top + STRIP_GAP);
 }
 
 function ConfirmForm({

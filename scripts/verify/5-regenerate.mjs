@@ -504,13 +504,23 @@ try {
     ["This brainstorm's thread is gone. Start a fresh thread and every branch carries on there, the open request with it.", 0],
   );
   await shot(window, shots, "8-thread-lost-menu");
+  await window.mouse.move(120, 600);
   await window.keyboard.press("Escape");
   await window.waitForSelector("[data-thread-menu]", { state: "hidden" });
-  // Escape hands focus back to the chip, whose hint then shows; the bar's Start a fresh thread stays clear of it.
+  await window.waitForTimeout(800);
+  check(
+    "Escape hands focus back to the chip, and its hint stays shut rather than pop up over the title because the menu closed",
+    await window.evaluate(() => [document.activeElement?.matches("[data-thread-chip]") ?? false, document.querySelector('[data-slot="tooltip-content"]') !== null]),
+    [true, false],
+  );
   await window.click('[data-topbar] [data-request-action="fresh_thread"]');
   await window.waitForSelector('[data-request-phase="queued"]', { timeout: PHASE_MS });
   const fresh = t3.started();
   check("Start a fresh thread starts one T3 thread, and the open request follows to it", [fresh.length, markers(fresh[0]?.thread, 3)], [1, 1]);
+  // Open thread takes Start a fresh thread's place under the pointer, so the pointer moves off before the shot, which
+  // is of the bar, not of a hint.
+  await window.mouse.move(120, 600);
+  await window.waitForSelector('[data-slot="tooltip-content"]', { state: "detached" });
   await shot(window, shots, "9-fresh-thread");
 
   check("the window logged no errors or warnings", errors, []);
