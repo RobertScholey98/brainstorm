@@ -1,5 +1,5 @@
 import type { Confirms } from "./confirm";
-import { requestFeedback } from "./machines";
+import { confirmGate, regenerateGate, requestFeedback } from "./machines";
 import { confirmPlan, liveMarks, slotShapes } from "./main";
 import { appearanceProp, classifyOverrides } from "./props";
 import type { Reads } from "./reads";
@@ -133,17 +133,20 @@ export class Branches {
   }
 
   /**
-   * Why the branch can't be made now, or null. Confirm shares Regenerate's gate (ADR 009), so a branch is refused while
-   * a request is open anywhere in the brainstorm or its thread is lost, even one the app answers itself, as a confirm
-   * on the latest iteration is.
+   * Why the branch can't be made now, or null. A branch shares Confirm's gate (ADR 009): it is refused while a request
+   * is open anywhere in the brainstorm, and, when it asks the agent something (a graft or an instruction), while the
+   * thread is lost too. One the app answers itself runs no agent turn, so it is made on a lost thread, as a confirm
+   * with nothing to graft is on the latest iteration.
    */
-  #gate({ parent }: BranchStart): Failure | null {
+  #gate({ parent, grafting, instruction }: BranchStart): Failure | null {
     const { store, trees } = this.#deps;
     const busy = trees.openElsewhere(parent.id) ?? store.openRequest(parent.id);
-    if (busy !== null) return { code: "request_open", message: `request ${busy.n} is still open on this brainstorm's thread; let it finish or withdraw it first`, n: busy.n };
     const attachment = store.attachment(parent.id);
-    if (attachment.lostAt !== null) return { code: "thread_lost", message: `thread ${attachment.threadId} is gone; start a fresh thread first`, thread: attachment.threadId };
-    return null;
+    const gate = confirmGate(regenerateGate({ hasIteration: true, open: busy, busy: false, attachment }), grafting || instruction !== null);
+    if (gate.ok) return null;
+    return busy !== null
+      ? { code: "request_open", message: `request ${busy.n} is still open on this brainstorm's thread; let it finish or withdraw it first`, n: busy.n }
+      : { code: "thread_lost", message: `thread ${attachment.threadId} is gone; start a fresh thread first`, thread: attachment.threadId };
   }
 
   /**
@@ -206,8 +209,8 @@ export class Branches {
       // The check awaited the worker, so another branch may have opened a request on the thread meanwhile.
       const late = this.#gate(start);
       if (late !== null) return fail(late);
-      // The tree's thread as it is. The gate refuses a lost one, but the branch copies whatever it finds, so it never
-      // reads healthier than its tree.
+      // The tree's thread as it is, lost included: a branch that asks the agent nothing is made on a lost thread, and
+      // copies it, so it never reads healthier than its tree.
       const shared = store.attachment(parent.id);
       const thread = shared.threadId;
       store.createBranch(

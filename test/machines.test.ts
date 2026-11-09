@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   blockedMessage,
   canAppend,
+  confirmGate,
   foldFeedback,
   formatRefreshMessage,
   formatRequestMessage,
@@ -247,6 +248,19 @@ test("blockedMessage says why Regenerate is shut, after the hint's lead name", (
     "Needs a first iteration",
     "Request 3 is still open",
     "This brainstorm's thread is gone. Start a fresh thread from the top bar.",
+  ]);
+});
+
+test("confirmGate lets a confirm that asks the agent nothing past a lost thread, and nothing else", () => {
+  const lost = { ok: false, reason: "thread_lost" } as const;
+  const open = { ok: false, reason: "request_open" } as const;
+  const busy = { ok: false, reason: "branch_busy" } as const;
+  expect([confirmGate(lost, false), confirmGate(lost, true), confirmGate(open, false), confirmGate(busy, false), confirmGate({ ok: true }, true)]).toEqual([
+    { ok: true },
+    { ok: false, reason: "thread_lost" },
+    { ok: false, reason: "request_open" },
+    { ok: false, reason: "branch_busy" },
+    { ok: true },
   ]);
 });
 
