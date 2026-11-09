@@ -17,6 +17,7 @@ const GHOST = "44444444-4444-4444-4444-444444444444" as ThreadId;
 const LIB = "55555555-5555-5555-5555-555555555555" as ThreadId;
 const SIDE = "66666666-6666-6666-6666-666666666666" as ThreadId;
 const GONE = "77777777-7777-7777-7777-777777777777" as ThreadId;
+const SHARED = "88888888-8888-8888-8888-888888888888" as ThreadId;
 const AT = "2026-11-09T01:00:00.000Z";
 
 // Copies inside the repo, so each library resolves react and tailwindcss from the repo's node_modules.
@@ -52,6 +53,7 @@ beforeAll(async () => {
   bridge.add(LIB, "proj-lib", "The library's own project");
   bridge.add(SIDE, "proj-side", "An app that adds the library");
   bridge.add(GONE, "proj-gone", "A project last seen in a worktree since removed");
+  bridge.add(SHARED, "proj-shared", "A project Brainstorm knows only from a system");
   let id = 0;
   service = await Brainstorm.open({
     dbPath: join(home, "brainstorm.db"),
@@ -162,6 +164,26 @@ describe("a project's design system", () => {
       expect(data(await service.projectSystem(MAIN)).system?.id).toBe(system);
     } finally {
       rmSync(third, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("finds a library's project from a system it already has in that repo", async () => {
+    // One repo with two libraries, as a monorepo's packages/ui and packages/charts would be.
+    const repo = mkdtempSync(join(import.meta.dirname, ".kit-"));
+    execFileSync("git", ["init", "-q", repo]);
+    for (const name of ["ui", "charts"]) {
+      cpSync(join(import.meta.dirname, "kit-lib"), join(repo, name), { recursive: true });
+      const file = join(repo, name, "package.json");
+      writeFileSync(file, readFileSync(file, "utf8").replace("@fixture/kit", `@fixture/${name}`));
+    }
+    try {
+      // An agent on the library's project adds the first one by path, so Brainstorm has no folder for the project.
+      expect(data(await service.systems.add({ path: join(repo, "ui"), thread: SHARED })).system.projectId).toBe("proj-shared");
+      // An app's agent adds the second. It belongs to the project the first one did.
+      const charts = data(await service.systems.add({ path: join(repo, "charts"), thread: SIDE })).system;
+      expect(charts.projectId).toBe("proj-shared");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
     }
   }, 120_000);
 });

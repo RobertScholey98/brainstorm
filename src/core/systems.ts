@@ -566,17 +566,24 @@ export class Systems {
    * from a worktree matches its library in the main checkout, and a project whose folder merely contains `root`, such
    * as a parent folder of several repos, doesn't. Outside git, a stored folder that holds `root` is the best there is.
    * A project's repo is stored when its folder is first seen, so a project known only from a deleted worktree matches.
+   * A project known only from a system, added by path from a thread elsewhere, holds that system's repo.
    */
   async #repoProject(root: string, repo: string | null): Promise<ProjectId | null> {
     if (repo === null) return this.#store.projectsHolding(root)[0] ?? null;
     for (const p of this.#store.projectRepos()) {
       let theirs = p.repoGit;
       // A project stored before repos were: read its folder while it's still there, and keep the answer.
-      if (theirs === null && p.repoPath !== null) {
+      if (theirs === null && p.repoPath !== null && existsSync(p.repoPath)) {
         theirs = (await repoAt(p.repoPath))?.git ?? null;
         if (theirs !== null) this.#store.setProjectRepo(p.id, theirs);
       }
       if (theirs !== null && samePath(theirs, repo)) return p.id;
+    }
+    // A project known only from a system has no folder; add records this repo for it, so the loop above finds it next.
+    for (const s of this.#store.systems()) {
+      if (s.projectId === null || !existsSync(s.source.root)) continue;
+      const theirs = (await repoAt(s.source.root))?.git ?? null;
+      if (theirs !== null && samePath(theirs, repo)) return s.projectId;
     }
     return null;
   }

@@ -2,7 +2,7 @@
 // worktree thread on one project, and a thread on a new project. The window's routes are driven with the UI token the
 // server prints, as the window would.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +24,10 @@ for (const dir of [mainCheckout, worktree, fresh]) mkdirSync(dir, { recursive: t
 // Inside the repo, so the library resolves react and tailwindcss from the repo's node_modules.
 const kit = mkdtempSync(join(root, "test", ".kit-verify-"));
 cpSync(join(root, "test", "kit-lib"), kit, { recursive: true });
+// A second library in the same repo, which the project doesn't switch to on its own.
+const kit2 = mkdtempSync(join(root, "test", ".kit-verify-"));
+cpSync(join(root, "test", "kit-lib"), kit2, { recursive: true });
+writeFileSync(join(kit2, "package.json"), readFileSync(join(kit2, "package.json"), "utf8").replace("@fixture/kit", "@fixture/charts"));
 
 // Brainstorm names a project after its repo's main checkout, which holds the library.
 const repoName = basename(dirname(execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: root, encoding: "utf8" }).trim()));
@@ -158,10 +162,18 @@ try {
   const elsewhere = cli(["project", "use", "none", "--thread", OTHER], { thread: MAIN, cwd: mainCheckout });
   check("project use --thread records no folder for another project", [elsewhere.code, elsewhere.out], [0, ["this project: no design system; its brainstorms are freeform"]]);
   check("so that project isn't named after this repo", (await ui("GET", "/v1/ui/projects")).data.find((p) => p.id === "proj-other")?.name, null);
+
+  const second = cli(["system", "add", kit2], { thread: MAIN, cwd: mainCheckout });
+  const charts = (await ui("GET", "/v1/ui/systems")).data.find((s) => s.name === "@fixture/charts")?.id;
+  check("system add says the project keeps the system it has", [second.code, second.out.slice(-2)], [
+    0,
+    [`this project keeps @fixture/kit (${system}); brainstorm project use ${charts} switches it`, "next: report to Rob and wait; Rob's review may send changes back to this thread"],
+  ]);
 } finally {
   server.kill();
   await new Promise((r) => setTimeout(r, 300));
   rmSync(kit, { recursive: true, force: true });
+  rmSync(kit2, { recursive: true, force: true });
   rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }
 

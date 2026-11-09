@@ -421,10 +421,18 @@ const COMMANDS: Record<string, Command> = {
       if (!result.ok) return { result, lines: [] };
       const s = result.data.system;
       const projects = s.projects.map((p) => p.name ?? p.id).join(", ");
+      // A project with a system keeps it, so say so rather than let the agent assume the new one took over.
+      const own = thread === null ? null : await call<ProjectListing>("GET", `/v1/agent/project-system?thread=${thread}`);
+      const kept = own?.ok === true && own.data.system !== null && own.data.system.id !== s.id ? own.data.system : null;
       return {
         result,
         lines: [
           ...syncLines(result.data, "added"),
+          ...(kept !== null
+            ? [`this project keeps ${kept.name} (${kept.id}); brainstorm project use ${s.id} switches it`]
+            : projects === ""
+              ? [`no project builds with it yet; brainstorm project use ${s.id} sets one`]
+              : []),
           ...(projects === "" ? [] : [`brainstorms on ${projects} build with it`]),
           // A new system always awaits Rob's review, and brainstorms refuse it until he confirms it.
           "next: report to Rob and wait; Rob's review may send changes back to this thread",

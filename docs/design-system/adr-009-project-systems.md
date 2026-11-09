@@ -96,3 +96,11 @@ window can name it; a row made without a path takes the first path a session giv
   stored `repo_git` fixes it. `system add` sends the agent's folder only for the agent's own thread, since
   `--thread` can name another project's. Adding a folder that is already a system says how to use it with
   `project use`.
+- Round 4 found the same folder problem in `session new` and `project use`: with `--thread` naming another project's
+  thread, the agent's folder stamped that project with the wrong repo and name. They now send a folder only for the
+  agent's own thread or an explicit `--project`.
+- Round 5 found that a project Brainstorm knows only from a system, added by path from a thread elsewhere, has no folder
+  to compare. The repo match also checks each system's own folder. `system add` now says when the agent's project
+  keeps the system it had, so a switch the agent assumed shows in its transcript.
+- "Unless the project has one already" reads the project as it is now. A project cleared with `project use none`
+  takes the next system added from it.
