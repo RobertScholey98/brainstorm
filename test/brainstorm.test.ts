@@ -1111,6 +1111,8 @@ const REEL = "wheel/reel" as BlockId;
 const slotReelJson = JSON.stringify({ title: "Slot reel", props: wheelProps });
 /** Neon as the agent leaves it once it has merged a graft in. */
 const MERGED = { tsx: neonTsx.replace(">Spin<", ">SPIN<"), json: neonJson };
+/** Calm as it was: a confirm that grafts from it keeps it (ADR 009). */
+const CALM_AS_IS = { "wheel/calm": { tsx: neonTsx, json: calmJson } };
 
 /** Iteration 3 changes only the result sheet, so iteration 2, with both wheels, is in the past. */
 async function withPastTwoWheels() {
@@ -1174,7 +1176,7 @@ describe("marks and confirm", () => {
       kind: "confirm",
       mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }],
       grafts: [{ from: { blockId: CALM, part: SPIN }, into: "wheel", instruction: "under the wheel" }],
-      drop: [CALM],
+      drop: [],
     });
     expect(await service.act(S, { kind: "trash", blockId: SHEET })).toEqual({
       ok: false,
@@ -1183,9 +1185,25 @@ describe("marks and confirm", () => {
     const context = data(await service.context(S, T1));
     expect(context.marks.grafts.map((g) => g.from)).toEqual([{ blockId: CALM, part: SPIN }]);
 
-    const result = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED }), addresses: [], note: "spin button from Calm" }));
-    expect(result.warnings).toEqual([]);
-    expect(data(await service.view(S)).marks, "the marks are spent once the confirm lands").toEqual(NONE);
+    const result = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED, ...CALM_AS_IS }), addresses: [], note: "spin button from Calm" }));
+    expect(result.warnings, "Calm, the pick's source, stays beside Main with no confirm_mismatch").toEqual([]);
+    const landed = data(await service.view(S));
+    expect(landed.marks, "the pick is spent; Main's mark stays while Calm sits beside it, an option with no mark").toEqual(KEEP_NEON);
+    expect([landed.iteration?.slots[0]?.variants, landed.overrides.applicable.map((o) => [o.blockId, o.prop]), landed.feedback.map((f) => f.id)], "Calm keeps its setting and pin").toEqual([
+      ["calm", "neon"],
+      [
+        [CALM, "spinSeconds"],
+        [NEON, "accent"],
+        [NEON, "density"],
+      ],
+      [1, 2, 3],
+    ]);
+    data(await service.act(S, { kind: "confirm" }));
+    const next = data(await service.view(S));
+    expect([next.iteration?.slots[0]?.variants, next.request?.request.scope], "the next Confirm drops Calm like any option beside Main").toEqual([
+      ["neon"],
+      { kind: "confirm", mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }], grafts: [], drop: [CALM] },
+    ]);
 
     const other = await withTwoWheels();
     data(await other.service.act(S, { kind: "approve", blockId: NEON }));
@@ -1196,7 +1214,6 @@ describe("marks and confirm", () => {
     const warned = data(await other.service.commit({ session: S, thread: T1, files: bad, addresses: [], note: null }));
     expect(warned.warnings.map((w) => [w.code, w.message])).toEqual([
       ["pin_lost", 'feedback #1 ("bigger button") is pinned to data-part "spin-button" in wheel/neon, which this commit no longer renders'],
-      ["confirm_mismatch", "request 1 drops wheel/calm, and this commit still has it"],
       ["confirm_mismatch", 'wheel/neon doesn\'t render data-part "spin-button", the element request 1 grafts into it from wheel/calm'],
     ]);
   });
@@ -1223,7 +1240,8 @@ describe("marks and confirm", () => {
     const confirmed = async () => {
       const ctx = await withTwoWheels();
       data(await ctx.service.act(S, { kind: "approve", blockId: NEON }));
-      data(await ctx.service.act(S, { kind: "add_graft", from: { blockId: CALM, part: SPIN }, into: WHEEL, instruction: null }));
+      // A pick from the sheet, so Calm is no graft's source and the confirm drops it.
+      data(await ctx.service.act(S, { kind: "add_graft", from: { blockId: SHEET, part: null }, into: WHEEL, instruction: "its layout" }));
       data(await ctx.service.act(S, { kind: "confirm" }));
       return ctx.service;
     };
@@ -1261,14 +1279,22 @@ describe("marks and confirm", () => {
     };
     const service = await confirmed();
     const big = { tsx: sheetTsx.replace("<section", '<section className="big"'), json: sheetJson };
-    const result = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED, "result/sheet": big }), addresses: [], note: null }));
+    const result = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED, ...CALM_AS_IS, "result/sheet": big }), addresses: [], note: null }));
     expect(result.warnings.map((w) => [w.code, w.message])).toEqual([
       ["out_of_scope", "result/sheet changed, but request 1 asked only for the grafts into Main and the dropped variants"],
     ]);
 
+    const deleted = await confirmed();
+    const gone = data(await deleted.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED }), addresses: [], note: null }));
+    expect(gone.warnings.map((w) => [w.code, w.message]), "the confirm keeps the pick's source, so deleting it is news").toEqual([
+      ["override_dropped", "Rob set spinSeconds = 3 on wheel/calm, and it no longer applies (block_removed); he'll see it flagged"],
+      ["pin_lost", 'feedback #2 ("too grey") is pinned to wheel/calm, which this commit no longer renders'],
+      ["out_of_scope", "wheel/calm changed, but request 1 asked only for the grafts into Main and the dropped variants"],
+    ]);
+
     const other = await confirmed();
     const renamed: FileMap = Object.fromEntries(
-      Object.entries(copy(2, { "wheel/neon-two": { tsx: neonTsx, json: neonJson } })).filter(([path]) => !path.startsWith("slots/wheel/neon/")),
+      Object.entries(copy(2, { "wheel/neon-two": { tsx: neonTsx, json: neonJson }, ...CALM_AS_IS })).filter(([path]) => !path.startsWith("slots/wheel/neon/")),
     );
     const lost = data(await other.commit({ session: S, thread: T1, files: renamed, addresses: [], note: null }));
     expect(lost.warnings.filter((w) => w.code === "confirm_mismatch").map((w) => [w.code, w.message]), "the new id sits beside a Main that is gone").toEqual([
@@ -1286,14 +1312,14 @@ describe("marks and confirm", () => {
       return ctx.service;
     };
     const service = await confirmed();
-    const beside = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED, "wheel/reel": { tsx: neonTsx, json: slotReelJson } }), addresses: [], note: null }));
+    const beside = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED, ...CALM_AS_IS, "wheel/reel": { tsx: neonTsx, json: slotReelJson } }), addresses: [], note: null }));
     expect(beside.warnings.map((w) => [w.code, w.message])).toEqual([
       ["confirm_mismatch", "request 1 keeps only Main in slot wheel, and this commit has wheel/reel beside it"],
     ]);
 
     const other = await confirmed();
     const retitled = { tsx: neonTsx, json: JSON.stringify({ title: "Neon wheel two", props: wheelProps }) };
-    const renamed = data(await other.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": retitled }), addresses: [], note: null }));
+    const renamed = data(await other.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": retitled, ...CALM_AS_IS }), addresses: [], note: null }));
     expect(renamed.warnings.map((w) => [w.code, w.message])).toEqual([
       ["confirm_mismatch", 'wheel/neon is titled "Neon wheel two"; request 1 keeps it as Main titled "Neon wheel"'],
     ]);
@@ -1432,16 +1458,25 @@ describe("marks and confirm", () => {
     });
   });
 
-  test("a whole-block graft the commit leaves unapplied warns, though the commit drops what it should", async () => {
+  test("a whole-block graft the commit leaves unapplied warns, though the commit drops what it should and keeps its source", async () => {
     const { service } = await withTwoWheels();
+    // The reel, trashed, gives the commit something to drop: one that kept everything would change nothing, and land nothing.
+    data(await service.commit({ session: S, thread: T1, files: copy(2, { ...CALM_AS_IS, "wheel/reel": { tsx: neonTsx, json: slotReelJson } }), addresses: [], note: null }));
+    data(await service.act(S, { kind: "trash", blockId: REEL }));
     data(await service.act(S, { kind: "approve", blockId: NEON }));
     data(await service.act(S, { kind: "add_graft", from: { blockId: CALM, part: null }, into: WHEEL, instruction: "its calm colours" }));
     data(await service.act(S, { kind: "confirm" }));
-    const result = data(await service.commit({ session: S, thread: T1, files: copy(2), addresses: [], note: null }));
+    expect(data(await service.view(S)).request?.request.scope).toEqual({
+      kind: "confirm",
+      mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }],
+      grafts: [{ from: { blockId: CALM, part: null }, into: "wheel", instruction: "its calm colours" }],
+      drop: [REEL],
+    });
+    const result = data(await service.commit({ session: S, thread: T1, files: copy(3, CALM_AS_IS), addresses: [], note: null }));
     expect(result.warnings.map((w) => [w.code, w.file, w.message])).toEqual([
       ["confirm_mismatch", "slots/wheel/neon/block.tsx", "request 1 grafts all of wheel/calm into wheel/neon, and this commit leaves wheel/neon as it was"],
     ]);
-    expect(data(await service.view(S)).request?.request.state, "a warning, not a refusal").toEqual({ state: "fulfilled", iteration: 3 });
+    expect(data(await service.view(S)).request?.request.state, "a warning, not a refusal").toEqual({ state: "fulfilled", iteration: 4 });
   });
 
   test("a graft whose part the commit's Main doesn't render isn't spent: it waits under Main for the next confirm", async () => {
@@ -1505,21 +1540,29 @@ describe("marks and confirm", () => {
     });
   });
 
-  test("a graft the commit didn't apply keeps its slot's Main mark while the commit leaves other variants beside Main", async () => {
+  test("a graft the commit didn't apply keeps its source and its slot's Main mark, and the next confirm carries it again", async () => {
     const { service } = await withTwoWheels();
+    // The reel, trashed, gives the commit something to drop: one that kept everything would change nothing, and land nothing.
+    data(await service.commit({ session: S, thread: T1, files: copy(2, { ...CALM_AS_IS, "wheel/reel": { tsx: neonTsx, json: slotReelJson } }), addresses: [], note: null }));
+    data(await service.act(S, { kind: "trash", blockId: REEL }));
     data(await service.act(S, { kind: "approve", blockId: NEON }));
     data(await service.act(S, { kind: "add_graft", from: { blockId: CALM, part: SPIN }, into: WHEEL, instruction: null }));
     data(await service.act(S, { kind: "confirm" }));
-    const calmer = { tsx: neonTsx.replace(">Spin<", ">Go<"), json: calmJson };
-    const result = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/calm": calmer }), addresses: [], note: null }));
+    const result = data(await service.commit({ session: S, thread: T1, files: copy(3, CALM_AS_IS), addresses: [], note: null }));
     expect(result.warnings.map((w) => w.message)).toEqual([
-      "request 1 drops wheel/calm, and this commit still has it",
       'request 1 grafts data-part "spin-button" from wheel/calm into wheel/neon, and this commit leaves wheel/neon as it was',
     ]);
     expect(data(await service.view(S)).marks).toEqual({
       mains: { wheel: "neon" },
       grafts: [{ id: 1, from: { blockId: CALM, part: SPIN }, into: "wheel", instruction: null }],
       trashed: [],
+    });
+    data(await service.act(S, { kind: "confirm" }));
+    expect(data(await service.view(S)).request?.request.scope).toEqual({
+      kind: "confirm",
+      mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }],
+      grafts: [{ from: { blockId: CALM, part: SPIN }, into: "wheel", instruction: null }],
+      drop: [],
     });
   });
 
@@ -1714,11 +1757,11 @@ describe("branches", () => {
         kind: "confirm",
         mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }],
         grafts: [{ from: { blockId: CALM, part: SPIN }, into: "wheel", instruction: "under the wheel" }],
-        drop: [CALM],
+        drop: [],
       },
     });
     expect(bridge.sent.map((m) => [m.thread, m.message.split("\n")[0]])).toEqual([
-      [T1, `[brainstorm] session ${F} · request 1 · branch of ${S} iteration 2 · scope: confirm main wheel/neon, result/sheet; graft wheel/calm [spin-button] into wheel; drop wheel/calm`],
+      [T1, `[brainstorm] session ${F} · request 1 · branch of ${S} iteration 2 · scope: confirm main wheel/neon, result/sheet; graft wheel/calm [spin-button] into wheel; drop none`],
     ]);
     expect(await service.act(F, { kind: "trash", blockId: SHEET }), "its marks hold while the confirm is open").toMatchObject({ ok: false, error: { code: "invalid_action" } });
   });
@@ -2048,7 +2091,7 @@ describe("vary", () => {
     expect(data(await service.view(S)).marks.grafts).toEqual([]);
   });
 
-  test("a confirm whose commit leaves Main as it was warns that a vary option's graft never landed, and one that changes Main passes", async () => {
+  test("a vary option's graft keeps its source: a commit that leaves Main as it was warns and the next confirm carries the graft again, and once it lands the source is an option the next confirm drops", async () => {
     const grafted = async () => {
       const { service } = await withIteration();
       data(await service.act(S, { kind: "vary", target: { blockId: NEON, part: SPIN }, count: 2, direction: null }));
@@ -2059,18 +2102,54 @@ describe("vary", () => {
       data(await service.act(S, { kind: "confirm" }));
       return service;
     };
+    const optionB = "wheel/spin-button-b" as BlockId;
+    const keptB = { [optionB]: { tsx: spinTsx("b"), json: spinJson("Spin button B") } };
     // Neon already renders a spin-button, so the element alone can't show the graft went in.
     const untouched = await grafted();
-    expect(data(await untouched.commit({ session: S, thread: T1, files: copy(2), addresses: [], note: null })).warnings.map((w) => [w.code, w.file, w.message])).toEqual([
+    expect(data(await untouched.view(S)).request?.request.scope, "Spin button B is the graft's source, so only A goes").toEqual({
+      kind: "confirm",
+      mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }],
+      grafts: [{ from: { blockId: optionB, part: "spin-button" }, into: "wheel", instruction: null }],
+      drop: ["wheel/spin-button-a"],
+    });
+    expect(data(await untouched.commit({ session: S, thread: T1, files: copy(2, keptB), addresses: [], note: null })).warnings.map((w) => [w.code, w.file, w.message])).toEqual([
       [
         "confirm_mismatch",
         "slots/wheel/neon/block.tsx",
         'request 2 grafts data-part "spin-button" from wheel/spin-button-b into wheel/neon, and this commit leaves wheel/neon as it was',
       ],
     ]);
+    expect(data(await untouched.view(S)).marks, "the graft is live, its source still there").toEqual({
+      mains: { wheel: "neon" },
+      grafts: [{ id: 1, from: { blockId: optionB, part: "spin-button" }, into: "wheel", instruction: null }],
+      trashed: [],
+    });
+    data(await untouched.act(S, { kind: "confirm" }));
+    expect(data(await untouched.view(S)).request?.request.scope, "the next Confirm carries it again").toEqual({
+      kind: "confirm",
+      mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }],
+      grafts: [{ from: { blockId: optionB, part: "spin-button" }, into: "wheel", instruction: null }],
+      drop: [],
+    });
 
     const merged = await grafted();
-    expect(data(await merged.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED }), addresses: [], note: null })).warnings).toEqual([]);
+    expect(data(await merged.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": MERGED, ...keptB }), addresses: [], note: null })).warnings).toEqual([]);
+    const landed = data(await merged.view(S));
+    expect([landed.iteration?.blocks.map((b) => b.id), landed.marks], "Spin button B is an option beside Main, with no mark").toEqual([
+      [SHEET, NEON, optionB],
+      { mains: { wheel: "neon" }, grafts: [], trashed: [] },
+    ]);
+    const wheel = landed.iteration!.slots.find((s) => s.id === WHEEL)!;
+    expect(approval(wheel, landed.iteration!.blocks.find((b) => b.id === optionB)!, landed.marks), "its 👍 would graft its spin button again").toEqual({
+      kind: "graft",
+      from: { blockId: optionB, part: "spin-button" },
+    });
+    data(await merged.act(S, { kind: "confirm" }));
+    const next = data(await merged.view(S));
+    expect([next.iteration?.blocks.map((b) => b.id), next.request?.request.scope], "the next Confirm drops it with no agent turn").toEqual([
+      [SHEET, NEON],
+      { kind: "confirm", mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }], grafts: [], drop: [optionB] },
+    ]);
   });
 
   test("a vary option a confirm dropped is forgotten, so a later variant with its key becomes Main on a 👍", async () => {

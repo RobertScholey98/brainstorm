@@ -104,36 +104,48 @@ export function trashRefusal(slot: SlotShape, variant: VariantKey, marks: Marks)
 /**
  * What Confirm locks in, or null when there is nothing to lock. A slot with a Main, chosen or the only one left, keeps
  * only Main and names it, so every graft's slot has its Main in `mains`; a slot without one keeps its variants that
- * aren't trashed. Grafts go to the agent; with none the app narrows the iteration itself.
+ * aren't trashed. Grafts go to the agent; with none the app narrows the iteration itself. A graft's source stays,
+ * whatever slot it is in, so a graft the agent's commit doesn't apply can be tried again; once it lands the source is an
+ * option like any other, and the next Confirm drops it.
  */
 export function confirmPlan(slots: readonly SlotShape[], marks: Marks): ConfirmScope | null {
   const live = liveMarks(marks, slots);
+  const sources = live.grafts.map((g) => g.from.blockId);
   const mains: { slot: SlotId; variant: VariantKey }[] = [];
   const drop: BlockId[] = [];
   for (const slot of slots) {
     const main = mainOf(slot, live);
     if (main !== null) mains.push({ slot: slot.id, variant: main });
     const keep = main !== null ? [main] : shownVariants(slot, live);
-    drop.push(...slot.variants.filter((v) => !keep.includes(v)).map((v) => blockIdOf(slot.id, v)));
+    drop.push(...slot.variants.filter((v) => !keep.includes(v)).map((v) => blockIdOf(slot.id, v)).filter((b) => !sources.includes(b)));
   }
   const grafts = live.grafts.map(({ from, into, instruction }) => ({ from, into, instruction }));
   if (drop.length === 0 && grafts.length === 0) return null;
   return { kind: "confirm", mains, grafts, drop };
 }
 
-/** Each slot as the confirm leaves it, for the popover: what it keeps, what goes into Main, and how many options go. */
+/**
+ * Each slot as the confirm leaves it, for the popover: what it keeps, what goes into Main, how many options go, and
+ * the graft sources that stay beside Main until their grafts land.
+ */
 export type ConfirmLine = {
   readonly slot: SlotId;
   readonly keeps: readonly VariantKey[];
   readonly grafts: ConfirmScope["grafts"];
   readonly dropped: number;
+  readonly stays: readonly BlockId[];
 };
 
 export function confirmLines(slots: readonly SlotShape[], plan: ConfirmScope): ConfirmLine[] {
   return slots.map((slot) => {
     const dropped = plan.drop.filter((b) => splitBlockId(b).slot === slot.id).length;
     const grafts = plan.grafts.filter((g) => g.into === slot.id);
-    return { slot: slot.id, keeps: slot.variants.filter((v) => !plan.drop.includes(blockIdOf(slot.id, v))), grafts, dropped };
+    const main = plan.mains.find((m) => m.slot === slot.id)?.variant;
+    const sources = new Set(plan.grafts.map((g) => g.from.blockId));
+    // Only beside a Main is a source news: a slot with no Main keeps its variants anyway.
+    const stays = main === undefined ? [] : slot.variants.filter((v) => v !== main && sources.has(blockIdOf(slot.id, v))).map((v) => blockIdOf(slot.id, v));
+    const keeps = slot.variants.filter((v) => !plan.drop.includes(blockIdOf(slot.id, v)) && !stays.includes(blockIdOf(slot.id, v)));
+    return { slot: slot.id, keeps, grafts, dropped, stays };
   });
 }
 

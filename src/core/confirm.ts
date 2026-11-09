@@ -220,11 +220,14 @@ export type DrawnBlocks = {
   readonly parts: ReadonlyMap<BlockId, readonly PartName[]>;
 };
 
-/** Whether `block` sits in a slot that has a Main and isn't that Main. */
+/**
+ * Whether `block` sits in a slot that has a Main and isn't that Main, nor a graft's source: the confirm keeps a source
+ * until its graft lands, so the commit should leave it as it was.
+ */
 export function besideMain(scope: ConfirmScope, block: BlockId): boolean {
   const { slot, variant } = splitBlockId(block);
   const main = scope.mains.find((m) => m.slot === slot);
-  return main !== undefined && main.variant !== variant;
+  return main !== undefined && main.variant !== variant && !scope.grafts.some((g) => g.from.blockId === block);
 }
 
 /**
@@ -291,16 +294,16 @@ function graftsByMain(scope: ConfirmScope, drawn: DrawnBlocks): { id: BlockId; u
 
 /**
  * The marks a confirm leaves once its iteration lands: the grafts its commit didn't apply, each waiting under its
- * slot's Main. Main is implicit when the commit leaves the slot one variant; when it leaves others beside Main, the
- * slot keeps its Main mark, so the graft still reads.
+ * slot's Main. Main is implicit when the commit leaves the slot one variant; when it leaves others beside Main, as a
+ * graft's source the confirm kept, the slot keeps its Main mark, so a waiting graft still reads and the next Confirm
+ * drops those others.
  */
 function leftWaiting(spent: Marks, confirm: Confirmed, blocks: readonly { readonly id: BlockId }[]): Marks {
   const grafts = spent.grafts.filter((g) => confirm.unapplied.some((u) => sameGraft(g, u)));
   const mains: Partial<Record<SlotId, VariantKey>> = {};
-  for (const g of grafts) {
-    const main = confirm.scope.mains.find((m) => m.slot === g.into);
-    const beside = blocks.some((b) => splitBlockId(b.id).slot === g.into && splitBlockId(b.id).variant !== main?.variant);
-    if (main !== undefined && beside) mains[g.into] = main.variant;
+  for (const main of confirm.scope.mains) {
+    const inSlot = blocks.map((b) => splitBlockId(b.id)).filter((b) => b.slot === main.slot);
+    if (inSlot.some((b) => b.variant === main.variant) && inSlot.some((b) => b.variant !== main.variant)) mains[main.slot] = main.variant;
   }
   return { mains, grafts, trashed: [] };
 }
