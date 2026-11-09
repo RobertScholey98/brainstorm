@@ -826,7 +826,7 @@ try {
   check("the run picker lists the runs newest first", await window.$$eval("[data-run-option]", (els) => els.map((e) => e.dataset.runOption)), ["Confirm 1", "Start"]);
   await shot(window, shots, "11-runs");
   await window.keyboard.press("Escape");
-  await window.waitForSelector("[data-run-option]", { state: "detached" });
+  await window.waitForSelector("[data-run-option]", { state: "hidden" });
 
   // The thread lives in the top bar, with a fresh thread for a clean context.
   await window.click("[data-thread-chip]");

@@ -250,14 +250,18 @@ export async function paneFeet(window) {
 }
 
 export async function shot(window, shots, name) {
-  // A popover still fading in or out reads as a defect in a still, so the shot waits out every finite animation.
+  // A popover still fading in or out reads as a defect in a still, so the shot waits out every finite animation that
+  // is running, for a second at most: a paused one would never finish.
   await window.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => {})),
-    ),
+    Promise.race([
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.playState === "running" && a.effect?.getTiming().iterations !== Infinity)
+          .map((a) => a.finished.catch(() => {})),
+      ),
+      new Promise((done) => setTimeout(done, 1000)),
+    ]),
   );
   await window.screenshot({ path: join(shots, `${name}.png`) });
 }
