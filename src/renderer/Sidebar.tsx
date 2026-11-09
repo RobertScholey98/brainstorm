@@ -614,7 +614,7 @@ function VariantRow({
         tabIndex={active ? 0 : -1}
         isActive={active}
         onClick={() => onVariant(variant)}
-        // The two marks' room, so the title gives way to them rather than run under them.
+        // The two 24 px marks' room, 48 px, so the title and key give way to them rather than run under them.
         className="pr-12"
         data-variant={variant}
         data-showing={active || undefined}
@@ -641,7 +641,7 @@ function VariantRow({
       </SidebarMenuButton>
       <div
         className={cn(
-          "absolute top-1 right-1 flex gap-0.5 transition-opacity md:opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100",
+          "absolute top-1 right-0 flex transition-opacity md:opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100",
           (active || pressed) && "md:opacity-100",
         )}
         data-marks
