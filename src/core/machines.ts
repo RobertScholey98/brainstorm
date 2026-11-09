@@ -1,4 +1,4 @@
-import { partLabel } from "./fork";
+import { partLabel } from "./part";
 import {
   blockIdOf,
   parseRequestN,
@@ -246,7 +246,7 @@ export function originText(origin: IterationOrigin): string {
   switch (origin.kind) {
     case "brief":
       return "First designs, from the brief";
-    case "fork":
+    case "branch":
       return `Branched from iteration ${origin.from}`;
     case "agent":
       return origin.note ?? "The agent's own commit";
@@ -313,18 +313,18 @@ export const changedText = (changed: readonly string[]): string =>
   changed.length === 0 ? "no blocks changed" : `changed ${changed.join(", ")}`;
 
 /**
- * `fork` makes it a branch's first request: the segment tells the agent the session is a new branch of the brainstorm
+ * `branchOf` makes it a branch's first request: the segment tells the agent the session is a new branch of the brainstorm
  * it already works on, in the same thread.
  */
 export function formatRequestMessage(
   request: RequestMessageFields,
-  options: { readonly fork?: { readonly parent: SessionId; readonly from: IterationN } } = {},
+  options: { readonly branchOf?: { readonly parent: SessionId; readonly from: IterationN } } = {},
 ): string {
-  const { fork } = options;
+  const { branchOf } = options;
   const segments = [
     `[brainstorm] session ${request.session}`,
     `request ${request.n}`,
-    ...(fork === undefined ? [] : [`branch of ${fork.parent} iteration ${fork.from}`]),
+    ...(branchOf === undefined ? [] : [`branch of ${branchOf.parent} iteration ${branchOf.from}`]),
     `scope: ${scopeText(request.scope)}`,
     ...(request.feedbackIds.length > 0 ? [`feedback: ${request.feedbackIds.map((id) => `#${id}`).join(" ")}`] : []),
     ...(request.freetext !== null ? [`freetext: ${JSON.stringify(request.freetext)}`] : []),

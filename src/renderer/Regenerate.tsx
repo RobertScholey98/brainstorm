@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { Count } from "@/components/ui/count";
-import { partLabel } from "../core/fork";
+import { partLabel } from "../core/part";
 import { blockedMessage, requestFeedback } from "../core/machines";
 import { actionRank, COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
 import { PHASE, TONE_TEXT } from "./status";

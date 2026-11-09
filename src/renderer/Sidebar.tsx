@@ -28,7 +28,7 @@ import { Count } from "@/components/ui/count";
 import { blockIdOf, type BlockView, type ContentHash, type IterationN, type Marks, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type Pin, type StoredGraft, type VariantKey } from "../core/types";
 import { approval, mainOf, shownVariants, trashRefusal } from "../core/main";
 import { partLabel } from "../core/part";
-import { keyEchoesTitle } from "../core/fork";
+import { keyEchoesTitle } from "../core/vary";
 import type { PaneLimits } from "./hooks/use-pane-width";
 import { useRowFit } from "./headerAction";
 import { Mark } from "./Mark";
@@ -474,9 +474,9 @@ function SlotPicker({
  */
 function BranchLine({ view, onOpen, onMakePrimary }: { view: SessionView; onOpen: (id: SessionId) => void; onMakePrimary: () => void }) {
   const back =
-    view.fork === null
+    view.branchOf === null
       ? { text: "The first line, now an offshoot", hint: "Open the main line", to: view.tree.primary }
-      : { text: `Branch from iteration ${view.fork.from}`, hint: `Open ${view.fork.parent.title}, the line this branch left`, to: view.fork.parent.id };
+      : { text: `Branch from iteration ${view.branchOf.from}`, hint: `Open ${view.branchOf.parent.title}, the line this branch left`, to: view.branchOf.parent.id };
   return (
     <SidebarGroup className="py-1" data-branch-line={view.session.id}>
       <div className="flex min-h-8 items-center gap-1 rounded-md bg-muted py-1 pr-1 pl-0.5 text-xs text-fg-muted">

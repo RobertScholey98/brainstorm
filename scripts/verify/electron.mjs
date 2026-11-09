@@ -109,6 +109,14 @@ export async function settled(read, { quietMs = 400, timeoutMs = 6000 } = {}) {
 
 export const inBlock = (blockId, part) => `div[data-bid="${blockId}"] [data-part="${part}"]`;
 
+/** The sidebar shows one slot at a time (ADR 009); its picker switches. */
+export async function showSlot(window, slot) {
+  if ((await window.getAttribute("[data-slot-picker]", "data-slot-picker")) === slot) return;
+  await window.click("[data-slot-picker]");
+  await window.click(`[data-slot-option="${slot}"]`);
+  await window.waitForSelector(`[data-slot-picker="${slot}"]`);
+}
+
 /**
  * What in the overlay at `selector` reaches past its box, by tag and text, once its layout has settled: empty when
  * every field, label and button sits inside it.

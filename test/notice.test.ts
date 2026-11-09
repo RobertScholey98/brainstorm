@@ -17,7 +17,7 @@ describe("failedTitle", () => {
   });
 
   it("names the steps outside a brainstorm's actions", () => {
-    expect(["export", "list", "load", "settle", "unsettle", "fork", "history"].map((a) => failedTitle(a as "export"))).toEqual([
+    expect(["export", "list", "load", "settle", "unsettle", "branch", "history"].map((a) => failedTitle(a as "export"))).toEqual([
       "Couldn't export the brainstorm",
       "Couldn't refresh the brainstorms",
       "Couldn't load the brainstorm",

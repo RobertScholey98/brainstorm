@@ -154,7 +154,6 @@ try {
           activeAt: list.result.data[0].createdAt,
           request: null,
           settlement: { state: "active", unsettledAt: null },
-          fork: null,
         },
       ],
     },

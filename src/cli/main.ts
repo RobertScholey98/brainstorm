@@ -299,11 +299,11 @@ function contextLines(c: AgentContext): string[] {
   return [
     `session ${c.session.id} "${c.session.title}"`,
     ...(c.session.brief === "" ? [] : [`brief: ${c.session.brief}`]),
-    ...(c.fork === null
+    ...(c.branchOf === null
       ? []
       : [
-          `branch of ${c.fork.parent.id} "${c.fork.parent.title}" iteration ${c.fork.from}: its first iteration is that iteration narrowed to what Rob kept. This thread works on every branch of the brainstorm.`,
-          ...c.fork.baked.map((b) => `  baked default ${b.blockId} ${b.prop} = ${JSON.stringify(b.value)}`),
+          `branch of ${c.branchOf.parent.id} "${c.branchOf.parent.title}" iteration ${c.branchOf.from}: its first iteration is that iteration narrowed to what Rob kept. This thread works on every branch of the brainstorm.`,
+          ...c.branchOf.baked.map((b) => `  baked default ${b.blockId} ${b.prop} = ${JSON.stringify(b.value)}`),
         ]),
     c.attached ? `attached: this thread (${c.attachedThread})` : `attached: thread ${c.attachedThread}, not this one`,
     ...(c.system === null

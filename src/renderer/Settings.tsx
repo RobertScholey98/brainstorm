@@ -29,7 +29,7 @@ import { Switch } from "@/components/ui/switch";
 import { Hint } from "@/components/ui/tooltip";
 import { openFolderPath, type AppAbout, type Openable } from "../core/about";
 import type { AppUpdateState } from "../core/appUpdate";
-import { VARY_MAX } from "../core/fork";
+import { VARY_MAX } from "../core/vary";
 import { RESTORE_DEFAULTS, type AppSettings, type NotifyChoice, type StripChoice, type UiPrefs, type UiPrefsPatch } from "../core/prefs";
 import { SETTLE_SHORTCUT } from "./settle";
 import { updateMove, updateStatus } from "./Update";

@@ -20,11 +20,11 @@ const confirm = (n: number, session = root): HistoryEntry => ({
     kept: [],
   },
 });
-const forked = (n: number, session: SessionId): HistoryEntry => ({
+const branched = (n: number, session: SessionId): HistoryEntry => ({
   session,
   n: n as IterationN,
   createdAt: at,
-  origin: { kind: "fork", parent: "Root", from: (n - 1) as IterationN },
+  origin: { kind: "branch", parent: "Root", from: (n - 1) as IterationN },
 });
 const regenerate = (n: number): HistoryEntry => ({
   session: root,
@@ -48,7 +48,7 @@ describe("splitRuns", () => {
   });
 
   it("starts a run at a branch point, named for it, across sessions on the trail", () => {
-    const runs = splitRuns([brief(1), agent(2), forked(3, branch), agent(4, branch)]);
+    const runs = splitRuns([brief(1), agent(2), branched(3, branch), agent(4, branch)]);
     expect(runs.map((r) => [r.key, r.label, r.entries.map(entryKey)])).toEqual([
       ["s_root01:1", "Start", ["s_root01:1", "s_root01:2"]],
       ["s_branch1:3", "Branch from iteration 2", ["s_branch1:3", "s_branch1:4"]],
@@ -56,7 +56,7 @@ describe("splitRuns", () => {
   });
 
   it("counts a grafted branch's confirm once, when the agent's merge lands, not at the branch point", () => {
-    const runs = splitRuns([brief(1), agent(2), forked(3, branch), confirm(4, branch), regenerate(5)]);
+    const runs = splitRuns([brief(1), agent(2), branched(3, branch), confirm(4, branch), regenerate(5)]);
     expect(runs.map((r) => [r.key, r.label])).toEqual([
       ["s_root01:1", "Start"],
       ["s_branch1:3", "Branch from iteration 2"],
@@ -65,7 +65,7 @@ describe("splitRuns", () => {
   });
 
   it("numbers the confirms after a branch point on from the ones before it", () => {
-    expect(splitRuns([brief(1), confirm(2), forked(3, branch), confirm(4, branch)]).map((r) => r.label)).toEqual(["Start", "Confirm 1", "Branch from iteration 2", "Confirm 2"]);
+    expect(splitRuns([brief(1), confirm(2), branched(3, branch), confirm(4, branch)]).map((r) => r.label)).toEqual(["Start", "Confirm 1", "Branch from iteration 2", "Confirm 2"]);
   });
 
   it("has no Start run when the trail opens on a confirm", () => {

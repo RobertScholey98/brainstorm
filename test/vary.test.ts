@@ -1,22 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { bakeDefaults, forkTitle, keyEchoesTitle, partLabel, varyNames } from "../src/core/fork";
-import type { PartName, PropName, VariantKey } from "../src/core/types";
-
-test("bakeDefaults changes only the defaults it names", () => {
-  const json = JSON.stringify({ title: "Neon wheel", props: { appearance: { accent: { type: "color", label: "Accent", default: "#ff2bd6" } } } });
-  expect(JSON.parse(bakeDefaults(json, [{ prop: "accent" as PropName, value: "#00ff88" }]))).toEqual({
-    title: "Neon wheel",
-    props: { appearance: { accent: { type: "color", label: "Accent", default: "#00ff88" } } },
-  });
-  expect(bakeDefaults(json, []), "nothing to bake leaves the file byte for byte").toBe(json);
-});
-
-test("forkTitle is the instruction's first clause, cut at a word", () => {
-  expect(forkTitle("Try it as a slot machine, with three reels")).toBe("Try it as a slot machine");
-  expect(forkTitle("  calmer\nand smaller")).toBe("calmer");
-  expect(forkTitle("A very long instruction that keeps going well past the limit of the title")).toBe("A very long instruction that keeps going well…");
-  expect(forkTitle("ok. then more")).toBe("ok. then more");
-});
+import { partLabel } from "../src/core/part";
+import { keyEchoesTitle, varyNames } from "../src/core/vary";
+import type { PartName, VariantKey } from "../src/core/types";
 
 test("partLabel reads a data-part as words", () => {
   expect(partLabel("spin-button" as PartName)).toBe("Spin button");

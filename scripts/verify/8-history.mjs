@@ -2,7 +2,7 @@ import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { join } from "node:path";
 import { fakeT3 } from "../../test/fake-t3/control.mjs";
 import { brainstorm, DEMO_THREAD, seedDemo } from "../seed-demo.mjs";
-import { build, canvasFrame, checks, inBlock, launch, openSession, outsideBox, pixels, settled, showBoard, shot, workspace } from "./electron.mjs";
+import { build, canvasFrame, checks, inBlock, launch, openSession, outsideBox, pixels, settled, showBoard, shot, showSlot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-8");
@@ -56,7 +56,7 @@ const stripRest = (window) =>
   window.evaluate(() => {
     const scroller = document.querySelector("[data-history-scroll]");
     const box = scroller.getBoundingClientRect();
-    const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : "stub");
+    const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyBranch !== undefined ? "branch" : "stub");
     const inView = [...document.querySelectorAll("[data-history-list] > *:not([data-off])")].filter((el) => el.getBoundingClientRect().right > box.left + 1 && el.getBoundingClientRect().left < box.right - 1);
     const [first, last] = [inView.at(0).getBoundingClientRect(), inView.at(-1).getBoundingClientRect()];
     return {
@@ -116,7 +116,7 @@ const edgeCues = (window) =>
  */
 const stripLines = (window) =>
   window.$$eval("[data-history-list] > *", (entries) => {
-    const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : "stub");
+    const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyBranch !== undefined ? "branch" : "stub");
     const cut = entries.filter((el) => [...el.querySelectorAll('[data-slot="truncate"]')].some((t) => t.scrollWidth > t.clientWidth));
     const spare = entries.filter((el) => {
       const width = el.getBoundingClientRect().width;
@@ -151,7 +151,7 @@ const stripEdges = (window) =>
     };
     const [strong, card] = [token("border-strong"), token("card")];
     const name = (el) =>
-      el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : el.dataset.forkStub !== undefined ? "stub" : "loading";
+      el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyBranch !== undefined ? "branch" : "loading";
     return [...document.querySelectorAll("[data-history-list] > *, [data-history-skeleton-entry]")].map((el) => {
       const s = getComputedStyle(el);
       const ring = s.boxShadow.split(/,(?![^(]*\))/).find((layer) => / 0px 0px 0px 1px( inset)?$/.test(layer.trim()));
@@ -165,7 +165,7 @@ const edgesClipped = (window) =>
   window.evaluate(() => {
     const clip = (el) => el.closest("[data-history-scroll], [data-history-loading] .overflow-x-auto, [data-history-loading]").getBoundingClientRect();
     const name = (el) =>
-      el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : el.dataset.forkStub !== undefined ? "stub" : "loading";
+      el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyBranch !== undefined ? "branch" : "loading";
     return [...document.querySelectorAll("[data-history-list] > *, [data-history-skeleton-entry]")]
       .filter((el) => {
         const s = getComputedStyle(el);
@@ -177,16 +177,16 @@ const edgesClipped = (window) =>
   });
 /**
  * One page of the strip as it rests: the entries in view, the ones with a line cut, whether the latest names itself
- * "latest" in full, and whether a fork's tile is wider than its words, which would take room an entry's line needs.
+ * "latest" in full, and whether a branch's tile is wider than its words, which would take room an entry's line needs.
  */
 const pageRead = (window) =>
   window.evaluate(() => {
     const box = document.querySelector("[data-history-scroll]").getBoundingClientRect();
-    const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyFork !== undefined ? "fork" : "stub");
+    const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : el.dataset.historyBranch !== undefined ? "branch" : "stub");
     const inView = [...document.querySelectorAll("[data-history-list] > *:not([data-off])")].filter((el) => el.getBoundingClientRect().right > box.left + 1 && el.getBoundingClientRect().left < box.right - 1);
     const latest = inView.find((el) => el.querySelector("[data-history-latest]") !== null)?.querySelector("[data-history-latest]");
     const line = latest?.parentElement.getBoundingClientRect();
-    const wide = inView.filter((el) => el.dataset.historyFork !== undefined).filter((el) => {
+    const wide = inView.filter((el) => el.dataset.historyBranch !== undefined).filter((el) => {
       const width = el.getBoundingClientRect().width;
       el.style.width = "max-content";
       const need = el.getBoundingClientRect().width;
@@ -197,7 +197,7 @@ const pageRead = (window) =>
       inView: inView.map(name),
       cut: inView.filter((el) => el.querySelector("[data-slot=truncate][data-cut]") !== null).map(name),
       latest: latest === undefined ? null : latest.getBoundingClientRect().top < line.bottom - 0.5 && latest.getBoundingClientRect().right <= line.right + 0.5,
-      wideFork: wide.length > 0,
+      wideBranch: wide.length > 0,
     };
   });
 /** Every page of the strip, from the start to the end, read by `pageRead`. */
@@ -222,13 +222,6 @@ async function stripScroll(window, act) {
 const canvasAt = (window) =>
   window.$eval("[data-canvas-iteration]", (el) => ({ n: Number(el.dataset.canvasIteration), past: el.dataset.canvasPast === undefined ? null : Number(el.dataset.canvasPast) }));
 const pool = (canvas) => canvas.textContent(inBlock("wheel/neon", "pool"));
-/** The sidebar shows one slot at a time (ADR 009); its picker switches. */
-async function showSlot(window, slot) {
-  if ((await window.getAttribute("[data-slot-picker]", "data-slot-picker")) === slot) return;
-  await window.click("[data-slot-picker]");
-  await window.click(`[data-slot-option="${slot}"]`);
-  await window.waitForSelector(`[data-slot-picker="${slot}"]`);
-}
 const rows = (window, group) => window.$$eval(`[${group}] [data-variant]`, (els) => els.map((e) => e.dataset.variant));
 /** A row's marks show on hover, as T3 Code's row actions do. */
 async function mark(window, kind, variant) {
@@ -538,7 +531,7 @@ try {
   const branched = context(branchId);
   check("the branch is on the brainstorm's own thread", branched.attachedThread, DEMO_THREAD);
   check("its first iteration numbers on from where it left, 2, with only Reel in the wheel and the unmarked result as it was", [branched.latest.n, [...branched.latest.blocks].sort()], [2, ["result/card", "result/receipt", "wheel/reel"]]);
-  check("Rob's setting is baked in as a default", branched.fork.baked.map((b) => [b.blockId, b.prop, b.value]), [["result/card", "headline", "Fate has spoken"]]);
+  check("Rob's setting is baked in as a default", branched.branchOf.baked.map((b) => [b.blockId, b.prop, b.value]), [["result/card", "headline", "Fate has spoken"]]);
   const branchCopy = join(home, "branch-copy");
   must("pull branch", brainstorm(env, ["pull", branchId, "--out", branchCopy, "--json"]));
   check(
@@ -553,8 +546,8 @@ try {
   await shot(window, shots, "6-branch");
   await window.click("[data-strip-run]");
   await window.click('[data-run-option="Start"]');
-  await window.waitForSelector(`[data-history-fork="${session}"]`);
-  check("its Start run is the first line's iteration 1, and the first line carries on from it as an offshoot", [(await strip(window)).map((e) => e.n), await window.$eval(`[data-history-fork="${session}"]`, (el) => el.previousElementSibling.dataset.historyN)], [[1], "1"]);
+  await window.waitForSelector(`[data-history-branch="${session}"]`);
+  check("its Start run is the first line's iteration 1, and the first line carries on from it as an offshoot", [(await strip(window)).map((e) => e.n), await window.$eval(`[data-history-branch="${session}"]`, (el) => el.previousElementSibling.dataset.historyN)], [[1], "1"]);
 
   // Make primary: the branch becomes the line home shows, and the first line an offshoot it can come back from.
   await window.click("[data-make-primary]");
@@ -567,7 +560,7 @@ try {
   await window.waitForSelector("[data-history]");
   await window.click("[data-strip-run]");
   await window.click('[data-run-option="Start"]');
-  await window.click(`[data-history-fork="${session}"]`);
+  await window.click(`[data-history-branch="${session}"]`);
   await window.waitForSelector(`[data-branch-line="${session}"]`);
   check("the first line, now an offshoot, says so and can take its place back", (await window.textContent("[data-branch-line]")).replace("Make primary", "").trim(), "The first line, now an offshoot");
   await window.click("[data-make-primary]");
@@ -792,8 +785,8 @@ try {
     "the earlier arrow steps back a page at a time and rests on each page's start, every entry it shows whole, the cut one out of sight",
     back,
     [
-      [["fork", "iteration 2"], [], 16, 1],
-      [["iteration 1", "fork"], [], 16, 1],
+      [["branch", "iteration 2"], [], 16, 1],
+      [["iteration 1", "branch"], [], 16, 1],
     ],
   );
   check("between pages both ends show their cue, and at the start only the end", backCues, [["start", "end"], ["end"]]);
@@ -817,7 +810,7 @@ try {
       const rest = await stripRest(window);
       return [rest.inView, rest.cut, rest.shown, rest.insets, rest.arrows];
     }),
-    [["fork", "iteration 2", "iteration 3"], [], true, [16, 16], 2],
+    [["branch", "iteration 2", "iteration 3"], [], true, [16, 16], 2],
   );
   check("and both iterations in view read their age whole, and latest whole or not at all", await uncut(), [
     [2, "whole", "uncut"],
@@ -825,7 +818,7 @@ try {
   ]);
   const overflowLines = await settled(() =>
     window.$$eval("[data-history-list] > *:not([data-off])", (entries) => {
-      const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : "fork");
+      const name = (el) => (el.dataset.historyN !== undefined ? `iteration ${el.dataset.historyN}` : "branch");
       const cut = entries.filter((el) => [...el.querySelectorAll('[data-slot="truncate"]')].some((t) => t.scrollWidth > t.clientWidth));
       const spare = entries.filter((el) => {
         const width = el.getBoundingClientRect().width;
@@ -847,8 +840,8 @@ try {
     const pages = await stripPages(window);
     console.log(`  strip pages at ${width}: ${pages.map((page) => page.inView.join(" + ")).join(" | ")}`);
     check(
-      `at ${width}, on every page of a forked and varied brainstorm's strip, each iteration's lines read whole, latest names itself in full, and the fork's tile takes no more than its words`,
-      pages.filter((page) => page.cut.some((name) => name.startsWith("iteration")) || page.latest === false || page.wideFork),
+      `at ${width}, on every page of a branched and varied brainstorm's strip, each iteration's lines read whole, latest names itself in full, and the branch's tile takes no more than its words`,
+      pages.filter((page) => page.cut.some((name) => name.startsWith("iteration")) || page.latest === false || page.wideBranch),
       [],
     );
   }

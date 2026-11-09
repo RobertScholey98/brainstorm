@@ -1,7 +1,7 @@
 import { cpSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brainstorm, seedDemo } from "../seed-demo.mjs";
-import { build, canvasFrame, checks, inBlock, launch, pixels, settled, showBoard, shot, workspace } from "./electron.mjs";
+import { build, canvasFrame, checks, inBlock, launch, pixels, settled, showBoard, shot, showSlot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-2");
@@ -145,6 +145,7 @@ try {
 
   const activeBlocks = () => canvas.$$eval("#canvas div[data-bid]", (els) => els.map((e) => e.getAttribute("data-bid")));
   const pick = async (variant, blockId, part) => {
+    await showSlot(window, blockId.split("/")[0]);
     await window.click(`button[data-variant="${variant}"]`);
     await canvas.waitForSelector(inBlock(blockId, part));
   };

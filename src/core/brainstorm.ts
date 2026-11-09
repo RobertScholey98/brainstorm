@@ -23,7 +23,7 @@ import { prefRows, readPrefs, type UiPrefs, type UiPrefsPatch } from "./prefs";
 import { projectNameAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { exportFileName } from "./fileName";
-import { bakeDefaults, forkTitle, VARY_MAX, varyNames } from "./fork";
+import { bakeDefaults, branchTitle } from "./branch";
 import { confirmPlan, liveMarks, showingVariant, trashRefusal, withApproval, withPick, withTrash } from "./main";
 import {
   Store,
@@ -37,6 +37,7 @@ import {
 } from "./store";
 import { blockConformance, compiledForConformance, proposedConformance, proposedImports } from "./system/conform";
 import { tierFolder } from "./system/source";
+import { Trees, walkTree } from "./tree";
 import type { CheckEnv } from "./check";
 import { Systems, componentChanges, renderChanges } from "./systems";
 import {
@@ -50,6 +51,7 @@ import {
   type AgentContext,
   type Attachment,
   type AttachResult,
+  type BakedSetting,
   type BlockDraft,
   type BlockId,
   type BlockView,
@@ -62,8 +64,7 @@ import {
   type FeedbackId,
   type FileMap,
   type ConfirmScope,
-  type ForkBranch,
-  type ForkInput,
+  type BranchInput,
   type HistoryEntry,
   type Issue,
   type IterationContents,
@@ -114,6 +115,7 @@ import {
   type VaryScope,
   type WorkingCopyDraft,
 } from "./types";
+import { VARY_MAX, varyNames } from "./vary";
 import { blockFile, emitWorkingCopy, proposedFile, readStoredBlock, readStoredProposed, scanWorkingCopy } from "./workingCopy";
 
 const SNAPSHOT_MESSAGES = 30;
@@ -128,7 +130,7 @@ export type BrainstormOptions = {
   readonly newSessionId?: () => SessionId;
   /** Monotonic milliseconds, for the snapshot cache's TTL. */
   readonly clockMs?: () => number;
-  /** The app's home when it isn't the default, which a fork's new thread must be told, since T3 gives agents its own environment. */
+  /** The app's home when it isn't the default, which a fresh thread must be told, since T3 gives agents its own environment. */
   readonly agentHome?: string | null;
 };
 
@@ -179,6 +181,7 @@ const summaryOf = ({ id, projectId, title, brief, createdAt }: SessionSummary): 
 
 export class Brainstorm {
   readonly #store: Store;
+  readonly #trees: Trees;
   readonly #bridge: AgentBridge;
   readonly #checker: Checker;
   readonly #exportsDir: string;
@@ -199,6 +202,7 @@ export class Brainstorm {
 
   private constructor(options: BrainstormOptions) {
     this.#store = new Store(options.dbPath);
+    this.#trees = new Trees(this.#store);
     this.#bridge = options.bridge;
     this.#checker = options.checker;
     this.#exportsDir = options.exportsDir;
@@ -314,7 +318,7 @@ export class Brainstorm {
           const s = byId.get(id);
           return s === undefined ? [] : [s];
         });
-        const primary = byId.get(this.#primaryOf(root.id)) ?? root;
+        const primary = byId.get(this.#trees.primaryOf(root.id)) ?? root;
         const { openRequest: _o, settledAt: _s, unsettledAt: _u, woken: _w, parent: _p, ...listing } = primary;
         const open = tree.find((s) => s.openRequest);
         return {
@@ -328,47 +332,9 @@ export class Brainstorm {
       });
   }
 
-  #tree(id: SessionId): Tree {
-    return walkTree(this.#store.forkLinks(), id);
-  }
-
-  /** The brainstorm a branch belongs to, by its root: the session with no parent. */
-  #rootOf(id: SessionId): SessionId {
-    return this.#tree(id).trail[0]!.session;
-  }
-
-  /** Every live branch of `id`'s brainstorm, root first. */
-  #treeOf(id: SessionId): SessionId[] {
-    return this.#tree(id).members.filter((m) => this.#store.session(m) !== null);
-  }
-
-  #primaryOf(root: SessionId): SessionId {
-    const chosen = this.#store.primaryOf(root);
-    return chosen !== null && this.#store.session(chosen) !== null ? chosen : root;
-  }
-
-  /** Another branch's open request. A brainstorm has one open at a time, so a new request waits for it. */
-  #openElsewhere(id: SessionId): Request | null {
-    for (const other of this.#treeOf(id)) {
-      if (other === id) continue;
-      const open = this.#store.openRequest(other);
-      if (open !== null) return open;
-    }
-    return null;
-  }
-
-  /**
-   * Another branch's request that holds the thread they share, so a Retry or Resend waits for it. Migration 11 and a
-   * fresh thread can leave several requests waiting as send failed; none of those holds the thread, so the first
-   * retried goes and the others then wait for it.
-   */
+  /** Another branch's request that holds the thread they share, so a Retry or Resend waits for it. */
   #holdingElsewhere(id: SessionId): Request | null {
-    for (const other of this.#treeOf(id)) {
-      if (other === id) continue;
-      const open = this.#store.openRequest(other);
-      if (open !== null && holdsThread(this.#phaseOf(open, this.#store.attachment(other), false).phase)) return open;
-    }
-    return null;
+    return this.#trees.holdingElsewhere(id, (open, other) => holdsThread(this.#phaseOf(open, this.#store.attachment(other), false).phase));
   }
 
   /** An open request's phase from its thread as last seen. `busy` says another branch's request holds the thread. */
@@ -380,16 +346,9 @@ export class Brainstorm {
 
   /** Moves every branch of the brainstorm to `thread`. Attaching, and a fresh thread, both land here. */
   #moveTree(id: SessionId, thread: ThreadId): void {
-    const at = this.#now();
-    this.#store.tx(() => {
-      for (const member of this.#treeOf(id)) {
-        const current = this.#store.attachment(member);
-        if (current.threadId !== thread) this.#store.reattach(member, thread, at);
-        else if (current.lostAt !== null) this.#store.setLost(member, null);
-      }
-    });
+    const moved = this.#trees.move(id, thread, this.#now());
     this.#seen.delete(thread);
-    for (const member of this.#treeOf(id)) this.#emit(member);
+    for (const member of moved) this.#emit(member);
   }
 
   /**
@@ -399,14 +358,14 @@ export class Brainstorm {
    */
   settle(id: SessionId, settled: boolean): Result<SessionListing> {
     if (this.#store.session(id) === null) return fail(notFound("session", `no session ${id}`));
-    const root = this.#rootOf(id);
-    const listing = () => this.#listings(null).find((s) => s.id === this.#primaryOf(root));
+    const root = this.#trees.rootOf(id);
+    const listing = () => this.#listings(null).find((s) => s.id === this.#trees.primaryOf(root));
     const before = listing();
     if (before === undefined) return fail(notFound("session", `no session ${id}`));
     const active = before.settlement.state === "active";
     if (settled && active) this.#store.settle(root, this.#now());
     else if (!settled && !active) this.#store.unsettle(root, this.#now());
-    for (const member of this.#treeOf(id)) this.#emit(member);
+    for (const member of this.#trees.membersOf(id)) this.#emit(member);
     return ok(listing() ?? before);
   }
 
@@ -491,13 +450,13 @@ export class Brainstorm {
     };
     const attached = thread !== null && thread === attachment.threadId;
     const addresses = open?.feedbackIds ?? [];
-    const fork = this.#store.fork(id);
+    const link = this.#store.fork(id);
     return ok({
       session: { id, title: session.title, brief: session.brief },
-      fork:
-        fork === null
+      branchOf:
+        link === null
           ? null
-          : { parent: { id: fork.parent, title: this.#store.sessionName(fork.parent)?.title ?? fork.parent }, from: fork.from, baked: fork.baked },
+          : { parent: { id: link.parent, title: this.#store.sessionName(link.parent)?.title ?? link.parent }, from: link.from, baked: link.baked },
       latest: latest === null ? null : this.#summary(id, latest, blocks),
       attached,
       attachedThread: attachment.threadId,
@@ -877,13 +836,13 @@ export class Brainstorm {
     const latest = this.#store.latestIteration(id);
     const { iteration, overrides } = this.#current(id, latest);
     const request = this.#store.latestRequest(id);
-    const fork = this.#store.fork(id);
-    const root = this.#rootOf(id);
+    const link = this.#store.fork(id);
+    const root = this.#trees.rootOf(id);
     return ok({
       session,
-      tree: { root: { id: root, title: this.#store.sessionName(root)?.title ?? session.title }, primary: this.#primaryOf(root) },
-      fork: fork === null ? null : { parent: { id: fork.parent, title: this.#store.sessionName(fork.parent)?.title ?? fork.parent }, from: fork.from },
-      history: this.#trail(id),
+      tree: { root: { id: root, title: this.#store.sessionName(root)?.title ?? session.title }, primary: this.#trees.primaryOf(root) },
+      branchOf: link === null ? null : { parent: { id: link.parent, title: this.#store.sessionName(link.parent)?.title ?? link.parent }, from: link.from },
+      history: this.#trees.trail(id, (s) => this.#history(s)),
       attachment,
       thread: this.#seen.get(attachment.threadId)?.snapshot?.thread ?? null,
       iteration,
@@ -894,7 +853,7 @@ export class Brainstorm {
       regenerate: regenerateGate({
         hasIteration: latest !== null,
         open: this.#store.openRequest(id),
-        busy: this.#openElsewhere(id) !== null,
+        busy: this.#trees.openElsewhere(id) !== null,
         attachment,
       }),
       system: this.#sessionSystemView(id, iteration),
@@ -1009,33 +968,8 @@ export class Brainstorm {
     return issues.filter(isError);
   }
 
-  /**
-   * A branch's trail (ADR 009): its ancestors' iterations up to each branch point, then its own. Every other branch
-   * hangs off the trail iteration it left from, and so does an ancestor's own continuation past the point this trail
-   * left it, so the old primary still shows once another branch is made primary.
-   */
-  #trail(id: SessionId): SessionView["history"] {
-    const chain = this.#tree(id).trail;
-    const iterations: HistoryEntry[] = [];
-    const forks: ForkBranch[] = [];
-    chain.forEach(({ session, upTo }, i) => {
-      if (this.#store.sessionName(session) === null) return;
-      const own = this.#history(session).filter((e) => upTo === null || e.n <= upTo);
-      iterations.push(...own);
-      const next = chain[i + 1]?.session;
-      for (const f of this.#store.forksOf(session)) {
-        if (f.id !== next && (upTo === null || f.from <= upTo)) forks.push({ id: f.id, title: f.title, parent: session, from: f.from });
-      }
-      const latest = this.#store.latestIteration(session);
-      if (upTo !== null && latest !== null && latest.n > upTo) {
-        forks.push({ id: session, title: this.#store.sessionName(session)?.title ?? session, parent: session, from: upTo });
-      }
-    });
-    return { iterations, forks };
-  }
-
   #history(id: SessionId): HistoryEntry[] {
-    const fork = this.#store.fork(id);
+    const link = this.#store.fork(id);
     const byIteration = new Map(this.#store.requests(id).flatMap((r) => (r.state.state === "fulfilled" ? [[r.state.iteration, r]] : [])));
     return this.#store.iterations(id).map((i, index): HistoryEntry => {
       const request = byIteration.get(i.n);
@@ -1048,8 +982,8 @@ export class Brainstorm {
               changed: request.freetext === null ? this.#changedTitles(id, i.n) : [],
               kept: this.#keptTitles(id, i.n, request.scope),
             }
-          : index === 0 && fork !== null
-            ? { kind: "fork", parent: this.#store.sessionName(fork.parent)?.title ?? fork.parent, from: fork.from }
+          : index === 0 && link !== null
+            ? { kind: "branch", parent: this.#store.sessionName(link.parent)?.title ?? link.parent, from: link.from }
             : index === 0
               ? { kind: "brief" }
               : { kind: "agent", note: i.note };
@@ -1069,7 +1003,7 @@ export class Brainstorm {
    */
   #variedFrom(id: SessionId): Map<BlockId, Pin> {
     const out = new Map<BlockId, Pin>();
-    for (const { session, upTo } of this.#tree(id).trail) {
+    for (const { session, upTo } of this.#trees.walk(id).trail) {
       const varies = new Map(
         this.#store.requests(session).flatMap((r) => (r.scope.kind === "vary" && r.state.state === "fulfilled" ? [[r.state.iteration, r.scope] as const] : [])),
       );
@@ -1293,8 +1227,8 @@ export class Brainstorm {
         return this.#request(id, { scope: { kind: "add_slot" }, freetext: prompt }, latest, blockIds);
       }
       case "make_primary":
-        this.#store.setPrimary(this.#rootOf(id), id);
-        for (const member of this.#treeOf(id)) this.#emit(member);
+        this.#store.setPrimary(this.#trees.rootOf(id), id);
+        for (const member of this.#trees.membersOf(id)) this.#emit(member);
         return null;
       case "refresh_thread":
         return this.#refreshThread(session);
@@ -1484,7 +1418,7 @@ export class Brainstorm {
   /** Why a new request can't open now, as a failure, or null when it can. */
   #gate(id: SessionId, latest: StoredIteration | null): Failure | null {
     const open = this.#store.openRequest(id);
-    const busy = this.#openElsewhere(id);
+    const busy = this.#trees.openElsewhere(id);
     const attachment = this.#store.attachment(id);
     const gate = regenerateGate({ hasIteration: latest !== null, open, busy: busy !== null, attachment });
     if (gate.ok) return null;
@@ -1625,9 +1559,9 @@ export class Brainstorm {
    * One start runs per brainstorm at a time, so a second press can't make a second thread.
    */
   async #refreshThread(session: SessionSummary): Promise<Failure | null> {
-    const root = this.#rootOf(session.id);
+    const root = this.#trees.rootOf(session.id);
     if (this.#refreshing.has(root)) return invalid("a fresh thread is already starting for this brainstorm");
-    const open = this.#store.openRequest(session.id) ?? this.#openElsewhere(session.id);
+    const open = this.#store.openRequest(session.id) ?? this.#trees.openElsewhere(session.id);
     const lost = this.#store.attachment(session.id).lostAt !== null;
     if (open !== null && !lost) return { code: "request_open", message: `request ${open.n} is still open; let it finish or withdraw it first`, n: open.n };
     const title = this.#store.sessionName(root)?.title ?? session.title;
@@ -1645,7 +1579,7 @@ export class Brainstorm {
     // the rest wait for Rob's retry, as migration 11 leaves a second one.
     const moved = this.#store.tx(() => {
       this.#moveTree(session.id, thread);
-      const open = this.#treeOf(session.id).flatMap((m) => {
+      const open = this.#trees.membersOf(session.id).flatMap((m) => {
         const r = this.#store.openRequest(m);
         return r === null ? [] : [r];
       });
@@ -1713,18 +1647,36 @@ export class Brainstorm {
 
   /** A branch's first request says where it came from, and a resend of it later says so again. */
   #messageFor(request: Request): string {
-    const fork = request.n === 1 ? this.#store.fork(request.session) : null;
-    return formatRequestMessage(request, fork === null ? {} : { fork: { parent: fork.parent, from: fork.from } });
+    const link = request.n === 1 ? this.#store.fork(request.session) : null;
+    return formatRequestMessage(request, link === null ? {} : { branchOf: { parent: link.parent, from: link.from } });
   }
 
   /**
    * Confirms on a past iteration (ADR 009): a new branch of the brainstorm, on its thread, that continues from iteration
-   * \`from\` of \`parentId\`. Its first iteration is that one narrowed by Rob's marks, with his settings baked in as
+   * `from` of `parentId`. Its first iteration is that one narrowed by Rob's marks, with his settings baked in as
    * defaults and his open pins carried. With grafts, the narrowing waits for the agent: the first iteration keeps every
    * variant, and request 1 is the confirm. An instruction asks the agent to try it on the branch. With neither, request
    * 1 is still the confirm, fulfilled by the first iteration, as an app-applied confirm is.
    */
-  async fork(parentId: SessionId, input: ForkInput): Promise<Result<{ readonly fork: SessionId }>> {
+  async branch(parentId: SessionId, input: BranchInput): Promise<Result<{ readonly branch: SessionId }>> {
+    const start = this.#branchStart(parentId, input);
+    if (!start.ok) return start;
+    const closed = this.#branchGate(start.data);
+    if (closed !== null) return fail(closed);
+    const baked = await this.#bakeBranch(start.data);
+    if (!baked.ok) return baked;
+    const id = this.#newSessionId();
+    const written = this.#writeBranch(id, start.data, baked.data);
+    if (!written.ok) return written;
+    this.#emit(id);
+    this.#emit(parentId);
+    const request = this.#store.openRequest(id);
+    if (request !== null) await this.#send(id, request.n, written.data);
+    return ok({ branch: id });
+  }
+
+  /** What a branch starts from, or why it can't: the parent's iteration, and Rob's marks on it as a plan. */
+  #branchStart(parentId: SessionId, input: BranchInput): Result<BranchStart> {
     const parent = this.#store.session(parentId);
     if (parent === null) return fail(notFound("session", `no session ${parentId}`));
     const source = this.#store.iteration(parentId, input.from);
@@ -1743,20 +1695,29 @@ export class Brainstorm {
     const plan = confirmPlan(slotShapes, marks);
     const grafting = plan !== null && plan.grafts.length > 0;
     if (plan === null && instruction === null) return fail(invalid("say what the branch should try, or mark what it keeps"));
-    // The branch's request goes to the thread every branch shares, so the same gate holds as for any request.
-    const gate = (): Failure | null => {
-      if (!grafting && instruction === null) return null;
-      const busy = this.#openElsewhere(parentId) ?? this.#store.openRequest(parentId);
-      if (busy !== null) return { code: "request_open", message: `request ${busy.n} is still open on this brainstorm's thread; let it finish or withdraw it first`, n: busy.n };
-      const attachment = this.#store.attachment(parentId);
-      if (attachment.lostAt !== null) return { code: "thread_lost", message: `thread ${attachment.threadId} is gone; start a fresh thread first`, thread: attachment.threadId };
-      return null;
-    };
-    const closed = gate();
-    if (closed !== null) return fail(closed);
+    return ok({ parent, source, blocks, marks, plan, instruction, grafting });
+  }
 
+  /**
+   * Why the branch can't be made now, or null. Its request goes to the thread every branch shares, so the same gate
+   * holds as for any request. A branch that asks the agent nothing passes.
+   */
+  #branchGate({ parent, grafting, instruction }: BranchStart): Failure | null {
+    if (!grafting && instruction === null) return null;
+    const busy = this.#trees.openElsewhere(parent.id) ?? this.#store.openRequest(parent.id);
+    if (busy !== null) return { code: "request_open", message: `request ${busy.n} is still open on this brainstorm's thread; let it finish or withdraw it first`, n: busy.n };
+    const attachment = this.#store.attachment(parent.id);
+    if (attachment.lostAt !== null) return { code: "thread_lost", message: `thread ${attachment.threadId} is gone; start a fresh thread first`, thread: attachment.threadId };
+    return null;
+  }
+
+  /**
+   * The branch's first iteration: the variants it keeps, with Rob's settings on them baked into their defaults and
+   * checked again, or a refusal naming the kept variant his settings break.
+   */
+  async #bakeBranch({ parent, source, blocks, plan, grafting }: BranchStart): Promise<Result<BakedBranch>> {
     const kept = grafting || plan === null ? blocks : blocks.filter((b) => !plan.drop.includes(b.id));
-    const { applicable } = classifyOverrides(this.#schemas(blocks), this.#store.overrides(parentId));
+    const { applicable } = classifyOverrides(this.#schemas(blocks), this.#store.overrides(parent.id));
     const settings = applicable.flatMap((o) => {
       const stored = kept.find((b) => b.id === o.blockId);
       const spec = stored === undefined ? undefined : appearanceProp(this.#load(stored).draft.props, o.prop);
@@ -1771,9 +1732,9 @@ export class Brainstorm {
       if (draft === null) throw new Error(`${stored.id} no longer parses with Rob's settings baked in`);
       return { id: stored.id, title, hash: draft.hash, draft };
     });
-    const system = this.#store.sessionSystem(parentId);
-    const parentProposed = this.#store.iterationProposed(parentId, source.n);
-    const proposedDrafts = parentProposed.flatMap((p) => {
+    const system = this.#store.sessionSystem(parent.id);
+    const proposed = this.#store.iterationProposed(parent.id, source.n);
+    const proposedDrafts = proposed.flatMap((p) => {
       const draft = readStoredProposed(p.name, this.#store.proposedContent(p.hash).files);
       return draft === null ? [] : [draft];
     });
@@ -1788,40 +1749,36 @@ export class Brainstorm {
       const title = baked.find((b) => broken.file?.startsWith(`slots/${b.id}/`))?.title ?? "A kept variant";
       return fail(invalid(`${title} doesn't render with your settings as its defaults (${broken.message}). Reset the setting that breaks it, or keep another variant.`));
     }
+    return ok({ kept, settings, blocks: baked.map((b) => ({ id: b.id, hash: b.hash })), contents: [...contents.values()], system, proposed });
+  }
 
-    const id = this.#newSessionId();
+  /** Writes branch `id` with its first iteration, carried pins and request 1 in one transaction, and returns its thread. */
+  #writeBranch(id: SessionId, start: BranchStart, baked: BakedBranch): Result<ThreadId> {
+    const { parent, source, marks, instruction, grafting } = start;
     const at = this.#now();
-    const keptIds = new Set(kept.map((b) => b.id));
-    const pins = this.#feedback(parentId).filter((f) => f.status.state === "open" && keptIds.has(f.pin.blockId));
-    // Request 1 is the confirm, unless only an instruction goes to the agent. With no grafts and no instruction the
-    // first iteration already carries the confirm out, so it fulfils the request (`answered`).
-    const body: RequestBody | null =
-      plan !== null && (grafting || instruction === null)
-        ? { scope: plan, freetext: instruction }
-        : instruction !== null
-          ? { scope: { kind: "all" }, freetext: instruction }
-          : null;
-    const answered = !grafting && instruction === null;
+    const keptIds = new Set(baked.kept.map((b) => b.id));
+    const pins = this.#feedback(parent.id).filter((f) => f.status.state === "open" && keptIds.has(f.pin.blockId));
+    const { body, answered } = branchRequest(start);
     const asked = new Set(body === null ? [] : requestFeedback(pins, body.scope).map((f) => f.id));
-    const written = this.#store.tx((): Result<ThreadId> => {
+    return this.#store.tx((): Result<ThreadId> => {
       // The check awaited the worker, so another branch may have opened a request on the thread meanwhile.
-      const late = gate();
+      const late = this.#branchGate(start);
       if (late !== null) return fail(late);
-      const thread = this.#store.attachment(parentId).threadId;
+      const thread = this.#store.attachment(parent.id).threadId;
       this.#store.createFork(
         {
           // Numbered in its tree: the branch line and the strip already say where it left from.
-          session: { id, projectId: parent.projectId, title: instruction === null ? `Branch ${this.#tree(parentId).members.length}` : forkTitle(instruction), brief: parent.brief, createdAt: at },
-          fork: { parent: parentId, from: source.n, baked: settings, createdAt: at },
+          session: { id, projectId: parent.projectId, title: instruction === null ? `Branch ${this.#trees.walk(parent.id).members.length}` : branchTitle(instruction), brief: parent.brief, createdAt: at },
+          fork: { parent: parent.id, from: source.n, baked: baked.settings, createdAt: at },
           // A branch continues its source's numbers, so a trail reads 1, 2, 3, 4 whichever branch it ends on.
           // Made on the thread the tree shares now, as an iteration the app writes for a confirm is.
           iteration: { n: (source.n + 1) as IterationN, threadId: thread, note: null, slots: source.slots, createdAt: at },
-          blocks: baked.map((b) => ({ id: b.id, hash: b.hash })),
-          contents: [...contents.values()],
-          proposed: parentProposed,
+          blocks: baked.blocks,
+          contents: baked.contents,
+          proposed: baked.proposed,
           feedback: pins.map((f) => ({ pin: f.pin, text: f.text, asked: asked.has(f.id) })),
-          system,
-          theme: this.#store.sessionTheme(parentId),
+          system: baked.system,
+          theme: this.#store.sessionTheme(parent.id),
           request: body === null ? null : { body, at, answered },
         },
         thread,
@@ -1834,12 +1791,6 @@ export class Brainstorm {
       }
       return ok(thread);
     });
-    if (!written.ok) return written;
-    this.#emit(id);
-    this.#emit(parentId);
-    const request = this.#store.openRequest(id);
-    if (request !== null) await this.#send(id, request.n, written.data);
-    return ok({ fork: id });
   }
 
   /** A still: the slot `at.slot` (else the first) of iteration `at.n` (else the latest), showing its selected variant. */
@@ -1915,7 +1866,7 @@ export class Brainstorm {
     const result = await this.#bridge.snapshot(thread, { messages: SNAPSHOT_MESSAGES });
     this.#remember(thread, result);
     // The branches share the thread, so it is lost or found for all of them.
-    for (const member of this.#treeOf(id)) {
+    for (const member of this.#trees.membersOf(id)) {
       const attachment = this.#store.attachment(member);
       if (attachment.threadId !== thread) continue;
       if (result.kind === "found" && attachment.lostAt !== null) this.#store.setLost(member, null);
@@ -2011,27 +1962,40 @@ export class Brainstorm {
   }
 }
 
-type ForkLinks = ReadonlyMap<SessionId, { readonly parent: SessionId; readonly from: IterationN }>;
+/** What a branch starts from: the parent, the iteration it leaves from, and Rob's marks on it as a plan. */
+type BranchStart = {
+  readonly parent: SessionSummary;
+  readonly source: StoredIteration;
+  readonly blocks: readonly IterationBlock[];
+  readonly marks: Marks;
+  readonly plan: ConfirmScope | null;
+  readonly instruction: string | null;
+  /** With grafts the narrowing waits for the agent, so the first iteration keeps every variant. */
+  readonly grafting: boolean;
+};
+
+/** A branch's first iteration, baked and checked: the blocks it keeps, the settings baked into them, and their content. */
+type BakedBranch = {
+  readonly kept: readonly IterationBlock[];
+  readonly settings: readonly BakedSetting[];
+  readonly blocks: readonly IterationBlock[];
+  readonly contents: readonly StoredContent[];
+  readonly system: SessionSystem | null;
+  readonly proposed: readonly IterationProposed[];
+};
 
 /**
- * A brainstorm as seen from one of its branches. `trail` runs from the root to the branch, each ancestor up to the
- * iteration the next one left it from; `members` is every session in the tree, root first.
+ * A branch's request 1: the confirm, unless only an instruction goes to the agent. With no grafts and no instruction
+ * the first iteration already carries the confirm out, so it fulfils the request (`answered`).
  */
-type Tree = { readonly trail: readonly { readonly session: SessionId; readonly upTo: IterationN | null }[]; readonly members: readonly SessionId[] };
-
-/** The one walk of a brainstorm's fork links, up to the root and back down to every branch. */
-function walkTree(links: ForkLinks, id: SessionId): Tree {
-  const trail: { session: SessionId; upTo: IterationN | null }[] = [{ session: id, upTo: null }];
-  for (let link = links.get(id); link !== undefined; link = links.get(link.parent)) {
-    const { parent, from } = link;
-    if (trail.some((t) => t.session === parent)) break;
-    trail.unshift({ session: parent, upTo: from });
-  }
-  const members = [trail[0]!.session];
-  for (let i = 0; i < members.length; i += 1) {
-    for (const [child, link] of links) if (link.parent === members[i] && !members.includes(child)) members.push(child);
-  }
-  return { trail, members };
+function branchRequest({ plan, grafting, instruction }: BranchStart): { readonly body: RequestBody | null; readonly answered: boolean } {
+  const body: RequestBody | null =
+    plan !== null && (grafting || instruction === null)
+      ? { scope: plan, freetext: instruction }
+      : instruction !== null
+        ? { scope: { kind: "all" }, freetext: instruction }
+        : null;
+  return { body, answered: !grafting && instruction === null };
 }
 
 const invalid = (message: string): Failure => ({ code: "invalid_action", message });

@@ -20,7 +20,7 @@ export const entryKey = (at: { readonly session: SessionId; readonly n: Iteratio
 
 /** Whether an entry starts a run: a fulfilled confirm, or a branch's first iteration. */
 export function startsRun(entry: HistoryEntry): boolean {
-  return entry.origin.kind === "fork" || isConfirm(entry);
+  return entry.origin.kind === "branch" || isConfirm(entry);
 }
 
 const isConfirm = (entry: HistoryEntry) => entry.origin.kind === "request" && entry.origin.body.scope.kind === "confirm";
@@ -36,7 +36,7 @@ export function splitRuns(entries: readonly HistoryEntry[]): Run[] {
   let confirms = 0;
   return runs.map((run) => {
     const first = run[0]!;
-    const label = first.origin.kind === "fork" ? `Branch from iteration ${first.origin.from}` : isConfirm(first) ? `Confirm ${(confirms += 1)}` : "Start";
+    const label = first.origin.kind === "branch" ? `Branch from iteration ${first.origin.from}` : isConfirm(first) ? `Confirm ${(confirms += 1)}` : "Start";
     return { key: entryKey(first), label, entries: run };
   });
 }

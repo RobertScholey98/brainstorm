@@ -204,7 +204,7 @@ Rob asked for a new slot. Add one entry to the `slots` list in `brainstorm.json`
 Handle with the use-brainstorm skill: run `brainstorm context s_q7d1m0`.
 ```
 
-Rob went back to a past iteration and confirmed different choices there, so the brainstorm has a new branch. Every branch is its own session on this same thread, and its iterations number on from where it left. `context` adds a `branch of` line and one `baked default <block> <prop> = <value>` line for each of Rob's settings that became a default. Build from the branch's own latest iteration, not from the branch it left. Only one branch has a request open at a time.
+Rob went back to a past iteration and confirmed different choices there, so the brainstorm has a new branch. Every branch is its own session on this same thread, and its iterations number on from where it left. `context` adds a `branch of` line (`branchOf` in `--json`) and one `baked default <block> <prop> = <value>` line for each of Rob's settings that became a default. Build from the branch's own latest iteration, not from the branch it left. Only one branch has a request open at a time.
 
 ## Fresh threads
 

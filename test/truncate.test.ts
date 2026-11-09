@@ -25,7 +25,7 @@ describe("cutText", () => {
 
   it("never leaves the ellipsis after a comma and its space, or a middle dot", () => {
     expect(cutText("spinning, slowly", room(11))).toBe("spinning…");
-    expect(cutText("Forked from Chore roulette · iteration 2", room(29))).toBe("Forked from Chore roulette…");
+    expect(cutText("Branch from Chore roulette · iteration 2", room(29))).toBe("Branch from Chore roulette…");
   });
 
   it("shows only the ellipsis when no letter fits", () => {

@@ -659,7 +659,7 @@ export type RequestContext = RequestBody & {
 };
 
 /** What an agent needs to know about a branch: where it came from, and which of its defaults are Rob's settings. */
-export type ForkContext = {
+export type BranchContext = {
   readonly parent: { readonly id: SessionId; readonly title: string };
   readonly from: IterationN;
   readonly baked: readonly BakedSetting[];
@@ -669,7 +669,8 @@ export type BakedSetting = { readonly blockId: BlockId; readonly prop: PropName;
 
 export type AgentContext = {
   readonly session: { readonly id: SessionId; readonly title: string; readonly brief: string };
-  readonly fork: ForkContext | null;
+  /** Where this branch left its parent, or null for the root: the `branch of` line in `brainstorm context`. */
+  readonly branchOf: BranchContext | null;
   readonly latest: IterationSummary | null;
   readonly attached: boolean;
   readonly attachedThread: ThreadId;
@@ -726,7 +727,7 @@ export type Regenerate =
 /** What produced an iteration, for the filmstrip: the brief, a branch, one of Rob's requests, or the agent unasked. */
 export type IterationOrigin =
   | { readonly kind: "brief" }
-  | { readonly kind: "fork"; readonly parent: string; readonly from: IterationN }
+  | { readonly kind: "branch"; readonly parent: string; readonly from: IterationN }
   /** `kept` titles a confirm's Mains that it narrowed or grafted into, and is empty for any other request. */
   | { readonly kind: "request"; readonly n: RequestN; readonly body: RequestBody; readonly changed: readonly string[]; readonly kept: readonly string[] }
   | { readonly kind: "agent"; readonly note: string | null };
@@ -738,29 +739,29 @@ export type IterationOrigin =
 export type HistoryEntry = { readonly session: SessionId; readonly n: IterationN; readonly createdAt: string; readonly origin: IterationOrigin };
 
 /** A branch that leaves the trail at iteration `from` of `parent`, drawn as an offshoot of that still. */
-export type ForkBranch = { readonly id: SessionId; readonly title: string; readonly parent: SessionId; readonly from: IterationN };
+export type TrailBranch = { readonly id: SessionId; readonly title: string; readonly parent: SessionId; readonly from: IterationN };
 
 /** Where a branch left its parent. */
-export type ForkLink = { readonly parent: { readonly id: SessionId; readonly title: string }; readonly from: IterationN };
+export type BranchLink = { readonly parent: { readonly id: SessionId; readonly title: string }; readonly from: IterationN };
 
 /**
  * One branch of a brainstorm. Three fields place it in its tree, each answering one question: `tree` says which
- * brainstorm it is and which branch is primary, `fork` says where this branch itself left its parent, and
- * `history.forks` says which other branches leave this branch's trail. `fork` is this branch's own link, so it never
- * appears in `history.forks`; that list holds its children, its ancestors' other children before each branch point,
- * and the rest of an ancestor's own line past the point this branch left it.
+ * brainstorm it is and which branch is primary, `branchOf` says where this branch itself left its parent, and
+ * `history.branches` says which other branches leave this branch's trail. `branchOf` is this branch's own link, so
+ * it never appears in `history.branches`; that list holds its children, its ancestors' other children before each
+ * branch point, and the rest of an ancestor's own line past the point this branch left it.
  */
 export type SessionView = {
   readonly session: SessionSummary;
   /** Which brainstorm this is: its root, whose title it goes by, and its primary branch. */
   readonly tree: { readonly root: { readonly id: SessionId; readonly title: string }; readonly primary: SessionId };
   /** Where this branch left its parent, or null for the root. */
-  readonly fork: ForkLink | null;
+  readonly branchOf: BranchLink | null;
   /**
    * What the strip draws: `iterations` is this branch's trail, its ancestors' iterations up to each branch point and
-   * then its own, and `forks` is every other branch that leaves an iteration on it.
+   * then its own, and `branches` is every other branch that leaves an iteration on it.
    */
-  readonly history: { readonly iterations: readonly HistoryEntry[]; readonly forks: readonly ForkBranch[] };
+  readonly history: { readonly iterations: readonly HistoryEntry[]; readonly branches: readonly TrailBranch[] };
   readonly attachment: Attachment;
   readonly thread: ThreadInfo | null;
   readonly iteration: IterationView | null;
@@ -1087,7 +1088,7 @@ export type SessionPreview = {
 };
 
 /** A branch from iteration `from`: Rob's marks on that iteration, and optionally what the branch should try. */
-export type ForkInput = {
+export type BranchInput = {
   readonly from: IterationN;
   readonly marks: Marks;
   readonly instruction: string | null;

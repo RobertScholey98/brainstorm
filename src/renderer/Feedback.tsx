@@ -1,7 +1,7 @@
 import { EyeOff, MessageSquarePlus, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
-import { partLabel } from "../core/fork";
+import { partLabel } from "../core/part";
 import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, CanvasRect, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
 import { PinNumber } from "./PinNumber";

@@ -8,7 +8,7 @@ import type { AppUpdates } from "../core/appUpdate";
 import type { Brainstorm } from "../core/brainstorm";
 import { zBranded } from "../core/parse";
 import { TIERS } from "../core/system/model";
-import { VARY_MAX } from "../core/fork";
+import { VARY_MAX } from "../core/vary";
 import { uiPrefsPatch, type AppSettings } from "../core/prefs";
 import type { AppAbout, SkillHost } from "../core/about";
 import { exportsDir } from "./appData";
@@ -108,7 +108,7 @@ const instruction = z
   .string()
   .nullable()
   .transform((d) => (d === null || d.trim() === "" ? null : d.trim()));
-const forkBody = z.strictObject({
+const branchBody = z.strictObject({
   from: iterationN,
   marks: z.strictObject({
     mains: z.record(z.string(), variantKey),
@@ -519,11 +519,11 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
     },
     {
       method: "POST",
-      path: /^\/v1\/ui\/sessions\/([^/]+)\/fork$/,
+      path: /^\/v1\/ui\/sessions\/([^/]+)\/branch$/,
       auth: "ui",
       handle: withSession(async (id, { body }) => {
-        const b = parseBody(forkBody, body);
-        return b.ok ? service.fork(id, b.data) : b;
+        const b = parseBody(branchBody, body);
+        return b.ok ? service.branch(id, b.data) : b;
       }),
     },
     {

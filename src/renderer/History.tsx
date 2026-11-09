@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { originText } from "../core/machines";
-import type { ForkBranch, HistoryEntry, IterationN, Result, SessionId, SessionPreview, SessionView, SlotId } from "../core/types";
+import type { HistoryEntry, IterationN, Result, SessionId, SessionPreview, SessionView, SlotId, TrailBranch } from "../core/types";
 import { IterationStill, STILL_BOX } from "./Preview";
 import { entryKey, runOf, splitRuns, type Run } from "./runs";
 import { pageAt, pageOf, pageRest, STRIP_INSET, stripFit, type EntryNeed, type StripFit } from "./stripFit";
@@ -20,7 +20,7 @@ export type TrailPoint = { readonly session: SessionId; readonly n: IterationN }
 export type LoadIterationStill = (at: { readonly session: SessionId; readonly n: IterationN; readonly slot: SlotId | null }) => Promise<Result<SessionPreview | null>>;
 
 /** One place in the strip, in the order it shows: each iteration of the run, then the branches that leave it. */
-type StripItem = { readonly kind: "iteration"; readonly entry: HistoryEntry } | { readonly kind: "fork"; readonly fork: ForkBranch };
+type StripItem = { readonly kind: "iteration"; readonly entry: HistoryEntry } | { readonly kind: "branch"; readonly branch: TrailBranch };
 
 const samePoint = (a: TrailPoint, b: TrailPoint) => a.session === b.session && a.n === b.n;
 
@@ -56,7 +56,7 @@ export function Filmstrip({
   onOpen: (id: SessionId) => void;
 }) {
   const now = useNow();
-  const { iterations, forks } = view.history;
+  const { iterations, branches } = view.history;
   const section = useRef<HTMLElement>(null);
   const head = useRef<HTMLDivElement>(null);
   const steps = useRef<HTMLSpanElement>(null);
@@ -73,10 +73,10 @@ export function Filmstrip({
   const entries = run?.entries ?? [];
   const items: StripItem[] = entries.flatMap((entry) => [
     { kind: "iteration", entry } as const,
-    ...forks.filter((f) => f.parent === entry.session && f.from === entry.n).map((fork) => ({ kind: "fork", fork }) as const),
+    ...branches.filter((b) => b.parent === entry.session && b.from === entry.n).map((branch) => ({ kind: "branch", branch }) as const),
   ]);
   const shownAt = items.findIndex((i) => i.kind === "iteration" && samePoint(i.entry, showing));
-  const branches = forks.filter((f) => entries.some((e) => e.session === f.parent && e.n === f.from)).length;
+  const leaving = branches.filter((b) => entries.some((e) => e.session === b.parent && e.n === b.from)).length;
 
   const [fit, setFit] = useState<StripFit>(() => stripFit(0, items.map(() => ({ need: 0, floor: 0 })), shownAt));
   const overflows = fit.pages !== null;
@@ -196,7 +196,7 @@ export function Filmstrip({
           <RunPicker runs={runs} run={run} now={now} onRun={setChosen} />
         ) : (
           <span className="whitespace-nowrap" data-history-count>
-            {`${entries.length} ${entries.length === 1 ? "iteration" : "iterations"}${branches > 0 ? ` · ${branches} ${branches === 1 ? "branch" : "branches"}` : ""}`}
+            {`${entries.length} ${entries.length === 1 ? "iteration" : "iterations"}${leaving > 0 ? ` · ${leaving} ${leaving === 1 ? "branch" : "branches"}` : ""}`}
           </span>
         )}
       </StripHead>
@@ -216,8 +216,8 @@ export function Filmstrip({
         >
           {items.map((item, i) => {
             const snap = fit.pages?.includes(i) === true;
-            return item.kind === "fork" ? (
-              <Offshoot key={`${item.fork.id}@${entryKey({ session: item.fork.parent, n: item.fork.from })}`} fork={item.fork} first={item.fork.id === view.tree.root.id} snap={snap} onOpen={onOpen} />
+            return item.kind === "branch" ? (
+              <Offshoot key={`${item.branch.id}@${entryKey({ session: item.branch.parent, n: item.branch.from })}`} branch={item.branch} first={item.branch.id === view.tree.root.id} snap={snap} onOpen={onOpen} />
             ) : (
               <StillOption
                 key={entryKey(item.entry)}
@@ -261,7 +261,7 @@ function EdgeCue({ side, shown }: { side: "start" | "end"; shown: boolean }) {
   );
 }
 
-/** The strip is one row at one height whether or not it has forks or overflows, with its head standing to the left. */
+/** The strip is one row at one height whether or not it has branches or overflows, with its head standing to the left. */
 const STRIP = "flex h-strip shrink-0 items-center border-t bg-card";
 /** Overflow scrolls sideways and rests on a page's start. Its ends fade only over the inset, which at rest holds no entry. */
 const STRIP_SCROLL = "scroll-fades-x scrollbar-none flex min-w-0 flex-1 snap-x snap-mandatory scroll-px-4 overflow-x-auto overflow-y-hidden";
@@ -470,29 +470,29 @@ function StillOption({
  * more iteration. An ancestor's own continuation past the point this trail left it reads the same way: once another
  * branch is primary, the old primary is one more branch off the trail.
  */
-function Offshoot({ fork, first, snap, onOpen }: { fork: ForkBranch; first: boolean; snap: boolean; onOpen: (id: SessionId) => void }) {
+function Offshoot({ branch, first, snap, onOpen }: { branch: TrailBranch; first: boolean; snap: boolean; onOpen: (id: SessionId) => void }) {
   // The brainstorm's first line shares the brainstorm's title, so once another branch is primary it names its place.
-  const name = first ? "The first line" : fork.title;
+  const name = first ? "The first line" : branch.title;
   return (
-    <Hint label={`Open ${first ? "the first line" : `the branch ${fork.title}`}`} side="top">
+    <Hint label={`Open ${first ? "the first line" : `the branch ${branch.title}`}`} side="top">
       <button
         type="button"
-        onClick={() => onOpen(fork.id)}
-        className={cn(ENTRY, snap && SNAP, FORK_BOX, "outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring")}
-        data-history-fork={fork.id}
-        data-history-from={fork.from}
-        data-history-continues={fork.id === fork.parent || undefined}
+        onClick={() => onOpen(branch.id)}
+        className={cn(ENTRY, snap && SNAP, BRANCH_BOX, "outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring")}
+        data-history-branch={branch.id}
+        data-history-from={branch.from}
+        data-history-continues={branch.id === branch.parent || undefined}
       >
-        <ForkLines first={name} second={`from iteration ${fork.from}`} />
+        <BranchLines first={name} second={`from iteration ${branch.from}`} />
       </button>
     </Hint>
   );
 }
 
 /** Dashed in the entries' strong edge, so a link off the strip holds its shape as an entry does. */
-const FORK_BOX = "flex h-still items-center gap-2 rounded-lg border border-dashed border-border-strong px-3 text-left";
+const BRANCH_BOX = "flex h-still items-center gap-2 rounded-lg border border-dashed border-border-strong px-3 text-left";
 
-function ForkLines({ first, second }: { first: string; second: string }) {
+function BranchLines({ first, second }: { first: string; second: string }) {
   return (
     <>
       <GitBranch aria-hidden className="size-3.5 shrink-0 text-fg-muted" />

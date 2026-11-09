@@ -778,13 +778,13 @@ function SessionWorkspace({
   };
   const confirm = async (instruction: string | null): Promise<boolean> => {
     if (past === null) return (await send({ kind: "confirm" })) !== null;
-    const result = await api.fork(past.session, { from: past.n, marks: past.marks, instruction });
+    const result = await api.branch(past.session, { from: past.n, marks: past.marks, instruction });
     if (!result.ok) {
-      showNotice({ title: failedTitle("fork"), detail: result.error.message });
+      showNotice({ title: failedTitle("branch"), detail: result.error.message });
       return false;
     }
     clearNotice();
-    onOpen(result.data.fork);
+    onOpen(result.data.branch);
     return true;
   };
   const [addingSlot, setAddingSlot] = useState(false);

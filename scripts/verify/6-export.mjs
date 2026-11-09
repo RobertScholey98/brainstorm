@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { seedDemo } from "../seed-demo.mjs";
-import { build, checks, inBlock, launch, openSession, settled, showBoard, shot, workspace } from "./electron.mjs";
+import { build, checks, inBlock, launch, openSession, settled, showBoard, shot, showSlot, workspace } from "./electron.mjs";
 
 build();
 const { home, shots, env } = workspace("verify-6");
@@ -30,12 +30,14 @@ try {
   await showBoard(window, canvas);
   await canvas.waitForSelector(inBlock("wheel/neon", "screen"));
 
+  await showSlot(window, "result");
   await window.click('button[data-variant="receipt"]');
   await canvas.waitForSelector(inBlock("result/receipt", "footer"));
   await setText(window, "footer", "Pinned to the fridge", "textarea");
   await window.click('button[data-variant="card"]');
   await canvas.waitForSelector(inBlock("result/card", "headline"));
   await setText(window, "headline", "Fate has spoken");
+  await showSlot(window, "wheel");
   await window.click('button[data-variant="neon"]');
   await setText(window, "accent", "#00f0ff", 'input[type="text"]');
   await window.click('button[data-variant="reel"]');

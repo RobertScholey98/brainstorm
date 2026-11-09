@@ -109,5 +109,5 @@ const barFits = (bar: HTMLElement): boolean => {
 /** Fits the canvas bar: its right end's labels give way, in `BAR_COLLAPSE` order, before the pick hint cuts. */
 export const useBarFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, barFits, "[data-bar-hint], [data-present-controls]", BAR_COLLAPSE.hold + 1);
 
-/** Fits a sidebar row: its status drops its time, then its words, then a fork its branch glyph, before its title cuts. */
+/** Fits a sidebar row: its status drops its time, then its words, then a branch row its glyph, before its title cuts. */
 export const useRowFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, rowFits, "[data-row-title]");

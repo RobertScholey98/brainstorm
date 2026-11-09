@@ -340,7 +340,7 @@ describe("branches, confirms and fresh threads", () => {
   test("a branch's first request says where it left, on the thread the agent already has", () => {
     const first = formatRequestMessage(
       { ...request({ state: "sending" }), n: 1 as RequestN, scope: { kind: "all" }, feedbackIds: [], freetext: "slot machine" },
-      { fork: { parent: "s_parent1" as SessionId, from: 3 as IterationN } },
+      { branchOf: { parent: "s_parent1" as SessionId, from: 3 as IterationN } },
     );
     expect(first).toBe(
       '[brainstorm] session s_8f2k3a · request 1 · branch of s_parent1 iteration 3 · scope: all · freetext: "slot machine"\n' +
@@ -408,7 +408,7 @@ describe("vary and history text", () => {
 
   test("originText says where each iteration came from", () => {
     expect(originText({ kind: "brief" })).toBe("First designs, from the brief");
-    expect(originText({ kind: "fork", parent: "Chore wheel", from: 2 as IterationN })).toBe("Branched from iteration 2");
+    expect(originText({ kind: "branch", parent: "Chore wheel", from: 2 as IterationN })).toBe("Branched from iteration 2");
     expect(originText({ kind: "agent", note: null })).toBe("The agent's own commit");
     expect(originText({ kind: "agent", note: "tidied" })).toBe("tidied");
     expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: null }, changed: ["Neon wheel", "Slot reel", "Assignment card"], kept: [] })).toBe(
