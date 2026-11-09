@@ -922,7 +922,7 @@ describe("marks and confirm", () => {
     expect(view.marks).toEqual(NONE);
     expect(view.request?.phase.phase).toBe("fulfilled");
     const origin = view.history.iterations.at(-1)?.origin;
-    expect(origin?.kind === "request" && origin.body.scope).toEqual({ kind: "confirm", mains: [{ slot: "wheel", variant: "neon" }], grafts: [], drop: [CALM] });
+    expect(origin?.kind === "request" && origin.body.scope).toEqual({ kind: "confirm", mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }], grafts: [], drop: [CALM] });
     expect(bridge.sent.length, "no agent turn").toBe(sent);
   });
 
@@ -934,7 +934,7 @@ describe("marks and confirm", () => {
     expect(bridge.sent.at(-1)?.thread).toBe(T1);
     expect(data(await service.view(S)).request?.request.scope).toEqual({
       kind: "confirm",
-      mains: [{ slot: "wheel", variant: "neon" }],
+      mains: [{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }],
       grafts: [{ from: { blockId: CALM, part: SPIN }, into: "wheel", instruction: "under the wheel" }],
       drop: [CALM],
     });

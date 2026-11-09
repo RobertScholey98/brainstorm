@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { approval, confirmLines, confirmPlan, liveMarks, mainOf, shownVariants, trashRefusal, withApproval, withGraft, withTrash } from "../src/core/main";
+import { approval, confirmLines, confirmPlan, liveMarks, mainOf, shownVariants, trashRefusal, withApproval, withGraft, withPick, withTrash } from "../src/core/main";
 import type { BlockId, Marks, PartName, Pin, SlotId, StoredGraft, VariantKey } from "../src/core/types";
 
 const v = (k: string) => k as VariantKey;
@@ -50,13 +50,34 @@ describe("confirm", () => {
     expect(confirmPlan([sheet], main("sheet")), "a lone variant chosen as Main changes nothing").toBe(null);
   });
 
-  test("keeps only Main where there is one, drops the trashed elsewhere, and carries the picks", () => {
-    expect(confirmPlan(slots, main("neon"))).toEqual({ kind: "confirm", mains: [{ slot: "wheel", variant: "neon" }], grafts: [], drop: ["wheel/calm", "wheel/spin-a"] });
-    expect(confirmPlan(slots, withTrash(NONE, "wheel/calm" as BlockId, true))).toEqual({ kind: "confirm", mains: [], grafts: [], drop: ["wheel/calm"] });
+  test("keeps only Main where there is one, chosen or the only one left, drops the trashed elsewhere, and carries the picks", () => {
+    const sheetMain = { slot: "result", variant: "sheet" };
+    expect(confirmPlan(slots, main("neon"))).toEqual({ kind: "confirm", mains: [{ slot: "wheel", variant: "neon" }, sheetMain], grafts: [], drop: ["wheel/calm", "wheel/spin-a"] });
+    expect(confirmPlan(slots, withTrash(NONE, "wheel/calm" as BlockId, true))).toEqual({ kind: "confirm", mains: [sheetMain], grafts: [], drop: ["wheel/calm"] });
     const picked = withGraft(main("neon"), { from: { blockId: "wheel/calm" as BlockId, part: SPIN }, into: wheel.id, instruction: "under the title" });
     const plan = confirmPlan(slots, picked)!;
     expect(plan.grafts).toEqual([{ from: { blockId: "wheel/calm", part: SPIN }, into: "wheel", instruction: "under the title" }]);
-    expect(confirmLines(slots, plan)).toEqual([{ slot: "wheel", keeps: ["neon"], grafts: plan.grafts, dropped: 2 }]);
+    expect(confirmLines(slots, plan), "every slot, the unchanged one too").toEqual([
+      { slot: "wheel", keeps: ["neon"], grafts: plan.grafts, dropped: 2 },
+      { slot: "result", keeps: ["sheet"], grafts: [], dropped: 0 },
+    ]);
+  });
+
+  test("names a slot's only variant as its Main, so a pick into it reaches the agent with somewhere to go", () => {
+    const narrowed = [{ id: wheel.id, variants: [v("neon")] }, sheet];
+    const plan = confirmPlan(narrowed, withGraft(NONE, { from: { blockId: "result/sheet" as BlockId, part: SPIN }, into: wheel.id, instruction: null }))!;
+    expect(plan.mains).toEqual([{ slot: "wheel", variant: "neon" }, { slot: "result", variant: "sheet" }]);
+    expect(plan.grafts.map((g) => g.into)).toEqual(["wheel"]);
+  });
+
+  test("reads no graft into a slot with no Main, nor one taken from Main itself, and reads them again once Main makes sense of them", () => {
+    const grafted = withApproval(main("neon"), wheel, option);
+    const unmained = withApproval(grafted, wheel, block("neon"));
+    expect(liveMarks(unmained, slots).grafts, "Stop keeping this as Main leaves the pick waiting").toEqual([]);
+    expect(confirmPlan(slots, unmained), "so Confirm has nothing to send").toBe(null);
+    expect(liveMarks(withApproval(unmained, wheel, block("neon")), slots).grafts).toEqual(grafted.grafts);
+    const fromMain = { ...grafted, mains: { [wheel.id]: v("spin-a") } };
+    expect(liveMarks(fromMain, slots).grafts, "an element already in Main").toEqual([]);
   });
 
   test("forgets marks on blocks a later iteration no longer has", () => {
@@ -66,6 +87,20 @@ describe("confirm", () => {
       trashed: ["wheel/gone", "wheel/calm"] as BlockId[],
     };
     expect(liveMarks(stale, slots)).toEqual({ mains: {}, grafts: [], trashed: ["wheel/calm"] });
+  });
+
+  test("a pick lands in the slot's Main, or makes what Rob is looking at Main first, and refuses Main's own elements", () => {
+    const from = { blockId: "result/sheet" as BlockId, part: SPIN };
+    expect(withPick(main("calm"), wheel, from, "smaller", v("neon"))).toEqual({ ...main("calm"), grafts: [{ id: 1, from, into: "wheel", instruction: "smaller" }] });
+    expect(withPick(NONE, wheel, from, null, v("spin-a"))).toEqual({ ...main("spin-a"), grafts: [{ id: 1, from, into: "wheel", instruction: null }] });
+    const trashedActive = withTrash(NONE, "wheel/spin-a" as BlockId, true);
+    expect(withPick(trashedActive, wheel, from, null, v("spin-a")), "a trashed variant on show never becomes Main").toEqual({
+      ...trashedActive,
+      mains: { [wheel.id]: v("neon") },
+      grafts: [{ id: 1, from, into: "wheel", instruction: null }],
+    });
+    expect(withPick(NONE, wheel, { blockId: "wheel/calm" as BlockId, part: SPIN }, null, v("calm"))).toEqual({ refused: "That element is already in Main" });
+    expect(withPick(NONE, sheet, from, null, null), "the only variant is Main already").toEqual({ refused: "That element is already in Main" });
   });
 
   test("numbers the window's own picks on from the highest", () => {

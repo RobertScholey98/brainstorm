@@ -19,7 +19,11 @@ import {
 type SlotShape = { readonly id: SlotId; readonly variants: readonly VariantKey[] };
 type BlockShape = Pick<BlockView, "id" | "slot" | "variant" | "variedFrom">;
 
-/** The marks that still name something in this iteration. A regenerate can remove a block a mark pointed at. */
+/**
+ * The marks that still name something in this iteration and still mean something together. A regenerate can remove a
+ * block a mark pointed at. A graft needs a Main to go into, and one taken from that Main has nothing to add, so either
+ * waits, kept but unread, until the slot's Main makes sense of it again.
+ */
 export function liveMarks(marks: Marks, slots: readonly SlotShape[]): Marks {
   const exists = (b: BlockId) => {
     const { slot, variant } = splitBlockId(b);
@@ -31,7 +35,12 @@ export function liveMarks(marks: Marks, slots: readonly SlotShape[]): Marks {
     if (v !== undefined && s.variants.includes(v)) mains[s.id] = v;
   }
   const trashed = marks.trashed.filter((b) => exists(b) && mains[splitBlockId(b).slot] !== splitBlockId(b).variant);
-  const grafts = marks.grafts.filter((g) => exists(g.from.blockId) && slots.some((s) => s.id === g.into));
+  const grafts = marks.grafts.filter((g) => {
+    const into = slots.find((s) => s.id === g.into);
+    if (into === undefined || !exists(g.from.blockId)) return false;
+    const main = mainOf(into, { mains, grafts: [], trashed });
+    return main !== null && g.from.blockId !== blockIdOf(into.id, main);
+  });
   return { mains, grafts, trashed };
 }
 
@@ -79,17 +88,18 @@ export function trashRefusal(slot: SlotShape, variant: VariantKey, marks: Marks)
 }
 
 /**
- * What Confirm locks in, or null when there is nothing to lock. A slot with a Main keeps only Main; a slot without one
- * keeps its variants that aren't trashed. Grafts go to the agent; with none the app narrows the iteration itself.
+ * What Confirm locks in, or null when there is nothing to lock. A slot with a Main, chosen or the only one left, keeps
+ * only Main and names it, so every graft's slot has its Main in `mains`; a slot without one keeps its variants that
+ * aren't trashed. Grafts go to the agent; with none the app narrows the iteration itself.
  */
 export function confirmPlan(slots: readonly SlotShape[], marks: Marks): ConfirmScope | null {
   const live = liveMarks(marks, slots);
   const mains: { slot: SlotId; variant: VariantKey }[] = [];
   const drop: BlockId[] = [];
   for (const slot of slots) {
-    const main = live.mains[slot.id];
-    if (main !== undefined) mains.push({ slot: slot.id, variant: main });
-    const keep = main !== undefined ? [main] : shownVariants(slot, live);
+    const main = mainOf(slot, live);
+    if (main !== null) mains.push({ slot: slot.id, variant: main });
+    const keep = main !== null ? [main] : shownVariants(slot, live);
     drop.push(...slot.variants.filter((v) => !keep.includes(v)).map((v) => blockIdOf(slot.id, v)));
   }
   const grafts = live.grafts.map(({ from, into, instruction }) => ({ from, into, instruction }));
@@ -97,7 +107,7 @@ export function confirmPlan(slots: readonly SlotShape[], marks: Marks): ConfirmS
   return { kind: "confirm", mains, grafts, drop };
 }
 
-/** Each slot as the confirm leaves it, for the popover: what Main is, what goes into it, and how many options go. */
+/** Each slot as the confirm leaves it, for the popover: what it keeps, what goes into Main, and how many options go. */
 export type ConfirmLine = {
   readonly slot: SlotId;
   readonly keeps: readonly VariantKey[];
@@ -109,7 +119,6 @@ export function confirmLines(slots: readonly SlotShape[], plan: ConfirmScope): C
   return slots.flatMap((slot) => {
     const dropped = plan.drop.filter((b) => splitBlockId(b).slot === slot.id).length;
     const grafts = plan.grafts.filter((g) => g.into === slot.id);
-    if (dropped === 0 && grafts.length === 0) return [];
     return [{ slot: slot.id, keeps: slot.variants.filter((v) => !plan.drop.includes(blockIdOf(slot.id, v))), grafts, dropped }];
   });
 }
@@ -137,6 +146,18 @@ export function withApproval(marks: Marks, slot: SlotShape, block: BlockShape): 
 export function withTrash(marks: Marks, block: BlockId, trashed: boolean): Marks {
   const rest = marks.trashed.filter((b) => b !== block);
   return { ...marks, trashed: trashed ? [...rest, block] : rest };
+}
+
+/**
+ * The marks after Pick brings `from` into `slot`'s Main, or why it can't. A slot with no Main yet takes the variant
+ * Rob is looking at there (`active`, when it still shows) as its Main first, so the pick has somewhere to land.
+ */
+export function withPick(marks: Marks, slot: SlotShape, from: Pin, instruction: string | null, active: VariantKey | null): Marks | { readonly refused: string } {
+  const shown = shownVariants(slot, marks);
+  const main = mainOf(slot, marks) ?? (active !== null && shown.includes(active) ? active : shown[0]!);
+  if (from.blockId === blockIdOf(slot.id, main)) return { refused: "That element is already in Main" };
+  const chosen = marks.mains[slot.id] === main ? marks : { ...marks, mains: { ...marks.mains, [slot.id]: main } };
+  return withGraft(chosen, { from, into: slot.id, instruction });
 }
 
 export function withGraft(marks: Marks, graft: Omit<StoredGraft, "id">): Marks {
