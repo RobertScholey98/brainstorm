@@ -150,6 +150,15 @@ export function requestPhase(request: Request, attachment: Attachment, observati
 }
 
 /**
+ * Whether a request in `phase` holds its brainstorm's thread, so another branch's Retry or Resend waits for it: it is
+ * being sent there, or the thread has it queued or is working on it. A request that failed to send, whose run ended,
+ * that went to a thread since replaced, or whose thread is gone holds nothing, so two such never wait on each other.
+ */
+export function holdsThread(phase: RequestPhase["phase"]): boolean {
+  return phase === "sending" || phase === "queued" || phase === "asking" || phase === "working";
+}
+
+/**
  * What Rob reads for a phase. `changed` names the fulfilling iteration's changed blocks by title, and `scope` is the
  * request's, so a vary reads as what it asked for. `kept` names a confirm's Mains, as the origin's does.
  */

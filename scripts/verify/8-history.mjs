@@ -403,6 +403,20 @@ try {
   await mark(window, "approve", "reel");
   await window.waitForSelector('[data-main-group] [data-variant="reel"]');
   check("a thumbs up in the past makes Reel the wheel's Main there, at the top, and the rest its options", [await rows(window, "data-main-group"), await rows(window, "data-options-group")], [["reel"], ["neon", "terminal"]]);
+  // A pick in the past waits on its Main: taking the Main back hides it, as the service hides a stored one, and
+  // choosing it again brings it back.
+  await window.click("[data-graft-toggle]");
+  await canvas.click(inBlock("result/card", "headline"));
+  await window.waitForSelector("[data-graft-composer]");
+  await window.click("[data-graft-add]");
+  await window.waitForSelector("[data-graft]");
+  await mark(window, "approve", "reel");
+  await window.waitForSelector("[data-main-empty]");
+  check("taking Main back in the past hides the pick waiting on it, so the sidebar shows only what Confirm would send", [await window.$$eval("[data-graft]", (els) => els.length), await window.isDisabled("[data-confirm-toggle]")], [0, false]);
+  await mark(window, "approve", "reel");
+  await window.waitForSelector("[data-graft]");
+  await window.click("[data-remove-graft]");
+  await window.waitForSelector("[data-graft]", { state: "detached" });
   await window.click("[data-confirm-toggle]");
   await window.waitForSelector("[data-confirm-menu]");
   check(
@@ -474,12 +488,39 @@ try {
   check("both marks are stored, so the agent reads them in context", context(session).marks, { mains: { wheel: "neon" }, grafts: [], trashed: ["wheel/terminal"] });
   check("Confirm is on once there is something to lock in", await window.isDisabled("[data-confirm-toggle]"), false);
   await shots2(window, shots, "5-marks");
+  check("the slot picker counts what is left in each slot, the trashed variant out", await window.textContent("[data-slot-count]"), "2 variants");
   await mark(window, "approve", "neon");
   await window.waitForSelector("[data-main-empty]");
   await window.click("[data-trashed-fold] button");
+  await window.waitForSelector('[data-restore="terminal"]');
+  await shots2(window, shots, "18-trashed-open");
   await window.click('[data-restore="terminal"]');
   await window.waitForSelector("[data-trashed-fold]", { state: "detached" });
   check("a second thumbs up and Restore undo them", context(session).marks, { mains: {}, grafts: [], trashed: [] });
+
+  // Keyboard alone: arrows move along the rows, Tab reaches the row's 👍, Enter presses it.
+  await window.focus('[data-slot-id="wheel"] [data-showing]');
+  const fromRow = await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant");
+  await window.keyboard.press("ArrowDown");
+  const toRow = await window.evaluate(() => document.activeElement?.dataset.variant ?? null);
+  await window.keyboard.press("Tab");
+  const tabbed = await window.evaluate(() => document.activeElement?.dataset.approve ?? null);
+  await window.keyboard.press("Enter");
+  await window.waitForSelector(`[data-main-group] [data-variant="${toRow}"]`);
+  check(
+    "with the keyboard alone, ArrowDown moves to the next variant and shows it, Tab reaches its 👍, and Enter makes it Main with focus still on that 👍 in the Main list",
+    [
+      toRow !== fromRow,
+      (await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant")) === toRow,
+      tabbed === toRow,
+      await window.getAttribute(`[data-approve="${toRow}"]`, "aria-pressed"),
+      await window.evaluate(() => [document.activeElement?.dataset.approve ?? null, document.activeElement?.closest("[data-main-group]") !== null]),
+    ],
+    [true, true, true, "true", [toRow, true]],
+  );
+  await window.keyboard.press("Enter");
+  await window.waitForSelector("[data-main-empty]");
+  await window.click(`[data-slot-id="wheel"] [data-variant="${fromRow}"]`);
 
   // Confirm on a past iteration makes a branch, on the same thread (ADR 009).
   await window.click('[data-history-n="1"]');
@@ -834,6 +875,7 @@ try {
   check("the pick popover lands in the slot open in the sidebar unless Rob chooses another", await window.getAttribute("[data-graft-into]", "data-graft-into"), "wheel");
   check("nothing in the pick popover runs past its box", await outsideBox(window, "[data-graft-composer]"), []);
   await window.fill("[data-graft-instruction]", "above the logo");
+  await shots2(window, shots, "16-pick");
   await window.click("[data-graft-add]");
   await window.waitForSelector("[data-graft-composer]", { state: "detached" });
   check(
@@ -910,6 +952,9 @@ try {
 
   // Add slot asks the agent for a new slot, as a request like any other.
   await window.click("[data-slot-picker]");
+  await window.waitForSelector("[data-add-slot]");
+  check("the open slot picker lists each slot with what is left in it, then Add slot", await window.$$eval("[data-slot-option], [data-add-slot]", (els) => els.map((e) => e.textContent.trim())), ["The wheel1", "The result1", "Add slot…"]);
+  await shots2(window, shots, "17-slot-picker");
   await window.click("[data-add-slot]");
   await window.waitForSelector("[data-add-slot-dialog]");
   await window.fill("[data-add-slot-prompt]", "A settings sheet for who is on the rota");

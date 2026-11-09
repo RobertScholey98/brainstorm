@@ -2,13 +2,16 @@ import type { HistoryEntry, IterationN, SessionId } from "../core/types";
 
 /**
  * A run of history (ADR 009): the iterations from one confirm up to the next. Confirms are like commits, so the strip
- * shows one run at a time and a dropdown steps between them. A branch's first iteration is a confirm made on a past
- * iteration, so it starts a run too.
+ * shows one run at a time and a dropdown steps between them. A branch point starts a run too, under its own name: a
+ * branch made with only an instruction, or with grafts the agent has yet to merge, is no confirm yet.
  */
 export type Run = {
   /** The run's first entry, as `session:n`, which never changes as the run grows. */
   readonly key: string;
-  /** "Start" for what came before the first confirm, otherwise "Confirm k", counting confirms on the trail from 1. */
+  /**
+   * "Start" for what came before the first confirm or branch point, "Branch from iteration n" for a branch point, and
+   * "Confirm k" for a confirm, counting the trail's fulfilled confirms from 1.
+   */
   readonly label: string;
   readonly entries: readonly HistoryEntry[];
 };
@@ -17,8 +20,10 @@ export const entryKey = (at: { readonly session: SessionId; readonly n: Iteratio
 
 /** Whether an entry starts a run: a fulfilled confirm, or a branch's first iteration. */
 export function startsRun(entry: HistoryEntry): boolean {
-  return entry.origin.kind === "fork" || (entry.origin.kind === "request" && entry.origin.body.scope.kind === "confirm");
+  return entry.origin.kind === "fork" || isConfirm(entry);
 }
+
+const isConfirm = (entry: HistoryEntry) => entry.origin.kind === "request" && entry.origin.body.scope.kind === "confirm";
 
 /** The trail cut into runs, oldest first. A trail that opens on a confirm has no Start run. */
 export function splitRuns(entries: readonly HistoryEntry[]): Run[] {
@@ -31,7 +36,7 @@ export function splitRuns(entries: readonly HistoryEntry[]): Run[] {
   let confirms = 0;
   return runs.map((run) => {
     const first = run[0]!;
-    const label = startsRun(first) ? `Confirm ${(confirms += 1)}` : "Start";
+    const label = first.origin.kind === "fork" ? `Branch from iteration ${first.origin.from}` : isConfirm(first) ? `Confirm ${(confirms += 1)}` : "Start";
     return { key: entryKey(first), label, entries: run };
   });
 }

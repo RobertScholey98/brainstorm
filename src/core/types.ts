@@ -453,6 +453,15 @@ export type RequestState =
   | { readonly state: "fulfilled"; readonly iteration: IterationN }
   | { readonly state: "withdrawn" };
 
+/** A request is open from when it is saved until it is fulfilled or withdrawn. A branch has at most one open at a time. */
+export const OPEN_REQUEST_STATES = ["sending", "sent", "send_failed"] as const satisfies readonly RequestState["state"][];
+
+export type OpenRequestState = (typeof OPEN_REQUEST_STATES)[number];
+
+export function isOpenRequest(state: RequestState["state"]): state is OpenRequestState {
+  return (OPEN_REQUEST_STATES as readonly string[]).includes(state);
+}
+
 export type Request = RequestBody & {
   readonly session: SessionId;
   readonly n: RequestN;
@@ -734,11 +743,23 @@ export type ForkBranch = { readonly id: SessionId; readonly title: string; reado
 /** Where a branch left its parent. */
 export type ForkLink = { readonly parent: { readonly id: SessionId; readonly title: string }; readonly from: IterationN };
 
+/**
+ * One branch of a brainstorm. Three fields place it in its tree, each answering one question: `tree` says which
+ * brainstorm it is and which branch is primary, `fork` says where this branch itself left its parent, and
+ * `history.forks` says which other branches leave this branch's trail. `fork` is this branch's own link, so it never
+ * appears in `history.forks`; that list holds its children, its ancestors' other children before each branch point,
+ * and the rest of an ancestor's own line past the point this branch left it.
+ */
 export type SessionView = {
   readonly session: SessionSummary;
-  /** The brainstorm this branch belongs to: its root (whose title it goes by) and its primary branch. */
+  /** Which brainstorm this is: its root, whose title it goes by, and its primary branch. */
   readonly tree: { readonly root: { readonly id: SessionId; readonly title: string }; readonly primary: SessionId };
+  /** Where this branch left its parent, or null for the root. */
   readonly fork: ForkLink | null;
+  /**
+   * What the strip draws: `iterations` is this branch's trail, its ancestors' iterations up to each branch point and
+   * then its own, and `forks` is every other branch that leaves an iteration on it.
+   */
   readonly history: { readonly iterations: readonly HistoryEntry[]; readonly forks: readonly ForkBranch[] };
   readonly attachment: Attachment;
   readonly thread: ThreadInfo | null;

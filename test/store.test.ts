@@ -98,23 +98,34 @@ test("a version 9 store turns forks into branches: their iterations continue the
   const grand = "s_grand001";
   // A fork whose own thread never finished starting: it was attached to a placeholder.
   const pending = "s_pend0001";
+  // A fork already on the root's thread, with its own request open beside the root's.
+  const same = "s_same0001";
   const addSession = v9.prepare("INSERT INTO session(id, project_id, title, brief, created_at) VALUES (?, 'p1', ?, '', ?)");
   addSession.run(fork, "Darker", at);
   addSession.run(grand, "Smaller", at);
   addSession.run(pending, "Rounder", at);
-  v9.prepare("INSERT INTO attachment(session_id, thread_id, attached_at) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)").run(fork, t2, at, grand, t2, at, pending, `pending:${pending}`, at);
+  addSession.run(same, "Taller", at);
+  v9.prepare("INSERT INTO attachment(session_id, thread_id, attached_at) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?), (?, ?, ?)").run(
+    fork, t2, at, grand, t2, at, pending, `pending:${pending}`, at, same, t1, at,
+  );
   const iteration = v9.prepare("INSERT INTO iteration(session_id, n, thread_id, slots_json, created_at) VALUES (?, ?, ?, '[]', ?)");
   for (const n of [1, 2, 3]) iteration.run(session, n, t1, at);
   for (const n of [1, 2]) iteration.run(fork, n, t2, at);
   iteration.run(grand, 1, t2, at);
   iteration.run(pending, 1, t1, at);
+  iteration.run(same, 1, t1, at);
   const link = v9.prepare("INSERT INTO fork(session_id, parent_id, parent_n, baked_json, created_at) VALUES (?, ?, ?, '[]', ?)");
   link.run(fork, session, 2, at);
   link.run(grand, fork, 1, at);
   link.run(pending, session, 3, at);
+  link.run(same, session, 1, at);
   // What moves with a fork's iterations: their blocks and proposed components, its pins and their history, and the
   // requests they answered. The root's own request stays open on the root's thread.
-  v9.prepare("INSERT INTO block_content(hash, source, css, block_json, controls_json, controls_derived, compiled, parts_json) VALUES (?, 'x', NULL, '{}', NULL, 1, 'x', '[]')").run(hash);
+  v9.prepare("INSERT INTO block_content(hash, source, css, block_json, controls_json, controls_derived, compiled, parts_json) VALUES (?, ?, NULL, ?, NULL, 1, 'x', '[]')").run(
+    hash,
+    "export default () => null;\n",
+    '{ "title": "Neon", "props": { "appearance": {} } }',
+  );
   v9.prepare("INSERT INTO proposed_content(hash, source, css, json, compiled) VALUES (?, 'x', NULL, '{}', 'x')").run(hash);
   const block = v9.prepare("INSERT INTO iteration_block(session_id, n, block_id, hash) VALUES (?, ?, 'wheel/neon', ?)");
   for (const n of [1, 2]) block.run(fork, n, hash);
@@ -130,6 +141,7 @@ test("a version 9 store turns forks into branches: their iterations continue the
   request.run(fork, 2, body("darker again"), 2, t2, "sent", null, at);
   request.run(session, 1, body("warmer"), 3, t1, "sent", null, at);
   request.run(pending, 1, body("rounder"), 1, `pending:${pending}`, "sending", null, at);
+  request.run(same, 1, body("taller"), 1, t1, "sent", null, at);
   v9.close();
 
   const store = new Store(path);
@@ -157,6 +169,9 @@ test("a version 9 store turns forks into branches: their iterations continue the
   expect(store.requests(pending as SessionId).map((r) => [r.n, r.threadId, r.state])).toEqual([
     [1, t1, { state: "send_failed", error: "Brainstorm now keeps every branch on one thread; retry to send it there" }],
   ]);
+  expect(store.requests(same as SessionId).map((r) => [r.n, r.threadId, r.state]), "a fork on the root's thread waits beside the root's request too").toEqual([
+    [1, t1, { state: "send_failed", error: "Brainstorm now keeps every branch on one thread; retry to send it there" }],
+  ]);
   store.close();
 
   // The tree now has two open requests on one thread; the fork's waits for the root's.
@@ -169,6 +184,37 @@ test("a version 9 store turns forks into branches: their iterations continue the
     error: { code: "request_open", message: `branch ${session} has request 1 open on this thread; let it finish or withdraw it first`, n: 1 },
   });
   expect(bridge.sent).toEqual([]);
+
+  // Once the root's request closes, the waiting ones don't hold each other up: the first retried goes, and the
+  // others then wait for it.
+  expect(await service.act(session, { kind: "withdraw_request" })).toMatchObject({ ok: true });
+  expect(await service.act(fork as SessionId, { kind: "retry_request" })).toMatchObject({ ok: true });
+  expect(bridge.sent.map((m) => [m.thread, m.message.split("\n")[0]])).toEqual([[t1, `[brainstorm] session ${fork} · request 2 · scope: all · freetext: "darker again"`]]);
+  for (const waiting of [pending, same]) {
+    expect(await service.act(waiting as SessionId, { kind: "retry_request" })).toEqual({
+      ok: false,
+      error: { code: "request_open", message: `branch ${fork} has request 2 open on this thread; let it finish or withdraw it first`, n: 2 },
+    });
+  }
+  expect(bridge.sent).toHaveLength(1);
   service.close();
   await checker.close();
+});
+
+test("a version 9 fork that joins a lost root thread is lost too", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
+  seeded(path).close();
+  const v9 = new DatabaseSync(path);
+  v9.exec("DROP TABLE main_choice; DROP TABLE graft; DROP TABLE trashed; DROP TABLE primary_branch; PRAGMA user_version = 9;");
+  const fork = "s_fork0001";
+  v9.prepare("UPDATE attachment SET lost_at = ? WHERE session_id = ?").run(at, session);
+  v9.prepare("INSERT INTO session(id, project_id, title, brief, created_at) VALUES (?, 'p1', 'Darker', '', ?)").run(fork, at);
+  v9.prepare("INSERT INTO attachment(session_id, thread_id, attached_at) VALUES (?, ?, ?)").run(fork, t2, at);
+  v9.prepare("INSERT INTO iteration(session_id, n, thread_id, slots_json, created_at) VALUES (?, 1, ?, '[]', ?)").run(session, t1, at);
+  v9.prepare("INSERT INTO fork(session_id, parent_id, parent_n, baked_json, created_at) VALUES (?, ?, 1, '[]', ?)").run(fork, session, at);
+  v9.close();
+
+  const store = new Store(path);
+  expect(store.attachment(fork as SessionId)).toMatchObject({ threadId: t1, lostAt: at });
+  store.close();
 });

@@ -23,6 +23,7 @@ import {
   type InapplicableOverride,
   type IterationN,
   type IterationView,
+  isOpenRequest,
   type Marks,
   NO_MARKS,
   type Pin,
@@ -49,7 +50,7 @@ import { Filmstrip, FilmstripSkeleton, PastBar, type TrailPoint } from "./Histor
 import { AddSlotDialog } from "./AddSlot";
 import { ConfirmButton } from "./Confirm";
 import { PickComposer, PickSection } from "./Pick";
-import { approval, showingVariant, trashRefusal, withApproval, withPick, withTrash } from "../core/main";
+import { approval, liveMarks, showingVariant, trashRefusal, withApproval, withPick, withTrash } from "../core/main";
 import { HeldBar } from "./HeldBar";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
@@ -60,7 +61,7 @@ import { failedTitle, type Notice } from "./notice";
 import { PendingOverrides } from "./overrides";
 import { PresentControls } from "./PresentControls";
 import { WAITING } from "./Preview";
-import { AppSidebar, HomePanel, PanelActions, SessionPanel, type MarkHandlers } from "./Sidebar";
+import { AppSidebar, HomePanel, SessionPanel, type MarkHandlers } from "./Sidebar";
 import { RequestDetail } from "./Regenerate";
 import { settleUndoes, useSettleShortcut } from "./settle";
 import { SessionBar, TopBar } from "./TopBar";
@@ -120,8 +121,6 @@ type Past = {
   readonly marks: Marks;
 };
 
-/** A request is open until it lands, is withdrawn, or fails for good. */
-const isOpen = (state: string) => state === "sending" || state === "sent" || state === "send_failed";
 
 const NO_PLACEMENT: Placement = { placed: new Set(), detached: new Set() };
 const NO_SLOTS: readonly SlotView[] = [];
@@ -732,8 +731,11 @@ function SessionWorkspace({
   const pinBlocked = iteration === null ? "There is nothing on the canvas to pin yet" : past !== null ? "Back to latest to pin a comment" : unrendered;
 
   // Rob's marks (ADR 009): the stored ones at the latest, and the window's own on a past iteration.
-  const marks = past !== null ? past.marks : (view?.marks ?? NO_MARKS);
-  const confirmOpen = past === null && view?.request != null && view.request.request.scope.kind === "confirm" && isOpen(view.request.request.state.state);
+  // What the sidebar and Confirm show: the service already reads its marks live, and the past's local marks are read the
+  // same way, so a graft whose Main was taken back waits out of sight there too. The raw ones stay in `past`, where
+  // choosing a Main again brings the graft back.
+  const marks = past !== null ? liveMarks(past.marks, iteration?.slots ?? NO_SLOTS) : (view?.marks ?? NO_MARKS);
+  const confirmOpen = past === null && view?.request != null && view.request.request.scope.kind === "confirm" && isOpenRequest(view.request.request.state.state);
   const marksBlocked = confirmOpen ? "The confirm is with the agent, so its marks hold until it lands or you withdraw it" : null;
   const pickBlocked = iteration === null ? "There is nothing on the canvas to pick from yet" : (marksBlocked ?? unrendered);
   // Confirm and Add slot send to the thread, so they wait while it is busy or gone, like any request.
@@ -786,7 +788,6 @@ function SessionWorkspace({
     return true;
   };
   const [addingSlot, setAddingSlot] = useState(false);
-  const panelActions = useMemo(() => ({ onMakePrimary: () => void send({ kind: "make_primary" }) }), [send]);
   const picking = interaction.kind === "picking" ? interaction.for : null;
   const scene = useMemo<MirrorScene>(
     () => ({
@@ -871,7 +872,7 @@ function SessionWorkspace({
     <Shell
       sidebar={sidebar(
         homePanel ?? (
-          <PanelActions.Provider value={panelActions}>
+          <>
             <SessionPanel
               view={view}
               slots={slots}
@@ -885,6 +886,7 @@ function SessionWorkspace({
               onSlot={setSelectedSlot}
               onVariant={onVariant}
               onAddSlot={() => setAddingSlot(true)}
+              onMakePrimary={() => void send({ kind: "make_primary" })}
               marking={marksBlocked === null ? { ...markHandlers, blocked: null } : { blocked: marksBlocked }}
               confirm={
                 <ConfirmButton
@@ -903,7 +905,7 @@ function SessionWorkspace({
               onOpenChange={setAddingSlot}
               onSend={async (prompt) => (await send({ kind: "add_slot", prompt })) !== null}
             />
-          </PanelActions.Provider>
+          </>
         ),
       )}
       bar={

@@ -37,6 +37,7 @@ import type {
   VariantKey,
   Issue,
 } from "./types";
+import { OPEN_REQUEST_STATES } from "./types";
 import type { SystemManifest } from "./system/model";
 import type { SystemSource } from "./system/source";
 import { contentHash } from "./workingCopy";
@@ -162,24 +163,34 @@ function forksBecomeBranches(db: DatabaseSync): void {
     db.prepare("UPDATE feedback_event SET iteration = iteration + ? WHERE session_id = ? AND iteration IS NOT NULL").run(by, session);
     db.prepare("UPDATE fork SET parent_n = parent_n + ? WHERE parent_id = ?").run(by, session);
   };
+  // Which sessions have an open request, read once: the rewrite below keeps a request open, so the answer holds.
+  const open = new Set((db.prepare(`SELECT DISTINCT session_id FROM request WHERE ${OPEN_REQUEST}`).all() as Row[]).map((r) => str(r.session_id)));
   const ordered = [...parentOf.keys()].sort((a, b) => depth(a) - depth(b));
   for (const id of ordered) {
     // Read again: the parent's renumbering moved parent_n.
     const row = db.prepare("SELECT parent_n FROM fork WHERE session_id = ?").get(id) as Row;
     shift(id, num(row.parent_n));
     const root = rootOf(id);
-    const thread = db.prepare("SELECT thread_id FROM attachment WHERE session_id = ? AND detached_at IS NULL").get(root) as Row | undefined;
+    const shared = db.prepare("SELECT thread_id, lost_at FROM attachment WHERE session_id = ? AND detached_at IS NULL").get(root) as Row | undefined;
     const mine = db.prepare("SELECT thread_id FROM attachment WHERE session_id = ? AND detached_at IS NULL").get(id) as Row | undefined;
-    if (thread === undefined || mine === undefined || str(mine.thread_id) === str(thread.thread_id)) continue;
-    const at = new Date().toISOString();
-    db.prepare("UPDATE attachment SET detached_at = ? WHERE session_id = ? AND detached_at IS NULL").run(at, id);
-    db.prepare("INSERT INTO attachment(session_id, thread_id, attached_at) VALUES (?, ?, ?)").run(id, str(thread.thread_id), at);
-    // A request still waiting on the fork's own thread goes to the shared one, by Rob's retry.
+    if (shared === undefined || mine === undefined) continue;
+    const thread = str(shared.thread_id);
+    const moved = str(mine.thread_id) !== thread;
+    if (moved) {
+      const at = new Date().toISOString();
+      db.prepare("UPDATE attachment SET detached_at = ? WHERE session_id = ? AND detached_at IS NULL").run(at, id);
+      // The fork joins the root's thread as it is, lost included, so it never reads as healthy on a thread that's gone.
+      db.prepare("INSERT INTO attachment(session_id, thread_id, attached_at, lost_at) VALUES (?, ?, ?, ?)").run(id, thread, at, strOrNull(shared.lost_at));
+    }
+    // The shared thread takes one request at a time. A request still waiting on the fork's own thread, or open beside
+    // another branch's on the same one, waits for Rob's retry; the retry looks for its marker first, so none goes twice.
+    const crowded = [...open].some((other) => other !== id && rootOf(other) === root);
+    if (!moved && !crowded) continue;
     db.prepare(
       `UPDATE request SET thread_id = ?, state = 'send_failed',
          error = 'Brainstorm now keeps every branch on one thread; retry to send it there'
-       WHERE session_id = ? AND state IN ('sending','sent','send_failed')`,
-    ).run(str(thread.thread_id), id);
+       WHERE session_id = ? AND ${OPEN_REQUEST}`,
+    ).run(thread, id);
   }
 }
 
@@ -206,7 +217,7 @@ function dropVariantNotes(db: DatabaseSync): void {
   db.exec("ALTER TABLE block_content DROP COLUMN about");
 }
 
-const OPEN_REQUEST = `state IN ('sending','sent','send_failed')`;
+const OPEN_REQUEST = `state IN (${OPEN_REQUEST_STATES.map((s) => `'${s}'`).join(",")})`;
 
 type Row = Record<string, unknown>;
 
@@ -692,15 +703,6 @@ export class Store {
         ids,
         JSON.stringify(slots),
       );
-    });
-  }
-
-  /** A confirm's iteration landed, so the marks it carried are spent. */
-  clearMarks(session: SessionId): void {
-    this.tx(() => {
-      this.#run("DELETE FROM main_choice WHERE session_id = ?", session);
-      this.#run("DELETE FROM graft WHERE session_id = ?", session);
-      this.#run("DELETE FROM trashed WHERE session_id = ?", session);
     });
   }
 

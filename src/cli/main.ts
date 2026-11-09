@@ -272,7 +272,7 @@ function varyLines(scope: VaryScope): string[] {
 }
 
 /** What a confirm asks, spelled out: graft each element into its slot's Main, then delete every dropped variant. */
-function confirmLines(scope: ConfirmScope): string[] {
+function confirmAgentLines(scope: ConfirmScope): string[] {
   return [
     ...scope.mains.map((m) => `  main of slot ${m.slot}: ${m.slot}/${m.variant}`),
     ...scope.grafts.map((g) => {
@@ -317,7 +317,7 @@ function contextLines(c: AgentContext): string[] {
       : [
           `request ${r.n} · base ${r.base ?? "none"} · scope: ${scopeText(r.scope)}${r.freetext === null ? "" : ` · freetext: ${JSON.stringify(r.freetext)}`}`,
           ...(r.scope.kind === "vary" ? varyLines(r.scope) : []),
-          ...(r.scope.kind === "confirm" ? confirmLines(r.scope) : []),
+          ...(r.scope.kind === "confirm" ? confirmAgentLines(r.scope) : []),
           ...(r.scope.kind === "add_slot" ? ["  add_slot: add one new slot to brainstorm.json with its variants, as the freetext asks; change no existing block"] : []),
           ...r.feedback.map(feedbackLine),
           ...r.overrides.map((o) => `  override ${o.blockId} ${o.prop} = ${JSON.stringify(o.value)}`),

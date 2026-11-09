@@ -55,7 +55,7 @@ and history origin.
   `override_dropped` or `pin_lost`.
 
 A confirm clears the marks it carried once its iteration lands. While it is open, the marks stay as they were sent and
-Rob can't change them.
+Rob can't change them. A graft still waiting for its slot's Main was never part of the confirm, so it stays.
 
 When its iteration lands, a confirm also lets go of what belonged to the variants it dropped: Rob's settings on them,
 and his open pins, which are deleted as when he deletes one. No later request asks the agent about a block that is
@@ -77,7 +77,9 @@ working per branch without change.
 
 - **Making one.** Going back in history and confirming there makes a branch. Rob can 👍, pick and trash on the past
   iteration (kept in the renderer, as ADR 005's past picks are), and Confirm reads "Confirm as a branch". The branch's
-  first iteration is that iteration narrowed by the marks, with Rob's settings baked in as defaults, as a fork's was.
+  first iteration is that iteration with Rob's settings baked in as defaults, as a fork's was, on the thread the tree
+  shares. Without grafts it is narrowed by the marks too. With grafts it starts un-narrowed and carries the marks,
+  since the agent merges from the graft sources and must still have them; the agent's commit does the narrowing.
   With grafts, its request 1 is the confirm and goes to the thread; without, the app answers it: request 1 is the
   confirm, fulfilled by the branch's first iteration, so that iteration reads as the confirm in the strip and the top
   bar. With an instruction and no grafts, request 1 is the instruction instead, and the first iteration reads as the
@@ -87,7 +89,7 @@ working per branch without change.
   an adopt or a refresh writes the same thread to every session in the tree. Only one request is open per brainstorm,
   since one thread works on one thing at a time. A branch starts no thread of its own.
 - **Numbering.** A branch continues its source's numbers: a branch from iteration 3 starts at 4, so a trail reads
-  1, 2, 3, 4 whichever branch it ends on. Migration 11 renumbers existing forks the same way, and a request still open on an old fork's own thread becomes send failed, since the fork now shares its tree's thread.
+  1, 2, 3, 4 whichever branch it ends on. Migration 11 renumbers existing forks the same way, and a request still open on an old fork's own thread becomes send failed, since the fork now shares its tree's thread. So does a fork's open request beside another open one in its tree, whatever thread it was on. A fork that joins a lost root thread is lost too.
 - **Primary.** One branch is primary: the trail leading to the final design. It is the root until Rob presses **Make
   primary** on another, which sits on the branch's line in the sidebar ("Branch from iteration 3 · Make primary").
   The `primary_branch` row records it. The primary's strip shows its whole trail, its ancestors' iterations up to each
@@ -123,8 +125,10 @@ while a request is open. It is also the way back from a lost thread, in place of
 Once the new thread has started, the app reads the brainstorm's open requests again, since one may have opened or been
 withdrawn while T3 started it, and moves every one still open to the new thread. A withdrawn request stays withdrawn.
 The thread takes one request at a time, so the branch's own request is sent, or the first one when it has none, and
-any other waits as send failed for Rob's retry. One start runs per brainstorm at a time; a second press while it runs
-is refused.
+any other waits as send failed for Rob's retry. Only a request being sent to the thread, or queued or worked there,
+holds it; one waiting as send failed, or whose run ended, holds nothing. So of several waiting requests the first one
+retried goes, and the others wait for it. One start runs per brainstorm at a time; a second press while it runs is
+refused.
 
 ## Alternatives not taken
 

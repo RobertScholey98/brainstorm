@@ -347,7 +347,10 @@ function RunPicker({ runs, run, now, onRun }: { runs: readonly Run[]; run: Run; 
                       {`Iteration ${first.n}${r.entries.length > 1 ? `–${r.entries.at(-1)!.n}` : ""} · ${age(first.createdAt, now)}`}
                     </span>
                   </span>
-                  <Truncate className="max-w-menu text-xs text-fg-muted">{originText(first.origin)}</Truncate>
+                  {/* What the run kept and dropped is what tells one confirm from another, so it wraps rather than cuts. */}
+                  <span className="max-w-picker text-xs text-pretty text-fg-muted" data-run-summary>
+                    {originText(first.origin)}
+                  </span>
                 </span>
               </SelectItem>
             );

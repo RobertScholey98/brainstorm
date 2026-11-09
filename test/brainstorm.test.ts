@@ -697,6 +697,17 @@ describe("request phases", () => {
     expect(bridge.sent.map((m) => [m.thread, m.message.split("\n")[0]])).toEqual([
       [fresh, `[brainstorm] session ${F} · request 1 · branch of ${S} iteration 2 · scope: all · feedback: #1 #2 #3 · freetext: "Try a slot machine"`],
     ]);
+
+    // Once the branch's request closes, the waiting one goes, and the branch's next request waits for it in turn.
+    expect((await phaseOf(service, S))?.actions, "no Retry while the branch's request holds the thread").toEqual(["open_thread", "withdraw"]);
+    data(await service.act(F, { kind: "withdraw_request" }));
+    expect((await phaseOf(service, S))?.actions).toEqual(["retry", "open_thread", "withdraw"]);
+    data(await service.act(S, { kind: "retry_request" }));
+    expect(bridge.sent.at(-1)).toMatchObject({ thread: fresh, message: expect.stringMatching(new RegExp(`^\\[brainstorm\\] session ${S} · request 1 · scope: all\\n`)) });
+    expect(await service.act(F, { kind: "regenerate", scope: { kind: "all" }, freetext: "again" })).toEqual({
+      ok: false,
+      error: { code: "request_open", message: `branch ${S} has request 1 open on this thread; let it finish or withdraw it first`, n: 1 },
+    });
   });
 
   test("sending, and startup reconciliation of a send that never finished", async () => {
@@ -1151,9 +1162,60 @@ describe("marks and confirm", () => {
       Object.entries(copy(2, { "wheel/neon-two": { tsx: neonTsx, json: neonJson } })).filter(([path]) => !path.startsWith("slots/wheel/neon/")),
     );
     const lost = data(await other.commit({ session: S, thread: T1, files: renamed, addresses: [], note: null }));
-    expect(lost.warnings.filter((w) => w.code === "confirm_mismatch").map((w) => w.message)).toEqual([
-      "request 1 keeps wheel/neon as Main, and this commit no longer has it",
+    expect(lost.warnings.filter((w) => w.code === "confirm_mismatch").map((w) => [w.code, w.message]), "the new id sits beside a Main that is gone").toEqual([
+      ["confirm_mismatch", "request 1 keeps only Main in slot wheel, and this commit has wheel/neon-two beside it"],
+      ["confirm_mismatch", "request 1 keeps wheel/neon as Main, and this commit no longer has it"],
     ]);
+  });
+
+  test("a confirm's commit warns, once each, of a variant beside Main and of a Main renamed in title only", async () => {
+    const confirmed = async () => {
+      const ctx = await withTwoWheels();
+      data(await ctx.service.act(S, { kind: "approve", blockId: NEON }));
+      data(await ctx.service.act(S, { kind: "add_graft", from: { blockId: CALM, part: SPIN }, into: WHEEL, instruction: null }));
+      data(await ctx.service.act(S, { kind: "confirm" }));
+      return ctx.service;
+    };
+    const service = await confirmed();
+    const beside = data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/reel": { tsx: neonTsx, json: slotReelJson } }), addresses: [], note: null }));
+    expect(beside.warnings.map((w) => [w.code, w.message])).toEqual([
+      ["confirm_mismatch", "request 1 keeps only Main in slot wheel, and this commit has wheel/reel beside it"],
+    ]);
+
+    const other = await confirmed();
+    const retitled = { tsx: neonTsx, json: JSON.stringify({ title: "Neon wheel two", props: wheelProps }) };
+    const renamed = data(await other.commit({ session: S, thread: T1, files: copy(2, { "wheel/neon": retitled }), addresses: [], note: null }));
+    expect(renamed.warnings.map((w) => [w.code, w.message])).toEqual([
+      ["confirm_mismatch", 'wheel/neon is titled "Neon wheel two"; request 1 keeps it as Main titled "Neon wheel"'],
+    ]);
+  });
+
+  test("a confirm keeps a graft waiting for its slot's Main, on the app's path and the agent's", async () => {
+    const waiting = async () => {
+      const ctx = await withTwoWheels();
+      const calm = { tsx: neonTsx, json: calmJson };
+      data(await ctx.service.commit({ session: S, thread: T1, files: copy(2, { "wheel/calm": calm, "wheel/reel": { tsx: neonTsx, json: slotReelJson } }), addresses: [], note: null }));
+      data(await ctx.service.act(S, { kind: "trash", blockId: REEL }));
+      // The graft waits, unread, once its slot's Main is taken back.
+      data(await ctx.service.act(S, { kind: "approve", blockId: NEON }));
+      data(await ctx.service.act(S, { kind: "add_graft", from: { blockId: CALM, part: SPIN }, into: WHEEL, instruction: null }));
+      data(await ctx.service.act(S, { kind: "approve", blockId: NEON }));
+      return ctx.service;
+    };
+    const service = await waiting();
+    data(await service.act(S, { kind: "confirm" }));
+    const view = data(await service.view(S));
+    expect([view.iteration?.n, view.iteration?.slots[0]?.variants, view.marks]).toEqual([4, ["calm", "neon"], NONE]);
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    expect(data(await service.view(S)).marks.grafts.map((g) => [g.from.blockId, g.into]), "the waiting graft is still there").toEqual([[CALM, "wheel"]]);
+
+    const agent = await waiting();
+    data(await agent.act(S, { kind: "add_graft", from: { blockId: NEON, part: SPIN }, into: "result" as SlotId, instruction: null }));
+    data(await agent.act(S, { kind: "confirm" }));
+    data(await agent.commit({ session: S, thread: T1, files: copy(3, { "wheel/calm": { tsx: neonTsx, json: calmJson } }), addresses: [], note: null }));
+    expect(data(await agent.view(S)).marks, "the pick into the result sheet is spent").toEqual(NONE);
+    data(await agent.act(S, { kind: "approve", blockId: NEON }));
+    expect(data(await agent.view(S)).marks.grafts.map((g) => [g.from.blockId, g.into])).toEqual([[CALM, "wheel"]]);
   });
 
   test("a pick into a slot with no Main makes the variant that shows its Main", async () => {
@@ -1394,8 +1456,32 @@ describe("branches", () => {
       ok: false,
       error: { code: "invalid_action", message: "say what the branch should try, or mark what it keeps" },
     });
+    const graft = (from: BlockId, into: string) => ({ ...KEEP_NEON, grafts: [{ id: 1 as GraftId, from: { blockId: from, part: SPIN }, into: into as SlotId, instruction: null }] });
+    expect(await service.fork(S, { from: 2 as IterationN, marks: graft(CALM, "footer"), instruction: null }), "a graft into a slot the iteration lacks").toEqual({
+      ok: false,
+      error: { code: "not_found", entity: "block", message: "slot footer is not in iteration 2" },
+    });
+    expect(await service.fork(S, { from: 2 as IterationN, marks: graft(REEL, "wheel"), instruction: null }), "a graft from a block it lacks").toEqual({
+      ok: false,
+      error: { code: "not_found", entity: "block", message: "wheel/reel is not in iteration 2" },
+    });
+    expect(
+      await service.fork(S, { from: 2 as IterationN, marks: { ...NONE, mains: { ["result" as SlotId]: "neon" as VariantKey } }, instruction: null }),
+      "a Main naming a variant from another slot",
+    ).toEqual({
+      ok: false,
+      error: { code: "not_found", entity: "block", message: "result/neon is not in iteration 2" },
+    });
     expect(bridge.sent.length).toBe(0);
     expect(data(await service.view(S)).history.forks).toEqual([]);
+  });
+
+  test("a branch's first iteration is on the thread the tree shares, not the one its source was made on", async () => {
+    const { service } = await withPastTwoWheels();
+    data(await service.attach({ ref: S, thread: T2 }));
+    data(await service.fork(S, { from: 2 as IterationN, marks: KEEP_NEON, instruction: null }));
+    expect(data(await service.iteration(S, 2 as IterationN)).threadId).toBe(T1);
+    expect(data(await service.view(F)).iteration?.threadId).toBe(T2);
   });
 
   test("a variant that doesn't render with Rob's settings baked in refuses the branch", async () => {
@@ -1523,6 +1609,21 @@ describe("vary", () => {
     expect(marks.grafts.map(({ from, into, instruction }) => ({ from, into, instruction }))).toEqual([{ from: { blockId: option, part: "spin-button" }, into: "wheel", instruction: null }]);
     data(await service.act(S, { kind: "approve", blockId: option }));
     expect(data(await service.view(S)).marks.grafts).toEqual([]);
+  });
+
+  test("a vary option a confirm dropped is forgotten, so a later variant with its key becomes Main on a 👍", async () => {
+    const { service } = await withIteration();
+    data(await service.act(S, { kind: "vary", target: { blockId: NEON, part: "spin-button" as PartName }, count: 1, direction: null }));
+    data(await service.commit({ session: S, thread: T1, files: copy(1, { "wheel/spin-button-a": { tsx: spinTsx("a"), json: spinJson("Spin button A") } }), addresses: [], note: null }));
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    data(await service.act(S, { kind: "confirm" }));
+    const reused = "wheel/spin-button-a" as BlockId;
+    data(await service.commit({ session: S, thread: T1, files: copy(3, { [reused]: { tsx: spinTsx("unrelated"), json: spinJson("Unrelated") } }), addresses: [], note: null }));
+    expect(data(await service.view(S)).iteration?.blocks.find((b) => b.id === reused)?.variedFrom).toBe(null);
+
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    data(await service.act(S, { kind: "approve", blockId: reused }));
+    expect(data(await service.view(S)).marks).toEqual({ mains: { wheel: "spin-button-a" }, grafts: [], trashed: [] });
   });
 
   test("a whole-block vary is named after the block, and the count is held to 1 to 6", async () => {

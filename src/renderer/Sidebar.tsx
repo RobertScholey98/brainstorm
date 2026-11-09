@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, Component, CornerDownRight, GitBranch, LayoutGrid, Plus, ThumbsUp, Trash2, Undo2, X } from "lucide-react";
-import { createContext, useContext, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectSeparator, SelectTrigger } from "@/components/ui/select";
 import { cn } from "cn";
@@ -326,6 +326,7 @@ export function SessionPanel({
   onSlot,
   onVariant,
   onAddSlot,
+  onMakePrimary,
   marking,
   confirm,
 }: {
@@ -344,6 +345,7 @@ export function SessionPanel({
   onSlot: (slot: SlotId) => void;
   onVariant: (slot: SlotId, variant: VariantKey) => void;
   onAddSlot: () => void;
+  onMakePrimary: () => void;
   /** Held while the marks can't change (a confirm is open); the reason shows on the buttons. */
   marking: Marking;
   /** Confirm, at the panel's foot. */
@@ -385,7 +387,7 @@ export function SessionPanel({
       ) : (
         <>
           <SlotPicker slots={slots} slot={slot} marks={marks} onSlot={onSlot} onAddSlot={onAddSlot} canAdd={past === null} />
-          {view.session.id !== view.tree.primary && <BranchLine view={view} />}
+          {view.session.id !== view.tree.primary && <BranchLine view={view} onOpen={onOpen} onMakePrimary={onMakePrimary} />}
           <SlotMarks
             key={slot.id}
             slot={slot}
@@ -466,34 +468,33 @@ function SlotPicker({
   );
 }
 
-/** A branch that isn't the primary, the first line included once another took its place: what it is, and Make primary. */
-function BranchLine({ view }: { view: SessionView }) {
+/**
+ * A branch that isn't the primary, the first line included once another took its place: where it left from, which opens
+ * that line, and Make primary.
+ */
+function BranchLine({ view, onOpen, onMakePrimary }: { view: SessionView; onOpen: (id: SessionId) => void; onMakePrimary: () => void }) {
+  const back =
+    view.fork === null
+      ? { text: "The first line, now an offshoot", hint: "Open the main line", to: view.tree.primary }
+      : { text: `Branch from iteration ${view.fork.from}`, hint: `Open ${view.fork.parent.title}, the line this branch left`, to: view.fork.parent.id };
   return (
     <SidebarGroup className="py-1" data-branch-line={view.session.id}>
-      <div className="flex min-h-8 items-center gap-2 rounded-md bg-muted px-2 py-1.5 text-xs text-fg-muted">
-        <GitBranch aria-hidden className="size-3.5 shrink-0" />
-        <Truncate className="flex-1">{view.fork === null ? "The first line, now an offshoot" : `Branch from iteration ${view.fork.from}`}</Truncate>
-        <MakePrimary />
+      <div className="flex min-h-8 items-center gap-1 rounded-md bg-muted py-1 pr-1 pl-0.5 text-xs text-fg-muted">
+        <Hint label={back.hint} side="right">
+          <Button variant="ghost" size="xs" className="mr-auto min-w-0" onClick={() => onOpen(back.to)} data-branch-back={back.to}>
+            <GitBranch data-icon="inline-start" aria-hidden />
+            <Truncate>{back.text}</Truncate>
+          </Button>
+        </Hint>
+        <Hint label="Make this branch the brainstorm's main line" side="right">
+          <Button variant="outline" size="xs" onClick={onMakePrimary} data-make-primary>
+            Make primary
+          </Button>
+        </Hint>
       </div>
     </SidebarGroup>
   );
 }
-
-/** Make primary is the session's own action, sent through the panel's context so the line needs no handler threading. */
-function MakePrimary() {
-  const act = useContext(PanelActions);
-  if (act === null) throw new Error("MakePrimary needs PanelActions");
-  return (
-    <Hint label="Make this branch the brainstorm's main line" side="right">
-      <Button variant="outline" size="xs" onClick={act.onMakePrimary} data-make-primary>
-        Make primary
-      </Button>
-    </Hint>
-  );
-}
-
-/** The session panel's actions that reach past it. App provides them; a panel rendered without them is a wiring bug. */
-export const PanelActions = createContext<{ onMakePrimary: () => void } | null>(null);
 
 /** What a mark can do: the handlers while marking is open, or why it is held. */
 export type Marking = (MarkHandlers & { blocked: null }) | { blocked: string };
@@ -541,10 +542,10 @@ function SlotMarks({
       />
     );
   };
+  // Up and down move across both lists as one, Main's row then the options', while each list is its own radio group so
+  // a screen reader meets only radios in it; the grafts and the trashed fold are lists of their own.
   return (
     <div
-      role="radiogroup"
-      aria-label={`${slot.title} variant`}
       className="flex flex-col"
       onKeyDown={(e) => {
         const next = arrowFocus(e, "[data-variant]")?.dataset.variant;
@@ -554,18 +555,22 @@ function SlotMarks({
     >
       <SidebarGroup data-main-group>
         <SidebarGroupLabel>Main</SidebarGroupLabel>
-        <SidebarMenu>
-          {main === null ? (
-            <li className="px-2 py-1.5 text-xs text-fg-muted" data-main-empty>
-              Give a design a <ThumbsUp aria-label="thumbs up" className="inline size-3 align-text-bottom" /> to make it Main
-            </li>
-          ) : (
-            row(main, "main")
-          )}
-          {grafts.map((g) => (
-            <GraftRow key={g.id} graft={g} source={blocks.get(g.from.blockId)} marking={marking} />
-          ))}
-        </SidebarMenu>
+        {main === null ? (
+          <p className="px-2 py-1.5 text-xs text-fg-muted" data-main-empty>
+            Give a design a <ThumbsUp aria-label="thumbs up" className="inline size-3 align-text-bottom" /> to make it Main
+          </p>
+        ) : (
+          <SidebarMenu role="radiogroup" aria-label={`${slot.title}'s Main`}>
+            {row(main, "main")}
+          </SidebarMenu>
+        )}
+        {grafts.length > 0 && (
+          <SidebarMenu aria-label="Going into Main">
+            {grafts.map((g) => (
+              <GraftRow key={g.id} graft={g} source={blocks.get(g.from.blockId)} marking={marking} />
+            ))}
+          </SidebarMenu>
+        )}
       </SidebarGroup>
       {options.length > 0 && (
         <SidebarGroup data-options-group>
@@ -573,7 +578,9 @@ function SlotMarks({
             Options
             <Count className="ml-auto">{options.length}</Count>
           </SidebarGroupLabel>
-          <SidebarMenu>{options.map((v) => row(v, "option"))}</SidebarMenu>
+          <SidebarMenu role="radiogroup" aria-label={`${slot.title}'s options`}>
+            {options.map((v) => row(v, "option"))}
+          </SidebarMenu>
         </SidebarGroup>
       )}
       {trashed.length > 0 && <TrashedFold slot={slot} variants={trashed} blocks={blocks} marking={marking} />}
@@ -603,7 +610,8 @@ function VariantRow({
 }) {
   const active = variant === slot.active;
   const title = block?.title ?? variant;
-  // The only variant left is Main without a 👍, so its thumb reads pressed and says why there is nothing to undo.
+  // The only variant left is Main without a 👍: its thumb shows, held and unfilled, so it doesn't read as a choice Rob
+  // made, and its name says why there is nothing to press.
   const implicit = role === "main" && marks.mains[slot.id] === undefined;
   const verdict = block === undefined ? null : approval(slot, block, marks);
   const trashBlock = trashRefusal(slot, variant, marks);
@@ -618,8 +626,16 @@ function VariantRow({
           : verdict.kind === "graft"
             ? `Bring ${elementName(verdict.from, block)} into Main`
             : `Take ${elementName(verdict.graft.from, block)} back out of Main`;
-  const pressed = implicit || verdict?.kind === "unmain" || verdict?.kind === "ungraft";
+  const pressed = verdict?.kind === "unmain" || verdict?.kind === "ungraft";
   const blocked = marking.blocked;
+  // A 👍 moves its row between Main and the options, which mounts it anew in the other list; the 👍 that had focus
+  // takes it back there, so the keyboard isn't dropped to the page.
+  const thumb = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    if (refocus !== variant) return;
+    refocus = null;
+    thumb.current?.focus();
+  }, [variant]);
   return (
     <SidebarMenuItem data-variant-row={variant} data-variant-role={role}>
       <SidebarMenuButton
@@ -661,7 +677,7 @@ function VariantRow({
       <div
         className={cn(
           "absolute top-1 right-0 flex transition-opacity md:opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100",
-          (active || pressed) && "md:opacity-100",
+          (active || pressed || implicit) && "md:opacity-100",
         )}
         data-marks
       >
@@ -671,7 +687,12 @@ function VariantRow({
             reason={blocked}
             blocked={blocked !== null || implicit}
             pressed={pressed}
-            onClick={() => blocked === null && !implicit && block !== undefined && marking.onApprove(block)}
+            onClick={() => {
+              if (blocked !== null || implicit || block === undefined) return;
+              if (thumb.current === document.activeElement) refocus = variant;
+              marking.onApprove(block);
+            }}
+            ref={thumb}
             data-approve={variant}
             data-approve-kind={verdict.kind}
           >
@@ -694,6 +715,9 @@ function VariantRow({
   );
 }
 
+/** The variant whose focused 👍 just moved its row, until the row mounts in its new list and takes focus back. */
+let refocus: VariantKey | null = null;
+
 /**
  * A row's 24 px icon action. Its name is always what it does, so a screen reader tells 👍 from 🗑 even while they are
  * held; when it can't act, the hint shows why and the reason is its description.
@@ -704,6 +728,7 @@ function RowMark({
   blocked,
   pressed,
   onClick,
+  ref,
   children,
   ...data
 }: {
@@ -712,11 +737,13 @@ function RowMark({
   blocked: boolean;
   pressed?: boolean;
   onClick: () => void;
+  ref?: Ref<HTMLButtonElement>;
   children: ReactNode;
 } & Record<`data-${string}`, string | undefined>) {
   return (
     <Hint label={reason ?? label} side="right">
       <Button
+        ref={ref}
         variant="ghost"
         size="icon-xs"
         aria-label={label}
