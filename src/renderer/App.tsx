@@ -51,7 +51,7 @@ import { AddSlotDialog } from "./AddSlot";
 import { ConfirmButton } from "./Confirm";
 import { PickComposer, PickSection } from "./Pick";
 import { liveMarks, showingVariant } from "../core/main";
-import { markPast, type PastMark } from "./pastMarks";
+import { hasPastMarks, markPast, type PastMark } from "./pastMarks";
 import { HeldBar } from "./HeldBar";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
@@ -743,6 +743,9 @@ function SessionWorkspace({
   const pickBlocked = iteration === null ? "There is nothing on the canvas to pick from yet" : (marksBlocked ?? unrendered);
   // Confirm and Add slot send to the thread, so they wait while it is busy or gone, like any request.
   const sendBlocked = view !== null && !view.regenerate.ok && view.regenerate.reason !== "no_iteration" ? blockedMessage(view.regenerate.reason, view.request?.request.n) : null;
+  // A confirm the app writes itself, with no grafts (and on a branch no instruction), needs no thread, so a lost thread
+  // holds Confirm only for what goes to the agent. An open request in the brainstorm still holds it all (ADR 009).
+  const threadLost = view !== null && !view.regenerate.ok && view.regenerate.reason === "thread_lost" ? sendBlocked : null;
   const shownSlots = iteration?.slots ?? NO_SLOTS;
   // On a past iteration the window keeps the marks itself (`pastMarks.ts`); a refusal shows as the service's would.
   const markPastIteration = (mark: PastMark, action: RobAction): boolean => {
@@ -892,7 +895,8 @@ function SessionWorkspace({
                   blocks={blocks}
                   marks={marks}
                   past={readOnly}
-                  blocked={iteration === null ? WAITING : (marksBlocked ?? sendBlocked)}
+                  blocked={iteration === null ? WAITING : (marksBlocked ?? (threadLost === null ? sendBlocked : null))}
+                  lost={threadLost}
                   onConfirm={confirm}
                 />
               }
@@ -952,7 +956,7 @@ function SessionWorkspace({
             }
           />
         )}
-        {past !== null && <PastBar n={past.n} onLatest={showLatest} />}
+        {past !== null && <PastBar n={past.n} marked={hasPastMarks(past)} onLatest={showLatest} />}
         <section
           ref={canvasArea}
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-canvas"

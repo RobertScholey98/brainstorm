@@ -21,6 +21,10 @@ export type PastMark =
   | { readonly kind: "remove_graft"; readonly graft: GraftId }
   | { readonly kind: "pick"; readonly from: Pin; readonly into: SlotId; readonly instruction: string | null };
 
+/** Whether Rob has marked anything on the past iteration: what goes when he leaves it, unless he confirms a branch. */
+export const hasPastMarks = ({ marks }: PastMarks): boolean =>
+  Object.keys(marks.mains).length > 0 || marks.grafts.length > 0 || marks.trashed.length > 0;
+
 /**
  * The past's marks after one of Rob's, or why it is refused, or null when the slot it names isn't in the iteration and
  * there is nothing to do.

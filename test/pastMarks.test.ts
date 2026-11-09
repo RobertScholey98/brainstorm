@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { BlockId, GraftId, Marks, PartName, Pin, SlotId, VariantKey } from "../src/core/types";
-import { markPast, type PastMarks, type PastSlot } from "../src/renderer/pastMarks";
+import { hasPastMarks, markPast, type PastMarks, type PastSlot } from "../src/renderer/pastMarks";
 
 const v = (k: string) => k as VariantKey;
 const wheel: PastSlot = { id: "wheel" as SlotId, variants: [v("neon"), v("calm"), v("spin-a")], active: v("neon") };
@@ -87,5 +87,15 @@ describe("marks on a past iteration", () => {
   test("a mark on a slot the iteration doesn't have does nothing", () => {
     expect(markPast(fresh, slots, { kind: "approve", block: { ...block("calm"), slot: "gone" as SlotId } })).toBe(null);
     expect(markPast(fresh, slots, { kind: "pick", from: { blockId: "result/sheet" as BlockId, part: null }, into: "gone" as SlotId, instruction: null })).toBe(null);
+  });
+
+  test("the past is marked once Rob has made a Main, trashed or grafted there, and not once he takes the marks back", () => {
+    expect(hasPastMarks(fresh)).toBe(false);
+    expect(hasPastMarks({ marks: NONE, picks: { wheel: v("calm") } }), "showing another variant is no mark").toBe(false);
+    expect(hasPastMarks(after({ kind: "approve", block: block("calm") }))).toBe(true);
+    expect(hasPastMarks(after({ kind: "trash", block: block("calm") }))).toBe(true);
+    expect(hasPastMarks(after({ kind: "pick", from: { blockId: "result/sheet" as BlockId, part: null }, into: wheel.id, instruction: null }))).toBe(true);
+    expect(hasPastMarks(after({ kind: "approve", block: block("calm") }, { kind: "approve", block: block("calm") })), "a second 👍 undoes the first").toBe(false);
+    expect(hasPastMarks(after({ kind: "trash", block: block("calm") }, { kind: "restore", block: block("calm").id })), "a restore undoes a trash").toBe(false);
   });
 });

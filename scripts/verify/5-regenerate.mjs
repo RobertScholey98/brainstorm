@@ -523,6 +523,101 @@ try {
   await window.waitForSelector('[data-slot="tooltip-content"]', { state: "detached" });
   await shot(window, shots, "9-fresh-thread");
 
+  // A confirm the app writes itself asks nothing of the thread, so a lost thread holds Confirm only for what goes to the
+  // agent (ADR 009). A second brainstorm, whose thread is gone while no request is open in it, shows both.
+  const LOST = "44444444-4444-4444-8444-444444444444";
+  t3.addThread(LOST, { projectId: "chore-roulette", title: "Lost thread" });
+  const { session: stranded } = seedDemo(home, { T3CODE_THREAD_ID: LOST });
+  t3.setMissing(LOST, true);
+  await window.click("[data-back]");
+  const strandedCanvas = await openSession(window, stranded);
+  await showBoard(window, strandedCanvas);
+  // The open brainstorm asks T3 after its thread when the window takes focus.
+  await window.evaluate(() => dispatchEvent(new Event("focus")));
+  await window.waitForSelector('[data-thread-chip][data-thread="lost"]', { timeout: PHASE_MS });
+  check("on a lost thread with no request open, Regenerate is off", await window.isDisabled("[data-regenerate-toggle]"), true);
+  await window.click("[data-slot-picker]");
+  await window.click('[data-slot-option="wheel"]');
+  await window.waitForSelector('[data-slot-picker="wheel"]');
+  await window.hover('[data-slot-id] [data-variant="reel"]');
+  await window.click('[data-approve="reel"]');
+  await window.waitForSelector('[data-main-group] [data-variant="reel"]');
+  check("but with nothing grafted Confirm is on, since the app writes that iteration itself", await window.isDisabled("[data-confirm-toggle]"), false);
+  await window.click("[data-confirm-toggle]");
+  await window.waitForSelector("[data-confirm-menu]");
+  check(
+    "and its popover says it applies at once, with Confirm on",
+    [(await window.textContent("[data-confirm-hint]")).trim(), await window.isDisabled("[data-confirm-send]")],
+    ["Applies at once", false],
+  );
+  await window.keyboard.press("Escape");
+  await window.waitForSelector("[data-confirm-menu]", { state: "detached" });
+  await window.click("[data-graft-toggle]");
+  await strandedCanvas.click(inBlock("result/card", "headline"));
+  await window.waitForSelector("[data-graft-composer]");
+  await window.click("[data-graft-add]");
+  await window.waitForSelector("[data-graft]");
+  await window.mouse.move(120, 600);
+  await window.hover("[data-confirm-blocked]");
+  check(
+    "a graft goes to the agent, so then Confirm holds, saying the thread is gone",
+    [
+      await window.isDisabled("[data-confirm-toggle]"),
+      await window
+        .waitForSelector('[data-slot="tooltip-content"]', { state: "visible" })
+        .then((h) => h.evaluate((el) => el.textContent.trim())),
+    ],
+    [true, "This brainstorm's thread is gone. Start a fresh thread from the top bar."],
+  );
+  await window.mouse.move(120, 600);
+  await shot(window, shots, "10-lost-thread-confirm");
+  await window.click("[data-remove-graft]");
+  await window.waitForSelector("[data-graft]", { state: "detached" });
+  const lostBefore = t3.messages(LOST).length;
+  await window.click("[data-confirm-toggle]");
+  await window.click("[data-confirm-send]");
+  const narrowed = await window
+    .waitForFunction(() => [...document.querySelectorAll('[data-slot-id="wheel"] [data-variant]')].map((r) => r.dataset.variant).join() === "reel", null, { timeout: 5000 })
+    .then(() => true, () => false);
+  check(
+    "and Confirm with nothing grafted lands on the lost thread: the wheel keeps only Reel, with nothing sent to T3 and no notice",
+    [narrowed, t3.messages(LOST).length - lostBefore, await window.evaluate(() => document.querySelector("[data-slot=toast]")?.textContent.trim() ?? null)],
+    [true, 0, null],
+  );
+  // Once that confirm has landed, iteration 1 is in the past: a branch from there with nothing grafted applies at once
+  // too, but a word on what to try goes to the agent, so it holds while the thread is gone.
+  if (narrowed) {
+    // The strip shows the run the confirm started, so iteration 1 is in the run before it.
+    if ((await window.$("[data-history]")) === null) await window.click("[data-history-toggle]");
+    await window.click("[data-strip-run]");
+    await window.click('[data-run-option="Start"]');
+    await window.click('[data-history-n="1"]');
+    await window.waitForSelector("[data-past-bar]");
+    await window.hover('[data-slot-id] [data-variant="neon"]');
+    await window.click('[data-approve="neon"]');
+    await window.waitForSelector('[data-main-group] [data-variant="neon"]');
+    await window.click("[data-confirm-toggle]");
+    await window.waitForSelector("[data-confirm-menu]");
+    const branchLook = () =>
+      window.evaluate(() => [
+        document.querySelector("[data-confirm-hint]")?.textContent.trim(),
+        document.querySelector("[data-confirm-held]")?.textContent.trim() ?? null,
+        document.querySelector("[data-confirm-send]")?.disabled,
+      ]);
+    const unheld = await branchLook();
+    await window.fill("[data-confirm-instruction]", "Try the neon for nights");
+    check(
+      "on the lost thread a branch with nothing grafted applies at once, but typing what it should try holds Confirm, saying the thread is gone",
+      [unheld, await branchLook()],
+      [
+        ["Applies at once", null, false],
+        ["Goes to the agent", "This brainstorm's thread is gone. Start a fresh thread from the top bar.", true],
+      ],
+    );
+    await window.keyboard.press("Escape");
+    await window.waitForSelector("[data-confirm-menu]", { state: "detached" });
+  }
+
   check("the window logged no errors or warnings", errors, []);
 } finally {
   await app.close();

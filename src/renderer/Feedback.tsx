@@ -46,7 +46,8 @@ function statusLine(status: FeedbackStatus): string | null {
   }
 }
 
-const ACTION_LABEL: Record<FeedbackAction, string> = { confirm: "Confirm", reopen: "Reopen", edit: "Edit", delete: "Delete" };
+// Rob says an addressed comment looks right; "Confirm" is the sidebar's, which locks the marks in (ADR 009).
+const ACTION_LABEL: Record<FeedbackAction, string> = { confirm: "Looks right", reopen: "Reopen", edit: "Edit", delete: "Delete" };
 
 const PLACE_NOTE: Record<Exclude<PinPlace, "placed">, string> = {
   detached: "Detached: its element is gone",

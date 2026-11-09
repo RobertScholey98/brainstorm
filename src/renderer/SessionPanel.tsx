@@ -334,8 +334,9 @@ function SlotMarks({
       />
     );
   };
-  // Up and down move across both lists as one, Main's row then the options', while each list is its own radio group so
-  // a screen reader meets only radios in it; the grafts and the trashed fold are lists of their own.
+  // One variant shows per slot, Main's row or an option, so the slot's variants are one radio group, with Main and the
+  // options as named sections in it, and up and down move across both as one list. The rows' lists are presentational,
+  // so a screen reader meets the radios in their section; the grafts and the trashed fold are lists of their own.
   return (
     <div
       ref={list}
@@ -346,36 +347,34 @@ function SlotMarks({
       }}
       data-slot-id={slot.id}
     >
-      <SidebarGroup data-main-group>
-        <SidebarGroupLabel>Main</SidebarGroupLabel>
-        {main === null ? (
-          <p className="px-2 py-1.5 text-xs text-fg-muted" data-main-empty>
-            Give a design a <ThumbsUp aria-label="thumbs up" className="inline size-3 align-text-bottom" /> to make it Main
-          </p>
-        ) : (
-          <SidebarMenu role="radiogroup" aria-label={`${slot.title}'s Main`}>
-            {row(main, "main")}
-          </SidebarMenu>
-        )}
-        {grafts.length > 0 && (
-          <SidebarMenu aria-label="Going into Main">
-            {grafts.map((g) => (
-              <GraftRow key={g.id} graft={g} source={blocks.get(g.from.blockId)} blocked={marking.blocked} onRemove={() => removeGraft(g)} />
-            ))}
-          </SidebarMenu>
-        )}
-      </SidebarGroup>
-      {options.length > 0 && (
-        <SidebarGroup data-options-group>
-          <SidebarGroupLabel className="gap-2">
-            Options
-            <Count className="ml-auto">{options.length}</Count>
-          </SidebarGroupLabel>
-          <SidebarMenu role="radiogroup" aria-label={`${slot.title}'s options`}>
-            {options.map((v) => row(v, "option"))}
-          </SidebarMenu>
+      <div role="radiogroup" aria-label={`${slot.title} variants`} className="flex flex-col" data-variant-group={slot.id}>
+        <SidebarGroup role="group" aria-label="Main" data-main-group>
+          <SidebarGroupLabel>Main</SidebarGroupLabel>
+          {main === null ? (
+            <p className="px-2 py-1.5 text-xs text-fg-muted" data-main-empty>
+              Give a design a <ThumbsUp aria-label="thumbs up" className="inline size-3 align-text-bottom" /> to make it Main
+            </p>
+          ) : (
+            <SidebarMenu role="none">{row(main, "main")}</SidebarMenu>
+          )}
+          {grafts.length > 0 && (
+            <SidebarMenu aria-label="Going into Main">
+              {grafts.map((g) => (
+                <GraftRow key={g.id} graft={g} source={blocks.get(g.from.blockId)} blocked={marking.blocked} onRemove={() => removeGraft(g)} />
+              ))}
+            </SidebarMenu>
+          )}
         </SidebarGroup>
-      )}
+        {options.length > 0 && (
+          <SidebarGroup role="group" aria-label="Options" data-options-group>
+            <SidebarGroupLabel className="gap-2">
+              Options
+              <Count className="ml-auto">{options.length}</Count>
+            </SidebarGroupLabel>
+            <SidebarMenu role="none">{options.map((v) => row(v, "option"))}</SidebarMenu>
+          </SidebarGroup>
+        )}
+      </div>
       {trashed.length > 0 && <TrashedFold slot={slot} variants={trashed} blocks={blocks} marking={marking} />}
     </div>
   );
@@ -437,6 +436,8 @@ function VariantRow({
       <SidebarMenuButton
         role="radio"
         aria-checked={active}
+        // Main's row is in the Main section, but a screen reader moving by radio hears that from the row itself.
+        aria-description={role === "main" ? "Main" : undefined}
         tabIndex={active ? 0 : -1}
         isActive={active}
         onClick={() => onVariant(variant)}
