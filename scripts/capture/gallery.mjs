@@ -838,7 +838,7 @@ function scenes(page, home, env, t3, sessions) {
         args: ["--addresses", "2,3", "--note", "Louder spin, bigger chore"],
       });
       await page.waitForSelector('[data-feedback="3"][data-status="addressed"]', { timeout: PHASE_MS });
-      await page.click('[data-feedback="3"] button:has-text("Confirm")');
+      await page.click('[data-feedback="3"] button:has-text("Looks right")');
       await page.waitForSelector('[data-feedback="3"][data-status="confirmed"]');
       await canvas.click('.bs-pin[data-pin="1"]');
       await page.waitForSelector('[data-feedback="1"][data-focused]');

@@ -1173,6 +1173,18 @@ try {
     [["neon"], ["neon"]],
   );
   check(
+    "the slot's variants are one radio group named for it, Main and Options labelled sections in it, with exactly one radio checked and one tab stop",
+    await window.evaluate(() =>
+      [...document.querySelectorAll('[data-sidebar-panel="session"] [role="radiogroup"]')].map((g) => [
+        g.getAttribute("aria-label"),
+        [...g.querySelectorAll('[role="group"]')].map((x) => x.getAttribute("aria-label")),
+        [...g.querySelectorAll('[role="radio"][aria-checked="true"]')].map((r) => r.dataset.variant),
+        [...g.querySelectorAll('[role="radio"][tabindex="0"]')].map((r) => r.dataset.variant),
+      ]),
+    ),
+    [["The wheel variants", ["Main", "Options"], ["neon"], ["neon"]]],
+  );
+  check(
     "variant notes stay removed: each variant row is its button and its 👍/🗑 marks, and no note text reaches the sidebar",
     await window.$$eval('[data-slot="sidebar-content"] [data-variant]', (rows) => ({
       alone: rows.every((r) => [...r.closest("li").children].every((c) => c === r || c.hasAttribute("data-marks"))),

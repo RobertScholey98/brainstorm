@@ -22,6 +22,7 @@ export function ConfirmButton({
   marks,
   past,
   blocked,
+  lost,
   onConfirm,
 }: {
   slots: readonly SlotView[];
@@ -29,8 +30,13 @@ export function ConfirmButton({
   marks: Marks;
   /** The past iteration on the canvas, or null at the latest. */
   past: IterationN | null;
-  /** Why nothing can be sent now: a request is open, or the thread is gone. */
+  /** Why nothing can be sent now: a request is open in the brainstorm, or the marks are locked. */
   blocked: string | null;
+  /**
+   * Why nothing can go to the agent now: the thread is gone. A confirm the app writes itself, with no grafts and no
+   * instruction, still can (ADR 009).
+   */
+  lost: string | null;
   /** Sends; false keeps the popover open, since the failure already shows. */
   onConfirm: (instruction: string | null) => Promise<boolean>;
 }) {
@@ -39,7 +45,9 @@ export function ConfirmButton({
   const branching = past !== null;
   const label = branching ? "Confirm as a branch" : "Confirm";
   const nothing = plan === null && !branching ? "Nothing to confirm yet: give a design a thumbs up, trash an option or pick an element" : null;
-  const reason = blocked ?? nothing;
+  // With nothing marked, a branch can only ask the agent, by its instruction; with grafts, so does any confirm.
+  const held = lost !== null && (plan === null || plan.grafts.length > 0) ? lost : null;
+  const reason = blocked ?? held ?? nothing;
   const foot = useRef<HTMLButtonElement>(null);
   const trigger = (
     <Button ref={foot} variant="accent" className="w-full" disabled={reason !== null} data-confirm-toggle={branching ? "branch" : "latest"}>
@@ -66,7 +74,7 @@ export function ConfirmButton({
               : "Main becomes the design going forward, and the other options go. Earlier iterations stay in history."
           }
         />
-        <ConfirmForm slots={slots} blocks={blocks} marks={marks} branching={branching} onConfirm={onConfirm} onClose={() => setOpen(false)} />
+        <ConfirmForm slots={slots} blocks={blocks} marks={marks} branching={branching} lost={lost} onConfirm={onConfirm} onClose={() => setOpen(false)} />
       </PopoverContent>
     </Popover>
   );
@@ -90,6 +98,7 @@ function ConfirmForm({
   blocks,
   marks,
   branching,
+  lost,
   onConfirm,
   onClose,
 }: {
@@ -97,6 +106,7 @@ function ConfirmForm({
   blocks: readonly BlockView[];
   marks: Marks;
   branching: boolean;
+  lost: string | null;
   onConfirm: (instruction: string | null) => Promise<boolean>;
   onClose: () => void;
 }) {
@@ -107,7 +117,10 @@ function ConfirmForm({
   const titleOf = (id: BlockId) => blocks.find((b) => b.id === id)?.title ?? id;
   const grafting = plan !== null && plan.grafts.length > 0;
   const instruction = text.trim() === "" ? null : text.trim();
-  const ready = plan !== null || instruction !== null;
+  const toAgent = grafting || instruction !== null;
+  // An instruction typed on a lost thread would go to the agent, so Confirm holds and a line above the footer says why.
+  const held = toAgent ? lost : null;
+  const ready = (plan !== null || instruction !== null) && held === null;
 
   const submit = async () => {
     if (!ready || sending) return;
@@ -185,10 +198,16 @@ function ConfirmForm({
           />
         </label>
       )}
+      {/* Whole, on its own line, since the footer's hint has room only for a few words. */}
+      {held !== null && (
+        <p className="text-xs/snug text-warning" data-confirm-held>
+          {held}
+        </p>
+      )}
       <PopoverFooter
         hint={
           <span data-confirm-hint>
-            {grafting || instruction !== null ? "Goes to the agent" : "Applies at once"}
+            {toAgent ? "Goes to the agent" : "Applies at once"}
           </span>
         }
       >

@@ -224,6 +224,23 @@ const canvasAt = (window) =>
 const pool = (canvas) => canvas.textContent(inBlock("wheel/neon", "pool"));
 const rows = (window, group) => window.$$eval(`[${group}] [data-variant]`, (els) => els.map((e) => e.dataset.variant));
 /**
+ * The sidebar's variant radio groups: one per slot, named for it, with Main and the options as named sections in it,
+ * which radios it holds, which is checked and which says it is Main, and how many radios sit outside any group.
+ */
+const radioGroups = (window) =>
+  window.evaluate(() => {
+    const panel = document.querySelector('[data-sidebar-panel="session"]');
+    const groups = [...panel.querySelectorAll('[role="radiogroup"]')].map((g) => ({
+      name: g.getAttribute("aria-label"),
+      sections: [...g.querySelectorAll('[role="group"]')].map((x) => x.getAttribute("aria-label")),
+      radios: g.querySelectorAll('[role="radio"]').length,
+      checked: [...g.querySelectorAll('[role="radio"][aria-checked="true"]')].map((r) => r.dataset.variant),
+      tabStops: [...g.querySelectorAll('[role="radio"][tabindex="0"]')].map((r) => r.dataset.variant),
+      main: [...g.querySelectorAll('[role="radio"]')].filter((r) => r.getAttribute("aria-description") === "Main").map((r) => r.dataset.variant),
+    }));
+    return { groups, loose: [...panel.querySelectorAll('[role="radio"]')].filter((r) => r.closest('[role="radiogroup"]') === null).length };
+  });
+/**
  * Each line of the pick popover's note and whether it reads whole: no line or box around it wider or taller than it
  * shows, none cut to an ellipsis, none past the popover's edge. "Runs past its box" passed while the note was cut.
  */
@@ -414,12 +431,39 @@ try {
   await window.click('[data-slot-id="wheel"] [data-variant="reel"]');
   await canvas.waitForSelector(".bs-frame[data-slot=wheel] div[data-bid='wheel/reel']", { state: "attached" });
   check("the past shows the variant picked there", await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant"), "reel");
+  check("showing another variant is no mark, so the Viewing bar doesn't warn of marks going", await window.$("[data-past-marks-note]"), null);
 
   // Marks in the past are the window's own, for a branch from there (ADR 009).
   check("with nothing marked, Confirm as a branch is still on, since a word on what to try can make a branch alone", await window.isDisabled("[data-confirm-toggle]"), false);
   await mark(window, "approve", "reel");
   await window.waitForSelector('[data-main-group] [data-variant="reel"]');
   check("a thumbs up in the past makes Reel the wheel's Main there, at the top, and the rest its options", [await rows(window, "data-main-group"), await rows(window, "data-options-group")], [["reel"], ["neon", "terminal"]]);
+  check(
+    "once Rob marks the past, the Viewing bar says in one muted line that the marks go when he leaves",
+    await window.$eval("[data-past-marks-note]", (el) => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--fg-muted)" }));
+      const muted = getComputedStyle(probe).color;
+      probe.remove();
+      return [el.closest("[data-past-bar]") !== null, el.textContent.trim(), getComputedStyle(el).color === muted, el.getBoundingClientRect().height <= parseFloat(getComputedStyle(el).lineHeight) + 1];
+    }),
+    [true, "Marks here go when you leave. Confirm as a branch to keep them.", true, true],
+  );
+  check(
+    "the wheel's variants are one radio group named for the slot, Main and Options sections in it, with one radio checked and one tab stop, and Main's row says it is Main",
+    await radioGroups(window),
+    { groups: [{ name: "The wheel variants", sections: ["Main", "Options"], radios: 3, checked: ["reel"], tabStops: ["reel"], main: ["reel"] }], loose: 0 },
+  );
+  await window.focus('[data-slot-id="wheel"] [data-variant="reel"]');
+  await window.keyboard.press("ArrowDown");
+  await window.waitForSelector('[data-slot-id="wheel"] [data-variant="neon"][aria-checked="true"]');
+  check(
+    "ArrowDown from Main's row moves on into the options, which checks that one and moves the one tab stop with it",
+    [await window.evaluate(() => document.activeElement?.dataset.variant ?? null), (await radioGroups(window)).groups.map((g) => [g.checked, g.tabStops])],
+    ["neon", [[["neon"], ["neon"]]]],
+  );
+  await window.keyboard.press("ArrowUp");
+  await window.waitForSelector('[data-slot-id="wheel"] [data-variant="reel"][aria-checked="true"]');
+  check("and ArrowUp goes back up into Main", await window.evaluate(() => document.activeElement?.dataset.variant ?? null), "reel");
   // A pick in the past waits on its Main: taking the Main back hides it, as the service hides a stored one, and
   // choosing it again brings it back.
   await window.click("[data-graft-toggle]");
@@ -472,6 +516,12 @@ try {
   check("where the pick made in the past didn't move the latest one", await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant"), latestWheel);
   check("nor did the marks made there: the latest has no Main", (await window.$("[data-main-empty]")) !== null, true);
   await window.click('[data-history-n="1"]');
+  await window.waitForSelector("[data-past-bar]");
+  check(
+    "back on iteration 1 the marks made there are gone, and so is the Viewing bar's line about them",
+    [await window.$("[data-past-marks-note]"), await window.$("[data-main-group] [data-variant]")].map((el) => el !== null),
+    [false, false],
+  );
   await window.click("[data-back-to-latest]");
   await window.waitForSelector("[data-past-bar]", { state: "detached" });
   check("Back to latest does too, with the pins back", await canvas.$$eval(".bs-pin", (els) => els.length), 1);
@@ -503,6 +553,11 @@ try {
   await window.waitForSelector('[data-main-group] [data-variant="neon"]');
   check("a thumbs up makes Neon Main, at the top, and what shows", [await rows(window, "data-main-group"), await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant")], [["neon"], "neon"]);
   check("both marks are stored, so the agent reads them in context", context(session).marks, { mains: { wheel: "neon" }, grafts: [], trashed: ["wheel/terminal"] });
+  check(
+    "at the latest too the slot is one radio group with exactly one radio checked, Neon in Main, and the trashed option out of it",
+    await radioGroups(window),
+    { groups: [{ name: "The wheel variants", sections: ["Main", "Options"], radios: 2, checked: ["neon"], tabStops: ["neon"], main: ["neon"] }], loose: 0 },
+  );
   check("Confirm is on once there is something to lock in", await window.isDisabled("[data-confirm-toggle]"), false);
   await shots2(window, shots, "5-marks");
   check("the slot picker counts what is left in each slot, the trashed variant out", await window.textContent("[data-slot-count]"), "2 variants");
