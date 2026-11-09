@@ -1,11 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { afterAll, describe, expect, test, vi } from "vitest";
 import { Brainstorm } from "../src/core/brainstorm";
 import { createChecker, type Checker } from "../src/core/check";
+import { approval } from "../src/core/main";
 import type { BlockId, FeedbackId, GraftId, FileMap, IterationN, Marks, PartName, PropName, Result, SessionId, SlotId, ThreadId, VariantKey } from "../src/core/types";
 import { FakeBridge } from "./fakeBridge";
 import { wheelProps } from "./fixtures";
@@ -1280,6 +1281,48 @@ describe("marks and confirm", () => {
     expect(data(await service.view(S)).marks.grafts.map((g) => [g.from.blockId, g.into]), "the waiting graft is back").toEqual([[CALM, "wheel"]]);
   });
 
+  test("a confirm the app answers lets go of a waiting graft whose source it drops, so a later variant with that key doesn't revive it", async () => {
+    const { service } = await withTwoWheels();
+    const calm = { tsx: neonTsx, json: calmJson };
+    const reel = { tsx: neonTsx, json: slotReelJson };
+    data(await service.commit({ session: S, thread: T1, files: copy(2, { "wheel/calm": calm, "wheel/reel": reel }), addresses: [], note: null }));
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    data(await service.act(S, { kind: "add_graft", from: { blockId: CALM, part: SPIN }, into: WHEEL, instruction: null }));
+    // Neon off Main: the graft waits, unread, and Calm can be trashed.
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    data(await service.act(S, { kind: "trash", blockId: CALM }));
+    data(await service.act(S, { kind: "confirm" }));
+    const confirmed = data(await service.view(S));
+    expect([confirmed.iteration?.n, confirmed.iteration?.slots[0]?.variants, confirmed.request?.request.state]).toEqual([4, ["neon", "reel"], { state: "fulfilled", iteration: 4 }]);
+
+    data(await service.commit({ session: S, thread: T1, files: copy(4, { "wheel/calm": calm, "wheel/reel": reel }), addresses: [], note: "a new calm" }));
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    expect(data(await service.view(S)).marks, "the new Calm isn't the one Rob picked from").toEqual({ mains: { wheel: "neon" }, grafts: [], trashed: [] });
+  });
+
+  test("a confirm's commit based on an older iteration is refused as stale, and its marks are still held", async () => {
+    const { service } = await withTwoWheels();
+    data(await service.act(S, { kind: "approve", blockId: NEON }));
+    data(await service.act(S, { kind: "add_graft", from: { blockId: CALM, part: SPIN }, into: WHEEL, instruction: null }));
+    data(await service.act(S, { kind: "confirm" }));
+    expect(await service.commit({ session: S, thread: T1, files: copy(1), addresses: [], note: null })).toEqual({
+      ok: false,
+      error: {
+        code: "stale_working_copy",
+        message: "the working copy is based on iteration 1, but iteration 2 is the latest; pull again and reapply your edits",
+        base: 1,
+        latest: 2,
+      },
+    });
+    const view = data(await service.view(S));
+    expect([view.iteration?.n, view.request?.request.state.state]).toEqual([2, "sent"]);
+    expect(view.marks).toEqual({ mains: { wheel: "neon" }, grafts: [{ id: 1, from: { blockId: CALM, part: SPIN }, into: "wheel", instruction: null }], trashed: [] });
+    expect(await service.act(S, { kind: "trash", blockId: CALM }), "the confirm is still open, so they still can't change").toEqual({
+      ok: false,
+      error: { code: "invalid_action", message: "a confirm is open; its marks change once it lands or you withdraw it" },
+    });
+  });
+
   test("add slot asks the agent for a new slot, and warns when the commit adds none", async () => {
     const { service } = await withIteration();
     expect(await service.act(S, { kind: "add_slot", prompt: "  " })).toEqual({ ok: false, error: { code: "invalid_action", message: "say what the new slot is for" } });
@@ -1476,6 +1519,18 @@ describe("branches", () => {
     expect(data(await service.view(S)).history.branches).toEqual([]);
   });
 
+  test("a branch the app answers while the brainstorm's thread is lost is lost too", async () => {
+    const { service, bridge } = await withPastTwoWheels();
+    bridge.thread(T1).missing = true;
+    data(await service.act(S, { kind: "check_thread" }));
+    expect(data(await service.view(S)).attachment.lostAt).toBe(AT);
+    data(await service.branch(S, { from: 2 as IterationN, marks: KEEP_NEON, instruction: null }));
+    const view = data(await service.view(F));
+    expect([view.attachment.threadId, view.attachment.lostAt, view.regenerate]).toEqual([T1, AT, { ok: false, reason: "thread_lost" }]);
+    data(await service.act(F, { kind: "make_primary" }));
+    expect(data(await service.listSessions(null)).map((l) => [l.id, l.lost]), "home reads the primary branch").toEqual([[F, true]]);
+  });
+
   test("a branch's first iteration is on the thread the tree shares, not the one its source was made on", async () => {
     const { service } = await withPastTwoWheels();
     data(await service.attach({ ref: S, thread: T2 }));
@@ -1626,6 +1681,23 @@ describe("vary", () => {
     expect(data(await service.view(S)).marks).toEqual({ mains: { wheel: "spin-button-a" }, grafts: [], trashed: [] });
   });
 
+  test("a past iteration keeps a vary option's provenance after a later confirm drops it, so a 👍 on it there grafts", async () => {
+    const { service } = await withIteration();
+    data(await service.act(S, { kind: "vary", target: { blockId: NEON, part: SPIN }, count: 2, direction: null }));
+    const added = Object.fromEntries(["a", "b"].map((l) => [`wheel/spin-button-${l}`, { tsx: spinTsx(l), json: spinJson(`Spin button ${l.toUpperCase()}`) }]));
+    data(await service.commit({ session: S, thread: T1, files: copy(1, added), addresses: [], note: null }));
+    const optionB = "wheel/spin-button-b" as BlockId;
+    data(await service.act(S, { kind: "trash", blockId: optionB }));
+    data(await service.act(S, { kind: "confirm" }));
+    expect(data(await service.view(S)).iteration?.blocks.map((b) => b.id), "the confirm dropped Spin button B").toEqual([SHEET, NEON, "wheel/spin-button-a"]);
+
+    const past = data(service.iteration(S, 2 as IterationN));
+    const b = past.blocks.find((x) => x.id === optionB)!;
+    expect(b.variedFrom).toEqual({ blockId: NEON, part: "spin-button" });
+    const wheel = past.slots.find((s) => s.id === WHEEL)!;
+    expect(approval(wheel, b, KEEP_NEON), "with Neon as Main, a 👍 on B brings its spin button in").toEqual({ kind: "graft", from: { blockId: optionB, part: "spin-button" } });
+  });
+
   test("a whole-block vary is named after the block, and the count is held to 1 to 6", async () => {
     const { service } = await withIteration();
     expect(await service.act(S, { kind: "vary", target: { blockId: NEON, part: null }, count: 7, direction: null })).toEqual({
@@ -1668,6 +1740,101 @@ describe("vary", () => {
     const context = data(await service.context(S, T1));
     expect(context.request?.overrides.map((o) => [o.blockId, o.prop, o.value])).toEqual([[NEON, "accent", "#00ff88"]]);
   });
+});
+
+describe("a confirm with a design system", () => {
+  const listTsx = `import { Card } from "kit";
+import ChoreList from "proposed/ChoreList";
+export default function Chores() {
+  return <Card><ChoreList items={["Dishes"]} /></Card>;
+}
+`;
+  const badgeTsx = `import { Card } from "kit";
+import Badge from "proposed/Badge";
+export default function Chores() {
+  return <Card><Badge label="New" /></Card>;
+}
+`;
+  const proposed = {
+    ChoreList: {
+      tsx: `import ChoreRow from "proposed/ChoreRow";
+export default function ChoreList({ items }) {
+  return <ul>{items.map((item) => <ChoreRow key={item} item={item} />)}</ul>;
+}
+`,
+      json: { title: "Chore list", description: "The week's chores", tier: "primitive", example: { items: ["Dishes"] } },
+    },
+    ChoreRow: {
+      tsx: `import { Text } from "kit";
+export default function ChoreRow({ item }) {
+  return <li><Text size="sm">{item}</Text></li>;
+}
+`,
+      json: { title: "Chore row", description: "One chore", tier: "primitive", example: { item: "Dishes" } },
+    },
+    Badge: {
+      tsx: `import { Text } from "kit";
+export default function Badge({ label }) {
+  return <span><Text size="sm">{label}</Text></span>;
+}
+`,
+      json: { title: "Badge", description: "A short label", tier: "primitive", example: { label: "New" } },
+    },
+  };
+  const files = (base: number | null, blocks: Record<string, string>, names: readonly (keyof typeof proposed)[]): FileMap => {
+    const out: Record<string, string> = {
+      "brainstorm.json": JSON.stringify({ format: 1, session: S, base, slots: [{ id: "home", title: "Home" }] }),
+    };
+    for (const [variant, tsx] of Object.entries(blocks)) {
+      out[`slots/home/${variant}/block.tsx`] = tsx;
+      out[`slots/home/${variant}/block.json`] = JSON.stringify({ title: `Chores ${variant}`, props: { appearance: {} } });
+    }
+    for (const name of names) {
+      out[`proposed/${name}/component.tsx`] = proposed[name].tsx;
+      out[`proposed/${name}/component.json`] = JSON.stringify(proposed[name].json);
+    }
+    return out;
+  };
+
+  test("keeps only the proposed components a kept variant imports, directly or through another, so the agent's next commit has none unused", async () => {
+    // A copy inside the repo, so the library resolves react and tailwindcss from the repo's node_modules.
+    const lib = mkdtempSync(join(import.meta.dirname, ".kit-"));
+    try {
+      cpSync(join(import.meta.dirname, "kit-lib"), lib, { recursive: true });
+      const { service } = await setup();
+      const added = data(await service.systems.add({ path: lib, thread: T1 }));
+      data(await service.systems.review(added.system.id, { kind: "confirm" }));
+      data(await service.newSession({ title: "Chores", brief: "", thread: T1, projectPath: null, system: "@fixture/kit" }));
+      const first = data(await service.commit({ session: S, thread: T1, files: files(null, { a: listTsx, b: badgeTsx }, ["Badge", "ChoreList", "ChoreRow"]), addresses: [], note: null }));
+      expect(first.warnings).toEqual([]);
+
+      // A branch the app narrows from iteration 1 carries the same.
+      data(await service.branch(S, { from: 1 as IterationN, marks: { ...NONE, mains: { ["home" as SlotId]: "a" as VariantKey } }, instruction: null }));
+      expect(data(await service.view(F)).iteration?.proposed.map((p) => [p.name, p.usedBy])).toEqual([
+        ["ChoreList", ["home/a"]],
+        ["ChoreRow", []],
+      ]);
+
+      data(await service.act(S, { kind: "approve", blockId: "home/a" as BlockId }));
+      data(await service.act(S, { kind: "confirm" }));
+      const view = data(await service.view(S));
+      expect([view.iteration?.n, view.iteration?.blocks.map((b) => b.id), view.iteration?.proposed.map((p) => p.name)]).toEqual([2, ["home/a"], ["ChoreList", "ChoreRow"]]);
+
+      const pulled = data(await service.pull(S)).files;
+      expect(Object.keys(pulled).filter((path) => path.startsWith("proposed/")).sort()).toEqual([
+        "proposed/ChoreList/component.json",
+        "proposed/ChoreList/component.tsx",
+        "proposed/ChoreRow/component.json",
+        "proposed/ChoreRow/component.tsx",
+      ]);
+      // The agent edits what it pulled and commits it back.
+      const edited = { ...pulled, "slots/home/a/block.tsx": listTsx.replace('["Dishes"]', '["Dishes", "Bins"]') };
+      expect(data(await service.commit({ session: S, thread: T1, files: edited, addresses: [], note: null })).warnings).toEqual([]);
+      service.close();
+    } finally {
+      rmSync(lib, { recursive: true, force: true });
+    }
+  }, 120_000);
 });
 
 describe("history", () => {
