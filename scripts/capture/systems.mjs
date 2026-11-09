@@ -212,7 +212,7 @@ try {
   writeFileSync(css, good.css);
   cli(["commit", session, "--from", work, "--note", "Two week layouts and a recipe card, all from the kit"]);
   // A freeform study has no kit to propose against, so it refuses proposed components outright.
-  const sketch = cli(["session", "new", "--title", "Sketch", "--brief", "A loose sketch with no design system.", "--project", project]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
+  const sketch = cli(["session", "new", "--title", "Sketch", "--brief", "A loose sketch with no design system.", "--project", project, "--system", "none"]).stdout.match(/\bs_[a-z0-9]+/)?.[0];
   if (sketch === undefined) throw new Error(`session new failed:\n${transcript.at(-1)}`);
   const loose = join(home, "sketch");
   cli(["pull", sketch, "--out", loose]);
@@ -223,7 +223,7 @@ try {
     "agent-cli",
     "What the agent sees: adding robnet's UI library, starting a study with it, a commit refused for drifting from the kit, the fixed commit, and a freeform study refusing a proposed component",
     transcript.join("\n\n"),
-    "The agent's terminal: system add syncs robnet's packages/ui (72 components, 73 stories, with warnings for stories that read no colour token and the kit's own off-scale values); session new --system; a commit refused for a raw <button> with className, an inline style, and literal padding and radius in the proposed component's CSS, each naming the kit token to write instead so theme tweaks reach it; then the clean commit; last, a freeform session (no --system) refuses a proposed/ folder with invalid_proposed",
+    "The agent's terminal: system add syncs robnet's packages/ui (72 components, 73 stories, with warnings for stories that read no colour token and the kit's own off-scale values); session new --system; a commit refused for a raw <button> with className, an inline style, and literal padding and radius in the proposed component's CSS, each naming the kit token to write instead so theme tweaks reach it; then the clean commit; last, a freeform session (--system none) refuses a proposed/ folder with invalid_proposed",
   );
 
   // Rob looks at the library in the app.

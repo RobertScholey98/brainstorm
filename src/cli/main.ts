@@ -335,6 +335,16 @@ function threadFrom(flags: Flags, { required }: { required: boolean }): ThreadId
   return parseThreadId(raw) ?? usage(`"${raw}" is not a T3 thread id`);
 }
 
+/**
+ * The thread's project folder: --project, or this folder when the thread is the agent's own. --thread can name another
+ * project's thread, and this folder would then name the wrong repo for it.
+ */
+const folderOf = (flags: Flags): string | null => {
+  const named = str(flags, "project");
+  if (named !== undefined) return resolve(named);
+  return str(flags, "thread") === undefined ? resolve(".") : null;
+};
+
 function sessionFrom(raw: string | undefined): SessionId | Failure {
   return parseSessionId(raw ?? "") ?? usage(`"${raw}" is not a session id (s_…)`);
 }
@@ -406,8 +416,7 @@ const COMMANDS: Record<string, Command> = {
         name: str(flags, "name") ?? null,
         frame: str(flags, "frame") ?? null,
         thread,
-        // This folder is the thread's only when the thread is this agent's own; --thread can name any thread.
-        projectPath: thread !== null && str(flags, "thread") === undefined ? resolve(".") : null,
+        projectPath: thread === null ? null : folderOf(flags),
       });
       if (!result.ok) return { result, lines: [] };
       const s = result.data.system;
@@ -417,11 +426,8 @@ const COMMANDS: Record<string, Command> = {
         lines: [
           ...syncLines(result.data, "added"),
           ...(projects === "" ? [] : [`brainstorms on ${projects} build with it`]),
-          s.review?.state === "pending"
-            ? "next: report to Rob and wait; Rob's review may send changes back to this thread"
-            : projects === ""
-              ? `next: brainstorm session new --title <t> --system ${s.id}`
-              : "next: brainstorm session new --title <t>",
+          // A new system always awaits Rob's review, and brainstorms refuse it until he confirms it.
+          "next: report to Rob and wait; Rob's review may send changes back to this thread",
         ],
       };
     },
@@ -509,7 +515,7 @@ const COMMANDS: Record<string, Command> = {
         title,
         brief,
         thread,
-        project: resolve(str(flags, "project") ?? "."),
+        project: folderOf(flags),
         system,
       });
       if (!result.ok) return { result, lines: [] };
@@ -548,7 +554,7 @@ const COMMANDS: Record<string, Command> = {
       const ref = positionals[0] ?? "";
       const result = await call<ProjectListing>("POST", "/v1/agent/project-system", {
         thread,
-        project: resolve(str(flags, "project") ?? "."),
+        project: folderOf(flags),
         system: isNone(ref) ? null : ref,
       });
       return { result, lines: result.ok ? [projectLine(result.data)] : [] };

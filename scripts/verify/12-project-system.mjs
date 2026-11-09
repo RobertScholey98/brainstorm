@@ -31,11 +31,12 @@ const repoName = basename(dirname(execFileSync("git", ["rev-parse", "--path-form
 const MAIN = "11111111-1111-4111-8111-111111111111";
 const WORKTREE = "22222222-2222-4222-8222-222222222222";
 const FRESH = "33333333-3333-4333-8333-333333333333";
+const OTHER = "44444444-4444-4444-8444-444444444444";
 const statePath = join(tmp, "t3.json");
 const thread = (projectId, title) => ({ projectId, title, status: "completed", activeRunId: null, latestRunId: null, pendingRequestCount: 0, messages: [] });
 writeFileSync(
   statePath,
-  JSON.stringify({ threads: { [MAIN]: thread("proj-app", "Main"), [WORKTREE]: thread("proj-app", "Worktree"), [FRESH]: thread("proj-fresh", "Fresh") } }),
+  JSON.stringify({ threads: { [MAIN]: thread("proj-app", "Main"), [WORKTREE]: thread("proj-app", "Worktree"), [FRESH]: thread("proj-fresh", "Fresh"), [OTHER]: thread("proj-other", "Another repo's thread") } }),
 );
 const env = {
   ...process.env,
@@ -152,6 +153,11 @@ try {
   } finally {
     await browser.close();
   }
+
+  // An agent naming another project's thread is not in that project's folder, so its folder says nothing about it.
+  const elsewhere = cli(["project", "use", "none", "--thread", OTHER], { thread: MAIN, cwd: mainCheckout });
+  check("project use --thread records no folder for another project", [elsewhere.code, elsewhere.out], [0, ["this project: no design system; its brainstorms are freeform"]]);
+  check("so that project isn't named after this repo", (await ui("GET", "/v1/ui/projects")).data.find((p) => p.id === "proj-other")?.name, null);
 } finally {
   server.kill();
   await new Promise((r) => setTimeout(r, 300));

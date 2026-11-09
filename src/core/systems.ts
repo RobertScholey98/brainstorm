@@ -40,10 +40,11 @@ import type { SystemManifest, Tier } from "./system/model";
 const ok = <T>(data: T): Result<T> => ({ ok: true, data });
 const fail = (error: Failure): { ok: false; error: Failure } => ({ ok: false, error });
 const noSystem = (id: string): Failure => ({ code: "not_found", entity: "system", message: `no design system ${id}` });
-// An agent adding a system Brainstorm has, from another project, most likely wants this project to build with it.
-const alreadyAdded = (root: string, s: { readonly id: SystemId; readonly name: string }): Failure => ({
+// An agent adding a system Brainstorm has, from another project, most likely wants its project to build with it. Rob,
+// in the window, has the system's Projects control for that.
+const alreadyAdded = (root: string, s: { readonly id: SystemId; readonly name: string }, agent: boolean): Failure => ({
   code: "invalid_action",
-  message: `${root} is already the design system "${s.name}" (${s.id}); sync it instead, or run brainstorm project use ${s.id} for this project's brainstorms to build with it`,
+  message: `${root} is already the design system "${s.name}" (${s.id}); sync it instead${agent ? `, or run brainstorm project use ${s.id} for this project's brainstorms to build with it` : ""}`,
 });
 
 const randomSystemId = (): SystemId => {
@@ -231,7 +232,7 @@ export class Systems {
     if (!existsSync(root) || !statSync(root).isDirectory()) return fail({ code: "usage", message: `${root} isn't a folder` });
     const existing = this.#store.systems().find((s) => samePath(s.source.root, root));
     if (existing !== undefined) {
-      return fail(alreadyAdded(root, existing));
+      return fail(alreadyAdded(root, existing, input.thread != null));
     }
     const overrides: SourceOverrides = { name: input.name ?? null, frame: input.frame ?? null, ...(input.stubs === undefined ? {} : { stubs: input.stubs }) };
     const source = detectSource(root, overrides);
@@ -404,7 +405,7 @@ export class Systems {
     if (repairing === null) {
       const existing = this.#store.systems().find((s) => samePath(s.source.root, root));
       if (existing !== undefined) {
-        return fail(alreadyAdded(root, existing));
+        return fail(alreadyAdded(root, existing, false));
       }
     }
     const projectId = repairing?.projectId ?? this.#store.projectsHolding(root)[0] ?? null;

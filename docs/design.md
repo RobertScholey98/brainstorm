@@ -202,7 +202,7 @@ ADR 007 in `docs/design-system/` records the decision and what the build changed
 
 ```sql
 project(id TEXT PRIMARY KEY, repo_path TEXT, created_at TEXT NOT NULL,
-        name TEXT)                                                               -- id = T3 projectId; name added by migration 2
+        name TEXT, repo_git TEXT)                                                -- id = T3 projectId; name by migration 2, repo_git by 10
 session(id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES project, title TEXT NOT NULL,
         brief TEXT NOT NULL, created_at TEXT NOT NULL, archived_at TEXT,
         settled_at TEXT, unsettled_at TEXT)                                     -- migration 5; Rob's settle (ADR 004)
@@ -237,7 +237,7 @@ variant_seen(session_id TEXT NOT NULL REFERENCES session, block_id TEXT NOT NULL
         PRIMARY KEY(session_id, block_id))                                       -- migration 6; seeded with every block that existed
 ```
 
-Migration 7 adds the design system tables (`design_system`, `design_system_version`, `design_system_theme`, `session_theme`, `proposed_content`, `iteration_proposed`, `promotion`) and `session.system_id` and `system_n`; ADR 007's **Data** lists their columns. Migrations 8 and 9 are ADR 008's; migration 10 adds `project_system` (ADR 009).
+Migration 7 adds the design system tables (`design_system`, `design_system_version`, `design_system_theme`, `session_theme`, `proposed_content`, `iteration_proposed`, `promotion`) and `session.system_id` and `system_n`; ADR 007's **Data** lists their columns. Migrations 8 and 9 are ADR 008's; migration 10 adds `project_system` and `project.repo_git`, the main checkout's `.git` (ADR 009).
 
 A fork is a session like any other, plus its `fork` row. `createFork` writes the session, the `fork` row, its iteration 1 (the source iteration narrowed to one variant per slot, with Rob's settings baked into the picked variants' `block.json` defaults and re-checked), his open pins on those variants as new feedback numbered from 1, and request 1, all in one transaction, attached to the sentinel thread `pending:<sessionId>`. The sentinel fails the thread-id pattern, so the bridge refuses to send to it or show it, and the attachment invariant holds while no thread exists yet. An iteration's origin is derived, never stored: the request it fulfilled, a fork's iteration 1, a root's iteration 1 from the brief, or else the agent's own commit and its note. A block is new while it first appeared after iteration 1 and has no `variant_seen` row.
 
