@@ -32,7 +32,7 @@ The marks are Rob's rows (`main_choice`, `graft`, `trashed`), per branch. They d
 regenerate or vary leaves them in place; a mark whose block is gone is dropped on read.
 
 A slot with one variant and no mark has that variant as its Main, so after a confirm every slot has a Main without
-Rob marking it again.
+Rob marking it again. The same holds once trashing leaves one variant showing: the last one left is Main.
 
 ### Confirm
 
@@ -50,12 +50,18 @@ and history origin.
   still exist, so the request reads like any other in the history.
 - **Grafts.** The request goes to the agent. `brainstorm context` spells out each graft (source block, part, target
   slot, instruction) and which variants to delete. A commit that answers it warns `confirm_mismatch` when a slot with
-  a Main still has other variants, a Main is gone or renamed, or Main lacks a grafted part, and `out_of_scope` when it
-  changes any other block. The settings and pins it drops with the variants are no news, so they raise no
+  a Main still has other variants, a Main is gone or renamed, Main lacks a grafted part, or a Main that receives
+  grafts comes back unchanged (a vary option's part already renders in Main, and a whole block has no part to look
+  for), and `out_of_scope` when it changes any other block. The settings and pins it drops with the variants are no news, so they raise no
   `override_dropped` or `pin_lost`.
 
 A confirm clears the marks it carried once its iteration lands. While it is open, the marks stay as they were sent and
-Rob can't change them. A graft still waiting for its slot's Main was never part of the confirm, so it stays.
+Rob can't change them. A graft still waiting for its slot's Main was never part of the confirm, so it stays. A confirm
+Rob withdraws before its commit lands is no longer open, so that commit lands as the agent's own: the confirm stays
+withdrawn, the marks stay except those naming a block or slot the commit removed, and nothing is let go of.
+
+A confirm as a branch that asks the agent nothing still shares the gate: it waits for an open request and for a lost
+thread to be replaced, like Confirm at the latest.
 
 When its iteration lands, a confirm also lets go of what belonged to the variants it dropped: Rob's settings on them,
 and his open pins, which are deleted as when he deletes one. No later request asks the agent about a block that is
