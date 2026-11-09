@@ -369,11 +369,15 @@ function syncLines({ system, created, warnings }: SyncOutcome, verb: string): st
 
 const systemRef = (raw: string | undefined) => encodeURIComponent(raw ?? "");
 
-/** What `--system` and `project use` take for no design system. A system named "none" is still reachable by its id. */
-const NONE = "none";
+/** `--system` and `project use` take "none", in any case, for no design system. A system named so is reachable by its id. */
+const isNone = (ref: string) => ref.trim().toLowerCase() === "none";
 
 const projectLine = (p: ProjectListing): string =>
-  `project ${p.name ?? p.id}: ${p.system === null ? "no design system; its brainstorms are freeform" : `brainstorms build with ${p.system.name} (${p.system.id})`}`;
+  `project ${p.name ?? p.id}: ${
+    p.system === null
+      ? "no design system; its brainstorms are freeform"
+      : `brainstorms build with ${p.system.name} (${p.system.id})${p.system.awaitingReview ? ", once Rob confirms it on Brainstorm's Design systems page" : ""}`
+  }`;
 
 const COMMANDS: Record<string, Command> = {
   "system list": {
@@ -498,7 +502,7 @@ const COMMANDS: Record<string, Command> = {
       const briefFlag = str(flags, "brief");
       const brief = briefFlag === "-" ? (await readStdin()).trim() : (briefFlag ?? "");
       const named = str(flags, "system");
-      const system: SystemChoice = named === undefined ? { kind: "project" } : named === NONE ? { kind: "none" } : { kind: "named", ref: named };
+      const system: SystemChoice = named === undefined ? { kind: "project" } : isNone(named) ? { kind: "none" } : { kind: "named", ref: named };
       const result = await call<NewSessionResult>("POST", "/v1/agent/sessions", {
         title,
         brief,
@@ -543,7 +547,7 @@ const COMMANDS: Record<string, Command> = {
       const result = await call<ProjectListing>("POST", "/v1/agent/project-system", {
         thread,
         project: resolve(str(flags, "project") ?? "."),
-        system: ref === NONE ? null : ref,
+        system: isNone(ref) ? null : ref,
       });
       return { result, lines: result.ok ? [projectLine(result.data)] : [] };
     },

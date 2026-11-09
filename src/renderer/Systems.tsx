@@ -596,7 +596,8 @@ function SystemProjects({ api, view, showNotice }: { api: Api; view: SystemView;
   const [projects, setProjects] = useState<readonly ProjectListing[] | null>(null);
   const [busy, setBusy] = useState<ProjectId | null>(null);
   const load = useCallback(() => void api.projects().then((r) => r.ok && setProjects(r.data)), [api]);
-  // The view comes back after every change to a system or a project, so the list follows it.
+  // The view comes back after every change to a system or a project, so the list follows it. A project Brainstorm
+  // first sees in a new brainstorm changes no system, so opening the menu reads the list again too.
   useEffect(load, [load, view]);
   const toggle = async (p: ProjectListing) => {
     const using = p.system?.id === view.id;
@@ -609,7 +610,7 @@ function SystemProjects({ api, view, showNotice }: { api: Api; view: SystemView;
   const count = view.projects.length;
   const label = count === 0 ? "No projects" : count === 1 ? projectLabel(view.projects[0]!) : `${count} projects`;
   return (
-    <Popover>
+    <Popover onOpenChange={(open) => open && load()}>
       <PopoverTrigger render={<Button variant="outline" data-system-projects={view.id} />}>
         <FolderGit2 aria-hidden data-icon="inline-start" />
         <Truncate className="max-w-picker font-normal">{label}</Truncate>
@@ -625,7 +626,7 @@ function SystemProjects({ api, view, showNotice }: { api: Api; view: SystemView;
         ) : projects.length === 0 ? (
           <p className="text-fg-muted" data-system-projects-empty>
             Brainstorm lists a project once a brainstorm or a design system comes from it. For a new project, ask its agent to run{" "}
-            <span className="font-mono">brainstorm project use {view.name}</span>.
+            <span className="font-mono">{`brainstorm project use "${view.name}"`}</span>.
           </p>
         ) : (
           <div className="-mx-1.5 flex flex-col" role="group" aria-label="Projects">

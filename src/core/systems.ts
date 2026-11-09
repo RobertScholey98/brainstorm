@@ -129,7 +129,7 @@ export class Systems {
         return {
           id: p.id,
           name: p.name ?? (source === undefined ? null : basename(source.source.root)),
-          system: system === null || system === undefined ? null : { id: system.id, name: system.name },
+          system: system === null || system === undefined ? null : { id: system.id, name: system.name, awaitingReview: system.review?.state === "pending" },
         };
       })
       .sort((a, b) => (a.name ?? "￿").localeCompare(b.name ?? "￿") || a.id.localeCompare(b.id));
@@ -536,12 +536,16 @@ export class Systems {
     return ok({ ...observeWork(shown.snapshot), link: shown.snapshot.thread.link });
   }
 
+  /**
+   * The T3 project a system comes from, which then builds with it (ADR 009). The adding thread's project is a fact; a
+   * stored folder that holds `root` is a guess, since a project's stored folder may be a worktree or a parent folder.
+   */
   async #projectOf(root: string, thread: ThreadId | null): Promise<ProjectId | null> {
-    const known = this.#store.projectsHolding(root)[0];
-    if (known !== undefined) return known;
-    if (thread === null) return null;
-    const shown = await this.#bridge.snapshot(thread, { messages: 1 });
-    return shown.kind === "found" ? shown.snapshot.thread.projectId : null;
+    if (thread !== null) {
+      const shown = await this.#bridge.snapshot(thread, { messages: 1 });
+      if (shown.kind === "found") return shown.snapshot.thread.projectId;
+    }
+    return this.#store.projectsHolding(root)[0] ?? null;
   }
 
   /** A system by id or name, at its newest version. */

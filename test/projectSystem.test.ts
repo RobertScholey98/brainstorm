@@ -12,6 +12,7 @@ const checker = createChecker({ size: 2 });
 const MAIN = "11111111-1111-1111-1111-111111111111" as ThreadId;
 const WORKTREE = "22222222-2222-2222-2222-222222222222" as ThreadId;
 const FRESH = "33333333-3333-3333-3333-333333333333" as ThreadId;
+const GHOST = "44444444-4444-4444-4444-444444444444" as ThreadId;
 const AT = "2026-11-09T01:00:00.000Z";
 
 // Copies inside the repo, so each library resolves react and tailwindcss from the repo's node_modules.
@@ -41,6 +42,7 @@ beforeAll(async () => {
   // T3 runs a worktree thread in its own folder, but it belongs to the same project.
   bridge.add(WORKTREE, "proj-a", "Worktree");
   bridge.add(FRESH, "proj-new", "A new project");
+  bridge.add(GHOST, "proj-ghost", "A project nobody set");
   let id = 0;
   service = await Brainstorm.open({
     dbPath: join(home, "brainstorm.db"),
@@ -61,7 +63,8 @@ afterAll(async () => {
 
 describe("a project's design system", () => {
   test("is the system added from the project", () => {
-    expect(service.systems.projects().find((p) => p.id === "proj-a")?.system).toEqual({ id: system, name: "@fixture/kit" });
+    // It awaits Rob's review, which `project show` says, since its brainstorms are refused until he confirms it.
+    expect(service.systems.projects().find((p) => p.id === "proj-a")?.system).toEqual({ id: system, name: "@fixture/kit", awaitingReview: true });
     expect(service.systems.view(system)).toMatchObject({ ok: true, data: { projects: [{ id: "proj-a" }] } });
   });
 
@@ -82,9 +85,12 @@ describe("a project's design system", () => {
   });
 
   test("stays when another system is added from the same project", async () => {
+    // A brainstorm on the new project records the test folder, which holds the second library. The adding thread's
+    // project still wins over that folder.
+    data(await service.newSession({ title: "Seen", brief: "", thread: FRESH, projectPath: import.meta.dirname, system: { kind: "none" } }));
     const second = data(await service.systems.add({ path: other, thread: MAIN })).system;
-    expect(second.projects).toEqual([]);
-    expect(data(await service.projectSystem(WORKTREE)).system).toEqual({ id: system, name: "@fixture/kit" });
+    expect([second.projectId, second.projects]).toEqual(["proj-a", []]);
+    expect(data(await service.projectSystem(WORKTREE)).system).toEqual({ id: system, name: "@fixture/kit", awaitingReview: false });
   }, 120_000);
 
   test("gives way to a system the agent names for one brainstorm", async () => {
@@ -99,7 +105,7 @@ describe("a project's design system", () => {
     expect(data(await start(FRESH)).system).toBeNull();
     const folder = mkdtempSync(join(tmpdir(), "bs-fresh-"));
     const set = data(await service.setProjectSystem({ thread: FRESH, projectPath: folder, system: "@fixture/kit" }));
-    expect(set).toEqual({ id: "proj-new", name: null, system: { id: system, name: "@fixture/kit" } });
+    expect(set).toMatchObject({ id: "proj-new", system: { id: system, name: "@fixture/kit", awaitingReview: false } });
     expect(data(await start(FRESH)).system).toMatchObject({ id: system, from: "project" });
     expect(data(service.systems.view(system)).projects.map((p) => p.id)).toEqual(["proj-a", "proj-new"]);
   });
@@ -110,8 +116,9 @@ describe("a project's design system", () => {
     expect(data(await service.projectSystem(FRESH)).system).toBeNull();
   });
 
-  test("refuses a system Brainstorm doesn't have", () => {
-    const refused = service.systems.setProjectSystem("proj-new" as never, "@fixture/nope");
+  test("refuses a system Brainstorm doesn't have, and records nothing", async () => {
+    const refused = await service.setProjectSystem({ thread: GHOST, projectPath: import.meta.dirname, system: "@fixture/nope" });
     expect(refused.ok ? null : refused.error.message).toBe("no design system @fixture/nope");
+    expect(service.systems.projects().map((p) => p.id)).not.toContain("proj-ghost");
   });
 });

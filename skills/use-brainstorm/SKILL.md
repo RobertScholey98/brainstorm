@@ -1,6 +1,6 @@
 ---
 name: use-brainstorm
-description: Study one user task with the UX method, then build meaningfully different designs for it as live, switchable blocks in a Brainstorm session that Rob adjusts and pins feedback to. Use when asked for a UX study, alternative task flows, design options to compare, simpler onboarding, setup or settings, or help with an overwhelming interface; when a turn starts with `[brainstorm]`; when asked to pick up a brainstorm session; or when asked which design system this project's brainstorms use. Keep narrow visual fixes narrow, and respect requests for discussion or audit only.
+description: Study one user task with the UX method, then build meaningfully different designs for it as live, switchable blocks in a Brainstorm session that Rob adjusts and pins feedback to. Use when asked for a UX study, alternative task flows, design options to compare, simpler onboarding, setup or settings, or help with an overwhelming interface; when a turn starts with `[brainstorm]`; when asked to pick up a brainstorm session; or when asked to show, set or clear the design system this project's brainstorms use. Keep narrow visual fixes narrow, and respect requests for discussion or audit only.
 ---
 
 # Use Brainstorm
@@ -14,7 +14,7 @@ Pick the branch that matches the turn:
 - For a turn that starts with `[brainstorm] session <id> · request 1 · fork of <parent> iteration <n>`, follow **Start a fork**.
 - For any other turn that starts with `[brainstorm] session <id> · request <n>`, follow **Handle a request**.
 - For "pick up the brainstorm session titled X", follow **Take over a session**.
-- For a request to set which design system this project's brainstorms use, run `brainstorm project use <system>`, or `brainstorm project use none` to clear it, and reply with the line it prints.
+- For a question about which design system this project's brainstorms use, run `brainstorm project show`. To set it, run `brainstorm project use <system>`, or `brainstorm project use none` to clear it. Reply with the line the command prints, and start no study.
 - For anything else this skill triggered on, follow **Start a study**.
 
 Every branch runs `brainstorm` commands. Read [the Brainstorm loop](references/brainstorm-loop.md) before the first one. It holds the command reference, the working-copy format, how options map onto blocks, and what to do with each error and warning.
@@ -36,7 +36,7 @@ Every branch runs `brainstorm` commands. Read [the Brainstorm loop](references/b
 4. **Start the session.** Check `T3CODE_THREAD_ID` is set (`$env:T3CODE_THREAD_ID` in PowerShell, `$T3CODE_THREAD_ID` in a POSIX shell). If it is empty, tell the user in one line that a Brainstorm session must start inside a T3 thread, and stop. `session new` builds with the project's design system on its own, in every worktree, so don't choose one yourself. Only when the user names a system, run `brainstorm project show`: if the project has none, run `brainstorm project use <system>` so later brainstorms use it too; if it has another, pass `--system <system>` to this `session new` only. Pass `--system none` only when the user asks for a design without the system. Run `session new` with the brief on stdin. If it says Rob hasn't confirmed the system, tell the user in one line to confirm it on Brainstorm's Design systems page, and stop. Its output names the system the session builds with; the loop reference's **Design systems** says how that changes the blocks. Then `pull`, and read the generated `GUIDE.md`.
 5. **Build the blocks.** Map the hypotheses onto slots and variants as the loop reference describes. With a design system, compose its kit as `system/CATALOG.md` lists it; otherwise copy the product's real look from the repo. Each variant implements the task through its useful outcome, including the failure and recovery states that distinguish its hypothesis. [The worked example](references/example/slots/start-dialog/missing-only/) is one valid variant.
 6. **Commit until it succeeds.** Run `commit`. Fix every error it lists and commit again until it succeeds, then fix any warning you caused. The commit only proves each block compiles and renders with its defaults, so trace every variant's path to its outcome and through its failure state in the code as well.
-7. **Reply in one line.** Name the session, its slots and their variant counts. The whole reply looks like `Session s_x "Pin a comment": 1 slot, 3 variants.`
+7. **Reply in one line.** Name the session, its slots and their variant counts, and the design system it builds with, or that it has none, as `session new` printed it. The whole reply looks like `Session s_x "Pin a comment": 1 slot, 3 variants, built with acme-ui v7.` or `Session s_x "Pin a comment": 1 slot, 3 variants, no design system.`
 
 ## Handle a request
 

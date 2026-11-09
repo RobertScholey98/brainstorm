@@ -595,7 +595,8 @@ export type ProjectListing = {
   readonly id: ProjectId;
   /** The repo's name, or the folder of a system that came from it, or null when Brainstorm has seen neither. */
   readonly name: string | null;
-  readonly system: { readonly id: SystemId; readonly name: string } | null;
+  /** `awaitingReview` means its brainstorms are refused until Rob confirms the system (ADR 008). */
+  readonly system: { readonly id: SystemId; readonly name: string; readonly awaitingReview: boolean } | null;
 };
 
 /** `previous` is the thread that owned the session before, or null when the caller already owned it. */

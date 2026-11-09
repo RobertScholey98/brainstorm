@@ -293,6 +293,11 @@ export class Brainstorm {
     const info = await this.#resolveThread(input.thread);
     if (!info.ok) return info;
     const project = info.data.projectId;
+    // A system Brainstorm doesn't have changes nothing, not even which projects it knows.
+    if (input.system !== null) {
+      const found = this.#systems.find(input.system);
+      if (!found.ok) return found;
+    }
     const name = input.projectPath === null ? null : await projectNameAt(input.projectPath);
     this.#store.tx(() => {
       this.#store.ensureProject(project, input.projectPath, this.#now());
