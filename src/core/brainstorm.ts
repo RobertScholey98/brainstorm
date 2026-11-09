@@ -7,7 +7,6 @@ import { controlVocabulary } from "./controls";
 import {
   canAppend,
   FEEDBACK_ACTIONS,
-  foldFeedback,
   formatRefreshMessage,
   formatRequestMessage,
   holdsThread,
@@ -24,10 +23,11 @@ import { projectNameAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { exportFileName } from "./fileName";
 import { Branches } from "./branch";
-import { confirmPlan, liveMarks, showingVariant, slotShapes, trashRefusal, withApproval, withPick, withTrash } from "./main";
+import { besideMain, confirmMismatches, Confirms, type DrawnBlocks } from "./confirm";
+import { Reads } from "./reads";
+import { liveMarks, showingVariant, slotShapes } from "./main";
 import {
   Store,
-  type FeedbackRecord,
   type IterationBlock,
   type IterationProposed,
   type SessionSystem,
@@ -62,7 +62,6 @@ import {
   type FeedbackAction,
   type FeedbackId,
   type FileMap,
-  type ConfirmScope,
   type BranchInput,
   type HistoryEntry,
   type Issue,
@@ -71,12 +70,10 @@ import {
   type IterationOrigin,
   type IterationSummary,
   type IterationView,
-  type Marks,
   type NewSessionResult,
   type OpenPhase,
   type Override,
   type PartName,
-  type Pin,
   type ProjectId,
   type ProposedDraft,
   type ProposedName,
@@ -172,9 +169,6 @@ type Prepared =
       readonly request: Request | null;
     };
 
-/** The part of a parsed block that depends only on its content, so it can be shared by every block with that hash. */
-type Loaded = { readonly draft: Pick<BlockDraft, "title" | "props" | "controls">; readonly content: StoredContent };
-
 type Seen = { readonly snapshot: ThreadSnapshot | null; readonly checkedAt: number };
 
 const summaryOf = ({ id, projectId, title, brief, createdAt }: SessionSummary): SessionSummary => ({ id, projectId, title, brief, createdAt });
@@ -182,6 +176,8 @@ const summaryOf = ({ id, projectId, title, brief, createdAt }: SessionSummary): 
 export class Brainstorm {
   readonly #store: Store;
   readonly #trees: Trees;
+  readonly #reads: Reads;
+  readonly #confirms: Confirms;
   readonly #branches: Branches;
   readonly #bridge: AgentBridge;
   readonly #checker: Checker;
@@ -191,7 +187,6 @@ export class Brainstorm {
   readonly #clockMs: () => number;
   readonly #agentHome: string | null;
   readonly #seen = new Map<ThreadId, Seen>();
-  readonly #loaded = new Map<ContentHash, Loaded>();
   readonly #listeners = new Set<(session: SessionId) => void>();
   readonly #emitting = new Set<SessionId>();
   readonly #systems: Systems;
@@ -218,14 +213,15 @@ export class Brainstorm {
       now: this.#now,
       onVersion: (id) => this.#store.sessionsOn(id).forEach((s) => this.#emit(s)),
     });
+    this.#reads = new Reads(this.#store, this.#trees);
+    this.#confirms = new Confirms({ store: this.#store, reads: this.#reads, now: this.#now });
     this.#branches = new Branches({
       store: this.#store,
       trees: this.#trees,
       now: this.#now,
       newSessionId: this.#newSessionId,
-      load: (block) => this.#load(block),
-      feedback: (id) => this.#feedback(id),
-      proposedUsedBy: (session, n, kept) => this.#proposedUsedBy(session, n, kept),
+      reads: this.#reads,
+      confirms: this.#confirms,
       check: (blocks, overrides, ctx) => this.#check(blocks, overrides, ctx),
     });
   }
@@ -440,9 +436,9 @@ export class Brainstorm {
     const attachment = this.#store.attachment(id);
     const latest = this.#store.latestIteration(id);
     const blocks = latest === null ? [] : this.#store.iterationBlocks(id, latest.n);
-    const schemas = this.#schemas(blocks);
+    const schemas = this.#reads.schemas(blocks);
     const { applicable } = classifyOverrides(schemas, this.#store.overrides(id));
-    const feedback = this.#feedback(id);
+    const feedback = this.#reads.feedback(id);
     const open = this.#store.openRequest(id);
     // A vary's new variants start from the block they copy, as Rob sees it, so its settings are in scope; a confirm's
     // Mains are what the agent edits.
@@ -467,7 +463,7 @@ export class Brainstorm {
       branchOf:
         link === null
           ? null
-          : { parent: { id: link.parent, title: this.#store.sessionName(link.parent)?.title ?? link.parent }, from: link.from, baked: link.baked },
+          : { parent: { id: link.parent, title: this.#store.sessionName(link.parent) ?? link.parent }, from: link.from, baked: link.baked },
       latest: latest === null ? null : this.#summary(id, latest, blocks),
       attached,
       attachedThread: attachment.threadId,
@@ -550,7 +546,7 @@ export class Brainstorm {
       };
       // A confirm lets go only of what the commit did drop: a variant it kept against the confirm keeps its settings
       // and pins.
-      this.#land(
+      this.#confirms.land(
         {
           session: input.session,
           iteration,
@@ -612,7 +608,7 @@ export class Brainstorm {
       });
     }
 
-    const feedback = this.#feedback(session);
+    const feedback = this.#reads.feedback(session);
     const byId = new Map(feedback.map((f) => [f.id, f]));
     const unknown = input.addresses.filter((id) => !byId.has(id));
     if (unknown.length > 0) {
@@ -665,15 +661,15 @@ export class Brainstorm {
     });
     if (checkIssues.some(isError)) return fail(validationFailed([...parsed.warnings, ...checkIssues]));
 
-    const partsOf = (b: IterationBlock) => contents.get(b.hash)?.parts ?? this.#load(b).content.parts;
-    const before = { schemas: this.#schemas(previous), parts: new Map(previous.map((b) => [b.id, partsOf(b)])) };
+    const partsOf = (b: IterationBlock) => contents.get(b.hash)?.parts ?? this.#reads.load(b).content.parts;
+    const before = { schemas: this.#reads.schemas(previous), parts: new Map(previous.map((b) => [b.id, partsOf(b)])) };
     const after = {
       schemas: new Map(draft.blocks.map((b) => [b.id, b.props])),
       parts: new Map(draft.blocks.map((b) => [b.id, partsOf(b)])),
     };
     const drawn: Drawn = {
       titles: new Map(draft.blocks.map((b) => [b.id, b.title])),
-      titlesBefore: new Map(previous.map((b) => [b.id, this.#load(b).draft.title])),
+      titlesBefore: new Map(previous.map((b) => [b.id, this.#reads.load(b).draft.title])),
       hashes: new Map(draft.blocks.map((b) => [b.id, b.hash])),
       hashesBefore: previousHash,
       parts: after.parts,
@@ -855,15 +851,15 @@ export class Brainstorm {
     const root = this.#trees.rootOf(id);
     return ok({
       session,
-      tree: { root: { id: root, title: this.#store.sessionName(root)?.title ?? session.title }, primary: this.#trees.primaryOf(root) },
-      branchOf: link === null ? null : { parent: { id: link.parent, title: this.#store.sessionName(link.parent)?.title ?? link.parent }, from: link.from },
+      tree: { root: { id: root, title: this.#store.sessionName(root) ?? session.title }, primary: this.#trees.primaryOf(root) },
+      branchOf: link === null ? null : { parent: { id: link.parent, title: this.#store.sessionName(link.parent) ?? link.parent }, from: link.from },
       history: this.#trees.trail(id, (s) => this.#history(s)),
       attachment,
       thread: this.#seen.get(attachment.threadId)?.snapshot?.thread ?? null,
       iteration,
       marks: iteration === null ? NO_MARKS : liveMarks(this.#store.marks(id), iteration.slots),
       overrides,
-      feedback: this.#feedback(id),
+      feedback: this.#reads.feedback(id),
       request: request === null ? null : this.#requestView(session, request, attachment, iteration),
       regenerate: regenerateGate({
         hasIteration: latest !== null,
@@ -998,7 +994,7 @@ export class Brainstorm {
               kept: this.#keptTitles(id, i.n, request.scope),
             }
           : index === 0 && link !== null
-            ? { kind: "branch", parent: this.#store.sessionName(link.parent)?.title ?? link.parent, from: link.from }
+            ? { kind: "branch", parent: this.#store.sessionName(link.parent) ?? link.parent, from: link.from }
             : index === 0
               ? { kind: "brief" }
               : { kind: "agent", note: i.note };
@@ -1006,39 +1002,9 @@ export class Brainstorm {
     });
   }
 
-  /**
-   * Which variants of the session's iteration `through` a vary made, and from what: the block it copied and the element
-   * it varied. Only iterations up to `through` count, so a past iteration keeps the provenance it had even after a later
-   * one drops the option. A branch inherits its ancestors' variants, so their varies count up to where its trail left
-   * them. A vary option stops being one once an iteration on the trail goes without it, so a later variant that reuses
-   * its key starts as itself.
-   */
-  #variedFrom(id: SessionId, through: IterationN): Map<BlockId, Pin> {
-    const out = new Map<BlockId, Pin>();
-    for (const { session, upTo } of this.#trees.walk(id).trail) {
-      const cutoff = upTo ?? through;
-      const varies = new Map(
-        this.#store.requests(session).flatMap((r) => (r.scope.kind === "vary" && r.state.state === "fulfilled" ? [[r.state.iteration, r.scope] as const] : [])),
-      );
-      for (const iteration of this.#store.iterations(session)) {
-        if (iteration.n > cutoff) break;
-        const present = new Set(this.#store.iterationBlocks(session, iteration.n).map((b) => b.id));
-        for (const b of out.keys()) if (!present.has(b)) out.delete(b);
-        const vary = varies.get(iteration.n);
-        if (vary === undefined) continue;
-        const { slot } = splitBlockId(vary.target.blockId);
-        for (const v of vary.variants) {
-          const b = blockIdOf(slot, v.key);
-          if (present.has(b)) out.set(b, vary.target);
-        }
-      }
-    }
-    return out;
-  }
-
   #current(id: SessionId, latest: StoredIteration | null): { iteration: IterationView | null; overrides: SessionView["overrides"] } {
     const blocks = latest === null ? [] : this.#store.iterationBlocks(id, latest.n);
-    const overrides = classifyOverrides(this.#schemas(blocks), this.#store.overrides(id));
+    const overrides = classifyOverrides(this.#reads.schemas(blocks), this.#store.overrides(id));
     return { iteration: latest === null ? null : this.#iterationView(id, latest, blocks, overrides.applicable, true), overrides };
   }
 
@@ -1052,9 +1018,9 @@ export class Brainstorm {
     const seen = isLatest ? this.#store.seen(id) : new Set<BlockId>();
     // A branch's first iteration is its starting point, so only what came after it is new.
     const first = this.#store.iterations(id)[0]?.n ?? latest.n;
-    const varied = this.#variedFrom(id, latest.n);
+    const varied = this.#reads.variedFrom(id, latest.n);
     const { slots: _slots, blocks: _blocks, ...summary } = this.#summary(id, latest, blocks);
-    const loaded = blocks.map((b) => ({ id: b.id, ...splitBlockId(b.id), ...this.#load(b) }));
+    const loaded = blocks.map((b) => ({ id: b.id, ...splitBlockId(b.id), ...this.#reads.load(b) }));
     const marks = isLatest ? liveMarks(this.#store.marks(id), slotShapes(latest, blocks)) : NO_MARKS;
     const slots: SlotView[] = latest.slots.flatMap((s) => {
       const [head, ...rest] = loaded.filter((l) => l.slot === s.id).map((l) => l.variant);
@@ -1104,7 +1070,7 @@ export class Brainstorm {
     const it = this.#store.iteration(id, n);
     if (it === null) return fail(notFound("iteration", `${id} has no iteration ${n}`));
     const blocks = this.#store.iterationBlocks(id, n);
-    const { applicable } = classifyOverrides(this.#schemas(blocks), this.#store.overrides(id));
+    const { applicable } = classifyOverrides(this.#reads.schemas(blocks), this.#store.overrides(id));
     return ok(this.#iterationView(id, it, blocks, applicable, false));
   }
 
@@ -1119,7 +1085,7 @@ export class Brainstorm {
     if (phase.phase !== "fulfilled") return { request, phase, message: phaseMessage(phase, { title: session.title, changed: [] }) };
     const changed = phase.iteration === latest?.n ? latest.changed : this.#changedIn(session.id, phase.iteration);
     // Rob reads blocks by the titles the canvas shows, not by their ids.
-    const titles = new Map(this.#store.iterationBlocks(session.id, phase.iteration).map((b) => [b.id, this.#load(b).draft.title]));
+    const titles = new Map(this.#store.iterationBlocks(session.id, phase.iteration).map((b) => [b.id, this.#reads.load(b).draft.title]));
     return {
       request,
       phase,
@@ -1135,7 +1101,7 @@ export class Brainstorm {
   /** A confirm's kept Mains by the titles iteration `n` gives them, or none for any other request. */
   #keptTitles(id: SessionId, n: IterationN, scope: RequestScope): string[] {
     if (scope.kind !== "confirm") return [];
-    const titles = new Map(this.#store.iterationBlocks(id, n).map((b) => [b.id, this.#load(b).draft.title]));
+    const titles = new Map(this.#store.iterationBlocks(id, n).map((b) => [b.id, this.#reads.load(b).draft.title]));
     return keptMains(scope).map((b) => titles.get(b) ?? b);
   }
 
@@ -1153,7 +1119,7 @@ export class Brainstorm {
     const latest = this.#store.latestIteration(id);
     const blockIds = latest === null ? [] : this.#store.iterationBlocks(id, latest.n);
     const block = (blockId: BlockId) => blockIds.find((b) => b.id === blockId);
-    const feedback = (fid: FeedbackId) => this.#feedback(id).find((f) => f.id === fid);
+    const feedback = (fid: FeedbackId) => this.#reads.feedback(id).find((f) => f.id === fid);
     const noBlock = (blockId: BlockId) => notFound("block", `${blockId} is not in the latest iteration of ${id}`);
     const noFeedback = (fid: FeedbackId) => notFound("feedback", `no feedback #${fid} in ${id}`);
 
@@ -1161,7 +1127,7 @@ export class Brainstorm {
       case "set_override": {
         const b = block(action.blockId);
         if (b === undefined) return noBlock(action.blockId);
-        const prop = appearanceProp(this.#load(b).draft.props, action.prop);
+        const prop = appearanceProp(this.#reads.load(b).draft.props, action.prop);
         if (prop === undefined) return invalid(`${action.prop} is not an appearance prop of ${action.blockId}`);
         const value = parseAppearanceValue(prop, action.value);
         if (!value.ok) return invalid(`${JSON.stringify(action.value)} doesn't fit ${action.prop} (${value.reason})`);
@@ -1217,7 +1183,7 @@ export class Brainstorm {
         if (!Number.isInteger(action.count) || action.count < 1 || action.count > VARY_MAX) return invalid(`vary asks for 1 to ${VARY_MAX} variants`);
         const { slot, variant } = splitBlockId(b.id);
         const taken = blockIds.map((x) => splitBlockId(x.id)).filter((x) => x.slot === slot).map((x) => x.variant);
-        const variants = varyNames({ variant, title: this.#load(b).draft.title }, action.target.part, taken, action.count);
+        const variants = varyNames({ variant, title: this.#reads.load(b).draft.title }, action.target.part, taken, action.count);
         return this.#request(id, { scope: { kind: "vary", target: action.target, variants }, freetext: action.direction }, latest, blockIds);
       }
       case "mark_seen": {
@@ -1231,7 +1197,7 @@ export class Brainstorm {
       case "restore":
       case "add_graft":
       case "remove_graft":
-        return this.#mark(id, action, latest, blockIds);
+        return this.#confirms.mark(id, action, latest, blockIds);
       case "confirm":
         return this.#confirm(id, latest, blockIds);
       case "add_slot": {
@@ -1420,7 +1386,7 @@ export class Brainstorm {
       const missing = body.scope.blocks.find((b) => !blocks.some((x) => x.id === b));
       if (missing !== undefined) return notFound("block", `${missing} is not in the latest iteration of ${id}`);
     }
-    const feedbackIds = requestFeedback(this.#feedback(id), body.scope).map((f) => f.id);
+    const feedbackIds = requestFeedback(this.#reads.feedback(id), body.scope).map((f) => f.id);
     const thread = attachment.threadId;
     const n = this.#store.insertRequest(id, { body, feedbackIds, base: latest?.n ?? null, threadId: thread, at: this.#now() });
     this.#emit(id);
@@ -1452,154 +1418,17 @@ export class Brainstorm {
   }
 
   /**
-   * Rob's marks (ADR 009). They describe the latest iteration and change nothing the agent made. While a confirm is
-   * open they are what it was sent with, so they hold still until it lands or he withdraws it. The next marks come from
-   * main.ts, the rules the window applies too, and only what changed is written.
-   */
-  #mark(
-    id: SessionId,
-    action: Extract<RobAction, { kind: "approve" | "trash" | "restore" | "add_graft" | "remove_graft" }>,
-    latest: StoredIteration | null,
-    blocks: readonly IterationBlock[],
-  ): Failure | null {
-    if (latest === null) return notFound("iteration", `${id} has no iteration to mark yet`);
-    if (this.#store.openRequest(id)?.scope.kind === "confirm") return invalid("a confirm is open; its marks change once it lands or you withdraw it");
-    const slots = slotShapes(latest, blocks);
-    const before = liveMarks(this.#store.marks(id), slots);
-    const slotOf = (b: BlockId) => (blocks.some((x) => x.id === b) ? slots.find((s) => s.id === splitBlockId(b).slot) : undefined);
-    const missing = (b: BlockId) => notFound("block", `${b} is not in the latest iteration of ${id}`);
-    let after: Marks;
-    switch (action.kind) {
-      case "approve": {
-        const slot = slotOf(action.blockId);
-        if (slot === undefined) return missing(action.blockId);
-        const { variant } = splitBlockId(action.blockId);
-        after = withApproval(before, slot, { id: action.blockId, slot: slot.id, variant, variedFrom: this.#variedFrom(id, latest.n).get(action.blockId) ?? null });
-        break;
-      }
-      case "trash": {
-        const slot = slotOf(action.blockId);
-        if (slot === undefined) return missing(action.blockId);
-        const refusal = trashRefusal(slot, splitBlockId(action.blockId).variant, before);
-        if (refusal !== null) return invalid(refusal);
-        after = withTrash(before, action.blockId, true);
-        break;
-      }
-      case "restore":
-        after = withTrash(before, action.blockId, false);
-        break;
-      case "add_graft": {
-        const into = slots.find((s) => s.id === action.into);
-        if (into === undefined) return notFound("block", `slot ${action.into} is not in the latest iteration of ${id}`);
-        if (slotOf(action.from.blockId) === undefined) return missing(action.from.blockId);
-        // A pick into a slot with no Main lands in the variant Rob is looking at there.
-        const showing = showingVariant(into, before, this.#store.slotChoices(id).get(into.id) ?? null);
-        const picked = withPick(before, into, action.from, action.instruction, showing);
-        if ("refused" in picked) return invalid(picked.refused);
-        after = picked;
-        break;
-      }
-      case "remove_graft":
-        if (!before.grafts.some((g) => g.id === action.id)) return notFound("block", `no graft ${action.id} in ${id}`);
-        after = { ...before, grafts: before.grafts.filter((g) => g.id !== action.id) };
-        break;
-    }
-    this.#store.tx(() => {
-      this.#store.changeMarks(id, before, after, this.#now());
-      // A new Main is what the slot shows.
-      for (const slot of slots) {
-        const main = after.mains[slot.id];
-        if (main !== undefined && main !== before.mains[slot.id]) this.#store.setSlotChoice(id, slot.id, main);
-      }
-    });
-    return null;
-  }
-
-  /**
-   * Locks Rob's marks in (ADR 009). With nothing to graft the app writes the narrowed iteration itself, as a request it
-   * fulfils at once, so history reads it like any other. With grafts the agent does the merge.
+   * Locks Rob's marks in (ADR 009). Confirm shares Regenerate's gate, and with grafts it is a request like any other,
+   * which the agent merges. With nothing to graft, `Confirms` (confirm.ts) writes the narrowed iteration itself.
    */
   async #confirm(id: SessionId, latest: StoredIteration | null, blocks: readonly IterationBlock[]): Promise<Failure | null> {
     const gated = this.#gate(id, latest);
     if (gated !== null) return gated;
-    const plan = confirmPlan(slotShapes(latest!, blocks), this.#store.marks(id));
-    if (plan === null) return invalid("there is nothing to confirm: choose a Main, trash a variant or pick an element first");
-    if (plan.grafts.length > 0) return this.#request(id, { scope: plan, freetext: null }, latest, blocks);
-    const attachment = this.#store.attachment(id);
-    const at = this.#now();
-    const kept = blocks.filter((b) => !plan.drop.includes(b.id));
-    const n = (latest!.n + 1) as IterationN;
-    this.#store.tx(() => {
-      this.#land(
-        {
-          session: id,
-          iteration: { n, threadId: attachment.threadId, note: null, slots: latest!.slots, createdAt: at },
-          blocks: kept,
-          contents: [],
-          proposed: this.#proposedUsedBy(id, latest!.n, kept),
-          proposedContents: [],
-          addresses: [],
-        },
-        { confirmed: latest!, blocks, dropped: plan.drop },
-      );
-      this.#store.insertRequest(id, { body: { scope: plan, freetext: null }, feedbackIds: [], base: latest!.n, threadId: attachment.threadId, at, fulfilledIn: n });
-    });
+    const plan = this.#confirms.plan(id, latest!, blocks);
+    if (!plan.ok) return plan.error;
+    if (plan.data.grafts.length > 0) return this.#request(id, { scope: plan.data, freetext: null }, latest, blocks);
+    this.#confirms.answer(id, latest!, blocks, plan.data);
     return null;
-  }
-
-  /**
-   * Writes an iteration, the one way every iteration the service writes into a session lands, and settles Rob's marks
-   * against it. A confirm's marks are spent, read against the iteration it confirmed; a graft still waiting for its
-   * slot's Main never showed in the confirm, so it stays. What the confirm dropped lets go of Rob's settings and pins.
-   * Then any mark naming a block or slot the new iteration lacks goes, so a key the agent reuses later starts unmarked
-   * instead of reviving an old Main, trash or graft. Called inside the caller's transaction.
-   */
-  #land(
-    write: Parameters<Store["insertIteration"]>[0],
-    confirm: { readonly confirmed: StoredIteration; readonly blocks: readonly IterationBlock[]; readonly dropped: readonly BlockId[] } | null,
-  ): void {
-    const { session, iteration } = write;
-    if (confirm !== null) {
-      this.#store.changeMarks(session, liveMarks(this.#store.marks(session), slotShapes(confirm.confirmed, confirm.blocks)), NO_MARKS, iteration.createdAt);
-      this.#letGo(session, confirm.dropped, iteration.createdAt);
-    }
-    this.#store.insertIteration(write);
-    this.#store.pruneMarks(
-      session,
-      write.blocks.map((b) => b.id),
-      iteration.slots.map((s) => s.id),
-    );
-  }
-
-  /**
-   * The proposed components of iteration `n` that `kept` still imports, directly or through another proposed component,
-   * so an iteration narrowed by the app carries none that only a dropped variant used (ADR 008's `unused_proposed`).
-   */
-  #proposedUsedBy(session: SessionId, n: IterationN, kept: readonly IterationBlock[]): IterationProposed[] {
-    const all = this.#store.iterationProposed(session, n);
-    const importsOf = new Map(all.map((p) => [p.name as string, proposedImports(this.#store.proposedContent(p.hash).compiled)]));
-    const used = new Set<string>();
-    const pending = kept.flatMap((b) => proposedImports(this.#load(b).content.compiled));
-    for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
-      const imports = importsOf.get(name);
-      if (imports === undefined || used.has(name)) continue;
-      used.add(name);
-      pending.push(...imports);
-    }
-    return all.filter((p) => used.has(p.name));
-  }
-
-  /**
-   * What goes with the variants a confirm drops (ADR 009): Rob's settings on them, and his open pins, which no request
-   * could address once the variant is gone. A pin goes as when Rob deletes it, so its history stays in the store.
-   */
-  #letGo(id: SessionId, drop: readonly BlockId[], at: string): void {
-    for (const o of this.#store.overrides(id)) {
-      if (drop.includes(o.blockId)) this.#store.deleteOverride(id, o.blockId, o.prop);
-    }
-    for (const f of this.#feedback(id)) {
-      if (f.status.state === "open" && drop.includes(f.pin.blockId)) this.#store.deleteFeedback(id, f.id, at);
-    }
   }
 
   /**
@@ -1614,7 +1443,7 @@ export class Brainstorm {
     const open = this.#store.openRequest(session.id) ?? this.#trees.openElsewhere(session.id);
     const lost = this.#store.attachment(session.id).lostAt !== null;
     if (open !== null && !lost) return { code: "request_open", message: `request ${open.n} is still open; let it finish or withdraw it first`, n: open.n };
-    const title = this.#store.sessionName(root)?.title ?? session.title;
+    const title = this.#store.sessionName(root) ?? session.title;
     this.#refreshing.add(root);
     let result: StartResult;
     try {
@@ -1837,32 +1666,9 @@ export class Brainstorm {
     }
   }
 
-  #feedback(id: SessionId): Feedback[] {
-    return this.#store
-      .feedback(id)
-      .filter((f) => f.deletedAt === null)
-      .map(({ deletedAt: _deleted, ...f }: FeedbackRecord) => ({ ...f, status: foldFeedback(f.history) }));
-  }
-
-  /** Stored content never changes, so its row and its parse are read once per hash for the life of the service. */
-  #load(block: IterationBlock): Loaded {
-    const cached = this.#loaded.get(block.hash);
-    if (cached !== undefined) return cached;
-    const content = this.#store.content(block.hash);
-    const draft = readStoredBlock({ id: block.id, files: content.files });
-    if (draft === null) throw new Error(`stored block ${block.id} (${block.hash}) no longer parses`);
-    const loaded: Loaded = { draft: { title: draft.title, props: draft.props, controls: draft.controls }, content };
-    this.#loaded.set(block.hash, loaded);
-    return loaded;
-  }
-
-  #schemas(blocks: readonly IterationBlock[]): Map<BlockId, PropsSchema> {
-    return new Map(blocks.map((b) => [b.id, this.#load(b).draft.props]));
-  }
-
   /** The titles of the blocks iteration `n` changed, as the canvas names them. */
   #changedTitles(id: SessionId, n: IterationN): readonly string[] {
-    const titles = new Map(this.#store.iterationBlocks(id, n).map((b) => [b.id, this.#load(b).draft.title]));
+    const titles = new Map(this.#store.iterationBlocks(id, n).map((b) => [b.id, this.#reads.load(b).draft.title]));
     return this.#changedIn(id, n).map((b) => titles.get(b) ?? b);
   }
 
@@ -1971,14 +1777,7 @@ function lostPins(
     );
 }
 
-type Drawn = {
-  readonly titles: ReadonlyMap<BlockId, string>;
-  /** The titles in the iteration the commit is based on. */
-  readonly titlesBefore: ReadonlyMap<BlockId, string>;
-  /** Each block's content hash, in the commit and in the iteration it is based on. */
-  readonly hashes: ReadonlyMap<BlockId, ContentHash>;
-  readonly hashesBefore: ReadonlyMap<BlockId, ContentHash>;
-  readonly parts: ReadonlyMap<BlockId, readonly PartName[]>;
+type Drawn = DrawnBlocks & {
   /** The slots of the iteration the commit is based on. */
   readonly slotsBefore: ReadonlySet<SlotId>;
   /** How many slots the commit adds. */
@@ -2040,66 +1839,6 @@ function requestWarnings(
           ? [issue("not_addressed", `request ${request.n} asked for a new slot, and this commit adds none to brainstorm.json`, { file: "brainstorm.json" })]
           : [];
   return [...outOfScope, ...specific, ...notAddressed];
-}
-
-/** Whether `block` sits in a slot that has a Main and isn't that Main. */
-function besideMain(scope: ConfirmScope, block: BlockId): boolean {
-  const { slot, variant } = splitBlockId(block);
-  const main = scope.mains.find((m) => m.slot === slot);
-  return main !== undefined && main.variant !== variant;
-}
-
-/**
- * A confirm leaves each slot with a Main holding only Main, under the id and title it had, and a Main that receives
- * grafts changes and renders every element grafted into it. Every variant it drops is gone.
- */
-function confirmMismatches(n: RequestN, scope: ConfirmScope, drawn: Drawn): Issue[] {
-  const left = [...drawn.titles.keys()]
-    .filter((b) => scope.drop.includes(b) || besideMain(scope, b))
-    .map((b) =>
-      issue(
-        "confirm_mismatch",
-        scope.drop.includes(b)
-          ? `request ${n} drops ${b}, and this commit still has it`
-          : `request ${n} keeps only Main in slot ${splitBlockId(b).slot}, and this commit has ${b} beside it`,
-        { file: blockFile(b, "tsx") },
-      ),
-    );
-  const lost = scope.mains
-    .map((m) => blockIdOf(m.slot, m.variant))
-    .filter((id) => !drawn.titles.has(id))
-    .map((id) => issue("confirm_mismatch", `request ${n} keeps ${id} as Main, and this commit no longer has it`, { file: "brainstorm.json" }));
-  const renamed = scope.mains.flatMap((m) => {
-    const id = blockIdOf(m.slot, m.variant);
-    const before = drawn.titlesBefore.get(id);
-    const after = drawn.titles.get(id);
-    return before === undefined || after === undefined || before === after
-      ? []
-      : [issue("confirm_mismatch", `${id} is titled "${after}"; request ${n} keeps it as Main titled "${before}"`, { file: blockFile(id, "json") })];
-  });
-  const grafts = scope.mains.flatMap((m) => {
-    const into = scope.grafts.filter((g) => g.into === m.slot);
-    const id = blockIdOf(m.slot, m.variant);
-    // A Main that is gone is named once, above.
-    if (into.length === 0 || !drawn.titles.has(id)) return [];
-    // A grafted element can be one Main already renders, as a vary option's is, so only a changed Main shows the agent
-    // merged it. A whole-block graft has no element to look for at all.
-    if (drawn.hashes.get(id) === drawn.hashesBefore.get(id)) {
-      const what = into.map((g) => (g.from.part === null ? `all of ${g.from.blockId}` : `data-part "${g.from.part}" from ${g.from.blockId}`));
-      return [issue("confirm_mismatch", `request ${n} grafts ${listed(what)} into ${id}, and this commit leaves ${id} as it was`, { file: blockFile(id, "tsx") })];
-    }
-    return into.flatMap((g) =>
-      g.from.part === null || (drawn.parts.get(id) ?? []).includes(g.from.part)
-        ? []
-        : [issue("confirm_mismatch", `${id} doesn't render data-part "${g.from.part}", the element request ${n} grafts into it from ${g.from.blockId}`, { file: blockFile(id, "tsx") })],
-    );
-  });
-  return [...left, ...lost, ...renamed, ...grafts];
-}
-
-/** `a`, `a and b`, `a, b and c`. */
-function listed(items: readonly string[]): string {
-  return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 /** Each variant a vary asked for exists under its key and title, and still renders the element it varies. */

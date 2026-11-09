@@ -107,7 +107,7 @@ export class Trees {
       }
       const latest = this.#store.latestIteration(session);
       if (upTo !== null && latest !== null && latest.n > upTo) {
-        branches.push({ id: session, title: this.#store.sessionName(session)?.title ?? session, parent: session, from: upTo });
+        branches.push({ id: session, title: this.#store.sessionName(session) ?? session, parent: session, from: upTo });
       }
     });
     return { iterations, branches };

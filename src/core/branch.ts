@@ -1,6 +1,8 @@
+import type { Confirms } from "./confirm";
 import { requestFeedback } from "./machines";
 import { confirmPlan, liveMarks, slotShapes } from "./main";
 import { appearanceProp, classifyOverrides } from "./props";
+import type { Reads } from "./reads";
 import type { IterationBlock, IterationProposed, SessionSystem, Store, StoredContent, StoredIteration } from "./store";
 import type { Trees } from "./tree";
 import {
@@ -14,7 +16,6 @@ import {
   type ConfirmScope,
   type ContentHash,
   type Failure,
-  type Feedback,
   type Issue,
   type IterationN,
   type Marks,
@@ -55,19 +56,18 @@ export function branchTitle(instruction: string): string {
 }
 
 /**
- * What making a branch needs from the service: the store, the tree, the clock and new session ids, and four of the
- * service's own reads, which stay there because commits and confirms share them. `load` reads a stored block through
- * the service's cache, `feedback` folds a session's live pins, `proposedUsedBy` is the confirm's rule for which
- * proposed components a narrowed iteration keeps, and `check` is the commit's check against the session's kit.
+ * What making a branch needs: the store, the tree, the clock and new session ids; the shared reads, for stored blocks
+ * and live pins; confirms, since a branch narrowed by the app keeps the proposed components a confirm would; and the
+ * service's commit check against the session's kit. The check stays the service's: it runs the checker's worker with
+ * the environment its design systems give, which commits and upgrades use too.
  */
 export type BranchDeps = {
   readonly store: Store;
   readonly trees: Trees;
   readonly now: () => string;
   readonly newSessionId: () => SessionId;
-  readonly load: (block: IterationBlock) => { readonly draft: Pick<BlockDraft, "title" | "props">; readonly content: StoredContent };
-  readonly feedback: (id: SessionId) => Feedback[];
-  readonly proposedUsedBy: (session: SessionId, n: IterationN, kept: readonly IterationBlock[]) => IterationProposed[];
+  readonly reads: Reads;
+  readonly confirms: Confirms;
   readonly check: (
     blocks: readonly BlockDraft[],
     overrides: readonly Override[],
@@ -151,30 +151,30 @@ export class Branches {
    * checked again, or a refusal naming the kept variant his settings break.
    */
   async #bake({ parent, source, blocks, plan, grafting }: BranchStart): Promise<Result<BakedBranch>> {
-    const { store, load } = this.#deps;
+    const { store, reads } = this.#deps;
     const kept = grafting || plan === null ? blocks : blocks.filter((b) => !plan.drop.includes(b.id));
-    const { applicable } = classifyOverrides(new Map(blocks.map((b) => [b.id, load(b).draft.props])), store.overrides(parent.id));
+    const { applicable } = classifyOverrides(new Map(blocks.map((b) => [b.id, reads.load(b).draft.props])), store.overrides(parent.id));
     const settings = applicable.flatMap((o) => {
       const stored = kept.find((b) => b.id === o.blockId);
-      const spec = stored === undefined ? undefined : appearanceProp(load(stored).draft.props, o.prop);
+      const spec = stored === undefined ? undefined : appearanceProp(reads.load(stored).draft.props, o.prop);
       return spec === undefined || spec.default === o.value ? [] : [{ blockId: o.blockId, prop: o.prop, value: o.value }];
     });
     const baked: { id: BlockId; title: string; hash: ContentHash; draft: BlockDraft | null }[] = [];
     for (const stored of kept) {
       const mine = settings.filter((s) => s.blockId === stored.id);
-      const title = load(stored).draft.title;
+      const title = reads.load(stored).draft.title;
       if (mine.length === 0) {
         baked.push({ id: stored.id, title, hash: stored.hash, draft: null });
         continue;
       }
-      const files = load(stored).content.files;
+      const files = reads.load(stored).content.files;
       const draft = readStoredBlock({ id: stored.id, files: { ...files, json: bakeDefaults(files.json, mine) } });
       if (draft === null) return fail(invalid(`${title} doesn't read with your settings as its defaults. Reset its settings, or keep another variant.`));
       baked.push({ id: stored.id, title, hash: draft.hash, draft });
     }
     const system = store.sessionSystem(parent.id);
     // A branch narrowed by the app carries only the proposed components its kept variants use, as a confirm does.
-    const proposed = kept === blocks ? store.iterationProposed(parent.id, source.n) : this.#deps.proposedUsedBy(parent.id, source.n, kept);
+    const proposed = kept === blocks ? store.iterationProposed(parent.id, source.n) : this.#deps.confirms.proposedUsedBy(parent.id, source.n, kept);
     const proposedDrafts = proposed.flatMap((p) => {
       const draft = readStoredProposed(p.name, store.proposedContent(p.hash).files);
       return draft === null ? [] : [draft];
@@ -199,7 +199,7 @@ export class Branches {
     const { parent, source, marks, instruction, grafting } = start;
     const at = this.#deps.now();
     const keptIds = new Set(baked.kept.map((b) => b.id));
-    const pins = this.#deps.feedback(parent.id).filter((f) => f.status.state === "open" && keptIds.has(f.pin.blockId));
+    const pins = this.#deps.reads.feedback(parent.id).filter((f) => f.status.state === "open" && keptIds.has(f.pin.blockId));
     const { body, answered } = branchRequest(start);
     const asked = new Set(body === null ? [] : requestFeedback(pins, body.scope).map((f) => f.id));
     return store.tx((): Result<ThreadId> => {
