@@ -1,5 +1,5 @@
 import type { PreviewPrefs } from "../core/prefs";
-import { blockIdOf, type BlockId, type BlockView, type CanvasFrame, type CanvasPin, type CanvasSystem, type FeedbackId, type IterationN, type Props, type SessionId, type SlotId, type SlotView } from "../core/types";
+import { blockIdOf, type BlockId, type BlockView, type CanvasFrame, type CanvasPin, type CanvasSystem, type FeedbackId, type IterationN, type Marks, type Props, type SessionId, type SlotId, type SlotView } from "../core/types";
 
 /**
  * The preview window mirrors the main window's canvas (ADR 007). The two are pages of one origin in one Electron
@@ -9,6 +9,9 @@ import { blockIdOf, type BlockId, type BlockView, type CanvasFrame, type CanvasP
 const CHANNEL = "brainstorm-preview";
 
 /** What the main window's canvas shows, sent whenever it changes. Blocks go apart, since they change far less often. */
+/** What a canvas pick is for: a pin comment, a vary, or an element picked into Main (ADR 010). */
+export type PickKind = "comment" | "vary" | "graft";
+
 export type MirrorScene = {
   readonly session: SessionId;
   readonly title: string;
@@ -23,7 +26,7 @@ export type MirrorScene = {
   readonly slot: SlotId | null;
   readonly view: "stage" | "board";
   /** What a pick is for, while the canvas is in pick mode. */
-  readonly picking: "comment" | "vary" | null;
+  readonly picking: PickKind | null;
   readonly pins: readonly CanvasPin[];
   readonly focused: FeedbackId | null;
   readonly hovered: FeedbackId | null;
@@ -31,6 +34,8 @@ export type MirrorScene = {
   readonly past: IterationN | null;
   /** Why a comment can't be pinned now, in the Inspector's words, or null when it can. */
   readonly pinBlocked: string | null;
+  /** Rob's marks on the iteration showing, so a pick into Main here says when it makes the slot's Main too (ADR 010). */
+  readonly marks: Marks;
 };
 
 export type PreviewSettings = { readonly look: PreviewPrefs["look"]; readonly hold: boolean };
@@ -51,7 +56,7 @@ export type ToMain =
   | { readonly kind: "pin_clicked"; readonly id: FeedbackId }
   | { readonly kind: "pin_hovered"; readonly id: FeedbackId | null }
   /** Start a pick, or with null end one. */
-  | { readonly kind: "pick"; readonly for: "comment" | "vary" | null }
+  | { readonly kind: "pick"; readonly for: PickKind | null }
   /** The preview window took the pick and opened its composer, so the main window leaves pick mode. */
   | { readonly kind: "picked" }
   | { readonly kind: "slot"; readonly slot: SlotId }

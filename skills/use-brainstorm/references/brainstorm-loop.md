@@ -125,6 +125,7 @@ Warnings arrive with a saved iteration. Fix the ones you caused and commit again
 | `duplicate_part` | Two elements share a `data-part` in one render. Make the names unique. |
 | `uncontrolled_prop` | An explicit `controls.json` misses an appearance prop. Add the control, or delete `controls.json`. |
 | `vary_mismatch` | A vary request's new variant is missing, has another title, or lacks the target `data-part`. Add the folder under the key `context` named, set that title, or restore the part. |
+| `confirm_mismatch` | A confirm's deleted variant is still there, a new variant other than a graft's source sits beside Main, a Main is gone or retitled, Main doesn't render a grafted element's `data-part`, or a Main receiving grafts is unchanged. Delete the extra folders, restore Main under its key and title, or rebuild the grafted element in Main under that name. |
 
 A commit that changes nothing and addresses nothing new returns the latest iteration with `created: false`. That is a safe replay.
 
@@ -162,7 +163,8 @@ Handle with the use-brainstorm skill: run `brainstorm context s_8f2k3a`.
 
 `context` is the source of truth for the request, not the message. It gives the scope, the free text, each requested feedback item with its block, part, text and history, Rob's applicable overrides on in-scope blocks, all open and addressed feedback, the control vocabulary, and the exact `next` commands to run.
 
-- **Scope** is `all`, a list of block ids, `described`, where the free text names the blocks, or `vary`. Change only those blocks. Add a slot or variant only when the request asks for one.
+- **Scope** is `all`, a list of block ids, `described`, where the free text names the blocks, `vary`, `confirm` or `add_slot`. Change only those blocks. Add a slot or variant only when the request asks for one.
+- **Marks.** `context` names Rob's Main (`rob's main`), the variants he chose to carry forward, and what he trashed. Improve Main first, and leave trashed variants as they are: his next confirm deletes them.
 - **Feedback.** Pass the ids you addressed as `--addresses 4,7`, without `#`. Rob confirms them in the app.
 - **Note.** Add `--note "<one sentence on what changed>"`.
 
@@ -179,11 +181,38 @@ Rob picked one element and asked for new variants of its slot that differ only t
 - Rob's overrides on the target are in scope. Write them into each copy's `block.json` as the props' defaults, so the copies start from what Rob sees.
 - Leave the target and every other variant unchanged. The commit warns `out_of_scope` for any other block, and `vary_mismatch` for a missing variant, another title or a missing part.
 
-## Forks
+## Confirm
 
 ```
-[brainstorm] session s_q7d1m0 · request 1 · fork of s_8f2k3a iteration 4 · scope: all · feedback: #1 · freetext: "try a calmer wheel for mornings"
-Handle with the use-brainstorm skill: this thread is new, so run `brainstorm session attach s_q7d1m0`, then `brainstorm context s_q7d1m0`.
+[brainstorm] session s_8f2k3a · request 7 · scope: confirm main wheel/neon; graft wheel/calm [spin-button] into wheel; drop wheel/reel
 ```
 
-A fork is a new brainstorm, linked to its parent, in a new thread. `context` adds a `fork of` line and one `baked default <block> <prop> = <value>` line for each of Rob's settings that became a default. Rob's later requests to the fork arrive as ordinary requests.
+Rob chose a Main for each slot and picked elements from other variants to bring into it. A confirm with nothing to bring in never reaches you: the app writes it itself. `context` lists one line for each part of the work:
+
+- `main of slot <slot>: <block>` is the variant going forward.
+- `graft data-part "<part>" from <block> into <main>` asks you to rebuild that element of the source inside Main, where the quoted instruction says, or where it fits best when there is none. Keep the element's `data-part` name in Main, and change nothing else in Main.
+- `keep <block> as it is` names a graft's source. Leave its folder unchanged, even beside Main: Rob's next confirm deletes it once the graft has landed, and keeps it to try again if it hasn't.
+- `delete <block>` asks you to remove that variant's folder.
+
+The commit warns `confirm_mismatch` when a deleted variant is still there, a new variant other than a graft's source sits beside Main, a Main is gone or retitled, Main doesn't render a grafted element's `data-part`, or a Main receiving grafts comes back unchanged. It warns `out_of_scope` for a change to any other block, a graft's source included.
+
+## Add slot
+
+Rob asked for a new slot. Add one entry to the `slots` list in `brainstorm.json` and its variants under `slots/<slot>/`, as the free text asks. Change no existing block. The commit warns `not_addressed` when it adds no slot, and `out_of_scope` for a change to an existing block.
+
+## Branches
+
+```
+[brainstorm] session s_q7d1m0 · request 1 · branch of s_8f2k3a iteration 4 · scope: all · feedback: #1 · freetext: "try a calmer wheel for mornings"
+Handle with the use-brainstorm skill: run `brainstorm context s_q7d1m0`.
+```
+
+Rob went back to a past iteration and confirmed different choices there, so the brainstorm has a new branch. Every branch is its own session on this same thread, and its iterations number on from where it left. `context` adds a `branch of` line (`branchOf` in `--json`) and one `baked default <block> <prop> = <value>` line for each of Rob's settings that became a default. Build from the branch's own latest iteration, not from the branch it left. Only one branch has a request open at a time.
+
+## Fresh threads
+
+```
+[brainstorm] session s_8f2k3a · fresh thread for "Chore wheel"
+```
+
+Rob moved the whole brainstorm to a new thread for a clean context. Attach and read `context`; nothing is waiting for a commit unless `context` shows an open request.

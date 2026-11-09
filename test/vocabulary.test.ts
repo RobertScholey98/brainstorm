@@ -12,9 +12,9 @@ const RETIRED: readonly { readonly pattern: RegExp; readonly say: string }[] = [
   { pattern: /No iterations yet|agent's first commit/, say: "WAITING from Preview.tsx, the one name for a brainstorm with no iteration" },
   { pattern: /Restart Brainstorm, then try again/, say: "If it happens again, restart Brainstorm: the copy sits over a Try again button" },
   { pattern: /matches the search/, say: "the search's own words: Nothing here has “zebra” in its title or brief" },
-  { pattern: /heading={`Fork iteration/, say: "the Fork button's own label, so button and popover share one name in both states" },
   { pattern: /. Everything else stays./, say: "<context> · <clause>, the one grammar a popover description takes" },
-  { pattern: /Fork of/, say: "from … · iteration N, the one wording for a fork's lineage on the card, the row, the stub and the parent's tile" },
+  // Forks became branches (ADR 010), so the window, and the code behind it, says branch.
+  { pattern: /fork/i, say: "branch, the one name for a line of a brainstorm (ADR 010)" },
   { pattern: /Try again, and if it still fails/, say: "If it happens again, restart Brainstorm: the same copy shows in a toast, which has no Try again button" },
 ];
 
@@ -30,5 +30,21 @@ describe("UI vocabulary", () => {
       return RETIRED.filter(({ pattern }) => pattern.test(text)).map(({ pattern, say }) => `${file}: ${pattern}, say ${say}`);
     });
     expect(found).toEqual([]);
+  });
+});
+
+// Storage keeps ADR 005's `fork` table (ADR 010), which the store's SQL and migration 12 name. Nothing else does.
+const STORE = join("src", "core", "store.ts");
+const STORE_FORK_NAMES = new Set(["fork", "forks", "fork_parent", "forksBecomeBranches"]);
+
+describe("code vocabulary", () => {
+  it("says branch everywhere but the store", () => {
+    const found = sources("src").filter((file) => file !== STORE && /fork/i.test(readFileSync(file, "utf8")));
+    expect(found).toEqual([]);
+  });
+
+  it("names fork in the store only for its table and the migration that made forks branches", () => {
+    const names = new Set(readFileSync(STORE, "utf8").match(/\w*fork\w*/gi));
+    expect([...names].filter((name) => !STORE_FORK_NAMES.has(name))).toEqual([]);
   });
 });

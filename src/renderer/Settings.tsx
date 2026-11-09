@@ -29,7 +29,7 @@ import { Switch } from "@/components/ui/switch";
 import { Hint } from "@/components/ui/tooltip";
 import { openFolderPath, type AppAbout, type Openable } from "../core/about";
 import type { AppUpdateState } from "../core/appUpdate";
-import { VARY_MAX } from "../core/fork";
+import { VARY_MAX } from "../core/vary";
 import { RESTORE_DEFAULTS, type AppSettings, type NotifyChoice, type StripChoice, type UiPrefs, type UiPrefsPatch } from "../core/prefs";
 import { SETTLE_SHORTCUT } from "./settle";
 import { updateMove, updateStatus } from "./Update";
@@ -72,7 +72,7 @@ const SHORTCUTS: readonly { readonly keys: string; readonly title: string; reado
   { keys: "Ctrl+R", title: "Regenerate", description: "Ask the agent for a new iteration of the open brainstorm." },
   { keys: SETTLE_SHORTCUT, title: "Settle", description: "Settle the brainstorm focused in a list or open, or bring a settled one back." },
   { keys: "/", title: "Search", description: "Search the brainstorms on home, or these settings while they're open. Ctrl+F works on home too." },
-  { keys: "Ctrl+Enter", title: "Send", description: "Send from a comment, Regenerate, Fork or Vary." },
+  { keys: "Ctrl+Enter", title: "Send", description: "Send from a comment, Regenerate, Vary, Pick, Confirm or Add slot." },
   { keys: "Esc", title: "Back out", description: "Close a popover, stop picking, cancel a comment, then leave a past iteration." },
   { keys: "← →", title: "Slots and iterations", description: "Move between slot tabs, or between iterations in the history strip. Home and End jump to its ends." },
   { keys: "F5", title: "Present", description: "Fill the screen with the slot on the stage." },

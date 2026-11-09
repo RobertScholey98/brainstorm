@@ -8,7 +8,9 @@ import type {
   ContentHash,
   FeedbackEvent,
   FeedbackId,
+  GraftId,
   IterationN,
+  Marks,
   Override,
   PartName,
   Pin,
@@ -30,10 +32,12 @@ import type {
   SessionSummary,
   SlotId,
   SlotManifest,
+  StoredGraft,
   ThreadId,
   VariantKey,
   Issue,
 } from "./types";
+import { OPEN_REQUEST_STATES } from "./types";
 import type { SystemManifest } from "./system/model";
 import type { SystemSource } from "./system/source";
 import { contentHash } from "./workingCopy";
@@ -67,13 +71,16 @@ const MIGRATIONS: readonly Migration[] = [
     base INTEGER, thread_id TEXT NOT NULL,
     state TEXT NOT NULL CHECK(state IN ('sending','sent','send_failed','fulfilled','withdrawn')),
     error TEXT, sent_at TEXT, fulfilled_in INTEGER, created_at TEXT NOT NULL, PRIMARY KEY(session_id, n));
+  -- One open request per session. ADR 010 holds a whole brainstorm to one, since its branches share a thread; that rule
+  -- lives in the service (Trees and the request gates), not here, and migration 12 can leave several open in one tree.
   CREATE UNIQUE INDEX one_open_request ON request(session_id) WHERE state IN ('sending','sent','send_failed');
   `,
   `ALTER TABLE project ADD COLUMN name TEXT;`,
   `CREATE TABLE ui_pref(key TEXT PRIMARY KEY, value_json TEXT NOT NULL);`,
   dropVariantNotes,
   `ALTER TABLE session ADD COLUMN settled_at TEXT; ALTER TABLE session ADD COLUMN unsettled_at TEXT;`,
-  // Every block that exists already counts as seen, so nothing old lights up as new.
+  // Every block that exists already counts as seen, so nothing old lights up as new. ADR 005 named a branch a fork, and
+  // storage keeps that name: a branch is still a `fork` row, since migrations and stored databases name the table.
   `
   CREATE TABLE fork(session_id TEXT PRIMARY KEY REFERENCES session, parent_id TEXT NOT NULL REFERENCES session,
     parent_n INTEGER NOT NULL, baked_json TEXT NOT NULL, created_at TEXT NOT NULL,
@@ -121,7 +128,83 @@ const MIGRATIONS: readonly Migration[] = [
   INSERT INTO project_system(project_id, system_id, set_at)
     SELECT project_id, MIN(id), MIN(created_at) FROM design_system WHERE project_id IS NOT NULL GROUP BY project_id HAVING COUNT(*) = 1;
   `,
+  // Main, confirm and branches (ADR 010): Rob's marks, the primary branch, and forks become branches of one tree.
+  `
+  CREATE TABLE main_choice(session_id TEXT NOT NULL REFERENCES session, slot TEXT NOT NULL, variant TEXT NOT NULL,
+    PRIMARY KEY(session_id, slot));
+  CREATE TABLE graft(session_id TEXT NOT NULL REFERENCES session, id INTEGER NOT NULL, block_id TEXT NOT NULL, part TEXT,
+    into_slot TEXT NOT NULL, instruction TEXT, created_at TEXT NOT NULL, PRIMARY KEY(session_id, id));
+  CREATE TABLE trashed(session_id TEXT NOT NULL REFERENCES session, block_id TEXT NOT NULL, PRIMARY KEY(session_id, block_id));
+  CREATE TABLE primary_branch(root_id TEXT PRIMARY KEY REFERENCES session, session_id TEXT NOT NULL REFERENCES session);
+  `,
+  forksBecomeBranches,
 ];
+
+/**
+ * A fork used to number its iterations from 1 and run on a thread of its own. As a branch it continues its parent's
+ * numbers, so a fork from iteration 3 now starts at 4, and it shares its root's thread. Parents are renumbered before
+ * their children, since a child's offset is where it left its parent after the parent moved.
+ */
+function forksBecomeBranches(db: DatabaseSync): void {
+  db.exec("PRAGMA defer_foreign_keys = ON");
+  const forks = db.prepare("SELECT session_id, parent_id, parent_n FROM fork ORDER BY created_at, session_id").all() as Row[];
+  const parentOf = new Map(forks.map((f) => [str(f.session_id), { parent: str(f.parent_id), from: num(f.parent_n) }]));
+  const depth = (id: string): number => {
+    let d = 0;
+    for (let at = parentOf.get(id); at !== undefined && d < 64; at = parentOf.get(at.parent)) d += 1;
+    return d;
+  };
+  const rootOf = (id: string): string => {
+    let at = id;
+    for (let i = 0; i < 64 && parentOf.has(at); i += 1) at = parentOf.get(at)!.parent;
+    return at;
+  };
+  const shift = (session: string, by: number) => {
+    if (by === 0) return;
+    // Through negatives, so no row ever collides with one not yet moved.
+    for (const sign of [-1, 1]) {
+      const n = sign === -1 ? "-(n + ?)" : "-n";
+      const args = sign === -1 ? [by, session] : [session];
+      db.prepare(`UPDATE iteration SET n = ${n} WHERE session_id = ?`).run(...args);
+      db.prepare(`UPDATE iteration_block SET n = ${n} WHERE session_id = ?`).run(...args);
+      db.prepare(`UPDATE iteration_proposed SET n = ${n} WHERE session_id = ?`).run(...args);
+    }
+    db.prepare("UPDATE request SET base = base + ? WHERE session_id = ? AND base IS NOT NULL").run(by, session);
+    db.prepare("UPDATE request SET fulfilled_in = fulfilled_in + ? WHERE session_id = ? AND fulfilled_in IS NOT NULL").run(by, session);
+    db.prepare("UPDATE feedback SET created_in = created_in + ? WHERE session_id = ?").run(by, session);
+    db.prepare("UPDATE feedback_event SET iteration = iteration + ? WHERE session_id = ? AND iteration IS NOT NULL").run(by, session);
+    db.prepare("UPDATE fork SET parent_n = parent_n + ? WHERE parent_id = ?").run(by, session);
+  };
+  // Which sessions have an open request, read once: the rewrite below keeps a request open, so the answer holds.
+  const open = new Set((db.prepare(`SELECT DISTINCT session_id FROM request WHERE ${OPEN_REQUEST}`).all() as Row[]).map((r) => str(r.session_id)));
+  const ordered = [...parentOf.keys()].sort((a, b) => depth(a) - depth(b));
+  for (const id of ordered) {
+    // Read again: the parent's renumbering moved parent_n.
+    const row = db.prepare("SELECT parent_n FROM fork WHERE session_id = ?").get(id) as Row;
+    shift(id, num(row.parent_n));
+    const root = rootOf(id);
+    const shared = db.prepare("SELECT thread_id, lost_at FROM attachment WHERE session_id = ? AND detached_at IS NULL").get(root) as Row | undefined;
+    const mine = db.prepare("SELECT thread_id FROM attachment WHERE session_id = ? AND detached_at IS NULL").get(id) as Row | undefined;
+    if (shared === undefined || mine === undefined) continue;
+    const thread = str(shared.thread_id);
+    const moved = str(mine.thread_id) !== thread;
+    if (moved) {
+      const at = new Date().toISOString();
+      db.prepare("UPDATE attachment SET detached_at = ? WHERE session_id = ? AND detached_at IS NULL").run(at, id);
+      // The fork joins the root's thread as it is, lost included, so it never reads as healthy on a thread that's gone.
+      db.prepare("INSERT INTO attachment(session_id, thread_id, attached_at, lost_at) VALUES (?, ?, ?, ?)").run(id, thread, at, strOrNull(shared.lost_at));
+    }
+    // The shared thread takes one request at a time. A request still waiting on the fork's own thread, or open beside
+    // another branch's on the same one, waits for Rob's retry; the retry looks for its marker first, so none goes twice.
+    const crowded = [...open].some((other) => other !== id && rootOf(other) === root);
+    if (!moved && !crowded) continue;
+    db.prepare(
+      `UPDATE request SET thread_id = ?, state = 'send_failed',
+         error = 'Brainstorm now keeps every branch on one thread; retry to send it there'
+       WHERE session_id = ? AND ${OPEN_REQUEST}`,
+    ).run(thread, id);
+  }
+}
 
 /**
  * Variant notes left the format. A note was part of its block's content hash, so each block that had one is stored
@@ -146,7 +229,7 @@ function dropVariantNotes(db: DatabaseSync): void {
   db.exec("ALTER TABLE block_content DROP COLUMN about");
 }
 
-const OPEN_REQUEST = `state IN ('sending','sent','send_failed')`;
+const OPEN_REQUEST = `state IN (${OPEN_REQUEST_STATES.map((s) => `'${s}'`).join(",")})`;
 
 type Row = Record<string, unknown>;
 
@@ -231,34 +314,42 @@ const toSession = (r: Row): SessionSummary => ({
   createdAt: str(r.created_at),
 });
 
-/** A fork's link to its parent. `baked` names the settings that became its defaults, for the agent. */
-export type StoredFork = {
+/** A branch's link to its parent. `baked` names the settings that became its defaults, for the agent. */
+export type StoredBranch = {
   readonly parent: SessionId;
   readonly from: IterationN;
   readonly baked: readonly BakedSetting[];
   readonly createdAt: string;
 };
 
-/** Everything a fork is made of, written in one transaction before its thread starts. */
-export type NewFork = {
+/** Everything a branch is made of, written in one transaction on the thread its tree shares. */
+export type NewBranch = {
   readonly session: SessionSummary;
-  readonly fork: StoredFork;
+  readonly link: StoredBranch;
   readonly iteration: StoredIteration;
   readonly blocks: readonly IterationBlock[];
   readonly contents: readonly StoredContent[];
   readonly proposed: readonly IterationProposed[];
-  readonly feedback: readonly { readonly pin: Pin; readonly text: string }[];
-  readonly request: { readonly body: RequestBody; readonly at: string };
-  /** The parent's design system version and theme, which the fork keeps. */
+  /** Rob's open pins, carried as new feedback; `asked` puts one in request 1, as its scope's rule says. */
+  readonly feedback: readonly { readonly pin: Pin; readonly text: string; readonly asked: boolean }[];
+  /**
+   * The branch's request 1, or null when it has none. An `answered` one is a confirm the first iteration already carries
+   * out, so that iteration fulfils it; any other goes to the agent.
+   */
+  readonly request: { readonly body: RequestBody; readonly at: string; readonly answered: boolean } | null;
+  /** The parent's design system version and theme, which the branch keeps. */
   readonly system: SessionSystem | null;
   readonly theme: readonly { readonly key: string; readonly value: string }[];
 };
 
 /**
  * A listing as the store holds it; the service reads an open request's phase from the thread and folds the settle.
- * `woken` is whether anything that brings a settled brainstorm back has happened since `settledAt`.
+ * A brainstorm settles as a whole, so `settledAt` and `unsettledAt` are its root's (ADR 010). `woken` is whether this
+ * branch did anything that brings a settled brainstorm back since then.
  */
 export type StoredListing = Omit<SessionListing, "request" | "settlement"> & {
+  /** The session this branch left, or null for a brainstorm's root. */
+  readonly parent: SessionId | null;
   readonly openRequest: boolean;
   readonly settledAt: string | null;
   readonly unsettledAt: string | null;
@@ -278,7 +369,7 @@ const toListing = (r: Row): StoredListing => {
     settledAt: strOrNull(r.settled_at),
     unsettledAt: strOrNull(r.unsettled_at),
     woken: num(r.woken) === 1,
-    fork: r.fork_from === null ? null : { parentTitle: str(r.fork_parent_title), from: num(r.fork_from) as IterationN },
+    parent: r.branch_parent === null ? null : (str(r.branch_parent) as SessionId),
   };
 };
 
@@ -415,6 +506,11 @@ export class Store {
     this.#statement(sql).run(...params);
   }
 
+  /** Runs a write and says how many rows it changed. */
+  #changes(sql: string, ...params: (string | number | null)[]): number {
+    return Number(this.#statement(sql).run(...params).changes);
+  }
+
   uiPrefRows(): { key: string; json: string }[] {
     return this.#all("SELECT key, value_json FROM ui_pref ORDER BY key").map((r) => ({ key: str(r.key), json: str(r.value_json) }));
   }
@@ -479,21 +575,26 @@ export class Store {
   /** `project: null` lists every project's sessions. */
   sessions(project: ProjectId | null): StoredListing[] {
     return this.#all(
-      `SELECT s.id, s.project_id, p.name AS project_name, s.title, s.brief, s.created_at, a.thread_id, a.lost_at,
+      `WITH RECURSIVE up(id, root) AS (
+        SELECT id, id FROM session WHERE id NOT IN (SELECT session_id FROM fork)
+        UNION ALL SELECT f.session_id, up.root FROM fork f JOIN up ON f.parent_id = up.id
+      )
+      SELECT s.id, s.project_id, p.name AS project_name, s.title, s.brief, s.created_at, a.thread_id, a.lost_at,
         (SELECT MAX(n) FROM iteration WHERE session_id = s.id) AS latest_n,
         (SELECT MAX(created_at) FROM iteration WHERE session_id = s.id) AS latest_at,
         (SELECT MAX(created_at) FROM request WHERE session_id = s.id) AS request_at,
         EXISTS (SELECT 1 FROM request WHERE session_id = s.id AND ${OPEN_REQUEST}) AS open_request,
-        s.settled_at, s.unsettled_at,
-        s.settled_at IS NOT NULL AND (
-          EXISTS (SELECT 1 FROM request WHERE session_id = s.id AND created_at > s.settled_at)
+        root.settled_at, root.unsettled_at,
+        root.settled_at IS NOT NULL AND (
+          EXISTS (SELECT 1 FROM request WHERE session_id = s.id AND created_at > root.settled_at)
           OR EXISTS (
-            SELECT 1 FROM iteration i WHERE i.session_id = s.id AND i.created_at > s.settled_at
-              AND NOT EXISTS (SELECT 1 FROM request r WHERE r.session_id = s.id AND r.fulfilled_in = i.n AND r.created_at <= s.settled_at)
+            SELECT 1 FROM iteration i WHERE i.session_id = s.id AND i.created_at > root.settled_at
+              AND NOT EXISTS (SELECT 1 FROM request r WHERE r.session_id = s.id AND r.fulfilled_in = i.n AND r.created_at <= root.settled_at)
           )
         ) AS woken,
-        f.parent_n AS fork_from, (SELECT title FROM session WHERE id = f.parent_id) AS fork_parent_title
+        f.parent_id AS branch_parent
       FROM session s JOIN project p ON p.id = s.project_id JOIN attachment a ON a.session_id = s.id AND a.detached_at IS NULL
+        JOIN up ON up.id = s.id JOIN session root ON root.id = up.root
         LEFT JOIN fork f ON f.session_id = s.id
       WHERE s.archived_at IS NULL AND (? IS NULL OR s.project_id = ?)
       ORDER BY s.created_at, s.id`,
@@ -502,19 +603,25 @@ export class Store {
     ).map(toListing);
   }
 
-  /** The fork, its iteration 1 with carried feedback, then request 1, so the iteration can't fulfil the request. */
-  createFork(input: NewFork, thread: ThreadId): void {
-    const { session, fork, iteration } = input;
+  /**
+   * The branch, its first iteration with carried feedback, then request 1: an answered one already fulfilled by that
+   * iteration, any other open. The branch joins the thread its tree shares as it is, lost included, as migration 12
+   * joins an old fork to it.
+   */
+  createBranch(input: NewBranch, shared: Pick<Attachment, "threadId" | "lostAt">): void {
+    const { session, link, iteration, request } = input;
+    const thread = shared.threadId;
     this.tx(() => {
       this.createSession(session, thread, input.system);
-      for (const t of input.theme) this.setSessionTheme(session.id, t.key, t.value, fork.createdAt);
+      if (shared.lostAt !== null) this.setLost(session.id, shared.lostAt);
+      for (const t of input.theme) this.setSessionTheme(session.id, t.key, t.value, link.createdAt);
       this.#run(
         "INSERT INTO fork(session_id, parent_id, parent_n, baked_json, created_at) VALUES (?, ?, ?, ?, ?)",
         session.id,
-        fork.parent,
-        fork.from,
-        JSON.stringify(fork.baked),
-        fork.createdAt,
+        link.parent,
+        link.from,
+        JSON.stringify(link.baked),
+        link.createdAt,
       );
       this.insertIteration({
         session: session.id,
@@ -525,12 +632,123 @@ export class Store {
         proposedContents: [],
         addresses: [],
       });
-      const ids = input.feedback.map((f) => this.insertFeedback(session.id, { pin: f.pin, text: f.text, createdIn: iteration.n, at: fork.createdAt }));
-      this.insertRequest(session.id, { body: input.request.body, feedbackIds: ids, base: iteration.n, threadId: thread, at: input.request.at });
+      const ids = input.feedback.map((f) => this.insertFeedback(session.id, { pin: f.pin, text: f.text, createdIn: iteration.n, at: link.createdAt }));
+      // An answered confirm was made on the parent's iteration, so that is its base.
+      if (request?.answered === true) {
+        this.insertRequest(session.id, { body: request.body, feedbackIds: [], base: link.from, threadId: thread, at: request.at, fulfilledIn: iteration.n });
+      }
+      if (request !== null && !request.answered) {
+        const asked = ids.filter((_, i) => input.feedback[i]?.asked === true);
+        this.insertRequest(session.id, { body: request.body, feedbackIds: asked, base: iteration.n, threadId: thread, at: request.at });
+      }
     });
   }
 
-  fork(session: SessionId): StoredFork | null {
+  primaryOf(root: SessionId): SessionId | null {
+    const r = this.#get("SELECT session_id FROM primary_branch WHERE root_id = ?", root);
+    return r === undefined ? null : (str(r.session_id) as SessionId);
+  }
+
+  setPrimary(root: SessionId, session: SessionId): void {
+    this.#run(
+      "INSERT INTO primary_branch(root_id, session_id) VALUES (?, ?) ON CONFLICT(root_id) DO UPDATE SET session_id = excluded.session_id",
+      root,
+      session,
+    );
+  }
+
+  // --- Rob's marks (ADR 010) ------------------------------------------------------------------------------------------
+
+  marks(session: SessionId): Marks {
+    const mains = Object.fromEntries(
+      this.#all("SELECT slot, variant FROM main_choice WHERE session_id = ?", session).map((r) => [str(r.slot), str(r.variant) as VariantKey]),
+    ) as Marks["mains"];
+    const grafts = this.#all("SELECT * FROM graft WHERE session_id = ? ORDER BY id", session).map(
+      (r): StoredGraft => ({
+        id: num(r.id) as GraftId,
+        from: { blockId: str(r.block_id) as BlockId, part: strOrNull(r.part) as PartName | null },
+        into: str(r.into_slot) as SlotId,
+        instruction: strOrNull(r.instruction),
+      }),
+    );
+    const trashed = this.#all("SELECT block_id FROM trashed WHERE session_id = ? ORDER BY block_id", session).map((r) => str(r.block_id) as BlockId);
+    return { mains, grafts, trashed };
+  }
+
+  setMain(session: SessionId, slot: SlotId, variant: VariantKey | null): void {
+    if (variant === null) this.#run("DELETE FROM main_choice WHERE session_id = ? AND slot = ?", session, slot);
+    else {
+      this.#run(
+        "INSERT INTO main_choice(session_id, slot, variant) VALUES (?, ?, ?) ON CONFLICT(session_id, slot) DO UPDATE SET variant = excluded.variant",
+        session,
+        slot,
+        variant,
+      );
+    }
+  }
+
+  addGraft(session: SessionId, graft: { from: Pin; into: SlotId; instruction: string | null }, at: string): GraftId {
+    return this.tx(() => {
+      const next = num(this.#get("SELECT COALESCE(MAX(id), 0) + 1 AS next FROM graft WHERE session_id = ?", session)?.next);
+      this.#run(
+        "INSERT INTO graft(session_id, id, block_id, part, into_slot, instruction, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        session,
+        next,
+        graft.from.blockId,
+        graft.from.part,
+        graft.into,
+        graft.instruction,
+        at,
+      );
+      return next as GraftId;
+    });
+  }
+
+  removeGraft(session: SessionId, id: GraftId): void {
+    this.#run("DELETE FROM graft WHERE session_id = ? AND id = ?", session, id);
+  }
+
+  setTrashed(session: SessionId, block: BlockId, trashed: boolean): void {
+    if (trashed) this.#run("INSERT OR IGNORE INTO trashed(session_id, block_id) VALUES (?, ?)", session, block);
+    else this.#run("DELETE FROM trashed WHERE session_id = ? AND block_id = ?", session, block);
+  }
+
+  /**
+   * Writes what changed from `before` to `after`, both as the rules read them. Rows the rules leave unread, such as a
+   * graft waiting for its slot's Main, are in neither, so they stay as they are. A new graft is stored under the
+   * store's own next id, not the one main.ts minted from the marks it read, which an unread graft may hold; nothing
+   * reads the minted id.
+   */
+  changeMarks(session: SessionId, before: Marks, after: Marks, at: string): void {
+    this.tx(() => {
+      const slots = new Set([...Object.keys(before.mains), ...Object.keys(after.mains)] as SlotId[]);
+      for (const slot of slots) if (before.mains[slot] !== after.mains[slot]) this.setMain(session, slot, after.mains[slot] ?? null);
+      for (const b of before.trashed) if (!after.trashed.includes(b)) this.setTrashed(session, b, false);
+      for (const b of after.trashed) if (!before.trashed.includes(b)) this.setTrashed(session, b, true);
+      for (const g of before.grafts) if (!after.grafts.some((x) => x.id === g.id)) this.removeGraft(session, g.id);
+      for (const g of after.grafts) if (!before.grafts.some((x) => x.id === g.id)) this.addGraft(session, g, at);
+    });
+  }
+
+  /**
+   * Once an iteration lands, deletes the marks naming a block or slot it doesn't have, so a variant key the agent
+   * reuses later starts unmarked instead of reviving an old trash or Main.
+   */
+  pruneMarks(session: SessionId, blocks: readonly BlockId[], slots: readonly SlotId[]): void {
+    const ids = JSON.stringify(blocks);
+    this.tx(() => {
+      this.#run("DELETE FROM main_choice WHERE session_id = ? AND slot || '/' || variant NOT IN (SELECT value FROM json_each(?))", session, ids);
+      this.#run("DELETE FROM trashed WHERE session_id = ? AND block_id NOT IN (SELECT value FROM json_each(?))", session, ids);
+      this.#run(
+        "DELETE FROM graft WHERE session_id = ? AND (block_id NOT IN (SELECT value FROM json_each(?)) OR into_slot NOT IN (SELECT value FROM json_each(?)))",
+        session,
+        ids,
+        JSON.stringify(slots),
+      );
+    });
+  }
+
+  branchLink(session: SessionId): StoredBranch | null {
     const r = this.#get("SELECT * FROM fork WHERE session_id = ?", session);
     if (r === undefined) return null;
     return {
@@ -541,8 +759,18 @@ export class Store {
     };
   }
 
-  /** Forks made from `parent` that still exist, oldest first. */
-  forksOf(parent: SessionId): { id: SessionId; title: string; from: IterationN }[] {
+  /** Every branch's parent and the iteration it left from, archived branches included, for walking a brainstorm's tree. */
+  branchLinks(): Map<SessionId, { readonly parent: SessionId; readonly from: IterationN }> {
+    return new Map(
+      this.#all("SELECT session_id, parent_id, parent_n FROM fork ORDER BY created_at, session_id").map((r) => [
+        str(r.session_id) as SessionId,
+        { parent: str(r.parent_id) as SessionId, from: num(r.parent_n) as IterationN },
+      ]),
+    );
+  }
+
+  /** Branches made from `parent` that still exist, oldest first. */
+  branchesOf(parent: SessionId): { id: SessionId; title: string; from: IterationN }[] {
     return this.#all(
       `SELECT s.id, s.title, f.parent_n FROM fork f JOIN session s ON s.id = f.session_id
        WHERE f.parent_id = ? AND s.archived_at IS NULL ORDER BY f.created_at, s.id`,
@@ -550,14 +778,10 @@ export class Store {
     ).map((r) => ({ id: str(r.id) as SessionId, title: str(r.title), from: num(r.parent_n) as IterationN }));
   }
 
-  /** A session's title and whether it is gone, read even once archived, so a fork can still name its parent. */
-  sessionName(id: SessionId): { title: string; gone: boolean } | null {
-    const r = this.#get("SELECT title, archived_at FROM session WHERE id = ?", id);
-    return r === undefined ? null : { title: str(r.title), gone: r.archived_at !== null };
-  }
-
-  archive(session: SessionId, at: string): void {
-    this.#run("UPDATE session SET archived_at = ? WHERE id = ?", at, session);
+  /** A session's title, read even once archived, so a branch can still name its parent. */
+  sessionName(id: SessionId): string | null {
+    const r = this.#get("SELECT title FROM session WHERE id = ?", id);
+    return r === undefined ? null : str(r.title);
   }
 
   /** Each block id's first iteration, for whether it is new. */
@@ -830,26 +1054,56 @@ export class Store {
     return this.#all(`SELECT * FROM request WHERE state IN (${marks}) ORDER BY session_id, n`, ...states).map(toRequest);
   }
 
-  /** Inserts the next request in state `sending`. The one_open_request index refuses a second open one. */
+  /**
+   * Inserts the next request in state `sending`, or, with `fulfilledIn`, one the app has already answered with that
+   * iteration. The one_open_request index refuses a second open one.
+   */
   insertRequest(
     session: SessionId,
-    input: { body: RequestBody; feedbackIds: readonly FeedbackId[]; base: IterationN | null; threadId: ThreadId; at: string },
+    input: { body: RequestBody; feedbackIds: readonly FeedbackId[]; base: IterationN | null; threadId: ThreadId; at: string; fulfilledIn?: IterationN },
   ): RequestN {
     return this.tx(() => {
       const next = num(this.#get("SELECT COALESCE(MAX(n), 0) + 1 AS next FROM request WHERE session_id = ?", session)?.next);
       this.#run(
-        `INSERT INTO request(session_id, n, body_json, feedback_ids_json, base, thread_id, state, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'sending', ?)`,
+        `INSERT INTO request(session_id, n, body_json, feedback_ids_json, base, thread_id, state, fulfilled_in, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         session,
         next,
         JSON.stringify({ scope: input.body.scope, freetext: input.body.freetext }),
         JSON.stringify(input.feedbackIds),
         input.base,
         input.threadId,
+        input.fulfilledIn === undefined ? "sending" : "fulfilled",
+        input.fulfilledIn ?? null,
         input.at,
       );
       return next as RequestN;
     });
+  }
+
+  /**
+   * Records what became of sending request `n` to `thread`, and says whether it applied. It applies only while the
+   * request is still `sending` to that thread: a send awaits T3, and meanwhile a commit may have fulfilled the request,
+   * Rob withdrawn it, or a fresh thread taken it over, and then this result is old news.
+   */
+  settleDelivery(
+    session: SessionId,
+    n: RequestN,
+    thread: ThreadId,
+    outcome: { readonly state: "sent"; readonly sentAt: string } | { readonly state: "send_failed"; readonly error: string },
+  ): boolean {
+    return (
+      this.#changes(
+        `UPDATE request SET state = ?, error = ?, sent_at = COALESCE(?, sent_at)
+         WHERE session_id = ? AND n = ? AND state = 'sending' AND thread_id = ?`,
+        outcome.state,
+        outcome.state === "send_failed" ? outcome.error : null,
+        outcome.state === "sent" ? outcome.sentAt : null,
+        session,
+        n,
+        thread,
+      ) === 1
+    );
   }
 
   setRequestState(

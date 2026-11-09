@@ -15,12 +15,6 @@ Fields used: `thread.projectId`, `thread.title`, `thread.link`, `thread.status` 
 
 A missing or deleted thread exits 1 and prints `Thread <id> is no longer available.`
 
-## `t3 thread list --project <id-or-path> --json`
-
-Prints an array of thread objects shaped like `thread` above. An unknown project exits 1 and prints `No T3 Code project matches '<p>'. Pass a project id or a path inside a project.`
-
-Each object also carries `createdAt` and `updatedAt` (ISO times), `createdBy`, `creationSource`, `settled`, `snoozed`, `parentThreadId` and `relationshipToParent`. The bridge reads only `threadId` and `createdAt`, which a fork's retry uses to find a thread that `thread start` made while its reply was lost. A project argument of `.` from a worktree folder failed with the unknown-project message, so Brainstorm always passes the project id.
-
 ## `t3 thread start [flags] <project> <message|->`
 
 Observed on 2026-11-06 (`t3 v0.1.8-nightly.20261104.4179`). It starts a thread in the project and prints its id. `<project>` is a project id or a path inside the project. `-` reads the message from stdin.
@@ -32,7 +26,7 @@ Observed on 2026-11-06 (`t3 v0.1.8-nightly.20261104.4179`). It starts a thread i
 - `--json` prints `{ "threadId": "…", "projectId": "…", "runId": "…" | null }`.
 - `--base-dir <dir>` picks another T3 data directory, like `T3CODE_HOME`.
 
-Brainstorm runs `thread start --title "<safe title>" --json <projectId> -` for a fork, with the fork's request 1 on stdin, no `--worktree` (the parent's agent ran in the project too) and no `--wait`. The title goes on the command line, so `safeTitle` in the bridge keeps only letters, digits, spaces and `,.'()?+=/_-`, cut to 80 characters, and quotes it. The bridge reads only `threadId`.
+Brainstorm runs `thread start --title "<safe title>" --json <projectId> -` for a brainstorm's fresh thread and for a promotion, with the first message on stdin, no `--worktree` (the brainstorm's agent runs in the project folder) and no `--wait`. Branches start no thread of their own; they share their brainstorm's (ADR 010). The title goes on the command line, so `safeTitle` in the bridge keeps only letters, digits, spaces and `,.'()?+=/_-`, cut to 80 characters, and quotes it. The bridge reads only `threadId`.
 
 ## `t3 thread send <thread> <message|->`
 

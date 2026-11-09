@@ -220,7 +220,7 @@ body:is([data-resizing], [data-window-resizing]) [data-slot="sidebar-container"]
   grid-template-columns: auto minmax(0, max-content);
 }
 
-/* The Fork popover's carry list: a label column as wide as "Open pins", then what carries, which can shrink. */
+/* The branch popover's carry list: a label column as wide as "Open pins", then what carries, which can shrink. */
 @utility grid-carry {
   grid-template-columns: 72px minmax(0, 1fr);
 }

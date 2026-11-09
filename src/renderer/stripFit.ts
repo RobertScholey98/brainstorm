@@ -5,7 +5,7 @@ export const STRIP_GAP = 16;
 const ENTRY_MIN = 180;
 const ENTRY_MAX = 380;
 
-/** What an entry's lines take: `need` for every line whole, `floor` for the lines that never cut. A `link` is a fork's tile or stub. */
+/** What an entry's lines take: `need` for every line whole, `floor` for the lines that never cut. A `link` is a branch's tile or stub. */
 export type EntryNeed = { readonly need: number; readonly floor: number; readonly link?: boolean };
 
 /** Who takes room first when an entry's lines can't all read whole, in order. */
@@ -48,7 +48,7 @@ export function stripFit(room: number, entries: readonly EntryNeed[], shown?: nu
     let start = end - 1;
     let used = cost(start);
     while (start > 0 && used + STRIP_GAP + cost(start - 1) <= inner) used += STRIP_GAP + cost(--start);
-    // A fork's tile never takes a page alone, where it would grow to an entry's width: it joins the iteration it hangs off.
+    // A branch's tile never takes a page alone, where it would grow to an entry's width: it joins the iteration it hangs off.
     if (end - start === 1 && slots[start]!.tier === "link" && start > 0) start -= 1;
     const free = inner - (end - start - 1) * STRIP_GAP;
     const page = slots.slice(start, end);
@@ -83,7 +83,7 @@ function share(room: number, slots: readonly Slot[]): number[] {
   return widths.map(snap);
 }
 
-/** Widens `widths` to fill `room`, the narrowest first. A link keeps its width, so a fork's tile never grows to an entry's. */
+/** Widens `widths` to fill `room`, the narrowest first. A link keeps its width, so a branch's tile never grows to an entry's. */
 function grow(room: number, widths: readonly number[], slots: readonly Slot[]): number[] {
   if (sum(widths) >= room) return [...widths];
   const raise = (l: number) => widths.map((w, i) => (slots[i]!.tier === "link" ? w : Math.max(w, l)));

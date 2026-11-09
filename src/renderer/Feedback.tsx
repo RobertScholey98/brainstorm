@@ -1,7 +1,7 @@
 import { EyeOff, MessageSquarePlus, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
-import { partLabel } from "../core/fork";
+import { partLabel } from "../core/part";
 import { FEEDBACK_ACTIONS } from "../core/machines";
 import type { BlockId, BlockView, CanvasRect, Feedback, FeedbackAction, FeedbackId, FeedbackStatus, Pin, RobAction } from "../core/types";
 import { PinNumber } from "./PinNumber";
@@ -46,7 +46,8 @@ function statusLine(status: FeedbackStatus): string | null {
   }
 }
 
-const ACTION_LABEL: Record<FeedbackAction, string> = { confirm: "Confirm", reopen: "Reopen", edit: "Edit", delete: "Delete" };
+// Rob says an addressed comment looks right; "Confirm" is the sidebar's, which locks the marks in (ADR 010).
+const ACTION_LABEL: Record<FeedbackAction, string> = { confirm: "Looks right", reopen: "Reopen", edit: "Edit", delete: "Delete" };
 
 const PLACE_NOTE: Record<Exclude<PinPlace, "placed">, string> = {
   detached: "Detached: its element is gone",

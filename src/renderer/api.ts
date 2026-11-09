@@ -7,7 +7,7 @@ import type {
   ExportResult,
   ReviewAction,
   Issue,
-  ForkInput,
+  BranchInput,
   IterationN,
   IterationView,
   KitPayload,
@@ -38,10 +38,8 @@ export type Api = {
   preview(id: SessionId, at?: { readonly n?: IterationN; readonly slot?: SlotId }): Promise<Result<SessionPreview | null>>;
   /** A past iteration, read-only. */
   iteration(id: SessionId, n: IterationN): Promise<Result<IterationView>>;
-  /** Makes a new brainstorm from one iteration and starts its thread. A failed start still makes the fork. */
-  fork(id: SessionId, input: ForkInput): Promise<Result<{ readonly fork: SessionId }>>;
-  /** Throws away a fork whose thread never started. */
-  discard(id: SessionId): Promise<Result<{ readonly parent: SessionId | null }>>;
+  /** Confirms on a past iteration: a new branch of the brainstorm from it, on the brainstorm's thread (ADR 010). */
+  branch(id: SessionId, input: BranchInput): Promise<Result<{ readonly branch: SessionId }>>;
   act(id: SessionId, action: RobAction): Promise<Result<SessionView>>;
   /** Settles a brainstorm, or brings it back. */
   settle(id: SessionId, settled: boolean): Promise<Result<SessionListing>>;
@@ -145,8 +143,7 @@ export function createApi(token: string): Api {
       return call("GET", `/v1/ui/sessions/${id}/preview${q === "" ? "" : `?${q}`}`);
     },
     iteration: (id, n) => call("GET", `/v1/ui/sessions/${id}/iterations/${n}`),
-    fork: (id, input) => call("POST", `/v1/ui/sessions/${id}/fork`, input),
-    discard: (id) => call("POST", `/v1/ui/sessions/${id}/discard`),
+    branch: (id, input) => call("POST", `/v1/ui/sessions/${id}/branch`, input),
     act: (id, action) => call("POST", `/v1/ui/sessions/${id}/actions`, action),
     settle: (id, settled) => call("POST", `/v1/ui/sessions/${id}/settle`, { settled }),
     exportHtml: (id) => call("POST", `/v1/ui/sessions/${id}/export`),

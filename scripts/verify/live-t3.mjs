@@ -179,32 +179,32 @@ try {
   check("the top bar reads the takeover's fulfilled iteration", (await window.textContent("[data-request-message]"))?.trim(), await fulfilledText(third));
   await shot(window, shots, "4-takeover-fulfilled");
 
-  // One fork: the app starts its thread itself, and the new thread's agent works from that first message alone.
-  const instruction = `${title} fork: make the button label shorter. Keep it short and ask no questions.`;
-  const forkTitle = `${title} fork`;
-  await window.click("[data-fork-toggle]");
-  await window.fill("[data-fork-instruction]", instruction);
-  await window.click("[data-fork-send]");
-  await window.waitForSelector(`[data-forked-from="${session.id}"]`, { timeout: 60_000 });
-  const fork = await waitFor("the fork's thread", takeover, async () => {
-    const s = await sessionIn(takeover, forkTitle);
-    return s !== undefined && !s.attachedThread.startsWith("pending:") ? s : undefined;
-  });
-  const forkThread = fork.attachedThread;
-  console.log(`...  fork thread ${forkThread}`);
+  // One branch from iteration 2, made by Confirm as a branch with an instruction (ADR 010). It stays on the
+  // brainstorm's own thread, so the takeover thread's agent works the branch's first request.
+  const instruction = `${title} branch: make the button label shorter. Keep it short and ask no questions.`;
+  await window.click('[data-history-n="2"]');
+  await window.waitForSelector("[data-past-bar]");
+  await window.click("[data-confirm-toggle]");
+  await window.fill("[data-confirm-instruction]", instruction);
+  await window.click("[data-confirm-send]");
+  await window.waitForSelector("[data-branch-line]", { timeout: 60_000 });
+  const branchId = await window.getAttribute("[data-branch-line]", "data-branch-line");
+  console.log(`...  branch ${branchId}`);
   check(
-    "the fork's thread opened with the fork's request 1",
-    userTexts(forkThread)[0]?.split("\n")[0],
-    `[brainstorm] session ${fork.id} · request 1 · fork of ${session.id} iteration 3 · scope: all · freetext: ${JSON.stringify(instruction)}`,
+    "the branch's request 1 went to the brainstorm's own thread, saying what it branches from",
+    userTexts(takeover)
+      .find((t) => t.includes(`session ${branchId} · request 1 · `))
+      ?.split("\n")[0]
+      .startsWith(`[brainstorm] session ${branchId} · request 1 · branch of ${session.id} iteration 2 · `),
+    true,
   );
-  const forked = await waitFor("iteration 2 from the fork's thread", forkThread, () => fulfilled(fork.id, 2));
-  check("the fork's agent attached from that message and fulfilled it", [(await sessionIn(forkThread, forkTitle))?.attachedThread, forked.n], [forkThread, 2]);
+  const branched = await waitFor("the branch's first iteration, 3, from the same thread", takeover, () => fulfilled(branchId, 3));
+  check("the agent fulfilled it as iteration 3, numbering on from where the branch left", branched.n, 3);
   await window.waitForSelector('[data-request-phase="fulfilled"]', { timeout: 60_000 });
-  await shot(window, shots, "5-fork-fulfilled");
+  await shot(window, shots, "5-branch-fulfilled");
 
   console.log(`thread ${first}: ${showThread(first).thread.link}`);
   console.log(`thread ${takeover}: ${showThread(takeover).thread.link}`);
-  console.log(`fork thread ${forkThread}: ${showThread(forkThread).thread.link}`);
   console.log(`screenshots in ${shots}`);
   check("the window logged no errors or warnings", errors, []);
 } catch (e) {

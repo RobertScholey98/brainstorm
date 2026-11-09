@@ -140,7 +140,7 @@ export function Inspector({
   const past = readOnly !== null && (
     <div className="pt-3" data-inspector-past={readOnly}>
       <Callout tone="info">
-        <p>Iteration {readOnly} is read-only. Its settings travel with a fork.</p>
+        <p>Iteration {readOnly} is read-only. Its settings travel with a branch made from it.</p>
       </Callout>
     </div>
   );

@@ -1,10 +1,9 @@
-import { AlertTriangle, Check, CircleAlert, CircleHelp, CircleSlash, Clock, ExternalLink, Info, RotateCw, Send, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Check, CircleAlert, CircleHelp, CircleSlash, Clock, ExternalLink, Info, RefreshCw, RotateCw, Send, Sparkles, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Checkbox } from "@/components/ui/checkbox";
-import { chip } from "@/components/ui/chip";
 import { SubmitKey } from "@/components/ui/kbd";
 import { FieldLabel } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
@@ -14,8 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { BlockedHint, Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { Count } from "@/components/ui/count";
-import { partLabel } from "../core/fork";
-import { blockedMessage, requestFeedback, takeoverPhrase } from "../core/machines";
+import { partLabel } from "../core/part";
+import { blockedMessage, requestFeedback } from "../core/machines";
 import { actionRank, COLLAPSE, COMPACT, COMPACT_LABEL } from "./headerAction";
 import { PHASE, TONE_TEXT } from "./status";
 import { Elapsed } from "./SessionStatus";
@@ -23,8 +22,8 @@ import { PinNumber } from "./PinNumber";
 import { useNow } from "./time";
 import type { BlockId, BlockView, IterationN, RequestBody, RequestPhase, RequestPhaseAction, RequestScope, RobAction, SessionView } from "../core/types";
 
-/** Vary has its own pick and popover, so Regenerate offers the other three. */
-type ScopeKind = Exclude<RequestBody["scope"]["kind"], "vary">;
+/** Vary, Confirm and Add slot have their own controls, so Regenerate offers the other three. */
+type ScopeKind = "all" | "blocks" | "described";
 
 const SCOPES: readonly { value: ScopeKind; label: string }[] = [
   { value: "all", label: "Everything" },
@@ -41,7 +40,7 @@ function scopeOf(kind: ScopeKind, chosen: readonly BlockId[]): RequestScope | nu
 function requestBody(scope: RequestScope | null, text: string): RequestBody | null {
   const freetext = text.trim() === "" ? null : text.trim();
   if (scope === null) return null;
-  if (scope.kind === "described") return freetext === null ? null : { scope, freetext };
+  if (scope.kind === "described" || scope.kind === "add_slot") return freetext === null ? null : { scope, freetext };
   return { scope, freetext };
 }
 
@@ -238,7 +237,6 @@ function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
   const cls = `size-4 shrink-0 ${TONE_TEXT[PHASE[phase].tone]}`;
   switch (phase) {
     case "sending":
-    case "starting":
       return <Spinner className={cls} aria-hidden data-progress />;
     case "working":
       // A live dot in a 14 px halo, the optical size of the other phases' glyphs.
@@ -262,7 +260,6 @@ function PhaseIcon({ phase }: { phase: RequestPhase["phase"] }) {
       // A state, not an action, so not the undo arrow a button would carry.
       return <CircleSlash className={cls} aria-hidden />;
     case "send_failed":
-    case "start_failed":
     case "run_failed":
       return <CircleAlert className={cls} aria-hidden />;
     case "previous_thread":
@@ -276,16 +273,15 @@ const ACTION_LABEL: Record<RequestPhaseAction, string> = {
   resend: "Resend",
   withdraw: "Withdraw",
   open_thread: "Open thread",
-  copy_phrase: "Copy phrase",
-  discard: "Discard fork",
+  fresh_thread: "Start a fresh thread",
 };
 
 /** What each action does, for its hint once a narrow header leaves it its icon alone. */
-const ACTION_HINT: Record<Exclude<RequestPhaseAction, "copy_phrase" | "open_thread">, string> = {
+const ACTION_HINT: Record<Exclude<RequestPhaseAction, "open_thread">, string> = {
   retry: "Send the request again",
   resend: "Send the request to the thread that took over",
   withdraw: "Withdraw the request",
-  discard: "Discard this fork",
+  fresh_thread: "Carry on in a new T3 thread, and send the open request there",
 };
 
 const ACTION_ICON: Partial<Record<RequestPhaseAction, LucideIcon>> = {
@@ -293,19 +289,19 @@ const ACTION_ICON: Partial<Record<RequestPhaseAction, LucideIcon>> = {
   resend: Send,
   withdraw: CircleSlash,
   open_thread: ExternalLink,
-  discard: Trash2,
+  fresh_thread: RefreshCw,
 };
 
 /**
- * Phases that need more than the bar has room for: an error, the takeover phrase, the agent's reply, or what the next
- * step does. The bar names the phase and the strip under it says the rest, in the phase's tone, so nothing Rob has to
- * read or copy is cut off. `own` is an action the strip carries instead of the bar, beside what it acts on.
+ * Phases that need more than the bar has room for: an error, the agent's reply, or what the next step does. The bar
+ * names the phase and the strip under it says the rest, in the phase's tone, so nothing Rob has to read is cut off.
+ * `own` is an action the strip carries instead of the bar, beside what it acts on.
  */
 const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; readonly note?: string; readonly own?: RequestPhaseAction }>> = {
   send_failed: { label: "Send failed" },
-  start_failed: { label: "Start failed" },
   run_failed: { label: "Run failed", note: "The agent's run failed in T3. Open the thread to see why, or Retry." },
-  thread_lost: { label: "Thread lost", note: "This brainstorm's thread is gone. In a T3 thread on this project, say:", own: "copy_phrase" },
+  // A lost thread has no strip: the thread chip carries it, its menu says the rest, and Start a fresh thread stands
+  // beside it in the bar (ADR 010).
   previous_thread: { label: "Sent to the previous thread", note: "Another thread took this brainstorm over. Resend sends the request to it." },
   no_change: { label: "No change", note: "The agent replied in T3 without changing the design." },
 };
@@ -317,20 +313,18 @@ const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; re
  */
 export function RequestStatus({ view }: { view: SessionView }) {
   const request = view.request;
-  // A lost thread stays named once its request closes, since nothing can be sent until it is taken over.
-  const lost = view.attachment.lostAt !== null && (request === null || request.phase.actions.length === 0);
-  const counting = !lost && request !== null && PHASE[request.phase.phase].ended !== true;
+  // The thread's own state, a lost one included, is the thread chip's to say (ADR 010); this says the request's.
+  const counting = request !== null && PHASE[request.phase.phase].ended !== true;
   const now = useNow(counting ? 1_000 : undefined);
-  if (!lost && request === null) return null;
-  const phase = lost ? "thread_lost" : request!.phase.phase;
+  if (request === null) return null;
+  const phase = request.phase.phase;
   const detail = DETAIL[phase];
-  const long = detail?.label ?? request!.message;
+  const long = detail?.label ?? request.message;
   const short = PHASE[phase].short;
   return (
     <div
       className={`grid-phase grid items-center gap-2 text-sm ${TONE_TEXT[PHASE[phase].tone]}`}
-      data-request-phase={request?.phase.phase}
-      data-thread-lost={lost || undefined}
+      data-request-phase={phase}
       data-collapse={short === long ? undefined : COLLAPSE.status}
     >
       <PhaseIcon phase={phase} />
@@ -346,16 +340,19 @@ export function RequestStatus({ view }: { view: SessionView }) {
           {short}
         </Truncate>
       )}
-      {counting && <Elapsed since={request!.request.sentAt ?? request!.request.createdAt} now={now} rank={COLLAPSE.elapsed} />}
+      {counting && <Elapsed since={request.request.sentAt ?? request.request.createdAt} now={now} rank={COLLAPSE.elapsed} />}
     </div>
   );
 }
 
-/** The phase's actions that the bar shows; one the strip under the bar holds itself stays there. */
+/**
+ * The phase's actions that the bar shows; one the strip under the bar holds itself stays there. A lost thread's way
+ * back stands in the bar whether or not a request is open, beside the chip that says the thread is lost (ADR 010).
+ */
 export function phaseActions(view: SessionView): readonly RequestPhaseAction[] {
-  if (view.request === null) return [];
-  const own = DETAIL[view.request.phase.phase]?.own;
-  return view.request.phase.actions.filter((action) => action !== own);
+  const own = view.request === null ? undefined : DETAIL[view.request.phase.phase]?.own;
+  const actions = (view.request?.phase.actions ?? []).filter((action) => action !== own);
+  return view.attachment.lostAt !== null && !actions.includes("fresh_thread") ? ["fresh_thread", ...actions] : actions;
 }
 
 /**
@@ -363,12 +360,12 @@ export function phaseActions(view: SessionView): readonly RequestPhaseAction[] {
  * label changes length, so Withdraw sits at one x from queued to working. The phase's recovery keeps its name longest
  * (`actionRank`).
  */
-export function PhaseActions({ view, send, onDiscard }: { view: SessionView; send: (action: RobAction) => Promise<unknown>; onDiscard: () => void }) {
+export function PhaseActions({ view, send }: { view: SessionView; send: (action: RobAction) => Promise<unknown> }) {
   const actions = phaseActions(view);
   return (
     <span className="flex shrink-0 items-center gap-2" data-phase-actions>
       {actions.map((action) => (
-        <PhaseAction key={action} action={action} rank={actionRank(action)} view={view} send={send} onDiscard={onDiscard} />
+        <PhaseAction key={action} action={action} rank={actionRank(action)} view={view} send={send} />
       ))}
     </span>
   );
@@ -383,7 +380,6 @@ export function RequestDetail({ view }: { view: SessionView }) {
       tone={stripTone(view.request.phase.phase)}
       layout="strip"
       role="status"
-      actions={detail.own === "copy_phrase" ? <TakeoverPhrase title={view.session.title} /> : undefined}
       data-request-detail
     >
       <p className="select-text" data-request-message>
@@ -404,13 +400,11 @@ function PhaseAction({
   rank,
   view,
   send,
-  onDiscard,
 }: {
   action: RequestPhaseAction;
   rank: number;
   view: SessionView;
   send: (action: RobAction) => Promise<unknown>;
-  onDiscard: () => void;
 }) {
   switch (action) {
     case "retry":
@@ -420,10 +414,16 @@ function PhaseAction({
       return <ActionButton action={action} rank={rank} onClick={() => void send({ kind: "withdraw_request" })} />;
     case "open_thread":
       return <OpenThread view={view} rank={rank} />;
-    case "copy_phrase":
-      return <CopyPhrase title={view.session.title} />;
-    case "discard":
-      return <ActionButton action={action} rank={rank} onClick={onDiscard} />;
+    case "fresh_thread":
+      // With no request open there is nothing to send on, only the thread to carry on in.
+      return (
+        <ActionButton
+          action={action}
+          rank={rank}
+          hint={view.request?.phase.actions.includes("withdraw") === true ? undefined : "Carry on in a new T3 thread, and every branch with it"}
+          onClick={() => void send({ kind: "refresh_thread" })}
+        />
+      );
   }
 }
 
@@ -438,49 +438,10 @@ function OpenThread({ view, rank }: { view: SessionView; rank: number }) {
   );
 }
 
-/**
- * The takeover phrase on its own line in mono, with Copy phrase beside it where there is room and under it where
- * there isn't. The quoted title keeps to one line, so the phrase never breaks inside it.
- */
-export function TakeoverPhrase({ title }: { title: string }) {
-  const phrase = takeoverPhrase(title);
-  const at = phrase.indexOf('"');
-  return (
-    <>
-      <p className={cn(chip, "rounded-sm px-1.5 py-1.5 font-mono text-xs text-pretty text-fg select-all")} data-takeover-phrase>
-        {phrase.slice(0, at)}
-        <span className={title.length <= 24 ? "whitespace-nowrap" : undefined}>{phrase.slice(at)}</span>
-      </p>
-      <CopyPhrase title={title} />
-    </>
-  );
-}
-
-function CopyPhrase({ title }: { title: string }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(t);
-  }, [copied]);
-  return (
-    <Button variant="outline" onClick={() => void navigator.clipboard.writeText(takeoverPhrase(title)).then(() => setCopied(true))} data-request-action="copy_phrase">
-      {/* Both labels share one cell, so the button keeps the wider one's width and nothing beside it moves. */}
-      <span className="grid *:col-start-1 *:row-start-1" data-copied={copied || undefined}>
-        <span className={copied ? "invisible" : undefined}>{ACTION_LABEL.copy_phrase}</span>
-        <span className={copied ? "flex items-center justify-center gap-1" : "invisible flex items-center justify-center gap-1"} aria-live="polite">
-          <Check aria-hidden className="size-3.5 text-success" />
-          Copied
-        </span>
-      </span>
-    </Button>
-  );
-}
-
 /** Phase actions are full-height outline buttons, the same size as Regenerate and Export beside them. */
-function ActionButton({ action, rank, onClick }: { action: keyof typeof ACTION_HINT; rank: number; onClick: () => void }) {
+function ActionButton({ action, rank, hint = ACTION_HINT[action], onClick }: { action: keyof typeof ACTION_HINT; rank: number; hint?: string; onClick: () => void }) {
   return (
-    <Hint name={ACTION_LABEL[action]} label={ACTION_HINT[action]} side="left">
+    <Hint name={ACTION_LABEL[action]} label={hint} side="left">
       <Button variant="outline" className={COMPACT} onClick={onClick} data-collapse={rank} data-request-action={action}>
         <ActionLabel action={action} />
       </Button>
@@ -488,7 +449,7 @@ function ActionButton({ action, rank, onClick }: { action: keyof typeof ACTION_H
   );
 }
 
-/** An action's icon and name, the name given up for the icon alone in a narrow header, as Fork and Export do. */
+/** An action's icon and name, the name given up for the icon alone in a narrow header, as Export does. */
 function ActionLabel({ action }: { action: RequestPhaseAction }) {
   const Icon = ACTION_ICON[action];
   return (

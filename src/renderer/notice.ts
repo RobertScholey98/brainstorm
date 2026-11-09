@@ -4,7 +4,7 @@ import type { BlockView, RobAction } from "../core/types";
 export type Notice = { readonly title: string; readonly detail: string; readonly tone?: "success" };
 
 /** The step that failed, named as Rob took it, so a notice that came while he looked elsewhere still says what was lost. */
-export function failedTitle(action: RobAction | "export" | "list" | "load" | "settle" | "unsettle" | "discard" | "fork" | "history" | "update" | "check" | "download" | "skill", blocks: readonly BlockView[] = []): string {
+export function failedTitle(action: RobAction | "export" | "list" | "load" | "settle" | "unsettle" | "branch" | "history" | "update" | "check" | "download" | "skill", blocks: readonly BlockView[] = []): string {
   if (typeof action === "string") {
     if (action === "update") return "Couldn't restart into the update";
     if (action === "check") return "Couldn't check for updates";
@@ -14,8 +14,7 @@ export function failedTitle(action: RobAction | "export" | "list" | "load" | "se
     if (action === "list") return "Couldn't refresh the brainstorms";
     if (action === "settle") return "Couldn't settle the brainstorm";
     if (action === "unsettle") return "Couldn't bring the brainstorm back";
-    if (action === "discard") return "Couldn't discard the fork";
-    if (action === "fork") return "Couldn't fork the brainstorm";
+    if (action === "branch") return "Couldn't make the branch";
     if (action === "history") return "Couldn't open that iteration";
     return "Couldn't load the brainstorm";
   }
@@ -65,5 +64,23 @@ export function failedTitle(action: RobAction | "export" | "list" | "load" | "se
       return "Couldn't upgrade the design system";
     case "promote":
       return `Couldn't promote ${action.name}`;
+    case "approve":
+      return "Couldn't mark the variant";
+    case "trash":
+      return "Couldn't trash the variant";
+    case "restore":
+      return "Couldn't bring the variant back";
+    case "add_graft":
+      return "Couldn't add the element to Main";
+    case "remove_graft":
+      return "Couldn't take the element out of Main";
+    case "confirm":
+      return "Couldn't confirm";
+    case "add_slot":
+      return "Couldn't ask for the new slot";
+    case "make_primary":
+      return "Couldn't make this branch primary";
+    case "refresh_thread":
+      return "Couldn't start a fresh thread";
   }
 }

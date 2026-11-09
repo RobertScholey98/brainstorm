@@ -20,10 +20,12 @@ import {
   type ContentHash,
   type Feedback,
   type FeedbackId,
-  type ForkInput,
   type InapplicableOverride,
   type IterationN,
   type IterationView,
+  isOpenRequest,
+  type Marks,
+  NO_MARKS,
   type Pin,
   type PropName,
   type Props,
@@ -34,6 +36,7 @@ import {
   type SessionView,
   type SlotId,
   type SlotView,
+  type StoredGraft,
   type SystemId,
   type VariantKey,
 } from "../core/types";
@@ -43,18 +46,24 @@ import type { Api } from "./api";
 import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type FeedbackCue, type Placement } from "./CanvasHost";
 import { FeedbackPanel, PinComposer, pinPlace } from "./Feedback";
-import { Filmstrip, FilmstripSkeleton, PastBar } from "./History";
+import { Filmstrip, FilmstripSkeleton, PastBar, type TrailPoint } from "./History";
+import { AddSlotDialog } from "./AddSlot";
+import { ConfirmButton } from "./Confirm";
+import { PickComposer, PickSection } from "./Pick";
+import { liveMarks, showingVariant } from "../core/main";
+import { hasPastMarks, markPast, type PastMark } from "./pastMarks";
 import { HeldBar } from "./HeldBar";
 import { HomeOverview } from "./Home";
 import { useWiderThan, useWindowWidth } from "./hooks/use-mobile";
 import { fitPanes, usePaneWidth, type PaneLimits } from "./hooks/use-pane-width";
 import { Inspector, InspectorRail, InspectorSkeleton } from "./Inspector";
-import { previewWindow, PreviewLink, type MirrorScene, type ToMain } from "./mirror";
+import { previewWindow, PreviewLink, type MirrorScene, type PickKind, type ToMain } from "./mirror";
 import { failedTitle, type Notice } from "./notice";
 import { PendingOverrides } from "./overrides";
 import { PresentControls } from "./PresentControls";
 import { WAITING } from "./Preview";
-import { AppSidebar, HomePanel, SessionPanel } from "./Sidebar";
+import { AppSidebar, HomePanel } from "./Sidebar";
+import { SessionPanel, type MarkHandlers } from "./SessionPanel";
 import { RequestDetail } from "./Regenerate";
 import { settleUndoes, useSettleShortcut } from "./settle";
 import { SessionBar, TopBar } from "./TopBar";
@@ -91,18 +100,29 @@ type Nav =
 
 type Picked = { readonly pin: Pin; readonly at: { readonly x: number; readonly y: number }; readonly rect: CanvasRect };
 
-/** Pin comment and Vary share the canvas's pick mode; each opens its own popover where Rob picked. */
+/** Pin comment, Vary and Pick share the canvas's pick mode; each opens its own popover where Rob picked. */
 type CanvasInteraction =
   | { readonly kind: "view" }
-  | { readonly kind: "picking"; readonly for: "comment" | "vary" }
+  | { readonly kind: "picking"; readonly for: PickKind }
   | ({ readonly kind: "composing" } & Picked)
-  | ({ readonly kind: "varying" } & Picked);
+  | ({ readonly kind: "varying" } & Picked)
+  | ({ readonly kind: "grafting" } & Picked);
+
+const COMPOSER_FOR = { comment: "composing", vary: "varying", graft: "grafting" } as const;
 
 /**
- * A past iteration on the canvas, read-only. Rob's picks there change only what shows, never the stored slot choice,
- * and the Fork popover forks what shows. `iteration` is null while it loads.
+ * A past iteration on the canvas, on this branch's trail: its own or an ancestor's (`session`). The stored iteration
+ * never changes; Rob's picks there change only what shows, and his marks there are the window's own until Confirm makes
+ * a branch from them (ADR 010). `iteration` is null while it loads.
  */
-type Past = { readonly n: IterationN; readonly iteration: IterationView | null; readonly picks: Readonly<Record<string, VariantKey>> };
+type Past = {
+  readonly session: SessionId;
+  readonly n: IterationN;
+  readonly iteration: IterationView | null;
+  readonly picks: Readonly<Record<string, VariantKey>>;
+  readonly marks: Marks;
+};
+
 
 const NO_PLACEMENT: Placement = { placed: new Set(), detached: new Set() };
 const NO_SLOTS: readonly SlotView[] = [];
@@ -429,7 +449,7 @@ function SessionWorkspace({
   /** Shown in place of the session panel while Rob looks for another brainstorm. */
   homePanel: ReactNode | null;
   onHome: () => void;
-  /** Opens another brainstorm, or home with null: a fork, its parent, or home after a discard. */
+  /** Opens another brainstorm, or home with null: another branch of this one. */
   onOpen: (id: SessionId | null) => void;
   /** Settings' canvas defaults: the view, the history strip and Vary's count, each until Rob picks his own here. */
   settings: AppSettings;
@@ -493,33 +513,36 @@ function SessionWorkspace({
 
   const latest = view?.iteration ?? null;
   const showLatest = useCallback(() => setPast(null), []);
-  // A stored iteration never changes, so each is fetched once.
-  const fetched = useRef(new Map<IterationN, IterationView>());
+  // A stored iteration never changes, so each is fetched once, keyed by its branch, since a trail crosses branches.
+  const fetched = useRef(new Map<string, IterationView>());
   const showIteration = useCallback(
-    (n: IterationN) => {
+    (at: TrailPoint) => {
       setInteraction({ kind: "view" });
-      if (n === latest?.n) return setPast(null);
-      const known = fetched.current.get(n) ?? null;
-      setPast((p) => (p?.n === n ? p : { n, iteration: known, picks: {} }));
+      if (at.session === sessionId && at.n === latest?.n) return setPast(null);
+      const key = `${at.session}:${at.n}`;
+      const same = (p: Past | null) => p !== null && p.session === at.session && p.n === at.n;
+      const known = fetched.current.get(key) ?? null;
+      setPast((p) => (same(p) ? p : { session: at.session, n: at.n, iteration: known, picks: {}, marks: NO_MARKS }));
       if (known !== null) return;
-      void api.iteration(sessionId, n).then((r) => {
+      void api.iteration(at.session, at.n).then((r) => {
         if (!r.ok) {
           setPast(null);
           return showNotice({ title: failedTitle("history"), detail: r.error.message });
         }
-        fetched.current.set(n, r.data);
-        setPast((p) => (p?.n === n ? { ...p, iteration: r.data } : p));
+        fetched.current.set(key, r.data);
+        setPast((p) => (same(p) ? { ...p!, iteration: r.data } : p));
       });
     },
     [api, sessionId, latest?.n, showNotice],
   );
   // While a past iteration loads, the canvas keeps what it showed, so its frame isn't torn down and built again.
   const shown = useRef<IterationView | null>(null);
-  // The past is read-only, so what shows there is the stored iteration with Rob's picks laid over its slots.
+  // The past is read-only, so what shows there is the stored iteration with Rob's picks and marks laid over its slots: a
+  // variant he trashed there leaves the canvas as it does at the latest.
   const iteration = useMemo<IterationView | null>(() => {
     if (past === null) return latest;
     if (past.iteration === null) return shown.current;
-    return { ...past.iteration, slots: past.iteration.slots.map((s) => ({ ...s, active: past.picks[s.id] ?? s.active })) };
+    return { ...past.iteration, slots: past.iteration.slots.map((s) => ({ ...s, active: showingVariant(s, past.marks, past.picks[s.id] ?? s.active) })) };
   }, [past, latest]);
   useEffect(() => {
     shown.current = iteration;
@@ -595,7 +618,7 @@ function SessionWorkspace({
     return () => clearTimeout(timer);
   }, [unseenKey, send]);
 
-  const [stuckPick, setStuckPick] = useState<"comment" | "vary" | null>(null);
+  const [stuckPick, setStuckPick] = useState<PickKind | null>(null);
   const stepSlot = useCallback(
     (by: -1 | 1) => {
       const next = slots[slots.findIndex((s) => s.id === slot?.id) + by];
@@ -658,7 +681,7 @@ function SessionWorkspace({
   const onPicked = useCallback(
     (pin: Pin, at: { x: number; y: number }, rect: CanvasRect) => {
       onSelectBlock(pin.blockId);
-      setInteraction((i) => ({ kind: i.kind === "picking" && i.for === "vary" ? "varying" : "composing", pin, at, rect }));
+      setInteraction((i) => ({ kind: COMPOSER_FOR[i.kind === "picking" ? i.for : "comment"], pin, at, rect }));
     },
     [onSelectBlock],
   );
@@ -685,9 +708,13 @@ function SessionWorkspace({
   };
   // With the canvas away in a clean preview window, nothing can take a pick, so none starts: the canvas region says why
   // and offers the way on, and the bar and Pin comment stay as they were.
-  const togglePick = (kind: "comment" | "vary") => {
+  // The slot Rob was working on when he started a pick: the click that picks selects its block, which moves the
+  // sidebar to that block's slot, and a pick into Main goes where he was working (ADR 010).
+  const pickInto = useRef<SlotId | null>(null);
+  const togglePick = (kind: PickKind) => {
     if (preview.open && !preview.prefs.here && preview.prefs.look === "clean") return setStuckPick((s) => (s === kind ? null : kind));
     setStuckPick(null);
+    pickInto.current = slot?.id ?? null;
     setInteraction((i) => (i.kind === "picking" && i.for === kind ? { kind: "view" } : { kind: "picking", for: kind }));
   };
   const unrendered = selectedBlock !== null && blockErrors.has(selectedBlock.hash) ? "The block didn't render, so there's nothing to pick" : null;
@@ -704,6 +731,63 @@ function SessionWorkspace({
 
   // The preview window mirrors this canvas (ADR 007).
   const pinBlocked = iteration === null ? "There is nothing on the canvas to pin yet" : past !== null ? "Back to latest to pin a comment" : unrendered;
+
+  // Rob's marks (ADR 010): the stored ones at the latest, and the window's own on a past iteration.
+  // What the sidebar and Confirm show: the service already reads its marks live, and the past's local marks are read the
+  // same way, so a graft whose Main was taken back waits out of sight there too. The raw ones stay in `past`, where
+  // choosing a Main again brings the graft back.
+  // Held across renders, since the preview window's scene carries them for its pick popover.
+  const marks = useMemo(() => (past !== null ? liveMarks(past.marks, iteration?.slots ?? NO_SLOTS) : (view?.marks ?? NO_MARKS)), [past, iteration, view?.marks]);
+  const confirmOpen = past === null && view?.request != null && view.request.request.scope.kind === "confirm" && isOpenRequest(view.request.request.state.state);
+  const marksBlocked = confirmOpen ? "The confirm is with the agent, so its marks hold until it lands or you withdraw it" : null;
+  const pickBlocked = iteration === null ? "There is nothing on the canvas to pick from yet" : (marksBlocked ?? unrendered);
+  // Confirm and Add slot send to the thread, so they wait while it is busy or gone, like any request.
+  const sendBlocked = view !== null && !view.regenerate.ok && view.regenerate.reason !== "no_iteration" ? blockedMessage(view.regenerate.reason, view.request?.request.n) : null;
+  // A confirm the app writes itself, with no grafts (and on a branch no instruction), needs no thread, so a lost thread
+  // holds Confirm only for what goes to the agent. An open request in the brainstorm still holds it all (ADR 010).
+  const threadLost = view !== null && !view.regenerate.ok && view.regenerate.reason === "thread_lost" ? sendBlocked : null;
+  const shownSlots = iteration?.slots ?? NO_SLOTS;
+  // On a past iteration the window keeps the marks itself (`pastMarks.ts`); a refusal shows as the service's would.
+  const markPastIteration = (mark: PastMark, action: RobAction): boolean => {
+    if (past === null) return false;
+    const next = markPast(past, shownSlots, mark);
+    if (next === null) return false;
+    if ("refused" in next) {
+      showNotice({ title: failedTitle(action, blocks), detail: next.refused });
+      return false;
+    }
+    setPast((p) => (p === null ? p : { ...p, ...next }));
+    return true;
+  };
+  const markHandlers: MarkHandlers = {
+    onApprove: (b) => {
+      if (!shownSlots.some((x) => x.id === b.slot)) return;
+      if (past === null) return void send({ kind: "approve", blockId: b.id });
+      markPastIteration({ kind: "approve", block: b }, { kind: "approve", blockId: b.id });
+    },
+    onTrash: (b) => (past === null ? void send({ kind: "trash", blockId: b.id }) : void markPastIteration({ kind: "trash", block: b }, { kind: "trash", blockId: b.id })),
+    onRestore: (b) =>
+      past === null ? void send({ kind: "restore", blockId: b.id }) : void markPastIteration({ kind: "restore", block: b.id }, { kind: "restore", blockId: b.id }),
+    onRemoveGraft: (g: StoredGraft) =>
+      past === null ? void send({ kind: "remove_graft", id: g.id }) : void markPastIteration({ kind: "remove_graft", graft: g.id }, { kind: "remove_graft", id: g.id }),
+  };
+  const addGraft = async (from: Pin, into: SlotId, instruction: string | null): Promise<boolean> => {
+    const action: RobAction = { kind: "add_graft", from, into, instruction };
+    if (past === null) return (await send(action)) !== null;
+    return markPastIteration({ kind: "pick", from, into, instruction }, action);
+  };
+  const confirm = async (instruction: string | null): Promise<boolean> => {
+    if (past === null) return (await send({ kind: "confirm" })) !== null;
+    const result = await api.branch(past.session, { from: past.n, marks: past.marks, instruction });
+    if (!result.ok) {
+      showNotice({ title: failedTitle("branch"), detail: result.error.message });
+      return false;
+    }
+    clearNotice();
+    onOpen(result.data.branch);
+    return true;
+  };
+  const [addingSlot, setAddingSlot] = useState(false);
   const picking = interaction.kind === "picking" ? interaction.for : null;
   const scene = useMemo<MirrorScene>(
     () => ({
@@ -722,8 +806,9 @@ function SessionWorkspace({
       hovered: hoveredFeedback,
       past: readOnly,
       pinBlocked,
+      marks,
     }),
-    [sessionId, view?.session.title, title, slots, frames, canvasSystem, frameProps, selectedBlock?.id, slot?.id, shownView, picking, pins, focusedFeedback, hoveredFeedback, readOnly, pinBlocked],
+    [sessionId, view?.session.title, title, slots, frames, canvasSystem, frameProps, selectedBlock?.id, slot?.id, shownView, picking, pins, focusedFeedback, hoveredFeedback, readOnly, pinBlocked, marks],
   );
   const { link } = preview;
   useEffect(() => link.blocks(blocks), [link, blocks]);
@@ -743,7 +828,8 @@ function SessionWorkspace({
         return setHoveredPin(m.id);
       case "pick":
         if (m.for === null) return setInteraction((i) => (i.kind === "picking" ? { kind: "view" } : i));
-        if (m.for === "comment" ? pinBlocked !== null : varyBlocked !== null) return;
+        // The preview window's pick popover writes to the latest, so a pick into Main from there waits for the latest.
+        if ((m.for === "comment" ? pinBlocked : m.for === "vary" ? varyBlocked : past !== null ? "past" : pickBlocked) !== null) return;
         return setInteraction({ kind: "picking", for: m.for });
       case "picked":
         return setInteraction((i) => (i.kind === "picking" ? { kind: "view" } : i));
@@ -767,24 +853,6 @@ function SessionWorkspace({
   const [presentPoke, setPresentPoke] = useState(0);
   const pokePresent = useCallback(() => setPresentPoke((n) => n + 1), []);
 
-  const fork = async (input: ForkInput): Promise<boolean> => {
-    const result = await api.fork(sessionId, input);
-    if (!result.ok) {
-      showNotice({ title: failedTitle("fork"), detail: result.error.message });
-      return false;
-    }
-    clearNotice();
-    onOpen(result.data.fork);
-    return true;
-  };
-
-  const discard = async () => {
-    const result = await api.discard(sessionId);
-    if (!result.ok) return showNotice({ title: failedTitle("discard"), detail: result.error.message });
-    clearNotice();
-    onOpen(result.data.parent);
-  };
-
   const exportHtml = async () => {
     const result = await api.exportHtml(sessionId);
     if (result.ok) clearNotice();
@@ -793,10 +861,10 @@ function SessionWorkspace({
   };
 
   const loadStill = useCallback(
-    (at: { n: IterationN; slot: SlotId | null }) => api.preview(sessionId, { n: at.n, ...(at.slot === null ? {} : { slot: at.slot }) }),
-    [api, sessionId],
+    (at: TrailPoint & { slot: SlotId | null }) => api.preview(at.session, { n: at.n, ...(at.slot === null ? {} : { slot: at.slot }) }),
+    [api],
   );
-  const showing = past?.n ?? latest?.n ?? null;
+  const showing: TrailPoint | null = past !== null ? { session: past.session, n: past.n } : latest !== null ? { session: sessionId, n: latest.n } : null;
   const stripShown = stripOpen(history.choice, view?.history.iterations.length ?? history.latest ?? 0, settings.historyStrip);
   const historyToggle = { open: stripShown, onToggle: () => history.onChoose(!stripShown) };
   const strip = stripShown && view !== null && showing !== null && view.history.iterations.length > 0;
@@ -805,17 +873,41 @@ function SessionWorkspace({
     <Shell
       sidebar={sidebar(
         homePanel ?? (
-          <SessionPanel
-            view={view}
-            slots={slots}
-            blocks={blocks}
-            blockErrors={blockErrors}
-            onHome={onHome}
-            onOpen={onOpen}
-            selectedSlot={slot?.id ?? null}
-            onSlot={setSelectedSlot}
-            onVariant={onVariant}
-          />
+          <>
+            <SessionPanel
+              view={view}
+              slots={slots}
+              blocks={blocks}
+              blockErrors={blockErrors}
+              marks={marks}
+              past={readOnly}
+              onHome={onHome}
+              onOpen={onOpen}
+              selectedSlot={slot?.id ?? null}
+              onSlot={setSelectedSlot}
+              onVariant={onVariant}
+              onAddSlot={() => setAddingSlot(true)}
+              onMakePrimary={() => void send({ kind: "make_primary" })}
+              marking={marksBlocked === null ? { ...markHandlers, blocked: null } : { blocked: marksBlocked }}
+              confirm={
+                <ConfirmButton
+                  slots={slots}
+                  blocks={blocks}
+                  marks={marks}
+                  past={readOnly}
+                  blocked={iteration === null ? WAITING : (marksBlocked ?? (threadLost === null ? sendBlocked : null))}
+                  lost={threadLost}
+                  onConfirm={confirm}
+                />
+              }
+            />
+            <AddSlotDialog
+              open={addingSlot}
+              blocked={past !== null ? "Back to latest to add a slot" : sendBlocked}
+              onOpenChange={setAddingSlot}
+              onSend={async (prompt) => (await send({ kind: "add_slot", prompt })) !== null}
+            />
+          </>
         ),
       )}
       bar={
@@ -826,9 +918,7 @@ function SessionWorkspace({
           iteration={iteration}
           past={readOnly}
           selected={selectedBlock?.id ?? null}
-          blockErrors={blockErrors}
           send={send}
-          fork={fork}
           exportHtml={exportHtml}
           panel={{ open: !inspector.rail, onToggle: () => inspector.onRail(!inspector.rail) }}
           // Pressed only while a strip shows: the loading strip, or the real one once there is an iteration to show.
@@ -837,7 +927,6 @@ function SessionWorkspace({
               ? { ...historyToggle, open: false, blocked: WAITING }
               : historyToggle
           }
-          onDiscard={() => void discard()}
           onOpen={onOpen}
         />
       }
@@ -867,7 +956,7 @@ function SessionWorkspace({
             }
           />
         )}
-        {past !== null && <PastBar n={past.n} onLatest={showLatest} />}
+        {past !== null && <PastBar n={past.n} marked={hasPastMarks(past)} onLatest={showLatest} />}
         <section
           ref={canvasArea}
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-canvas"
@@ -940,6 +1029,28 @@ function SessionWorkspace({
             onCancel={() => setInteraction({ kind: "view" })}
           />
         )}
+        {interaction.kind === "grafting" && (
+          <PickComposer
+            key={JSON.stringify(interaction)}
+            pin={interaction.pin}
+            at={interaction.at}
+            rect={interaction.rect}
+            block={blocks.find((b) => b.id === interaction.pin.blockId) ?? null}
+            slots={slots}
+            blocks={blocks}
+            marks={marks}
+            current={pickInto.current}
+            bounds={{ width: canvasArea.current?.clientWidth ?? 0, height: canvasArea.current?.clientHeight ?? 0 }}
+            onAdd={async (into, instruction) => {
+              // The pick selected the picked block, which moved the sidebar to its slot; it goes back to the Main that
+              // took it, where the graft now waits.
+              if (!(await addGraft(interaction.pin, into, instruction))) return;
+              setSelectedSlot(into);
+              setInteraction({ kind: "view" });
+            }}
+            onCancel={() => setInteraction({ kind: "view" })}
+          />
+        )}
         {interaction.kind === "varying" && (
           <VaryComposer
             key={JSON.stringify(interaction)}
@@ -989,6 +1100,7 @@ function SessionWorkspace({
           onDismiss={onDismiss}
         >
           <VarySection picking={picking === "vary"} open={interaction.kind === "varying"} asked={stuckPick === "vary"} blocked={varyBlocked} onPickToggle={() => togglePick("vary")} />
+          <PickSection picking={picking === "graft"} open={interaction.kind === "grafting"} asked={stuckPick === "graft"} blocked={pickBlocked} onPickToggle={() => togglePick("graft")} />
           <FeedbackPanel
             feedback={feedback}
             blocks={blocks}
@@ -1049,15 +1161,15 @@ function CanvasAway({
   look: PreviewPrefs["look"];
   hold: boolean;
   /** A pick that is on, waiting for a click in the preview window. */
-  picking: "comment" | "vary" | null;
+  picking: PickKind | null;
   /** A pick asked for while the preview window is clean, which never takes one since an audience may be watching it. */
-  stuck: "comment" | "vary" | null;
+  stuck: PickKind | null;
   onHere: () => void;
   onWorking: () => void;
   onDismiss: () => void;
   onHold: (hold: boolean) => void;
 }) {
-  const act = stuck === "vary" ? "vary" : "pin";
+  const act = stuck === "vary" ? "vary" : stuck === "graft" ? "pick" : "pin";
   const name = look === "clean" ? "Clean" : "Working";
   return (
     <div className="absolute inset-0 z-raised flex bg-canvas" data-canvas-away={stuck !== null ? "stuck" : picking !== null ? "picking" : ""}>
@@ -1071,7 +1183,9 @@ function CanvasAway({
             {stuck !== null
               ? act === "pin"
                 ? "Pins don't show in the Clean preview"
-                : "Vary can't pick in the Clean preview"
+                : act === "vary"
+                  ? "Vary can't pick in the Clean preview"
+                  : "Pick can't pick in the Clean preview"
               : picking !== null
                 ? "Click an element in the preview window"
                 : hold
@@ -1086,7 +1200,9 @@ function CanvasAway({
               : picking !== null
                 ? picking === "vary"
                   ? "Choose its variants there. Esc stops."
-                  : "Add your comment there; it appears in Feedback here. Esc stops."
+                  : picking === "graft"
+                    ? "Choose which Main it goes into there. Esc stops."
+                    : "Add your comment there; it appears in Feedback here. Esc stops."
                 : hold
                   ? `The canvas is in the ${name} preview, which is held.`
                   : look === "clean"
@@ -1101,7 +1217,7 @@ function CanvasAway({
           {stuck !== null ? (
             <>
               <Button variant="accent" onClick={onHere} data-away-here>
-                {act === "pin" ? "Show canvas here and pin" : "Show canvas here and vary"}
+                {`Show canvas here and ${act}`}
               </Button>
               {/* The way that shows the audience Rob's tools, so it carries the Working look's warning tone. */}
               <Button variant="caution" data-edge onClick={onWorking} data-away-working>

@@ -1,4 +1,4 @@
-import { CircleCheck, CloudOff, GitBranch, Lightbulb, SearchX, Undo2 } from "lucide-react";
+import { CircleCheck, CloudOff, Lightbulb, SearchX, Undo2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -207,8 +207,8 @@ function NoneShown({ title, description, action, onAction, data }: { title: stri
 
 /**
  * One brainstorm: its preview, then its project and status, title, one line of what it is, and footer. Every card has
- * those four lines, so a row of cards is one height with no blank in any of them; the one line is where a fork came
- * from, else the brief, cut to fit. The title is the button that opens it, stretched over the whole card, so the
+ * those four lines, so a row of cards is one height with no blank in any of them; the one line is the brief, cut
+ * to fit. The title is the button that opens it, stretched over the whole card, so the
  * preview and the text are a click target without a button holding a frame. The settle control sits over the bottom
  * right corner, above the stretched button, and shows on hover or focus. A settled card is a ghost of an active one,
  * with no fill or lift and its still greyed, and counts from when it was settled.
@@ -232,7 +232,7 @@ function OverviewCard({
 }) {
   const brief = markdownText(s.brief).trim();
   // With nothing under its title, the title takes that line's room, so a long one wraps to a second line rather than cut beside a blank.
-  const lone = s.fork === null && brief === "";
+  const lone = brief === "";
   const settledAt = s.settlement.state === "settled" ? s.settlement.at : null;
   const found = briefMatch(s.title, brief, search);
   const label = settleLabel(s);
@@ -287,14 +287,8 @@ function OverviewCard({
             <Truncate>{s.title}</Truncate>
           )}
         </button>
-        {/* Forks sit flat among the rest, so each says where it came from, in place of the brief it shares with its parent. */}
         {lone ? null : found !== null ? (
           <BriefFragment found={found} settled={settledAt !== null} />
-        ) : s.fork !== null ? (
-          <span className="flex h-4.5 min-w-0 items-center gap-1 text-sm text-fg-muted" data-fork-of={s.fork.from}>
-            <GitBranch aria-hidden className="size-3.5 shrink-0" />
-            <Truncate>{`from ${s.fork.parentTitle} · iteration ${s.fork.from}`}</Truncate>
-          </span>
         ) : (
           <Truncate className="h-4.5 text-sm text-fg-muted" data-card-brief>
             {brief}

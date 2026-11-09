@@ -97,7 +97,7 @@ describe("t3 bridge", () => {
   });
 });
 
-describe("t3 thread start and list", () => {
+describe("t3 thread start", () => {
   const project = "f0d48734-aa55-422c-9bcd-e473ade44a34" as ProjectId;
   const odd = (id: string) => id as ProjectId;
 
@@ -108,16 +108,8 @@ describe("t3 thread start and list", () => {
     expect(readState().started).toEqual([{ thread: "5a000000-0000-4000-8000-000000000001", project, title: "Slot machine 100 reels", message }]);
   });
 
-  test("a start whose reply is lost fails, and list then finds the thread it made", async () => {
-    writeState({ ...readState(), failAfter: ["start"] });
-    expect(await bridge.start({ project, title: "Fork", message: "hi" })).toEqual({ kind: "failed", error: "fake t3 failure: the reply was lost" });
-    const listed = await bridge.list(project);
-    expect(listed.kind === "found" && listed.threads.map((t) => t.threadId).sort()).toEqual(["5a000000-0000-4000-8000-000000000001", thread]);
-  });
-
   test("refuses a project id cmd.exe could misread, and an unknown project fails", async () => {
     expect(await bridge.start({ project: odd("x & calc"), title: "t", message: "m" })).toEqual({ kind: "failed", error: `"x & calc" is not a T3 project id` });
-    expect(await bridge.list(odd("x & calc"))).toEqual({ kind: "failed", error: `"x & calc" is not a T3 project id` });
     expect((await bridge.start({ project: odd("no-such-project"), title: "t", message: "m" })).kind).toBe("failed");
     expect(readState().started).toEqual(undefined);
   });

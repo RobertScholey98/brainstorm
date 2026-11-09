@@ -8,7 +8,7 @@ import type { AppUpdates } from "../core/appUpdate";
 import type { Brainstorm } from "../core/brainstorm";
 import { zBranded } from "../core/parse";
 import { TIERS } from "../core/system/model";
-import { VARY_MAX } from "../core/fork";
+import { VARY_MAX } from "../core/vary";
 import { uiPrefsPatch, type AppSettings } from "../core/prefs";
 import type { AppAbout, SkillHost } from "../core/about";
 import { exportsDir } from "./appData";
@@ -16,6 +16,7 @@ import {
   parseBlockId,
   parseFeedbackId,
   parseIterationN,
+  parseGraftId,
   parsePartName,
   parseProjectId,
   parsePropName,
@@ -113,10 +114,28 @@ const cssName = z.string().regex(/^--[\w-]+$/, "a custom property, such as --pri
 const attachBody = z.strictObject({ ref: z.string().trim().min(1), thread: threadId });
 const settleBody = z.strictObject({ settled: z.boolean() });
 const iterationN = zBranded(z.number(), parseIterationN, "iteration number");
-const forkBody = z.strictObject({
+const slotId = zBranded(z.string(), parseSlotId, "slot id");
+const variantKey = zBranded(z.string(), parseVariantKey, "variant key");
+const partName = zBranded(z.string(), parsePartName, "part name");
+const instruction = z
+  .string()
+  .nullable()
+  .transform((d) => (d === null || d.trim() === "" ? null : d.trim()));
+const branchBody = z.strictObject({
   from: iterationN,
-  picks: z.record(z.string(), zBranded(z.string(), parseVariantKey, "variant key")).default({}),
-  instruction: z.string().trim().min(1, "say what the fork should try"),
+  marks: z.strictObject({
+    mains: z.record(slotId, variantKey),
+    grafts: z.array(
+      z.strictObject({
+        id: zBranded(z.number(), parseGraftId, "graft id"),
+        from: z.strictObject({ blockId, part: partName.nullable() }),
+        into: slotId,
+        instruction,
+      }),
+    ),
+    trashed: z.array(blockId),
+  }),
+  instruction: instruction.default(null),
 });
 const workingCopyBody = z.strictObject({
   thread: threadId,
@@ -181,6 +200,15 @@ const ACTIONS: { readonly [K in RobAction["kind"]]: z.ZodType<Extract<RobAction,
   save_theme: z.strictObject({ kind: z.literal("save_theme"), name: themeName }),
   upgrade_system: z.strictObject({ kind: z.literal("upgrade_system") }),
   promote: z.strictObject({ kind: z.literal("promote"), name: zBranded(z.string(), parseProposedName, "proposed component name") }),
+  approve: z.strictObject({ kind: z.literal("approve"), blockId }),
+  trash: z.strictObject({ kind: z.literal("trash"), blockId }),
+  restore: z.strictObject({ kind: z.literal("restore"), blockId }),
+  add_graft: z.strictObject({ kind: z.literal("add_graft"), from: pin, into: slotId, instruction }),
+  remove_graft: z.strictObject({ kind: z.literal("remove_graft"), id: zBranded(z.number(), parseGraftId, "graft id") }),
+  confirm: z.strictObject({ kind: z.literal("confirm") }),
+  add_slot: z.strictObject({ kind: z.literal("add_slot"), prompt: z.string().trim().min(1, "say what the new slot is for") }),
+  make_primary: z.strictObject({ kind: z.literal("make_primary") }),
+  refresh_thread: z.strictObject({ kind: z.literal("refresh_thread") }),
 };
 
 const isActionKind = (k: unknown): k is RobAction["kind"] => typeof k === "string" && Object.hasOwn(ACTIONS, k);
@@ -536,14 +564,13 @@ export function createHttpHandler(options: HttpOptions, port: () => number) {
     },
     {
       method: "POST",
-      path: /^\/v1\/ui\/sessions\/([^/]+)\/fork$/,
+      path: /^\/v1\/ui\/sessions\/([^/]+)\/branch$/,
       auth: "ui",
       handle: withSession(async (id, { body }) => {
-        const b = parseBody(forkBody, body);
-        return b.ok ? service.fork(id, b.data) : b;
+        const b = parseBody(branchBody, body);
+        return b.ok ? service.branch(id, b.data) : b;
       }),
     },
-    { method: "POST", path: /^\/v1\/ui\/sessions\/([^/]+)\/discard$/, auth: "ui", handle: withSession(async (id) => service.discard(id)) },
     {
       method: "POST",
       path: /^\/v1\/ui\/pick-folder$/,

@@ -91,21 +91,24 @@ describe("http", () => {
     });
   });
 
-  test("fork, discard, a past iteration and a past still are UI routes that check their input", async () => {
-    const created = await call("POST", "/v1/agent/sessions", agentToken, { title: "Fork me", brief: "", thread: T1, project: null });
+  test("a branch, a past iteration and a past still are UI routes that check their input", async () => {
+    const created = await call("POST", "/v1/agent/sessions", agentToken, { title: "Branch me", brief: "", thread: T1, project: null });
     const id = created.body.data.session.id;
     const ui = (method: string, path: string, body?: unknown) => call(method, `/v1/ui/sessions/${id}${path}`, server.uiToken, body);
-    expect(await ui("POST", "/fork", { from: 1, picks: {}, instruction: "  " })).toEqual({
-      status: 400,
-      body: { ok: false, error: { code: "usage", message: "instruction: say what the fork should try" } },
-    });
-    expect((await ui("POST", "/fork", { from: 0, instruction: "x" })).status).toBe(400);
-    expect((await ui("POST", "/fork", { from: 1, instruction: "x" })).body.error).toEqual({ code: "not_found", entity: "iteration", message: `${id} has no iteration 1` });
-    expect((await call("POST", "/v1/agent/sessions/" + id + "/fork", agentToken, { from: 1, instruction: "x" })).status, "only Rob forks").toBe(400);
+    expect((await ui("POST", "/branch", { from: 1, picks: {}, instruction: "x" })).body.error.code, "the old body is refused").toBe("usage");
+    expect((await ui("POST", "/branch", { from: 1, marks: { mains: { wheel: "Not A Key" }, grafts: [], trashed: [] }, instruction: null })).status).toBe(400);
+    const badSlot = await ui("POST", "/branch", { from: 1, marks: { mains: { "Not A Slot": "a" }, grafts: [], trashed: [] }, instruction: null });
+    expect([badSlot.status, badSlot.body.error.code, badSlot.body.error.message], "a Main's slot is checked at the edge too").toEqual([400, "usage", "marks.mains.Not A Slot: Invalid key in record"]);
+    expect((await ui("POST", "/branch", { from: 1, marks: { mains: { wheel: "a" }, grafts: [], trashed: [] }, instruction: null })).body.error.code, "a good one reaches the service").toBe("not_found");
+    expect((await ui("POST", "/branch", { from: 0, marks: { mains: {}, grafts: [], trashed: [] }, instruction: "x" })).status).toBe(400);
+    expect((await ui("POST", "/branch", { from: 1, marks: { mains: {}, grafts: [], trashed: [] }, instruction: "x" })).body.error).toEqual({ code: "not_found", entity: "iteration", message: `${id} has no iteration 1` });
+    expect((await call("POST", "/v1/agent/sessions/" + id + "/branch", agentToken, { from: 1, marks: { mains: {}, grafts: [], trashed: [] }, instruction: "x" })).status, "only Rob branches").toBe(400);
     expect((await ui("GET", "/iterations/1")).status).toBe(404);
     expect((await ui("GET", "/preview?n=zero")).body.error.message).toBe(`"zero" is not an iteration number`);
     expect((await ui("GET", "/preview?slot=Bad%20Slot")).status).toBe(400);
-    expect((await ui("POST", "/discard")).body.error).toEqual({ code: "invalid_action", message: `${id}'s thread has started; settle it instead` });
+    expect((await ui("POST", "/discard")).body.error.code, "discard is gone").toBe("usage");
+    expect((await ui("POST", "/actions", { kind: "add_slot", prompt: "  " })).status, "a new slot needs words").toBe(400);
+    expect((await ui("POST", "/actions", { kind: "approve", blockId: "wheel/neon" })).body.error.code, "a valid mark reaches the service").toBe("not_found");
     const vary = (count: number) => ui("POST", "/actions", { kind: "vary", target: { blockId: "wheel/neon", part: null }, count, direction: "  " });
     expect((await vary(7)).status).toBe(400);
     expect((await vary(3)).body.error.code, "a valid vary reaches the service").toBe("not_found");

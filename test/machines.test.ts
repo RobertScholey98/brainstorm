@@ -2,8 +2,11 @@ import { describe, expect, test } from "vitest";
 import {
   blockedMessage,
   canAppend,
+  confirmGate,
   foldFeedback,
+  formatRefreshMessage,
   formatRequestMessage,
+  keptMains,
   observeRequest,
   originText,
   parseRequestMarker,
@@ -12,6 +15,7 @@ import {
   scopeText,
 } from "../src/core/machines";
 import type {
+  ConfirmScope,
   Attachment,
   BlockId,
   FeedbackEvent,
@@ -24,6 +28,7 @@ import type {
   RequestScope,
   RequestState,
   RunId,
+  SlotId,
   SessionId,
   ThreadId,
   ThreadMessage,
@@ -112,7 +117,7 @@ const seen = (
   observation: Observation | null,
   threadId = threadA,
 ) => {
-  const phase = requestPhase(request(state, threadId), attachment, observation);
+  const phase = requestPhase(request(state, threadId), attachment, observation, false);
   return {
     phase: phase.phase,
     actions: phase.actions,
@@ -135,6 +140,12 @@ describe("requestPhase, one test per design.md row", () => {
     });
   });
 
+  test("while another branch's request holds the shared thread, Retry and Resend wait", () => {
+    const busy = (state: RequestState, threadId = threadA) => requestPhase(request(state, threadId), attached, null, true);
+    expect(busy({ state: "send_failed", error: "t3 exited 1" })).toEqual({ phase: "send_failed", error: "t3 exited 1", actions: ["open_thread", "withdraw"] });
+    expect(busy(sent, threadB)).toEqual({ phase: "previous_thread", actions: ["open_thread", "withdraw"] });
+  });
+
   test("send_failed to a lost thread offers no way to open it", () => {
     expect(seen({ state: "send_failed", error: "thread not found" }, lost, null).actions).toEqual(["retry", "withdraw"]);
   });
@@ -150,9 +161,8 @@ describe("requestPhase, one test per design.md row", () => {
   test("sent, attachment lost", () => {
     expect(seen(sent, lost, { kind: "running", pendingRequestCount: 0 })).toEqual({
       phase: "thread_lost",
-      actions: ["copy_phrase", "withdraw"],
-      message:
-        'This session\'s thread is gone. In a T3 thread on this project, say: pick up the brainstorm session titled "Chore wheel"',
+      actions: ["fresh_thread", "withdraw"],
+      message: "This brainstorm's thread is gone. Start a fresh thread, and the open request goes to it.",
     });
   });
 
@@ -204,7 +214,7 @@ describe("requestPhase, one test per design.md row", () => {
   });
 
   test("fulfilled names two changed blocks, then counts the rest", () => {
-    const fulfilled = requestPhase(request({ state: "fulfilled", iteration: it(3) }), attached, null);
+    const fulfilled = requestPhase(request({ state: "fulfilled", iteration: it(3) }), attached, null, false);
     const message = (changed: string[]) => phaseMessage(fulfilled, { title: "Chore wheel", changed });
     expect([message([]), message(["Neon wheel", "Card"]), message(["Neon wheel", "Card", "Slot reel", "Receipt"])]).toEqual([
       "Iteration 3 · no blocks changed",
@@ -214,7 +224,7 @@ describe("requestPhase, one test per design.md row", () => {
   });
 
   test("a fulfilled vary counts the new variants that landed, by the element", () => {
-    const fulfilled = requestPhase(request({ state: "fulfilled", iteration: it(4) }), attached, null);
+    const fulfilled = requestPhase(request({ state: "fulfilled", iteration: it(4) }), attached, null, false);
     const variants = [
       { key: "spin-button-a", title: "Spin button A" },
       { key: "spin-button-b", title: "Spin button B" },
@@ -237,7 +247,20 @@ test("blockedMessage says why Regenerate is shut, after the hint's lead name", (
   expect([blockedMessage("no_iteration", undefined), blockedMessage("request_open", 3 as RequestN), blockedMessage("thread_lost", undefined)]).toEqual([
     "Needs a first iteration",
     "Request 3 is still open",
-    "This session's thread is gone. Take it over from a T3 thread first.",
+    "This brainstorm's thread is gone. Start a fresh thread from the top bar.",
+  ]);
+});
+
+test("confirmGate lets a confirm that asks the agent nothing past a lost thread, and nothing else", () => {
+  const lost = { ok: false, reason: "thread_lost" } as const;
+  const open = { ok: false, reason: "request_open" } as const;
+  const busy = { ok: false, reason: "branch_busy" } as const;
+  expect([confirmGate(lost, false), confirmGate(lost, true), confirmGate(open, false), confirmGate(busy, false), confirmGate({ ok: true }, true)]).toEqual([
+    { ok: true },
+    { ok: false, reason: "thread_lost" },
+    { ok: false, reason: "request_open" },
+    { ok: false, reason: "branch_busy" },
+    { ok: true },
   ]);
 });
 
@@ -327,29 +350,58 @@ describe("the [brainstorm] message", () => {
   });
 });
 
-describe("a fork's thread start", () => {
-  const pending = `pending:${session}` as ThreadId;
-  const unstarted: Attachment = { ...attached, threadId: pending };
-
-  test("starting has nothing to press, and a failed start offers Retry and Discard only", () => {
-    expect(seen({ state: "sending" }, unstarted, null, pending)).toEqual({ phase: "starting", actions: [], message: "Starting a T3 thread" });
-    expect(seen({ state: "send_failed", error: "t3 exited 1" }, unstarted, null, pending)).toEqual({
-      phase: "start_failed",
-      actions: ["retry", "discard"],
-      message: "Couldn't start a T3 thread (t3 exited 1). The fork is saved.",
-    });
-  });
-
-  test("the first message says where the fork came from and has the new agent attach", () => {
+describe("branches, confirms and fresh threads", () => {
+  test("a branch's first request says where it left, on the thread the agent already has", () => {
     const first = formatRequestMessage(
       { ...request({ state: "sending" }), n: 1 as RequestN, scope: { kind: "all" }, feedbackIds: [], freetext: "slot machine" },
-      { fork: { parent: "s_parent1" as SessionId, from: 3 as IterationN } },
+      { branchOf: { parent: "s_parent1" as SessionId, from: 3 as IterationN } },
     );
     expect(first).toBe(
-      '[brainstorm] session s_8f2k3a · request 1 · fork of s_parent1 iteration 3 · scope: all · freetext: "slot machine"\n' +
-        "Handle with the use-brainstorm skill: this thread is new, so run `brainstorm session attach s_8f2k3a`, then `brainstorm context s_8f2k3a`.",
+      '[brainstorm] session s_8f2k3a · request 1 · branch of s_parent1 iteration 3 · scope: all · freetext: "slot machine"\n' +
+        "Handle with the use-brainstorm skill: run `brainstorm context s_8f2k3a`.",
     );
     expect(parseRequestMarker(first)).toEqual({ session: "s_8f2k3a", n: 1 });
+  });
+
+  test("a confirm's scope names Main, what goes into it and what goes", () => {
+    const confirm = {
+      kind: "confirm" as const,
+      mains: [{ slot: "wheel" as SlotId, variant: "neon" as VariantKey }],
+      grafts: [{ from: { blockId: "wheel/calm" as BlockId, part: "spin-button" as PartName }, into: "wheel" as SlotId, instruction: null }],
+      drop: ["wheel/calm" as BlockId],
+    };
+    expect(scopeText(confirm)).toBe("confirm main wheel/neon; graft wheel/calm [spin-button] into wheel; drop wheel/calm");
+    expect(scopeText({ ...confirm, mains: [], grafts: [] })).toBe("confirm; drop wheel/calm");
+    expect(scopeText({ kind: "add_slot" })).toBe("add_slot");
+  });
+
+  test("a confirm's history line leads with the Main it kept, by title, and counts several", () => {
+    const wheel = { slot: "wheel" as SlotId, variant: "neon" as VariantKey };
+    const result = { slot: "result" as SlotId, variant: "sheet" as VariantKey };
+    const drops = ["wheel/calm", "wheel/reel", "wheel/flat", "wheel/dial", "wheel/slot"] as BlockId[];
+    const confirm: ConfirmScope = { kind: "confirm", mains: [wheel, result], grafts: [], drop: drops };
+    expect(keptMains(confirm), "a slot that kept its only variant isn't news").toEqual(["wheel/neon"]);
+    const origin = (scope: ConfirmScope, kept: string[]) => originText({ kind: "request", n: 1 as RequestN, body: { scope, freetext: null }, changed: [], kept });
+    expect(origin(confirm, ["Neon wheel"])).toBe("Kept Neon wheel · 5 options dropped");
+    const both = { ...confirm, drop: [...drops, "result/plain" as BlockId] };
+    expect(keptMains(both)).toEqual(["wheel/neon", "result/sheet"]);
+    expect(origin(both, ["Neon wheel", "Result sheet"])).toBe("Kept 2 Mains · 6 options dropped");
+    const graft: ConfirmScope = { ...confirm, drop: [], grafts: [{ from: { blockId: "wheel/calm" as BlockId, part: "spin-button" as PartName }, into: "wheel" as SlotId, instruction: null }] };
+    expect(keptMains(graft)).toEqual(["wheel/neon"]);
+    expect(origin(graft, ["Neon wheel"])).toBe("Kept Neon wheel · 1 element brought in");
+    expect(origin({ ...confirm, mains: [] }, []), "trashes in a slot with no Main keep no Main").toBe("Confirmed · 5 options dropped");
+    expect(phaseMessage({ phase: "fulfilled", iteration: 4 as IterationN, actions: [] }, { title: "Chore wheel", changed: [], kept: ["Neon wheel"], scope: confirm })).toBe(
+      "Iteration 4 · Kept Neon wheel · 5 options dropped",
+    );
+  });
+
+  test("a fresh thread's first message has the new agent attach and read the brainstorm, with no request to answer", () => {
+    const message = formatRefreshMessage(session, "Chore wheel", null);
+    expect(message).toBe(
+      '[brainstorm] session s_8f2k3a · fresh thread for "Chore wheel"\n' +
+        "Handle with the use-brainstorm skill: this thread is new, so run `brainstorm session attach s_8f2k3a`, then `brainstorm context s_8f2k3a`, and reply in one line once you have read it.",
+    );
+    expect(parseRequestMarker(message), "nothing for the request machinery to wait on").toBe(null);
   });
 });
 
@@ -370,19 +422,19 @@ describe("vary and history text", () => {
 
   test("originText says where each iteration came from", () => {
     expect(originText({ kind: "brief" })).toBe("First designs, from the brief");
-    expect(originText({ kind: "fork", parent: "Chore wheel", from: 2 as IterationN })).toBe("Your picks from iteration 2");
+    expect(originText({ kind: "branch", parent: "Chore wheel", from: 2 as IterationN })).toBe("Branched from iteration 2");
     expect(originText({ kind: "agent", note: null })).toBe("The agent's own commit");
     expect(originText({ kind: "agent", note: "tidied" })).toBe("tidied");
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: null }, changed: ["Neon wheel", "Slot reel", "Assignment card"] })).toBe(
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: null }, changed: ["Neon wheel", "Slot reel", "Assignment card"], kept: [] })).toBe(
       "Changed Neon wheel, Slot reel and 1 more",
     );
     expect(
-      originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null }, changed: ["Neon wheel"] }),
+      originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null }, changed: ["Neon wheel"], kept: [] }),
     ).toBe("Changed Neon wheel");
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null }, changed: [] })).toBe(
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "blocks", blocks: ["wheel/neon" as BlockId] }, freetext: null }, changed: [], kept: [] })).toBe(
       "No blocks changed",
     );
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: "calmer" }, changed: [] })).toBe("calmer");
-    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: vary, freetext: "bouncier" }, changed: [] })).toBe("Vary Spin button ×2 · bouncier");
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: "calmer" }, changed: [], kept: [] })).toBe("calmer");
+    expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: vary, freetext: "bouncier" }, changed: [], kept: [] })).toBe("Vary Spin button ×2 · bouncier");
   });
 });

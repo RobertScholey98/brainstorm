@@ -192,7 +192,7 @@ try {
     1,
   );
   check(
-    "a card with no brief and no fork gives its title the brief's room, two 20 px lines in 44 px, so a long title wraps instead of cutting beside a blank",
+    "a card with no brief and no branch gives its title the brief's room, two 20 px lines in 44 px, so a long title wraps instead of cutting beside a blank",
     await window.$$eval("[data-card-title-wraps]", (titles) => [
       titles.length > 0,
       [...new Set(titles.map((t) => Math.round(t.closest("button").getBoundingClientRect().height)))],
@@ -673,13 +673,13 @@ try {
     [null, "chores", "Start a task"],
   );
   check(
-    "the brainstorm sidebar shows the back control, the thread and the slot's variants",
+    "the brainstorm sidebar shows the back control, the slot picker where the thread link was (ADR 010) and the slot's variants",
     [
       (await window.textContent("[data-back]"))?.trim(),
-      (await window.textContent('[data-thread="attached"]'))?.trim(),
+      await window.getAttribute("[data-slot-picker]", "data-slot-picker"),
       await window.$$eval('[data-slot-id="result"] [data-variant]', (els) => els.map((e) => e.dataset.variant)),
     ],
-    ["All brainstorms", "Attached", ["card"]],
+    ["All brainstorms", "result", ["card"]],
   );
   check(
     "every section head in the brainstorm panel takes one style, the selected slot's too, its variant count muted",
@@ -688,8 +688,9 @@ try {
       const muted = getComputedStyle(probe).color;
       probe.remove();
       const heads = [...document.querySelectorAll('[data-sidebar-panel="session"] [data-sidebar="group-label"]')].map((h) => `${getComputedStyle(h).color} ${getComputedStyle(h).fontWeight}`);
-      const counts = [...document.querySelectorAll("[data-slot-id] [data-slot-count]")];
-      return [heads.length >= 2, new Set(heads).size, counts.every((c) => getComputedStyle(c).color === muted)];
+      // One slot shows at a time, so a one-variant slot has a single head, Main; its count sits in the slot picker.
+      const counts = [...document.querySelectorAll("[data-slot-picker] [data-slot-count]")];
+      return [heads.length >= 1 && counts.length === 1, new Set(heads).size, counts.every((c) => getComputedStyle(c).color === muted)];
     }),
     [true, 1, true],
   );
@@ -701,8 +702,8 @@ try {
         const r = m.getBoundingClientRect();
         return Math.round(r.left + r.width / 2);
       });
-      const texts = [...document.querySelectorAll(`${panel} [data-back] > span, ${panel} [data-thread-link] .truncate, ${panel} [data-variant-title]`)].map((t) => Math.round(t.getBoundingClientRect().left));
-      return [marks.length >= 3 && new Set(marks).size, texts.length >= 2 && new Set(texts).size];
+      const texts = [...document.querySelectorAll(`${panel} [data-back] > span, ${panel} [data-variant-title]`)].map((t) => Math.round(t.getBoundingClientRect().left));
+      return [marks.length >= 2 && new Set(marks).size, texts.length >= 2 && new Set(texts).size];
     }),
     [1, 1],
   );
@@ -811,7 +812,7 @@ try {
   };
   check(
     "under the pointer, its hint open, a pressed pane toggle keeps its pressed fill, and an outline button takes the ghost's hover fill with its own edge",
-    [await underPointer('[data-sidebar="trigger"]'), await underPointer("[data-history-toggle]"), await underPointer("[data-fork-toggle]")],
+    [await underPointer('[data-sidebar="trigger"]'), await underPointer("[data-history-toggle]"), await underPointer("[data-topbar] [data-export]")],
     [["selected", "rgba(0, 0, 0, 0)"], ["selected", "rgba(0, 0, 0, 0)"], ["hover", "border-strong"]],
   );
   check("the canvas region ends where the Inspector starts", iframe.right <= inspector.left, true);
@@ -1164,29 +1165,42 @@ try {
   await window.click("[data-back]");
   await (await openSession(window, roulette)).waitForSelector('[data-bid="wheel/neon"]');
   check(
-    "every slot marks its showing variant, and only the selected slot's row is tinted",
+    "the sidebar shows one slot at a time (ADR 010), which marks its showing variant and tints its row",
     [
       await window.$$eval("[data-variant][data-showing]", (els) => els.map((e) => e.dataset.variant)),
       await window.$$eval("[data-variant][data-active]", (els) => els.map((e) => e.dataset.variant)),
     ],
-    [["neon", "card"], ["neon"]],
+    [["neon"], ["neon"]],
   );
   check(
-    "variant notes stay removed: each variant row is its button alone, and no note text reaches the sidebar",
+    "the slot's variants are one radio group named for it, Main and Options labelled sections in it, with exactly one radio checked and one tab stop",
+    await window.evaluate(() =>
+      [...document.querySelectorAll('[data-sidebar-panel="session"] [role="radiogroup"]')].map((g) => [
+        g.getAttribute("aria-label"),
+        [...g.querySelectorAll('[role="group"]')].map((x) => x.getAttribute("aria-label")),
+        [...g.querySelectorAll('[role="radio"][aria-checked="true"]')].map((r) => r.dataset.variant),
+        [...g.querySelectorAll('[role="radio"][tabindex="0"]')].map((r) => r.dataset.variant),
+      ]),
+    ),
+    [["The wheel variants", ["Main", "Options"], ["neon"], ["neon"]]],
+  );
+  check(
+    "variant notes stay removed: each variant row is its button and its 👍/🗑 marks, and no note text reaches the sidebar",
     await window.$$eval('[data-slot="sidebar-content"] [data-variant]', (rows) => ({
-      alone: rows.every((r) => r.closest("li").children.length === 1),
+      alone: rows.every((r) => [...r.closest("li").children].every((c) => c === r || c.hasAttribute("data-marks"))),
       notes: rows.some((r) => /Hypothesis|Tradeoff|Try this|Recommended/.test(r.closest("[data-slot-id]").textContent)),
       about: document.querySelectorAll("[data-about], [data-about-more]").length,
     })),
     { alone: true, notes: false, about: 0 },
   );
   check(
-    "the sidebar ends 32 px after its last row, and nothing fades over its rows: they clip at its edge",
+    "the brainstorm panel ends on Confirm's foot, held at the bottom (ADR 010), and nothing fades over its rows: they clip at its edge",
     await window.$eval('[data-slot="sidebar-content"]', (el) => {
       const masked = [...el.querySelectorAll("*")].filter((c) => getComputedStyle(c).backgroundImage.includes("gradient") || getComputedStyle(c).maskImage !== "none").length;
-      return [getComputedStyle(el).paddingBottom, getComputedStyle(el).maskImage, masked];
+      const foot = el.lastElementChild;
+      return [foot?.querySelector("[data-confirm-toggle]") !== null, foot && getComputedStyle(foot).position, getComputedStyle(el).maskImage, masked];
     }),
-    ["32px", "none", 0],
+    [true, "sticky", "none", 0],
   );
   check(
     "the sidebar never scrolls sideways",
@@ -1359,17 +1373,28 @@ try {
   await window.setViewportSize({ width: 1440, height: 900 });
   await window.waitForSelector("[data-home-overview]");
   await window.click(`[data-session="${loose}"]`);
-  await window.waitForSelector('[data-sidebar-panel="session"] [data-thread="lost"]');
-  check("a brainstorm whose thread is gone says Thread lost in its sidebar", (await window.textContent('[data-thread="lost"]'))?.trim(), "Thread lost");
+  // The thread lives in the top bar's chip (ADR 010), which says when it is gone; the way on stands beside it.
+  await window.waitForFunction(() => document.querySelector("[data-thread-chip]")?.textContent.trim() === "Thread lost");
+  check("a brainstorm whose thread is gone says Thread lost on the top bar's thread chip", (await window.textContent("[data-thread-chip]"))?.trim(), "Thread lost");
+  // Rebaselined for ADR 010, the chip carries the thread's state: with no request open the bar still offers Start a
+  // fresh thread, once, beside the chip, so the chip's menu no longer repeats it and only says what happened.
   check(
-    "the takeover phrase sits on its own line at the sidebar's width, with Copy phrase under it",
-    await window.$eval("[data-takeover]", (el) => {
-      const phrase = el.querySelector("[data-takeover-phrase]").getBoundingClientRect();
-      const copy = el.querySelector("button").getBoundingClientRect();
-      return [phrase.width > el.getBoundingClientRect().width * 0.7, copy.top >= phrase.bottom];
-    }),
-    [true, true],
+    "with no request open, the bar offers Start a fresh thread once beside the chip, and says Thread lost nowhere else",
+    await window.evaluate(() => [
+      [...document.querySelectorAll("[data-topbar] [data-request-action]")].map((el) => el.dataset.requestAction),
+      document.querySelectorAll("[data-topbar] [data-request-phase], [data-request-detail]").length,
+    ]),
+    [["fresh_thread"], 0],
   );
+  await window.click("[data-thread-chip]");
+  await window.waitForSelector("[data-thread-menu]");
+  check(
+    "the chip's menu says the thread is gone, with no second Start a fresh thread",
+    await window.$eval("[data-thread-menu]", (menu) => [menu.querySelector("[data-slot=popover-title]")?.textContent, menu.querySelectorAll("button, a").length]),
+    ["Thread lost", 0],
+  );
+  await window.keyboard.press("Escape");
+  await window.waitForSelector("[data-thread-menu]", { state: "hidden" });
   check(
     "before the first iteration, the Inspector says when settings appear and Pin comment is disabled",
     [(await window.textContent("[data-inspector-empty]"))?.includes("first iteration"), await window.isDisabled("[data-pick-toggle]")],

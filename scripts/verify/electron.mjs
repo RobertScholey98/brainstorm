@@ -109,6 +109,14 @@ export async function settled(read, { quietMs = 400, timeoutMs = 6000 } = {}) {
 
 export const inBlock = (blockId, part) => `div[data-bid="${blockId}"] [data-part="${part}"]`;
 
+/** The sidebar shows one slot at a time (ADR 010); its picker switches. */
+export async function showSlot(window, slot) {
+  if ((await window.getAttribute("[data-slot-picker]", "data-slot-picker")) === slot) return;
+  await window.click("[data-slot-picker]");
+  await window.click(`[data-slot-option="${slot}"]`);
+  await window.waitForSelector(`[data-slot-picker="${slot}"]`);
+}
+
 /**
  * What in the overlay at `selector` reaches past its box, by tag and text, once its layout has settled: empty when
  * every field, label and button sits inside it.
@@ -119,6 +127,8 @@ export const outsideBox = (window, selector) =>
       const b = box.getBoundingClientRect();
       return [...box.querySelectorAll("*")]
         .filter((el) => el.getClientRects().length > 0)
+        // A form control kept only for its value (a select's native input) is clipped away, so it shows nowhere.
+        .filter((el) => getComputedStyle(el).clipPath !== "inset(50%)")
         .filter((el) => {
           const r = el.getBoundingClientRect();
           return r.left < b.left - 0.5 || r.right > b.right + 0.5 || r.top < b.top - 0.5 || r.bottom > b.bottom + 0.5;
@@ -250,5 +260,21 @@ export async function paneFeet(window) {
 }
 
 export async function shot(window, shots, name) {
+  // A popover still fading in or out reads as a defect in a still, so the shot waits until two frames pass with no
+  // finite animation running, for two seconds at most: a paused one would never finish. One wait isn't enough, because a
+  // theme switch cascades: each nested `transition: color` starts only once its parent's color has moved, after a single
+  // wait has already collected what was running.
+  await window.evaluate(async () => {
+    const until = performance.now() + 2000;
+    const frame = () => new Promise((done) => requestAnimationFrame(() => done()));
+    const running = () => document.getAnimations().filter((a) => a.playState === "running" && a.effect?.getTiming().iterations !== Infinity);
+    while (performance.now() < until) {
+      await frame();
+      await frame();
+      const now = running();
+      if (now.length === 0) return;
+      await Promise.race([Promise.all(now.map((a) => a.finished.catch(() => {}))), new Promise((done) => setTimeout(done, until - performance.now()))]);
+    }
+  });
   await window.screenshot({ path: join(shots, `${name}.png`) });
 }

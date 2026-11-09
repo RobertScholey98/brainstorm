@@ -2,6 +2,8 @@
 
 Status: accepted. Rob chose design B from the round 5 prototype on 2026-11-06, and `shell-brief.md` records what he asked for: "Rob works in a tree: diverge, pick, fork, refine."
 
+Forks are superseded by branches in [ADR 010](adr-010-main-and-confirm.md): a branch shares its brainstorm's thread, and migration 12 turns every fork into one. History and vary stand as written here.
+
 ## Context
 
 Every commit makes an iteration, and until now Rob could see only the latest. To go back to something he liked, he had to ask the agent to rebuild it. To try two directions from one point, he had to pick one, so the other was lost. And to explore one element, such as a button, he had to ask for whole new variants and compare them by eye for the part he cared about.

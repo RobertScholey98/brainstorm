@@ -33,6 +33,8 @@ import {
   type SystemView,
   type ValidateResult,
   type VaryScope,
+  type ConfirmScope,
+  type Marks,
 } from "../core/types";
 import { changedText, scopeText } from "../core/machines";
 import { ownedByPull, withBase, workingCopySession } from "../core/workingCopy";
@@ -274,16 +276,44 @@ function varyLines(scope: VaryScope): string[] {
   ];
 }
 
+/**
+ * What a confirm asks, spelled out: graft each element into its slot's Main, keep each graft's source as it is, then
+ * delete every dropped variant.
+ */
+function confirmAgentLines(scope: ConfirmScope): string[] {
+  const sources = [...new Set(scope.grafts.map((g) => g.from.blockId))];
+  return [
+    ...scope.mains.map((m) => `  main of slot ${m.slot}: ${m.slot}/${m.variant}`),
+    ...scope.grafts.map((g) => {
+      const main = scope.mains.find((m) => m.slot === g.into);
+      const into = main === undefined ? `slot ${g.into}'s main` : `${g.into}/${main.variant}`;
+      const what = g.from.part === null ? `the whole of ${g.from.blockId}` : `data-part "${g.from.part}" from ${g.from.blockId}`;
+      return `  graft ${what} into ${into}${g.instruction === null ? ", placed where it fits best" : `: ${JSON.stringify(g.instruction)}`}`;
+    }),
+    ...(scope.grafts.length > 0 ? ["  keep each grafted element's data-part name in main, and change nothing else in it"] : []),
+    ...sources.map((b) => `  keep ${b} as it is: it is a graft's source, so this confirm keeps it`),
+    ...scope.drop.map((b) => `  delete ${b}`),
+  ];
+}
+
+function marksLines(marks: Marks): string[] {
+  const mains = Object.entries(marks.mains).map(([slot, variant]) => `${slot}/${variant}`);
+  return [
+    ...(mains.length === 0 ? [] : [`rob's main: ${mains.join(", ")}. Improve these first; leave the other variants as they are unless asked.`]),
+    ...(marks.trashed.length === 0 ? [] : [`trashed by rob: ${marks.trashed.join(", ")}. Don't change them; his next confirm deletes them.`]),
+  ];
+}
+
 function contextLines(c: AgentContext): string[] {
   const r = c.request;
   return [
     `session ${c.session.id} "${c.session.title}"`,
     ...(c.session.brief === "" ? [] : [`brief: ${c.session.brief}`]),
-    ...(c.fork === null
+    ...(c.branchOf === null
       ? []
       : [
-          `fork of ${c.fork.parent.id} "${c.fork.parent.title}" iteration ${c.fork.from}: iteration 1 is that iteration narrowed to Rob's picks`,
-          ...c.fork.baked.map((b) => `  baked default ${b.blockId} ${b.prop} = ${JSON.stringify(b.value)}`),
+          `branch of ${c.branchOf.parent.id} "${c.branchOf.parent.title}" iteration ${c.branchOf.from}: its first iteration is that iteration narrowed to what Rob kept. This thread works on every branch of the brainstorm.`,
+          ...c.branchOf.baked.map((b) => `  baked default ${b.blockId} ${b.prop} = ${JSON.stringify(b.value)}`),
         ]),
     c.attached ? `attached: this thread (${c.attachedThread})` : `attached: thread ${c.attachedThread}, not this one`,
     ...(c.system === null
@@ -297,9 +327,12 @@ function contextLines(c: AgentContext): string[] {
       : [
           `request ${r.n} · base ${r.base ?? "none"} · scope: ${scopeText(r.scope)}${r.freetext === null ? "" : ` · freetext: ${JSON.stringify(r.freetext)}`}`,
           ...(r.scope.kind === "vary" ? varyLines(r.scope) : []),
+          ...(r.scope.kind === "confirm" ? confirmAgentLines(r.scope) : []),
+          ...(r.scope.kind === "add_slot" ? ["  add_slot: add one new slot to brainstorm.json with its variants, as the freetext asks; change no existing block"] : []),
           ...r.feedback.map(feedbackLine),
           ...r.overrides.map((o) => `  override ${o.blockId} ${o.prop} = ${JSON.stringify(o.value)}`),
         ]),
+    ...marksLines(c.marks),
     `open feedback:${c.feedback.open.length === 0 ? " none" : ""}`,
     ...c.feedback.open.map(feedbackLine),
     `addressed feedback:${c.feedback.addressed.length === 0 ? " none" : ""}`,

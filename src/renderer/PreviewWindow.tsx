@@ -5,7 +5,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Toast } from "@/components/ui/toast";
 import { Hint, TooltipProvider } from "@/components/ui/tooltip";
 import { DEFAULT_SETTINGS } from "../core/prefs";
-import type { BlockView, CanvasRect, FeedbackId, Pin, RobAction } from "../core/types";
+import type { BlockView, CanvasRect, FeedbackId, Pin, RobAction, SlotId } from "../core/types";
 import type { Api } from "./api";
 import { CanvasBar } from "./CanvasBar";
 import { CanvasHost, type FeedbackCue } from "./CanvasHost";
@@ -15,8 +15,11 @@ import { setKitSource } from "./kit";
 import { describe, openChannel, type MirrorScene, type PreviewSettings, type ToMain, type ToPreview } from "./mirror";
 import { failedTitle, type Notice } from "./notice";
 import { VaryComposer } from "./Vary";
+import { PickComposer } from "./Pick";
+import type { PickKind } from "./mirror";
 
-type Composing = { readonly for: "comment" | "vary"; readonly pin: Pin; readonly at: { x: number; y: number }; readonly rect: CanvasRect };
+/** A pick waiting on its composer, with the slot that was showing when it was picked: a pick into Main goes there (ADR 010). */
+type Composing = { readonly for: PickKind; readonly pin: Pin; readonly at: { x: number; y: number }; readonly rect: CanvasRect; readonly slot: SlotId | null };
 
 const NO_SETTINGS: PreviewSettings = { look: "clean", hold: false };
 
@@ -191,7 +194,7 @@ export function PreviewWindow({ api }: { api: Api }) {
             onBlockError={() => {}}
             onPicked={(pin, at, rect) => {
               if (picking === null) return;
-              setComposing({ for: picking, pin, at, rect });
+              setComposing({ for: picking, pin, at, rect, slot: scene.slot });
               tell({ kind: "picked" });
             }}
             onPinClicked={(id: FeedbackId) => tell({ kind: "pin_clicked", id })}
@@ -226,6 +229,24 @@ export function PreviewWindow({ api }: { api: Api }) {
               bounds={bounds}
               onSend={async (count, direction) => {
                 if (await act({ kind: "vary", target: composing.pin, count, direction })) setComposing(null);
+              }}
+              onCancel={() => setComposing(null)}
+            />
+          )}
+          {composing?.for === "graft" && (
+            <PickComposer
+              key={JSON.stringify(composing)}
+              pin={composing.pin}
+              at={composing.at}
+              rect={composing.rect}
+              block={blockOf(composing.pin)}
+              slots={scene.slots}
+              blocks={blocks}
+              marks={scene.marks}
+              current={composing.slot}
+              bounds={bounds}
+              onAdd={async (into, instruction) => {
+                if (await act({ kind: "add_graft", from: composing.pin, into, instruction })) setComposing(null);
               }}
               onCancel={() => setComposing(null)}
             />

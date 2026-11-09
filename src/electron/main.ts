@@ -151,7 +151,7 @@ async function run(): Promise<void> {
   }
   if (skill !== null && (settings as AppSettings | null)?.skillUpdate !== false) installBundledSkill(skill);
   const origin = new URL(server.url).origin;
-  // Copy phrase writes the clipboard, Present fills the screen and a brainstorm that moved in the background raises a
+  // The copy buttons write the clipboard, Present fills the screen and a brainstorm that moved in the background raises a
   // notification, from the window; the canvas frame and everything else stay denied.
   const ALLOWED = new Set(["clipboard-sanitized-write", "fullscreen", "notifications"]);
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) =>

@@ -35,7 +35,7 @@ describe("the history strip's fit", () => {
     expect(stripFit(760, [{ need: 400, floor: 0 }, { need: 400, floor: 0 }, { need: 300, floor: 0 }], 2)).toEqual({ widths: [198, 198, 300], pages: null });
   });
 
-  it("gives a fork's tile its own floor, not an entry's, and its room last", () => {
+  it("gives a branch's tile its own floor, not an entry's, and its room last", () => {
     expect(stripFit(760, [{ need: 300, floor: 0 }, { need: 260, floor: 120, link: true }, { need: 300, floor: 0 }], 2)).toEqual({ widths: [276, 120, 300], pages: null });
   });
 
@@ -44,12 +44,12 @@ describe("the history strip's fit", () => {
     expect(stripFit(770, loose(200, 220, 200, 250))).toEqual({ widths: [200, 228, 228, 250], pages: [0, 1] });
   });
 
-  it("packs a fork's tile at its floor, so a forked and varied brainstorm at 1440 shows two whole entries a page, the tile no wider than its words", () => {
+  it("packs a branch's tile at its floor, so a branched and varied brainstorm at 1440 shows two whole entries a page, the tile no wider than its words", () => {
     const tree = [{ need: 210, floor: 150 }, { need: 240, floor: 150 }, { need: 280, floor: 150 }, { need: 250, floor: 130, link: true }, { need: 300, floor: 210 }];
     expect(stripFit(733, tree, 4)).toEqual({ widths: [210, 342.5, 342.5, 250, 435], pages: [0, 1, 3] });
   });
 
-  it("never leaves a fork's tile on a page alone, where it would take an entry's width: it joins the iteration it hangs off", () => {
+  it("never leaves a branch's tile on a page alone, where it would take an entry's width: it joins the iteration it hangs off", () => {
     const tree = [{ need: 210, floor: 150 }, { need: 240, floor: 150 }, { need: 280, floor: 150 }, { need: 250, floor: 130, link: true }, { need: 300, floor: 210 }];
     expect(stripFit(440, tree, 4)).toEqual({ widths: [210, 408, 262, 130, 408], pages: [0, 1, 2, 4] });
   });

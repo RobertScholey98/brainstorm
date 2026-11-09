@@ -392,10 +392,15 @@ try {
   check("and 12 px clear of the scrollbar's thumb once the Inspector scrolls", await fillAir(), { scrolls: true, air: [12, 12] });
   await window.setViewportSize({ width: 1440, height: 900 });
 
-  await window.click('[data-feedback="1"] button:has-text("Confirm")');
+  check(
+    "an addressed comment offers Looks right and Reopen, by name, so its own Confirm isn't read as the sidebar's",
+    await window.$$eval('[data-feedback="1"] [data-feedback-action]', (els) => els.map((b) => b.textContent.trim())),
+    ["Looks right", "Reopen"],
+  );
+  await window.click('[data-feedback="1"] button:has-text("Looks right")');
   await window.waitForSelector('[data-feedback="1"][data-status="confirmed"]');
   check(
-    "Confirm moves it to confirmed",
+    "Looks right moves it to confirmed",
     [await window.getAttribute('[data-feedback="1"]', "data-status"), await itemText(window, 1, "status")],
     ["confirmed", "Addressed in iteration 2"],
   );

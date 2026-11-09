@@ -1,5 +1,5 @@
 // A stand-in for `t3 thread …`, driven by the JSON file named in BRAINSTORM_FAKE_T3_STATE:
-// { "fail": false | true | ["send", "show", "list"],
+// { "fail": false | true | ["send", "show", "start"],
 //   "failAfter": ["send"],  commands that do their work and then exit 1, as when the CLI loses the reply
 //   "hold": ["send"],  commands that wait, before doing anything, until they are no longer listed
 //   "threads": { "<threadId>": { "projectId", "title", "status", "activeRunId", "latestRunId",
@@ -71,13 +71,6 @@ switch (command) {
     const t = findThread(id);
     const count = Number(flags.get("messages") ?? 20);
     process.stdout.write(JSON.stringify({ thread: threadJson(id, t), messages: (t.messages ?? []).slice(-count) }));
-    break;
-  }
-  case "list": {
-    const project = flags.get("project");
-    const threads = Object.entries(state.threads ?? {}).filter(([, t]) => !t.missing && t.projectId === project);
-    if (threads.length === 0) fail(`No T3 Code project matches '${project}'. Pass a project id or a path inside a project.`);
-    process.stdout.write(JSON.stringify(threads.map(([id, t]) => threadJson(id, t))));
     break;
   }
   case "send": {
