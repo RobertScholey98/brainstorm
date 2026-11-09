@@ -5,12 +5,12 @@ import { proposedImports } from "./system/conform";
 import {
   blockIdOf,
   issue,
-  NO_MARKS,
   splitBlockId,
   type BlockId,
   type ConfirmScope,
   type ContentHash,
   type Failure,
+  type Graft,
   type Issue,
   type IterationN,
   type Marks,
@@ -19,6 +19,8 @@ import {
   type Result,
   type RobAction,
   type SessionId,
+  type SlotId,
+  type VariantKey,
 } from "./types";
 import { blockFile } from "./workingCopy";
 
@@ -32,8 +34,17 @@ export type ConfirmDeps = {
 /** A mark Rob makes on the latest iteration. */
 export type MarkAction = Extract<RobAction, { kind: "approve" | "trash" | "restore" | "add_graft" | "remove_graft" }>;
 
-/** What a confirm the iteration lands for spends and lets go of: the iteration it confirmed and the blocks it dropped. */
-export type Confirmed = { readonly confirmed: StoredIteration; readonly blocks: readonly IterationBlock[]; readonly dropped: readonly BlockId[] };
+/**
+ * What a confirm the iteration lands for spends and lets go of: the iteration it confirmed, the confirm, the blocks it
+ * dropped, and the grafts its commit didn't apply, which aren't spent.
+ */
+export type Confirmed = {
+  readonly confirmed: StoredIteration;
+  readonly blocks: readonly IterationBlock[];
+  readonly scope: ConfirmScope;
+  readonly dropped: readonly BlockId[];
+  readonly unapplied: readonly Graft[];
+};
 
 /**
  * Rob's marks and Confirm on the latest iteration (ADR 009), and the landing every iteration the service writes goes
@@ -134,7 +145,7 @@ export class Confirms {
           proposedContents: [],
           addresses: [],
         },
-        { confirmed: latest, blocks, dropped: plan.drop },
+        { confirmed: latest, blocks, scope: plan, dropped: plan.drop, unapplied: [] },
       );
       store.insertRequest(id, { body: { scope: plan, freetext: null }, feedbackIds: [], base: latest.n, threadId: attachment.threadId, at, fulfilledIn: n });
     });
@@ -142,16 +153,18 @@ export class Confirms {
 
   /**
    * Writes an iteration, the one way every iteration the service writes into a session lands, and settles Rob's marks
-   * against it. A confirm's marks are spent, read against the iteration it confirmed; a graft still waiting for its
-   * slot's Main never showed in the confirm, so it stays. What the confirm dropped lets go of Rob's settings and pins.
-   * Then any mark naming a block or slot the new iteration lacks goes, so a key the agent reuses later starts unmarked
-   * instead of reviving an old Main, trash or graft. Called inside the caller's transaction.
+   * against it. A confirm's marks are spent, read against the iteration it confirmed, except a graft its commit didn't
+   * apply, which waits for the next Confirm; a graft still waiting for its slot's Main never showed in the confirm, so
+   * it stays too. What the confirm dropped lets go of Rob's settings and pins. Then any mark naming a block or slot the
+   * new iteration lacks goes, so a key the agent reuses later starts unmarked instead of reviving an old Main, trash or
+   * graft. Called inside the caller's transaction.
    */
   land(write: Parameters<Store["insertIteration"]>[0], confirm: Confirmed | null): void {
     const { store } = this.#deps;
     const { session, iteration } = write;
     if (confirm !== null) {
-      store.changeMarks(session, liveMarks(store.marks(session), slotShapes(confirm.confirmed, confirm.blocks)), NO_MARKS, iteration.createdAt);
+      const spent = liveMarks(store.marks(session), slotShapes(confirm.confirmed, confirm.blocks));
+      store.changeMarks(session, spent, leftWaiting(spent, confirm, write.blocks), iteration.createdAt);
       this.#letGo(session, confirm.dropped, iteration.createdAt);
     }
     store.insertIteration(write);
@@ -242,25 +255,57 @@ export function confirmMismatches(n: RequestN, scope: ConfirmScope, drawn: Drawn
       ? []
       : [issue("confirm_mismatch", `${id} is titled "${after}"; request ${n} keeps it as Main titled "${before}"`, { file: blockFile(id, "json") })];
   });
-  const grafts = scope.mains.flatMap((m) => {
-    const into = scope.grafts.filter((g) => g.into === m.slot);
-    const id = blockIdOf(m.slot, m.variant);
-    // A Main that is gone is named once, above.
-    if (into.length === 0 || !drawn.titles.has(id)) return [];
-    // A grafted element can be one Main already renders, as a vary option's is, so only a changed Main shows the agent
-    // merged it. A whole-block graft has no element to look for at all.
-    if (drawn.hashes.get(id) === drawn.hashesBefore.get(id)) {
-      const what = into.map((g) => (g.from.part === null ? `all of ${g.from.blockId}` : `data-part "${g.from.part}" from ${g.from.blockId}`));
+  const grafts = graftsByMain(scope, drawn).flatMap(({ id, unchanged, missed }) => {
+    if (unchanged) {
+      const what = missed.map((g) => (g.from.part === null ? `all of ${g.from.blockId}` : `data-part "${g.from.part}" from ${g.from.blockId}`));
       return [issue("confirm_mismatch", `request ${n} grafts ${listed(what)} into ${id}, and this commit leaves ${id} as it was`, { file: blockFile(id, "tsx") })];
     }
-    return into.flatMap((g) =>
-      g.from.part === null || (drawn.parts.get(id) ?? []).includes(g.from.part)
-        ? []
-        : [issue("confirm_mismatch", `${id} doesn't render data-part "${g.from.part}", the element request ${n} grafts into it from ${g.from.blockId}`, { file: blockFile(id, "tsx") })],
+    return missed.map((g) =>
+      issue("confirm_mismatch", `${id} doesn't render data-part "${g.from.part}", the element request ${n} grafts into it from ${g.from.blockId}`, { file: blockFile(id, "tsx") }),
     );
   });
   return [...left, ...lost, ...renamed, ...grafts];
 }
+
+/** The confirm's grafts this commit didn't apply: they aren't spent, and wait under their slot's Main for the next Confirm. */
+export function unappliedGrafts(scope: ConfirmScope, drawn: DrawnBlocks): Graft[] {
+  return graftsByMain(scope, drawn).flatMap((m) => m.missed);
+}
+
+/**
+ * Each Main that receives grafts and is still there, with the grafts the commit missed. A grafted element can be one
+ * Main already renders, as a vary option's is, so only a changed Main shows the agent merged it, and an unchanged one
+ * missed them all. A whole-block graft has no element to look for, so a changed Main took it.
+ */
+function graftsByMain(scope: ConfirmScope, drawn: DrawnBlocks): { id: BlockId; unchanged: boolean; missed: Graft[] }[] {
+  return scope.mains.flatMap((m) => {
+    const into = scope.grafts.filter((g) => g.into === m.slot);
+    const id = blockIdOf(m.slot, m.variant);
+    // A Main that is gone is named once, as lost.
+    if (into.length === 0 || !drawn.titles.has(id)) return [];
+    const unchanged = drawn.hashes.get(id) === drawn.hashesBefore.get(id);
+    const parts = drawn.parts.get(id) ?? [];
+    return [{ id, unchanged, missed: unchanged ? into : into.filter((g) => g.from.part !== null && !parts.includes(g.from.part)) }];
+  });
+}
+
+/**
+ * The marks a confirm leaves once its iteration lands: the grafts its commit didn't apply, each waiting under its
+ * slot's Main. Main is implicit when the commit leaves the slot one variant; when it leaves others beside Main, the
+ * slot keeps its Main mark, so the graft still reads.
+ */
+function leftWaiting(spent: Marks, confirm: Confirmed, blocks: readonly { readonly id: BlockId }[]): Marks {
+  const grafts = spent.grafts.filter((g) => confirm.unapplied.some((u) => sameGraft(g, u)));
+  const mains: Partial<Record<SlotId, VariantKey>> = {};
+  for (const g of grafts) {
+    const main = confirm.scope.mains.find((m) => m.slot === g.into);
+    const beside = blocks.some((b) => splitBlockId(b.id).slot === g.into && splitBlockId(b.id).variant !== main?.variant);
+    if (main !== undefined && beside) mains[g.into] = main.variant;
+  }
+  return { mains, grafts, trashed: [] };
+}
+
+const sameGraft = (a: Graft, b: Graft) => a.into === b.into && a.from.blockId === b.from.blockId && a.from.part === b.from.part && a.instruction === b.instruction;
 
 /** `a`, `a and b`, `a, b and c`. */
 function listed(items: readonly string[]): string {

@@ -6,6 +6,7 @@ import type { Checker } from "./check";
 import { controlVocabulary } from "./controls";
 import {
   canAppend,
+  confirmGate,
   FEEDBACK_ACTIONS,
   formatRefreshMessage,
   formatRequestMessage,
@@ -23,7 +24,7 @@ import { projectNameAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { exportFileName } from "./fileName";
 import { Branches } from "./branch";
-import { besideMain, confirmMismatches, Confirms, type DrawnBlocks } from "./confirm";
+import { besideMain, confirmMismatches, Confirms, unappliedGrafts, type DrawnBlocks } from "./confirm";
 import { Reads } from "./reads";
 import { liveMarks, showingVariant, slotShapes } from "./main";
 import {
@@ -62,6 +63,7 @@ import {
   type FeedbackAction,
   type FeedbackId,
   type FileMap,
+  type Graft,
   type BranchInput,
   type HistoryEntry,
   type Issue,
@@ -167,6 +169,8 @@ type Prepared =
       readonly warnings: readonly Issue[];
       /** The open request the warnings were read against, which the commit must still answer when it lands. */
       readonly request: Request | null;
+      /** A confirm's grafts this commit doesn't apply, which wait for the next Confirm. */
+      readonly unapplied: readonly Graft[];
     };
 
 type Seen = { readonly snapshot: ThreadSnapshot | null; readonly checkedAt: number };
@@ -545,7 +549,7 @@ export class Brainstorm {
         createdAt: this.#now(),
       };
       // A confirm lets go only of what the commit did drop: a variant it kept against the confirm keeps its settings
-      // and pins.
+      // and pins. A graft the commit didn't apply isn't spent.
       this.#confirms.land(
         {
           session: input.session,
@@ -557,7 +561,13 @@ export class Brainstorm {
           addresses: p.addresses,
         },
         scope?.kind === "confirm" && latest !== null
-          ? { confirmed: latest, blocks: this.#store.iterationBlocks(input.session, latest.n), dropped: p.removed.filter((b) => scope.drop.includes(b)) }
+          ? {
+              confirmed: latest,
+              blocks: this.#store.iterationBlocks(input.session, latest.n),
+              scope,
+              dropped: p.removed.filter((b) => scope.drop.includes(b)),
+              unapplied: p.unapplied,
+            }
           : null,
       );
       if (this.#store.attachment(input.session).lostAt !== null) this.#store.setLost(input.session, null);
@@ -697,6 +707,7 @@ export class Brainstorm {
       removed,
       warnings,
       request,
+      unapplied: request?.scope.kind === "confirm" ? unappliedGrafts(request.scope, drawn) : [],
     });
   }
 
@@ -1379,7 +1390,7 @@ export class Brainstorm {
     latest: StoredIteration | null,
     blocks: readonly IterationBlock[],
   ): Promise<Failure | null> {
-    const gated = this.#gate(id, latest);
+    const gated = this.#gate(id, latest, true);
     if (gated !== null) return gated;
     const attachment = this.#store.attachment(id);
     if (body.scope.kind === "blocks") {
@@ -1394,12 +1405,12 @@ export class Brainstorm {
     return null;
   }
 
-  /** Why a new request can't open now, as a failure, or null when it can. */
-  #gate(id: SessionId, latest: StoredIteration | null): Failure | null {
+  /** Why a new request can't open now, as a failure, or null when it can. One the app answers itself (`asksAgent` false) doesn't wait on a lost thread. */
+  #gate(id: SessionId, latest: StoredIteration | null, asksAgent: boolean): Failure | null {
     const open = this.#store.openRequest(id);
     const busy = this.#trees.openElsewhere(id);
     const attachment = this.#store.attachment(id);
-    const gate = regenerateGate({ hasIteration: latest !== null, open, busy: busy !== null, attachment });
+    const gate = confirmGate(regenerateGate({ hasIteration: latest !== null, open, busy: busy !== null, attachment }), asksAgent);
     if (gate.ok) return null;
     switch (gate.reason) {
       case "no_iteration":
@@ -1418,16 +1429,18 @@ export class Brainstorm {
   }
 
   /**
-   * Locks Rob's marks in (ADR 009). Confirm shares Regenerate's gate, and with grafts it is a request like any other,
-   * which the agent merges. With nothing to graft, `Confirms` (confirm.ts) writes the narrowed iteration itself.
+   * Locks Rob's marks in (ADR 009). With grafts it is a request like any other, which the agent merges, behind
+   * Regenerate's gate. With nothing to graft, `Confirms` (confirm.ts) writes the narrowed iteration itself, so only an
+   * open request holds it, not a lost thread.
    */
   async #confirm(id: SessionId, latest: StoredIteration | null, blocks: readonly IterationBlock[]): Promise<Failure | null> {
-    const gated = this.#gate(id, latest);
-    if (gated !== null) return gated;
-    const plan = this.#confirms.plan(id, latest!, blocks);
+    const plan = latest === null ? null : this.#confirms.plan(id, latest, blocks);
+    const gated = this.#gate(id, latest, plan?.ok === true && plan.data.grafts.length > 0);
+    // With no iteration there is no plan, and the gate refuses.
+    if (gated !== null || latest === null || plan === null) return gated;
     if (!plan.ok) return plan.error;
     if (plan.data.grafts.length > 0) return this.#request(id, { scope: plan.data, freetext: null }, latest, blocks);
-    this.#confirms.answer(id, latest!, blocks, plan.data);
+    this.#confirms.answer(id, latest, blocks, plan.data);
     return null;
   }
 

@@ -79,6 +79,16 @@ export function regenerateGate(state: {
   return { ok: true };
 }
 
+/**
+ * Confirm's gate (ADR 009), from Regenerate's verdict. A confirm that asks the agent nothing, with no grafts and, as a
+ * branch, no instruction, is written by the app with no agent turn, so a lost thread doesn't hold it. An open request
+ * anywhere in the brainstorm still does, since its commit could land on top. The service and the window both read
+ * Confirm's state through this.
+ */
+export function confirmGate(regenerate: Regenerate, asksAgent: boolean): Regenerate {
+  return !asksAgent && !regenerate.ok && regenerate.reason === "thread_lost" ? { ok: true } : regenerate;
+}
+
 export function blockedMessage(reason: Extract<Regenerate, { ok: false }>["reason"], openRequest: RequestN | undefined): string {
   switch (reason) {
     case "no_iteration":
