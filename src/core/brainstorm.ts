@@ -532,26 +532,22 @@ export class Brainstorm {
         slots: p.draft.manifest.slots,
         createdAt: this.#now(),
       };
-      // A confirm's marks are spent once its iteration lands, and what it dropped takes Rob's settings and pins with it.
-      // Only what the commit did drop: a variant it kept against the confirm keeps them.
+      // A confirm lets go only of what the commit did drop: a variant it kept against the confirm keeps its settings
+      // and pins.
       const scope = this.#store.openRequest(input.session)?.scope;
-      if (scope?.kind === "confirm" && latest !== null) {
-        this.#spendMarks(input.session, latest, this.#store.iterationBlocks(input.session, latest.n), iteration.createdAt);
-        this.#letGo(input.session, p.removed.filter((b) => scope.drop.includes(b)), iteration.createdAt);
-      }
-      this.#store.insertIteration({
-        session: input.session,
-        iteration,
-        blocks: p.draft.blocks.map((b) => ({ id: b.id, hash: b.hash })),
-        contents: p.contents,
-        proposed: p.proposed,
-        proposedContents: p.proposedContents,
-        addresses: p.addresses,
-      });
-      this.#store.pruneMarks(
-        input.session,
-        p.draft.blocks.map((b) => b.id),
-        p.draft.manifest.slots.map((s) => s.id),
+      this.#land(
+        {
+          session: input.session,
+          iteration,
+          blocks: p.draft.blocks.map((b) => ({ id: b.id, hash: b.hash })),
+          contents: p.contents,
+          proposed: p.proposed,
+          proposedContents: p.proposedContents,
+          addresses: p.addresses,
+        },
+        scope?.kind === "confirm" && latest !== null
+          ? { confirmed: latest, blocks: this.#store.iterationBlocks(input.session, latest.n), dropped: p.removed.filter((b) => scope.drop.includes(b)) }
+          : null,
       );
       if (this.#store.attachment(input.session).lostAt !== null) this.#store.setLost(input.session, null);
       return ok(iteration);
@@ -997,18 +993,21 @@ export class Brainstorm {
   }
 
   /**
-   * Which of the session's variants a vary made, and from what: the block it copied and the element it varied. A branch
-   * inherits its ancestors' variants, so their varies count up to where its trail left them. A vary option stops being
-   * one once an iteration on the trail goes without it, so a later variant that reuses its key starts as itself.
+   * Which variants of the session's iteration `through` a vary made, and from what: the block it copied and the element
+   * it varied. Only iterations up to `through` count, so a past iteration keeps the provenance it had even after a later
+   * one drops the option. A branch inherits its ancestors' variants, so their varies count up to where its trail left
+   * them. A vary option stops being one once an iteration on the trail goes without it, so a later variant that reuses
+   * its key starts as itself.
    */
-  #variedFrom(id: SessionId): Map<BlockId, Pin> {
+  #variedFrom(id: SessionId, through: IterationN): Map<BlockId, Pin> {
     const out = new Map<BlockId, Pin>();
     for (const { session, upTo } of this.#trees.walk(id).trail) {
+      const cutoff = upTo ?? through;
       const varies = new Map(
         this.#store.requests(session).flatMap((r) => (r.scope.kind === "vary" && r.state.state === "fulfilled" ? [[r.state.iteration, r.scope] as const] : [])),
       );
       for (const iteration of this.#store.iterations(session)) {
-        if (upTo !== null && iteration.n > upTo) break;
+        if (iteration.n > cutoff) break;
         const present = new Set(this.#store.iterationBlocks(session, iteration.n).map((b) => b.id));
         for (const b of out.keys()) if (!present.has(b)) out.delete(b);
         const vary = varies.get(iteration.n);
@@ -1039,7 +1038,7 @@ export class Brainstorm {
     const seen = isLatest ? this.#store.seen(id) : new Set<BlockId>();
     // A branch's first iteration is its starting point, so only what came after it is new.
     const first = this.#store.iterations(id)[0]?.n ?? latest.n;
-    const varied = this.#variedFrom(id);
+    const varied = this.#variedFrom(id, latest.n);
     const { slots: _slots, blocks: _blocks, ...summary } = this.#summary(id, latest, blocks);
     const loaded = blocks.map((b) => ({ id: b.id, ...splitBlockId(b.id), ...this.#load(b) }));
     const marks = isLatest ? liveMarks(this.#store.marks(id), this.#slotShapes(latest, blocks)) : NO_MARKS;
@@ -1461,7 +1460,7 @@ export class Brainstorm {
         const slot = slotOf(action.blockId);
         if (slot === undefined) return missing(action.blockId);
         const { variant } = splitBlockId(action.blockId);
-        after = withApproval(before, slot, { id: action.blockId, slot: slot.id, variant, variedFrom: this.#variedFrom(id).get(action.blockId) ?? null });
+        after = withApproval(before, slot, { id: action.blockId, slot: slot.id, variant, variedFrom: this.#variedFrom(id, latest.n).get(action.blockId) ?? null });
         break;
       }
       case "trash": {
@@ -1514,29 +1513,65 @@ export class Brainstorm {
     if (plan.grafts.length > 0) return this.#request(id, { scope: plan, freetext: null }, latest, blocks);
     const attachment = this.#store.attachment(id);
     const at = this.#now();
+    const kept = blocks.filter((b) => !plan.drop.includes(b.id));
     this.#store.tx(() => {
       this.#store.insertRequest(id, { body: { scope: plan, freetext: null }, feedbackIds: [], base: latest!.n, threadId: attachment.threadId, at });
-      this.#store.insertIteration({
-        session: id,
-        iteration: { n: (latest!.n + 1) as IterationN, threadId: attachment.threadId, note: null, slots: latest!.slots, createdAt: at },
-        blocks: blocks.filter((b) => !plan.drop.includes(b.id)),
-        contents: [],
-        proposed: this.#store.iterationProposed(id, latest!.n),
-        proposedContents: [],
-        addresses: [],
-      });
-      this.#spendMarks(id, latest!, blocks, at);
-      this.#letGo(id, plan.drop, at);
+      this.#land(
+        {
+          session: id,
+          iteration: { n: (latest!.n + 1) as IterationN, threadId: attachment.threadId, note: null, slots: latest!.slots, createdAt: at },
+          blocks: kept,
+          contents: [],
+          proposed: this.#proposedUsedBy(id, latest!.n, kept),
+          proposedContents: [],
+          addresses: [],
+        },
+        { confirmed: latest!, blocks, dropped: plan.drop },
+      );
     });
     return null;
   }
 
   /**
-   * A confirm's iteration landed, so the marks it carried are spent: the live Mains, trashes and grafts, read against
-   * the iteration it confirmed. A graft still waiting for its slot's Main never showed in the confirm, so it stays.
+   * Writes an iteration, the one way every iteration the service writes into a session lands, and settles Rob's marks
+   * against it. A confirm's marks are spent, read against the iteration it confirmed; a graft still waiting for its
+   * slot's Main never showed in the confirm, so it stays. What the confirm dropped lets go of Rob's settings and pins.
+   * Then any mark naming a block or slot the new iteration lacks goes, so a key the agent reuses later starts unmarked
+   * instead of reviving an old Main, trash or graft. Called inside the caller's transaction.
    */
-  #spendMarks(id: SessionId, confirmed: StoredIteration, blocks: readonly IterationBlock[], at: string): void {
-    this.#store.changeMarks(id, liveMarks(this.#store.marks(id), this.#slotShapes(confirmed, blocks)), NO_MARKS, at);
+  #land(
+    write: Parameters<Store["insertIteration"]>[0],
+    confirm: { readonly confirmed: StoredIteration; readonly blocks: readonly IterationBlock[]; readonly dropped: readonly BlockId[] } | null,
+  ): void {
+    const { session, iteration } = write;
+    if (confirm !== null) {
+      this.#store.changeMarks(session, liveMarks(this.#store.marks(session), this.#slotShapes(confirm.confirmed, confirm.blocks)), NO_MARKS, iteration.createdAt);
+      this.#letGo(session, confirm.dropped, iteration.createdAt);
+    }
+    this.#store.insertIteration(write);
+    this.#store.pruneMarks(
+      session,
+      write.blocks.map((b) => b.id),
+      iteration.slots.map((s) => s.id),
+    );
+  }
+
+  /**
+   * The proposed components of iteration `n` that `kept` still imports, directly or through another proposed component,
+   * so an iteration narrowed by the app carries none that only a dropped variant used (ADR 008's `unused_proposed`).
+   */
+  #proposedUsedBy(session: SessionId, n: IterationN, kept: readonly IterationBlock[]): IterationProposed[] {
+    const all = this.#store.iterationProposed(session, n);
+    const importsOf = new Map(all.map((p) => [p.name as string, proposedImports(this.#store.proposedContent(p.hash).compiled)]));
+    const used = new Set<string>();
+    const pending = kept.flatMap((b) => proposedImports(this.#load(b).content.compiled));
+    for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
+      const imports = importsOf.get(name);
+      if (imports === undefined || used.has(name)) continue;
+      used.add(name);
+      pending.push(...imports);
+    }
+    return all.filter((p) => used.has(p.name));
   }
 
   /**
@@ -1723,17 +1758,22 @@ export class Brainstorm {
       const spec = stored === undefined ? undefined : appearanceProp(this.#load(stored).draft.props, o.prop);
       return spec === undefined || spec.default === o.value ? [] : [{ blockId: o.blockId, prop: o.prop, value: o.value }];
     });
-    const baked = kept.map((stored) => {
+    const baked: { id: BlockId; title: string; hash: ContentHash; draft: BlockDraft | null }[] = [];
+    for (const stored of kept) {
       const mine = settings.filter((s) => s.blockId === stored.id);
       const title = this.#load(stored).draft.title;
-      if (mine.length === 0) return { id: stored.id, title, hash: stored.hash, draft: null };
+      if (mine.length === 0) {
+        baked.push({ id: stored.id, title, hash: stored.hash, draft: null });
+        continue;
+      }
       const files = this.#load(stored).content.files;
       const draft = readStoredBlock({ id: stored.id, files: { ...files, json: bakeDefaults(files.json, mine) } });
-      if (draft === null) throw new Error(`${stored.id} no longer parses with Rob's settings baked in`);
-      return { id: stored.id, title, hash: draft.hash, draft };
-    });
+      if (draft === null) return fail(invalid(`${title} doesn't read with your settings as its defaults. Reset its settings, or keep another variant.`));
+      baked.push({ id: stored.id, title, hash: draft.hash, draft });
+    }
     const system = this.#store.sessionSystem(parent.id);
-    const proposed = this.#store.iterationProposed(parent.id, source.n);
+    // A branch narrowed by the app carries only the proposed components its kept variants use, as a confirm does.
+    const proposed = kept === blocks ? this.#store.iterationProposed(parent.id, source.n) : this.#proposedUsedBy(parent.id, source.n, kept);
     const proposedDrafts = proposed.flatMap((p) => {
       const draft = readStoredProposed(p.name, this.#store.proposedContent(p.hash).files);
       return draft === null ? [] : [draft];
@@ -1764,7 +1804,9 @@ export class Brainstorm {
       // The check awaited the worker, so another branch may have opened a request on the thread meanwhile.
       const late = this.#branchGate(start);
       if (late !== null) return fail(late);
-      const thread = this.#store.attachment(parent.id).threadId;
+      // The tree's thread as it is: a branch made while it is lost is lost too, so it never reads as healthy.
+      const shared = this.#store.attachment(parent.id);
+      const thread = shared.threadId;
       this.#store.createFork(
         {
           // Numbered in its tree: the branch line and the strip already say where it left from.
@@ -1781,7 +1823,7 @@ export class Brainstorm {
           theme: this.#store.sessionTheme(parent.id),
           request: body === null ? null : { body, at, answered },
         },
-        thread,
+        shared,
       );
       // While the agent merges, the branch shows the marks it was confirmed with.
       if (grafting) {

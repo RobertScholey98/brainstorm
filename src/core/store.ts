@@ -570,12 +570,15 @@ export class Store {
 
   /**
    * The fork, its first iteration with carried feedback, then request 1, so the iteration can't fulfil the request. An
-   * answered request goes in before the iteration instead, so the iteration does fulfil it.
+   * answered request goes in before the iteration instead, so the iteration does fulfil it. The fork joins the thread
+   * its tree shares as it is, lost included, as migration 11 joins an old fork to it.
    */
-  createFork(input: NewFork, thread: ThreadId): void {
+  createFork(input: NewFork, shared: Pick<Attachment, "threadId" | "lostAt">): void {
     const { session, fork, iteration, request } = input;
+    const thread = shared.threadId;
     this.tx(() => {
       this.createSession(session, thread, input.system);
+      if (shared.lostAt !== null) this.setLost(session.id, shared.lostAt);
       for (const t of input.theme) this.setSessionTheme(session.id, t.key, t.value, fork.createdAt);
       this.#run(
         "INSERT INTO fork(session_id, parent_id, parent_n, baked_json, created_at) VALUES (?, ?, ?, ?, ?)",
