@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { Brainstorm } from "../src/core/brainstorm";
 import { createChecker } from "../src/core/check";
@@ -13,6 +14,8 @@ const MAIN = "11111111-1111-1111-1111-111111111111" as ThreadId;
 const WORKTREE = "22222222-2222-2222-2222-222222222222" as ThreadId;
 const FRESH = "33333333-3333-3333-3333-333333333333" as ThreadId;
 const GHOST = "44444444-4444-4444-4444-444444444444" as ThreadId;
+const LIB = "55555555-5555-5555-5555-555555555555" as ThreadId;
+const SIDE = "66666666-6666-6666-6666-666666666666" as ThreadId;
 const AT = "2026-11-09T01:00:00.000Z";
 
 // Copies inside the repo, so each library resolves react and tailwindcss from the repo's node_modules.
@@ -22,6 +25,8 @@ const other = mkdtempSync(join(import.meta.dirname, ".kit-"));
 cpSync(join(import.meta.dirname, "kit-lib"), other, { recursive: true });
 const pkg = join(other, "package.json");
 writeFileSync(pkg, readFileSync(pkg, "utf8").replace("@fixture/kit", "@fixture/other"));
+// The second library is a repo of its own, as a shared UI library in another repo would be.
+execFileSync("git", ["init", "-q", other]);
 
 let service: Brainstorm;
 let system: SystemId;
@@ -43,6 +48,8 @@ beforeAll(async () => {
   bridge.add(WORKTREE, "proj-a", "Worktree");
   bridge.add(FRESH, "proj-new", "A new project");
   bridge.add(GHOST, "proj-ghost", "A project nobody set");
+  bridge.add(LIB, "proj-lib", "The library's own project");
+  bridge.add(SIDE, "proj-side", "An app that adds the library");
   let id = 0;
   service = await Brainstorm.open({
     dbPath: join(home, "brainstorm.db"),
@@ -52,7 +59,8 @@ beforeAll(async () => {
     now: () => AT,
     newSessionId: () => `s_project${++id}` as SessionId,
   });
-  system = data(await service.systems.add({ path: kit, thread: MAIN })).system.id;
+  // The agent adds its project's own library from the main checkout, which Brainstorm hasn't seen yet.
+  system = data(await service.systems.add({ path: kit, thread: MAIN, projectPath: import.meta.dirname })).system.id;
 }, 120_000);
 
 afterAll(async () => {
@@ -62,7 +70,9 @@ afterAll(async () => {
 });
 
 describe("a project's design system", () => {
-  test("is the system added from the project", () => {
+  test("is the system added from the project, which is named after its repo", () => {
+    const repo = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: import.meta.dirname, encoding: "utf8" }).trim();
+    expect(service.systems.project("proj-a" as never).name).toBe(basename(dirname(repo)));
     // It awaits Rob's review, which `project show` says, since its brainstorms are refused until he confirms it.
     expect(service.systems.projects().find((p) => p.id === "proj-a")?.system).toEqual({ id: system, name: "@fixture/kit", awaitingReview: true });
     expect(service.systems.view(system)).toMatchObject({ ok: true, data: { projects: [{ id: "proj-a" }] } });
@@ -84,12 +94,15 @@ describe("a project's design system", () => {
     expect(data(await start(MAIN)).system?.from).toBe("project");
   });
 
-  test("stays when another system is added from the same project", async () => {
-    // A brainstorm on the new project records the test folder, which holds the second library. The adding thread's
-    // project still wins over that folder.
-    data(await service.newSession({ title: "Seen", brief: "", thread: FRESH, projectPath: import.meta.dirname, system: { kind: "none" } }));
-    const second = data(await service.systems.add({ path: other, thread: MAIN })).system;
-    expect([second.projectId, second.projects]).toEqual(["proj-a", []]);
+  test("belongs to the repo that holds it when an app adds a library from another repo, and both build with it", async () => {
+    // Brainstorm knows the library's project from a brainstorm in its repo.
+    data(await service.newSession({ title: "Library", brief: "", thread: LIB, projectPath: other, system: { kind: "none" } }));
+    const second = data(await service.systems.add({ path: other, thread: SIDE })).system;
+    // Promote and reviews start their threads on the system's project, so it must be the one holding the code.
+    expect([second.projectId, second.projects.map((p) => p.id)]).toEqual(["proj-lib", ["proj-lib", "proj-side"]]);
+    // The app keeps its own name, not the library's.
+    expect(service.systems.project("proj-side" as never).name).toBeNull();
+    // A project that has a system keeps it.
     expect(data(await service.projectSystem(WORKTREE)).system).toEqual({ id: system, name: "@fixture/kit", awaitingReview: false });
   }, 120_000);
 
@@ -118,7 +131,7 @@ describe("a project's design system", () => {
 
   test("refuses a system Brainstorm doesn't have, and records nothing", async () => {
     const refused = await service.setProjectSystem({ thread: GHOST, projectPath: import.meta.dirname, system: "@fixture/nope" });
-    expect(refused.ok ? null : refused.error.message).toBe("no design system @fixture/nope");
+    expect(refused.ok ? null : refused.error.message).toBe('no design system @fixture/nope; Brainstorm has "@fixture/kit", "@fixture/other"');
     expect(service.systems.projects().map((p) => p.id)).not.toContain("proj-ghost");
   });
 });

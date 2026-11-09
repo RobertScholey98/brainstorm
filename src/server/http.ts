@@ -88,7 +88,7 @@ const newSessionBody = z.strictObject({
 });
 /** An agent sets its project's design system by id or name; null clears it. */
 const agentProjectSystemBody = z.strictObject({ thread: threadId, project: z.string().nullable(), system: z.string().trim().min(1).nullable() });
-/** The window sets a project's design system by id; null clears it. */
+/** The window sets a project's design system by id or name; null clears it. */
 const uiProjectSystemBody = z.strictObject({ system: z.string().trim().min(1).nullable() });
 const addSystemBody = z.strictObject({
   path: z.string().trim().min(1),
@@ -96,6 +96,8 @@ const addSystemBody = z.strictObject({
   frame: z.string().trim().min(1).nullable().default(null),
   stubs: z.record(z.string(), z.string()).optional(),
   thread: threadId.nullable().default(null),
+  /** The adding agent's folder, which names its project and tells whether the library is in the same repo. */
+  projectPath: z.string().trim().min(1).nullable().default(null),
 });
 const folderBody = z.strictObject({ path: z.string().trim().min(1) });
 const importBody = z.strictObject({ path: z.string().trim().min(1), repair: z.string().trim().min(1).nullable().default(null) });

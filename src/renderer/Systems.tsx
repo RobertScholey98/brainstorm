@@ -623,12 +623,7 @@ function SystemProjects({ api, view, showNotice }: { api: Api; view: SystemView;
         />
         {projects === null ? (
           <Skeleton className="h-7 w-full" />
-        ) : projects.length === 0 ? (
-          <p className="text-fg-muted" data-system-projects-empty>
-            Brainstorm lists a project once a brainstorm or a design system comes from it. For a new project, ask its agent to run{" "}
-            <span className="font-mono">{`brainstorm project use "${view.name}"`}</span>.
-          </p>
-        ) : (
+        ) : projects.length === 0 ? null : (
           <div className="-mx-1.5 flex flex-col" role="group" aria-label="Projects">
             {projects.map((p) => {
               const other = p.system !== null && p.system.id !== view.id ? p.system : null;
@@ -646,6 +641,11 @@ function SystemProjects({ api, view, showNotice }: { api: Api; view: SystemView;
             })}
           </div>
         )}
+        {/* T3 can't list its projects, so this says how to reach one the list hasn't met yet. */}
+        <p className="text-xs text-fg-muted" data-system-projects-new>
+          Brainstorm lists a project once a brainstorm or a design system comes from it. For a project not listed, ask its agent to run{" "}
+          <span className="font-mono">{`brainstorm project use "${view.name}"`}</span>.
+        </p>
       </PopoverContent>
     </Popover>
   );

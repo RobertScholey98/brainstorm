@@ -16,7 +16,8 @@ const tmp = mkdtempSync(join(tmpdir(), "bs-verify12-"));
 const shots = join(root, "test-results", "project-system");
 mkdirSync(shots, { recursive: true });
 const home = join(tmp, "home");
-const mainCheckout = join(tmp, "app");
+// The main-checkout thread runs in the repo that holds the library, as an app's own design system does.
+const mainCheckout = root;
 const worktree = join(tmp, "worktrees", "app", "t3-1234");
 const fresh = join(tmp, "fresh");
 for (const dir of [mainCheckout, worktree, fresh]) mkdirSync(dir, { recursive: true });
@@ -99,7 +100,7 @@ try {
   const before = cli(["session", "new", "--title", "New project"], { thread: FRESH, cwd: fresh });
   check("a new project has no system", before.out[2], "design system: none; this project has none set (brainstorm project use <system> sets one)");
   const use = cli(["project", "use", "@fixture/kit"], { thread: FRESH, cwd: fresh });
-  check("project use sets it from the new project's thread", [use.code, use.out], [0, [`project proj-fresh: brainstorms build with @fixture/kit (${system})`]]);
+  check("project use sets it from the new project's thread", [use.code, use.out], [0, [`this project: brainstorms build with @fixture/kit (${system})`]]);
   const after = cli(["session", "new", "--title", "New project again"], { thread: FRESH, cwd: fresh });
   check("and the new project's next brainstorm builds with it", after.out[2], "design system: @fixture/kit v1, this project's");
 
@@ -111,11 +112,11 @@ try {
   );
   const cleared = await ui("POST", "/v1/ui/projects/proj-fresh/system", { system: null });
   check("the window clears the new project's system", cleared.data?.system, null);
-  check("project show reads it back", cli(["project", "show"], { thread: FRESH, cwd: fresh }).out, ["project proj-fresh: no design system; its brainstorms are freeform"]);
+  check("project show reads it back", cli(["project", "show"], { thread: FRESH, cwd: fresh }).out, ["this project: no design system; its brainstorms are freeform"]);
   const card = (await ui("GET", "/v1/ui/systems")).data.find((s) => s.id === system);
   check("the system's card lists the project still using it", card.projects.map((p) => p.id), ["proj-app"]);
   const bad = cli(["project", "use", "@fixture/nope"], { thread: FRESH, cwd: fresh });
-  check("project use refuses a system Brainstorm doesn't have", [bad.code, bad.err], [1, ["error not_found: no design system @fixture/nope"]]);
+  check("project use refuses a system Brainstorm doesn't have", [bad.code, bad.err], [1, ['error not_found: no design system @fixture/nope; Brainstorm has "@fixture/kit"']]);
 
   // The window, in plain Chromium against the same server.
   const browser = await chromium.launch();
@@ -143,7 +144,7 @@ try {
     await page.screenshot({ path: join(shots, "projects-menu.png") });
     await menu.locator('[data-system-project="proj-fresh"] [data-slot=checkbox]').click();
     await page.waitForFunction(() => document.querySelector('[data-system-project="proj-fresh"] [data-slot=checkbox]')?.hasAttribute("data-checked"));
-    check("checking the new project sets its system", cli(["project", "show"], { thread: FRESH, cwd: fresh }).out, [`project proj-fresh: brainstorms build with @fixture/kit (${system})`]);
+    check("checking the new project sets its system", cli(["project", "show"], { thread: FRESH, cwd: fresh }).out, [`this project: brainstorms build with @fixture/kit (${system})`]);
     await page.keyboard.press("Escape");
     check("the trigger counts both projects", (await trigger.textContent())?.trim(), "2 projects");
     await page.screenshot({ path: join(shots, "two-projects.png") });

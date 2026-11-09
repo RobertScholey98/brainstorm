@@ -1109,6 +1109,14 @@ export class Store {
     );
   }
 
+  /** Every project with a stored folder, which may be its main checkout or any worktree of it. */
+  projectPaths(): { readonly id: ProjectId; readonly repoPath: string }[] {
+    return this.#all("SELECT id, repo_path FROM project WHERE repo_path IS NOT NULL ORDER BY created_at, id").map((r) => ({
+      id: str(r.id) as ProjectId,
+      repoPath: str(r.repo_path),
+    }));
+  }
+
   /** Projects whose stored repo path holds `path`, longest first, to find the T3 project a library lives in. */
   projectsHolding(path: string): ProjectId[] {
     const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();

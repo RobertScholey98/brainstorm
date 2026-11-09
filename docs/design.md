@@ -136,7 +136,7 @@ brainstorm pull            <session> [--out <dir>]          # default .brainstor
 brainstorm validate        <session> [--from <dir>] [--thread <id>]
 brainstorm commit          <session> [--from <dir>] [--thread <id>] [--addresses 4,7] [--note <text>]
 brainstorm project show    [--thread <id>]                 # the design system of the thread's project
-brainstorm project use     <system|none> [--thread <id>]    # set or clear it (ADR 009)
+brainstorm project use     <system|none> [--thread <id>] [--project <path>]   # set or clear it (ADR 009)
 ```
 
 - **Startup.** The CLI reads `api.json` and checks `/health` (which must report the pid in `api.json`). If that fails, it starts the app detached behind a `start.lock`, resolved from the CLI's own install path, then waits up to 20 s for a fresh `api.json` with a healthy server. The app is `electron <repoRoot>`, with electron resolved from the repo's `node_modules` and `ELECTRON_RUN_AS_NODE` removed from its environment, since an agent inside an Electron host such as T3 can inherit it. In an installed app, `brainstorm` is a shim (`packaging/bin`) that runs the CLI on the app's own Electron with `ELECTRON_RUN_AS_NODE=1`, so the CLI starts `process.execPath` instead. `BRAINSTORM_APP=headless` runs `node dist/server/headless.js` instead, for tests. Only the server's stderr goes to `server.log`, because its stdout carries the UI token.

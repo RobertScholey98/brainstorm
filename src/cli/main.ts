@@ -373,7 +373,7 @@ const systemRef = (raw: string | undefined) => encodeURIComponent(raw ?? "");
 const isNone = (ref: string) => ref.trim().toLowerCase() === "none";
 
 const projectLine = (p: ProjectListing): string =>
-  `project ${p.name ?? p.id}: ${
+  `${p.name === null ? "this project" : `project ${p.name}`}: ${
     p.system === null
       ? "no design system; its brainstorms are freeform"
       : `brainstorms build with ${p.system.name} (${p.system.id})${p.system.awaitingReview ? ", once Rob confirms it on Brainstorm's Design systems page" : ""}`
@@ -406,6 +406,7 @@ const COMMANDS: Record<string, Command> = {
         name: str(flags, "name") ?? null,
         frame: str(flags, "frame") ?? null,
         thread,
+        projectPath: thread === null ? null : resolve("."),
       });
       if (!result.ok) return { result, lines: [] };
       const s = result.data.system;
