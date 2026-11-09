@@ -65,7 +65,7 @@ const PAGE_TITLE = /^text-title(?:\/|$)/;
 /** Files whose hints sit on the window header, where opening down would cover the canvas bar or the Inspector header. */
 const HEADER_FILES = /(?:^|[\\/])(?:TopBar|Regenerate|Export)\.tsx$/;
 /** Above and below a sidebar row are its neighbours. */
-const SIDEBAR_FILES = /(?:^|[\\/])Sidebar\.tsx$/;
+const SIDEBAR_FILES = /(?:^|[\\/])(?:Sidebar|SessionPanel)\.tsx$/;
 const LAYOUT = /^(?:m[trblxyse]?-|w-|min-w-|max-w-|flex-1$|grow|shrink|basis-|self-|justify-self-|order-|col-|row-)/;
 
 export async function loadDesign(styles = STYLES) {
