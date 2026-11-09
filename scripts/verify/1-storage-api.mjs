@@ -130,6 +130,7 @@ try {
   check("session new exits 0 and prints the session id first", [created.code, /^s_[0-9a-z]{8}$/.test(S)], [0, true]);
   check("session new prints what it created", lines(created.stdout).slice(1), [
     `created "Chore wheel" in project proj-a, attached to thread ${T1}`,
+    "design system: none; this project has none set (brainstorm project use <system> sets one)",
     `next: brainstorm pull ${S}`,
   ]);
   check("the CLI started the server and wrote api.json", existsSync(join(home, "api.json")), true);

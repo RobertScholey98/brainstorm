@@ -276,7 +276,7 @@ try {
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, /^\d+[smh]/.test(results.get(`light 1440 short ${p}`)?.elapsed ?? "")])),
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, ["sending", "queued", "working", "asking", "previous_thread"].includes(p)])),
   );
-  // Rebaselined for ADR 009, the chip carries the thread's state: a lost thread no longer has a status of its own
+  // Rebaselined for ADR 010, the chip carries the thread's state: a lost thread no longer has a status of its own
   // beside the chip, so at 1440 its short title keeps every label (it gave up Regenerate's glyph before).
   check(
     "at 1440 a short title keeps every label while sending, withdrawn, idle or on a lost thread; with a request open or fulfilled the thread chip folds to its dot first, in previous thread the status folds to \"Previous thread\" and Export gives way too, in ADR 003's order, and the title reads whole in every phase",
@@ -305,7 +305,7 @@ try {
       ["working", true],
       ["asking", true],
       ["previous_thread", true],
-      // ADR 009: with no status of its own beside the chip, a lost thread frees enough room that Withdraw keeps its
+      // ADR 010: with no status of its own beside the chip, a lost thread frees enough room that Withdraw keeps its
       // label and the fit stops at the floor, so the branch's title keeps 160 px or more rather than reading whole.
       ["thread_lost", true],
     ],

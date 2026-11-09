@@ -41,12 +41,12 @@ Round 6 added 2026-11-07. A container query at 960 px used to turn every session
 
 The header now measures. `useHeaderFit` in `headerAction.ts` runs after each layout and whenever the header, its actions or its title change size. It restores every label, then takes them back one at a time until the title holds 160 px (or reads whole) and each ancestor in a fork's breadcrumb holds 64 px. The order is fixed by `COLLAPSE`:
 
-1. the thread chip's title, which folds to its state dot (ADR 009; its hint still names the thread)
+1. the thread chip's title, which folds to its state dot (ADR 010; its hint still names the thread)
 2. the status's long words, which give way to the phase's short name ("Agent asking")
 3. Export
 4. the phase actions, from last to first, so the phase's recovery (Retry, Resend) keeps its name longest
 
-ADR 009 replaced Fork with Confirm in the sidebar and put the thread's title in the top bar. The thread is reference, and the status is what Rob is waiting on, so the thread's title goes first.
+ADR 010 replaced Fork with Confirm in the sidebar and put the thread's title in the top bar. The thread is reference, and the status is what Rob is waiting on, so the thread's title goes first.
 
 A collapsible part carries `data-collapse` with its rank, and a collapsed one `data-collapsed`, which the `data-collapsed:` and `in-data-collapsed:` variants style. Rules:
 

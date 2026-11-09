@@ -1,4 +1,4 @@
-# ADR 009: Main, confirm and branches
+# ADR 010: Main, confirm and branches
 
 Status: accepted. Rob asked for it on 2026-11-08: "The sidebar feels cluttered right now, and it's hard to see how
 moving forward works. I don't want the sidebar to be full of stuff I'm not keeping." He settled the questions below in
@@ -103,7 +103,7 @@ working per branch without change.
   an adopt or a refresh writes the same thread to every session in the tree. Only one request is open per brainstorm,
   since one thread works on one thing at a time. A branch starts no thread of its own.
 - **Numbering.** A branch continues its source's numbers: a branch from iteration 3 starts at 4, so a trail reads
-  1, 2, 3, 4 whichever branch it ends on. Migration 11 renumbers existing forks the same way, and a request still open on an old fork's own thread becomes send failed, since the fork now shares its tree's thread. So does a fork's open request beside another open one in its tree, whatever thread it was on. A fork that joins a lost root thread is lost too.
+  1, 2, 3, 4 whichever branch it ends on. Migration 12 renumbers existing forks the same way, and a request still open on an old fork's own thread becomes send failed, since the fork now shares its tree's thread. So does a fork's open request beside another open one in its tree, whatever thread it was on. A fork that joins a lost root thread is lost too.
 - **Primary.** One branch is primary: the trail leading to the final design. It is the root until Rob presses **Make
   primary** on another, which sits on the branch's line in the sidebar ("Branch from iteration 3 · Make primary").
   The `primary_branch` row records it. The primary's strip shows its whole trail, its ancestors' iterations up to each
@@ -164,5 +164,5 @@ refused.
   confirm lets go of on either path, add slot, a branch from a past iteration on the parent's thread and its answered
   confirm, renumbering, one open request per brainstorm, make primary and the primary's trail, start a fresh thread
   and the requests it moves, and home's one row per brainstorm.
-- `test/store.test.ts`: migration 11, including a fork whose own thread never started.
+- `test/store.test.ts`: migration 12, including a fork whose own thread never started.
 - `verify:8` drives the sidebar's marks, Confirm, the confirms dropdown, a branch and Make primary in the window.

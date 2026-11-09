@@ -26,7 +26,7 @@ Observed on 2026-11-06 (`t3 v0.1.8-nightly.20261104.4179`). It starts a thread i
 - `--json` prints `{ "threadId": "…", "projectId": "…", "runId": "…" | null }`.
 - `--base-dir <dir>` picks another T3 data directory, like `T3CODE_HOME`.
 
-Brainstorm runs `thread start --title "<safe title>" --json <projectId> -` for a brainstorm's fresh thread and for a promotion, with the first message on stdin, no `--worktree` (the brainstorm's agent runs in the project folder) and no `--wait`. Branches start no thread of their own; they share their brainstorm's (ADR 009). The title goes on the command line, so `safeTitle` in the bridge keeps only letters, digits, spaces and `,.'()?+=/_-`, cut to 80 characters, and quotes it. The bridge reads only `threadId`.
+Brainstorm runs `thread start --title "<safe title>" --json <projectId> -` for a brainstorm's fresh thread and for a promotion, with the first message on stdin, no `--worktree` (the brainstorm's agent runs in the project folder) and no `--wait`. Branches start no thread of their own; they share their brainstorm's (ADR 010). The title goes on the command line, so `safeTitle` in the bridge keeps only letters, digits, spaces and `,.'()?+=/_-`, cut to 80 characters, and quotes it. The bridge reads only `threadId`.
 
 ## `t3 thread send <thread> <message|->`
 

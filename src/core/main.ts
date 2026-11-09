@@ -12,7 +12,7 @@ import {
 } from "./types";
 
 /**
- * The rules for Main, the marks and Confirm (ADR 009). The service applies them to Rob's stored marks on the latest
+ * The rules for Main, the marks and Confirm (ADR 010). The service applies them to Rob's stored marks on the latest
  * iteration, and the window applies the same ones to the marks it keeps for a past iteration, so the two can't differ.
  */
 

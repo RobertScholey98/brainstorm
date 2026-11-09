@@ -301,7 +301,7 @@ const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; re
   send_failed: { label: "Send failed" },
   run_failed: { label: "Run failed", note: "The agent's run failed in T3. Open the thread to see why, or Retry." },
   // A lost thread has no strip: the thread chip carries it, its menu says the rest, and Start a fresh thread stands
-  // beside it in the bar (ADR 009).
+  // beside it in the bar (ADR 010).
   previous_thread: { label: "Sent to the previous thread", note: "Another thread took this brainstorm over. Resend sends the request to it." },
   no_change: { label: "No change", note: "The agent replied in T3 without changing the design." },
 };
@@ -313,7 +313,7 @@ const DETAIL: Partial<Record<RequestPhase["phase"], { readonly label: string; re
  */
 export function RequestStatus({ view }: { view: SessionView }) {
   const request = view.request;
-  // The thread's own state, a lost one included, is the thread chip's to say (ADR 009); this says the request's.
+  // The thread's own state, a lost one included, is the thread chip's to say (ADR 010); this says the request's.
   const counting = request !== null && PHASE[request.phase.phase].ended !== true;
   const now = useNow(counting ? 1_000 : undefined);
   if (request === null) return null;
@@ -347,7 +347,7 @@ export function RequestStatus({ view }: { view: SessionView }) {
 
 /**
  * The phase's actions that the bar shows; one the strip under the bar holds itself stays there. A lost thread's way
- * back stands in the bar whether or not a request is open, beside the chip that says the thread is lost (ADR 009).
+ * back stands in the bar whether or not a request is open, beside the chip that says the thread is lost (ADR 010).
  */
 export function phaseActions(view: SessionView): readonly RequestPhaseAction[] {
   const own = view.request === null ? undefined : DETAIL[view.request.phase.phase]?.own;

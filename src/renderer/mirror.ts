@@ -9,7 +9,7 @@ import { blockIdOf, type BlockId, type BlockView, type CanvasFrame, type CanvasP
 const CHANNEL = "brainstorm-preview";
 
 /** What the main window's canvas shows, sent whenever it changes. Blocks go apart, since they change far less often. */
-/** What a canvas pick is for: a pin comment, a vary, or an element picked into Main (ADR 009). */
+/** What a canvas pick is for: a pin comment, a vary, or an element picked into Main (ADR 010). */
 export type PickKind = "comment" | "vary" | "graft";
 
 export type MirrorScene = {
@@ -34,7 +34,7 @@ export type MirrorScene = {
   readonly past: IterationN | null;
   /** Why a comment can't be pinned now, in the Inspector's words, or null when it can. */
   readonly pinBlocked: string | null;
-  /** Rob's marks on the iteration showing, so a pick into Main here says when it makes the slot's Main too (ADR 009). */
+  /** Rob's marks on the iteration showing, so a pick into Main here says when it makes the slot's Main too (ADR 010). */
   readonly marks: Marks;
 };
 

@@ -2,7 +2,7 @@ import { approval, trashRefusal, withApproval, withPick, withTrash } from "../co
 import type { BlockId, BlockView, GraftId, Marks, Pin, SlotId, VariantKey } from "../core/types";
 
 /**
- * Rob's marks on a past iteration (ADR 009), which the window keeps itself until Confirm makes a branch from them. It
+ * Rob's marks on a past iteration (ADR 010), which the window keeps itself until Confirm makes a branch from them. It
  * applies `main.ts`'s rules, as the service does to its rows at the latest, and moves what shows the way the latest
  * does: a variant made Main is the one that shows in its slot.
  */

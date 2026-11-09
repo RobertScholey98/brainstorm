@@ -25,7 +25,7 @@ type StripItem = { readonly kind: "iteration"; readonly entry: HistoryEntry } | 
 const samePoint = (a: TrailPoint, b: TrailPoint) => a.session === b.session && a.n === b.n;
 
 /**
- * The branch's history along the bottom of the canvas (ADR 009): its whole trail, its ancestors' iterations up to each
+ * The branch's history along the bottom of the canvas (ADR 010): its whole trail, its ancestors' iterations up to each
  * branch point and then its own, cut into runs at each confirm. The strip shows one run, by default the one holding
  * the iteration on the canvas, and a dropdown in its head steps between runs, newest first. Each run is a still per
  * iteration, oldest first, with what made it and its age, and the branches that leave an iteration after its still. It
@@ -507,7 +507,7 @@ function BranchLines({ first, second }: { first: string; second: string }) {
 /**
  * One row over the canvas while Rob looks at a past iteration, as the canvas bar is one row: which iteration, the way
  * back, and what he can do from here. Once he has marked something here, the message says instead that the marks go
- * when he leaves, since the window keeps them only while the past shows (ADR 009). Its message gives way before its
+ * when he leaves, since the window keeps them only while the past shows (ADR 010). Its message gives way before its
  * button in a narrow window. Its text starts 16 px in, and its button ends 8 px in, where the canvas bar's view switch
  * ends.
  */

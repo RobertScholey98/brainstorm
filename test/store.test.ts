@@ -28,7 +28,7 @@ test("migrations run once and reopening keeps the data", () => {
   store.nameProject("p1" as ProjectId, "brainstorm");
   store.close();
   const reopened = new Store(path);
-  expect(reopened.schemaVersion()).toBe(11);
+  expect(reopened.schemaVersion()).toBe(12);
   expect(reopened.session(session)).toEqual({ id: session, projectId: "p1", title: "Wheel", brief: "", createdAt: at });
   expect(reopened.sessions(null).map((s) => s.projectName)).toEqual(["brainstorm"]);
   reopened.close();
@@ -38,10 +38,10 @@ test("a version 1 store gains a null name for the projects it already has", () =
   const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
   seeded(path).close();
   const v1 = new DatabaseSync(path);
-  v1.exec("ALTER TABLE project DROP COLUMN name; DROP TABLE ui_pref; ALTER TABLE block_content ADD COLUMN about TEXT; ALTER TABLE session DROP COLUMN settled_at; ALTER TABLE session DROP COLUMN unsettled_at; DROP TABLE fork; DROP TABLE variant_seen; DROP TABLE promotion; DROP TABLE iteration_proposed; DROP TABLE proposed_content; DROP TABLE session_theme; ALTER TABLE session DROP COLUMN system_n; ALTER TABLE session DROP COLUMN system_id; DROP TABLE design_system_theme; DROP TABLE design_system_version; DROP TABLE design_system; DROP TABLE system_import; DROP TABLE main_choice; DROP TABLE graft; DROP TABLE trashed; DROP TABLE primary_branch; PRAGMA user_version = 1;");
+  v1.exec("ALTER TABLE project DROP COLUMN name; DROP TABLE ui_pref; ALTER TABLE block_content ADD COLUMN about TEXT; ALTER TABLE session DROP COLUMN settled_at; ALTER TABLE session DROP COLUMN unsettled_at; DROP TABLE fork; DROP TABLE variant_seen; DROP TABLE promotion; DROP TABLE iteration_proposed; DROP TABLE proposed_content; DROP TABLE session_theme; ALTER TABLE session DROP COLUMN system_n; ALTER TABLE session DROP COLUMN system_id; DROP TABLE design_system_theme; DROP TABLE design_system_version; DROP TABLE project_system; ALTER TABLE project DROP COLUMN repo_git; DROP TABLE design_system; DROP TABLE system_import; DROP TABLE main_choice; DROP TABLE graft; DROP TABLE trashed; DROP TABLE primary_branch; PRAGMA user_version = 1;");
   v1.close();
   const store = new Store(path);
-  expect(store.schemaVersion()).toBe(11);
+  expect(store.schemaVersion()).toBe(12);
   expect(store.sessions(null).map((s) => [s.id, s.projectName])).toEqual([[session, null]]);
   store.close();
 });
@@ -108,7 +108,7 @@ test("a version 3 store drops variant notes and stores each noted block under th
   const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
   seeded(path).close();
   const v3 = new DatabaseSync(path);
-  v3.exec("ALTER TABLE block_content ADD COLUMN about TEXT; ALTER TABLE session DROP COLUMN settled_at; ALTER TABLE session DROP COLUMN unsettled_at; DROP TABLE fork; DROP TABLE variant_seen; DROP TABLE promotion; DROP TABLE iteration_proposed; DROP TABLE proposed_content; DROP TABLE session_theme; ALTER TABLE session DROP COLUMN system_n; ALTER TABLE session DROP COLUMN system_id; DROP TABLE design_system_theme; DROP TABLE design_system_version; DROP TABLE design_system; DROP TABLE system_import; DROP TABLE main_choice; DROP TABLE graft; DROP TABLE trashed; DROP TABLE primary_branch; PRAGMA user_version = 3;");
+  v3.exec("ALTER TABLE block_content ADD COLUMN about TEXT; ALTER TABLE session DROP COLUMN settled_at; ALTER TABLE session DROP COLUMN unsettled_at; DROP TABLE fork; DROP TABLE variant_seen; DROP TABLE promotion; DROP TABLE iteration_proposed; DROP TABLE proposed_content; DROP TABLE session_theme; ALTER TABLE session DROP COLUMN system_n; ALTER TABLE session DROP COLUMN system_id; DROP TABLE design_system_theme; DROP TABLE design_system_version; DROP TABLE project_system; ALTER TABLE project DROP COLUMN repo_git; DROP TABLE design_system; DROP TABLE system_import; DROP TABLE main_choice; DROP TABLE graft; DROP TABLE trashed; DROP TABLE primary_branch; PRAGMA user_version = 3;");
   const files = { tsx: "export default () => null;\n", json: '{ "title": "Neon" }\n', css: null, controls: null };
   const insert = v3.prepare(
     "INSERT INTO block_content(hash, source, css, block_json, controls_json, controls_derived, about, compiled, parts_json) VALUES (?, ?, NULL, ?, NULL, 1, ?, 'compiled', '[]')",
@@ -121,7 +121,7 @@ test("a version 3 store drops variant notes and stores each noted block under th
 
   const store = new Store(path);
   const hash = contentHash(files);
-  expect(store.schemaVersion()).toBe(11);
+  expect(store.schemaVersion()).toBe(12);
   expect(store.iterationBlocks(session, 1 as IterationN)).toEqual([{ id: "wheel/neon" as BlockId, hash }]);
   expect(store.iterationBlocks(session, 2 as IterationN)).toEqual([{ id: "wheel/neon" as BlockId, hash }]);
   expect(store.content(hash as ContentHash)).toEqual({ hash, files, compiled: "compiled", parts: [] });
@@ -164,7 +164,7 @@ const RETRY_THERE = "Brainstorm now keeps every branch on one thread; retry to s
 test("a version 9 store turns forks into branches: their iterations continue the parent's numbers, on the root's thread", async () => {
   const path = v9Store();
   const store = new Store(path);
-  expect(store.schemaVersion()).toBe(11);
+  expect(store.schemaVersion()).toBe(12);
   const ns = (id: SessionId) => [1, 2, 3, 4, 5, 6].filter((n) => store.iteration(id, n as IterationN) !== null);
   expect(ns(v9.root)).toEqual([1, 2, 3]);
   expect(ns(v9.fork), "a fork from 2 starts at 3").toEqual([3, 4]);
@@ -245,5 +245,22 @@ test("a version 9 fork that joins a lost root thread is lost too", () => {
   expect(store.attachment(v9.lostFork)).toMatchObject({ threadId: v9.lostThread, lostAt: v9.lostAt });
   expect([1, 2, 3, 4].filter((n) => store.iteration(v9.lostFork, n as IterationN) !== null), "a fork from 1 starts at 2").toEqual([2, 3]);
   expect(store.requests(v9.lostFork).map((r) => [r.n, r.base, r.state])).toEqual([[1, 2, { state: "fulfilled", iteration: 3 }]]);
+  store.close();
+});
+
+test("a version 9 store gives each project its system when exactly one system came from it", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "bs-store-")), "brainstorm.db");
+  seeded(path).close();
+  const v9 = new DatabaseSync(path);
+  v9.exec("DROP TABLE project_system; ALTER TABLE project DROP COLUMN repo_git; DROP TABLE main_choice; DROP TABLE graft; DROP TABLE trashed; DROP TABLE primary_branch; PRAGMA user_version = 9;");
+  const insert = v9.prepare("INSERT INTO design_system(id, name, source_json, project_id, created_at) VALUES (?, ?, '{}', ?, ?)");
+  insert.run("ds_one", "One", "proj-one", at);
+  insert.run("ds_twoa", "Two A", "proj-two", at);
+  insert.run("ds_twob", "Two B", "proj-two", at);
+  insert.run("ds_loose", "Loose", null, at);
+  v9.close();
+  const store = new Store(path);
+  expect(store.schemaVersion()).toBe(12);
+  expect(["proj-one", "proj-two", "p1"].map((p) => store.projectSystem(p as ProjectId))).toEqual(["ds_one", null, null]);
   store.close();
 });

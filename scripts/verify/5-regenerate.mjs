@@ -471,7 +471,7 @@ try {
   check("Resend sends it to the new thread", [await phase("queued"), markers(TAKEOVER, 3)], [{ message: "Queued in T3", actions: ["open_thread", "withdraw"] }, 1]);
 
   t3.setMissing(TAKEOVER, true);
-  // Rebaselined for ADR 009, the chip carries the thread's state: a request waiting on a lost thread used to say so
+  // Rebaselined for ADR 010, the chip carries the thread's state: a request waiting on a lost thread used to say so
   // four times (the chip, a status beside it, a strip under the bar, and Start a fresh thread both in the bar and in
   // the chip's menu). Now the chip alone says Thread lost, and Start a fresh thread stands once in the bar beside it.
   await window.waitForSelector('[data-thread-chip][data-thread="lost"]', { timeout: PHASE_MS });
@@ -524,7 +524,7 @@ try {
   await shot(window, shots, "9-fresh-thread");
 
   // A confirm the app writes itself asks nothing of the thread, so a lost thread holds Confirm only for what goes to the
-  // agent (ADR 009). A second brainstorm, whose thread is gone while no request is open in it, shows both.
+  // agent (ADR 010). A second brainstorm, whose thread is gone while no request is open in it, shows both.
   const LOST = "44444444-4444-4444-8444-444444444444";
   t3.addThread(LOST, { projectId: "chore-roulette", title: "Lost thread" });
   const { session: stranded } = seedDemo(home, { T3CODE_THREAD_ID: LOST });

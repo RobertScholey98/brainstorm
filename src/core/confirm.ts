@@ -47,7 +47,7 @@ export type Confirmed = {
 };
 
 /**
- * Rob's marks and Confirm on the latest iteration (ADR 009), and the landing every iteration the service writes goes
+ * Rob's marks and Confirm on the latest iteration (ADR 010), and the landing every iteration the service writes goes
  * through. The rules are main.ts's; this applies them to the stored marks. Gating a confirm and sending one with grafts
  * to the thread is the service's, as for any request.
  */
@@ -195,7 +195,7 @@ export class Confirms {
   }
 
   /**
-   * What goes with the variants a confirm drops (ADR 009): Rob's settings on them, and his open pins, which no request
+   * What goes with the variants a confirm drops (ADR 010): Rob's settings on them, and his open pins, which no request
    * could address once the variant is gone. A pin goes as when Rob deletes it, so its history stays in the store.
    */
   #letGo(id: SessionId, drop: readonly BlockId[], at: string): void {

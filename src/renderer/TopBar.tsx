@@ -162,7 +162,7 @@ export function SessionBar({
   onOpen: (id: SessionId) => void;
 }) {
   const latest = view?.iteration?.n ?? null;
-  // A brainstorm goes by its root's title; a branch that isn't the primary is named after it (ADR 009).
+  // A brainstorm goes by its root's title; a branch that isn't the primary is named after it (ADR 010).
   const branch = view !== null && view.session.id !== view.tree.primary;
   const heading = view === null ? title : branch ? view.session.title : view.tree.root.title;
   return (
@@ -238,7 +238,7 @@ export function SessionBar({
           </div>
         )}
         {/* In the past the badge names the iteration shown, so a closed request's result, about the latest, steps aside.
-            A request waiting on a lost thread says nothing the chip doesn't, so the chip says it alone (ADR 009). */}
+            A request waiting on a lost thread says nothing the chip doesn't, so the chip says it alone (ADR 010). */}
         {view !== null && view.request !== null && view.request.phase.phase !== "thread_lost" && (past === null || view.request.phase.actions.length > 0) && (
           <div className="flex shrink-0 items-center gap-2" data-header-status>
             <Separator orientation="vertical" />
@@ -257,7 +257,7 @@ function openPhase(view: SessionView): OpenPhase | null {
 }
 
 /**
- * The brainstorm's T3 thread, which every branch shares (ADR 009): its state as a dot and a word, and a menu that
+ * The brainstorm's T3 thread, which every branch shares (ADR 010): its state as a dot and a word, and a menu that
  * opens the thread in T3 or starts a fresh one, which moves every branch to it. The chip alone says a thread is lost,
  * in the warning's hue; its way back, Start a fresh thread, stands beside it in the bar, so the menu then only says
  * what happened and what the fresh thread carries.

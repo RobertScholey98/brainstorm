@@ -1,7 +1,7 @@
 import type { HistoryEntry, IterationN, SessionId } from "../core/types";
 
 /**
- * A run of history (ADR 009): the iterations from one confirm up to the next. Confirms are like commits, so the strip
+ * A run of history (ADR 010): the iterations from one confirm up to the next. Confirms are like commits, so the strip
  * shows one run at a time and a dropdown steps between them. A branch point starts a run too, under its own name: a
  * branch made with only an instruction, or with grafts the agent has yet to merge, is no confirm yet.
  */

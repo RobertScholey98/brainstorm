@@ -113,7 +113,7 @@ const COMPOSER_FOR = { comment: "composing", vary: "varying", graft: "grafting" 
 /**
  * A past iteration on the canvas, on this branch's trail: its own or an ancestor's (`session`). The stored iteration
  * never changes; Rob's picks there change only what shows, and his marks there are the window's own until Confirm makes
- * a branch from them (ADR 009). `iteration` is null while it loads.
+ * a branch from them (ADR 010). `iteration` is null while it loads.
  */
 type Past = {
   readonly session: SessionId;
@@ -709,7 +709,7 @@ function SessionWorkspace({
   // With the canvas away in a clean preview window, nothing can take a pick, so none starts: the canvas region says why
   // and offers the way on, and the bar and Pin comment stay as they were.
   // The slot Rob was working on when he started a pick: the click that picks selects its block, which moves the
-  // sidebar to that block's slot, and a pick into Main goes where he was working (ADR 009).
+  // sidebar to that block's slot, and a pick into Main goes where he was working (ADR 010).
   const pickInto = useRef<SlotId | null>(null);
   const togglePick = (kind: PickKind) => {
     if (preview.open && !preview.prefs.here && preview.prefs.look === "clean") return setStuckPick((s) => (s === kind ? null : kind));
@@ -732,7 +732,7 @@ function SessionWorkspace({
   // The preview window mirrors this canvas (ADR 007).
   const pinBlocked = iteration === null ? "There is nothing on the canvas to pin yet" : past !== null ? "Back to latest to pin a comment" : unrendered;
 
-  // Rob's marks (ADR 009): the stored ones at the latest, and the window's own on a past iteration.
+  // Rob's marks (ADR 010): the stored ones at the latest, and the window's own on a past iteration.
   // What the sidebar and Confirm show: the service already reads its marks live, and the past's local marks are read the
   // same way, so a graft whose Main was taken back waits out of sight there too. The raw ones stay in `past`, where
   // choosing a Main again brings the graft back.
@@ -744,7 +744,7 @@ function SessionWorkspace({
   // Confirm and Add slot send to the thread, so they wait while it is busy or gone, like any request.
   const sendBlocked = view !== null && !view.regenerate.ok && view.regenerate.reason !== "no_iteration" ? blockedMessage(view.regenerate.reason, view.request?.request.n) : null;
   // A confirm the app writes itself, with no grafts (and on a branch no instruction), needs no thread, so a lost thread
-  // holds Confirm only for what goes to the agent. An open request in the brainstorm still holds it all (ADR 009).
+  // holds Confirm only for what goes to the agent. An open request in the brainstorm still holds it all (ADR 010).
   const threadLost = view !== null && !view.regenerate.ok && view.regenerate.reason === "thread_lost" ? sendBlocked : null;
   const shownSlots = iteration?.slots ?? NO_SLOTS;
   // On a past iteration the window keeps the marks itself (`pastMarks.ts`); a refusal shows as the service's would.

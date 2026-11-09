@@ -179,7 +179,7 @@ try {
   check("the top bar reads the takeover's fulfilled iteration", (await window.textContent("[data-request-message]"))?.trim(), await fulfilledText(third));
   await shot(window, shots, "4-takeover-fulfilled");
 
-  // One branch from iteration 2, made by Confirm as a branch with an instruction (ADR 009). It stays on the
+  // One branch from iteration 2, made by Confirm as a branch with an instruction (ADR 010). It stays on the
   // brainstorm's own thread, so the takeover thread's agent works the branch's first request.
   const instruction = `${title} branch: make the button label shorter. Keep it short and ask no questions.`;
   await window.click('[data-history-n="2"]');

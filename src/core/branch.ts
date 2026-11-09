@@ -81,7 +81,7 @@ export type BranchDeps = {
 };
 
 /**
- * Confirms on a past iteration (ADR 009): a new branch of the brainstorm, on its thread, that continues from iteration
+ * Confirms on a past iteration (ADR 010): a new branch of the brainstorm, on its thread, that continues from iteration
  * `from` of its parent. Its first iteration is that one narrowed by Rob's marks, with his settings baked in as defaults
  * and his open pins carried. With grafts, the narrowing waits for the agent: the first iteration keeps every variant,
  * and request 1 is the confirm. An instruction asks the agent to try it on the branch. With neither, request 1 is still
@@ -133,7 +133,7 @@ export class Branches {
   }
 
   /**
-   * Why the branch can't be made now, or null. A branch shares Confirm's gate (ADR 009): it is refused while a request
+   * Why the branch can't be made now, or null. A branch shares Confirm's gate (ADR 010): it is refused while a request
    * is open anywhere in the brainstorm, and, when it asks the agent something (a graft or an instruction), while the
    * thread is lost too. One the app answers itself runs no agent turn, so it is made on a lost thread, as a confirm
    * with nothing to graft is on the latest iteration.

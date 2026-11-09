@@ -45,7 +45,7 @@ export type MarkHandlers = {
 };
 
 /**
- * One brainstorm's sidebar (ADR 009): the slot picker, then the picked slot's Main and its options, each option with a
+ * One brainstorm's sidebar (ADR 010): the slot picker, then the picked slot's Main and its options, each option with a
  * 👍 and a 🗑, and the trashed fold. Confirm sits at its foot. A branch that isn't the primary says so above Main.
  */
 export function SessionPanel({

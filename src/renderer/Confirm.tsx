@@ -13,7 +13,7 @@ import { partLabel } from "../core/part";
 import { blockIdOf, type BlockId, type BlockView, type ConfirmScope, type IterationN, type Marks, type SlotView } from "../core/types";
 
 /**
- * Confirm, at the foot of the sidebar (ADR 009). At the latest it locks Rob's marks in; on a past iteration it makes a
+ * Confirm, at the foot of the sidebar (ADR 010). At the latest it locks Rob's marks in; on a past iteration it makes a
  * branch from there with them. The popover lists what each slot becomes before anything is sent.
  */
 export function ConfirmButton({
@@ -34,7 +34,7 @@ export function ConfirmButton({
   blocked: string | null;
   /**
    * Why nothing can go to the agent now: the thread is gone. A confirm the app writes itself, with no grafts and no
-   * instruction, still can (ADR 009).
+   * instruction, still can (ADR 010).
    */
   lost: string | null;
   /** Sends; false keeps the popover open, since the failure already shows. */

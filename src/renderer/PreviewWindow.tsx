@@ -18,7 +18,7 @@ import { VaryComposer } from "./Vary";
 import { PickComposer } from "./Pick";
 import type { PickKind } from "./mirror";
 
-/** A pick waiting on its composer, with the slot that was showing when it was picked: a pick into Main goes there (ADR 009). */
+/** A pick waiting on its composer, with the slot that was showing when it was picked: a pick into Main goes there (ADR 010). */
 type Composing = { readonly for: PickKind; readonly pin: Pin; readonly at: { x: number; y: number }; readonly rect: CanvasRect; readonly slot: SlotId | null };
 
 const NO_SETTINGS: PreviewSettings = { look: "clean", hold: false };

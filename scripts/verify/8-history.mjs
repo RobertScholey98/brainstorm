@@ -433,7 +433,7 @@ try {
   check("the past shows the variant picked there", await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant"), "reel");
   check("showing another variant is no mark, so the Viewing bar doesn't warn of marks going", await window.$("[data-past-marks-note]"), null);
 
-  // Marks in the past are the window's own, for a branch from there (ADR 009).
+  // Marks in the past are the window's own, for a branch from there (ADR 010).
   check("with nothing marked, Confirm as a branch is still on, since a word on what to try can make a branch alone", await window.isDisabled("[data-confirm-toggle]"), false);
   await mark(window, "approve", "reel");
   await window.waitForSelector('[data-main-group] [data-variant="reel"]');
@@ -543,7 +543,7 @@ try {
   await window.click("[data-history-toggle]");
   await window.waitForSelector("[data-history]");
 
-  // Marks at the latest are Rob's, stored, and undone the same way (ADR 009).
+  // Marks at the latest are Rob's, stored, and undone the same way (ADR 010).
   await showSlot(window, "wheel");
   check("at the latest Confirm reads Confirm and waits for a mark", [(await window.textContent("[data-confirm-toggle]")).trim(), await window.isDisabled("[data-confirm-toggle]")], ["Confirm", true]);
   await mark(window, "trash", "terminal");
@@ -653,7 +653,7 @@ try {
   await window.waitForSelector("[data-main-empty]");
   await window.click(`[data-slot-id="wheel"] [data-variant="${fromRow}"]`);
 
-  // Confirm on a past iteration makes a branch, on the same thread (ADR 009).
+  // Confirm on a past iteration makes a branch, on the same thread (ADR 010).
   await window.click('[data-history-n="1"]');
   await window.waitForSelector("[data-past-bar]");
   await showSlot(window, "wheel");
@@ -1007,7 +1007,7 @@ try {
   );
 
   // Grafts at the latest: with Neon as Main, a vary option's 👍 brings its element in, and Pick brings one from another
-  // slot (ADR 009). Confirm then goes to the agent, which merges them, keeps Spin button B, the source it grafts from, and
+  // slot (ADR 010). Confirm then goes to the agent, which merges them, keeps Spin button B, the source it grafts from, and
   // drops the rest.
   await showSlot(window, "wheel");
   // Into a slot with no Main, a pick makes the variant showing there its Main first (`withPick`), and says so.

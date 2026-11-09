@@ -28,7 +28,7 @@ export function walkTree(links: ParentLinks, id: SessionId): TreeWalk {
   return { trail, members };
 }
 
-/** A brainstorm's tree of branches (ADR 009), read from the store: its root, its primary, its trails and its thread. */
+/** A brainstorm's tree of branches (ADR 010), read from the store: its root, its primary, its trails and its thread. */
 export class Trees {
   readonly #store: Store;
 
@@ -62,7 +62,7 @@ export class Trees {
 
   /**
    * Another branch's open request that `holds` says holds the thread they share, so a Retry or Resend waits for it.
-   * Migration 11 and a fresh thread can leave several requests waiting as send failed; none of those holds the
+   * Migration 12 and a fresh thread can leave several requests waiting as send failed; none of those holds the
    * thread, so the first retried goes and the others then wait for it.
    */
   holdingElsewhere(id: SessionId, holds: (open: Request, session: SessionId) => boolean): Request | null {
@@ -88,7 +88,7 @@ export class Trees {
   }
 
   /**
-   * A branch's trail (ADR 009): its ancestors' iterations up to each branch point, then its own. Every other branch
+   * A branch's trail (ADR 010): its ancestors' iterations up to each branch point, then its own. Every other branch
    * hangs off the trail iteration it left from, and so does an ancestor's own continuation past the point this trail
    * left it, so the old primary still shows once another branch is made primary. `history` is one session's own
    * iterations.

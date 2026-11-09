@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { basename, relative, resolve } from "node:path";
 import { observeWork } from "./agentWork";
+import { repoAt } from "./projectName";
 import { PLAIN_ENV, type CheckEnv, type Checker } from "./check";
 import type { Store, SessionSystem, StoredSystem, StoredSystemVersion } from "./store";
 import { catalogMarkdown } from "./system/catalog";
@@ -13,14 +14,17 @@ import {
   isError,
   type AgentBridge,
   type AgentWork,
+  type ChosenSystem,
   type Failure,
   type Issue,
   type IssueCode,
   type KitPayload,
   type ProjectId,
+  type ProjectListing,
   type Result,
   type ReviewAction,
   type SystemCheck,
+  type SystemChoice,
   type SystemId,
   type SystemImport,
   type SystemListing,
@@ -36,6 +40,12 @@ import type { SystemManifest, Tier } from "./system/model";
 const ok = <T>(data: T): Result<T> => ({ ok: true, data });
 const fail = (error: Failure): { ok: false; error: Failure } => ({ ok: false, error });
 const noSystem = (id: string): Failure => ({ code: "not_found", entity: "system", message: `no design system ${id}` });
+// An agent adding a system Brainstorm has, from another project, most likely wants its project to build with it. Rob,
+// in the window, has the system's Projects control for that.
+const alreadyAdded = (root: string, s: { readonly id: SystemId; readonly name: string }, agent: boolean): Failure => ({
+  code: "invalid_action",
+  message: `${root} is already the design system "${s.name}" (${s.id}); sync it instead${agent ? `, or run brainstorm project use ${s.id} for this project's brainstorms to build with it` : ""}`,
+});
 
 const randomSystemId = (): SystemId => {
   const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -91,10 +101,11 @@ export class Systems {
   }
 
   list(): SystemListing[] {
-    return this.#store.systems().map((s) => this.#listing(s));
+    const projects = this.projects();
+    return this.#store.systems().map((s) => this.#listing(s, projects));
   }
 
-  #listing(s: StoredSystem): SystemListing {
+  #listing(s: StoredSystem, projects: readonly ProjectListing[] = this.projects()): SystemListing {
     const latest = this.#store.latestSystemVersion(s.id);
     return {
       id: s.id,
@@ -106,7 +117,64 @@ export class Systems {
       syncError: s.syncError,
       adapter: typeof s.source.adapter === "string",
       review: s.review,
+      projects: projects
+        .filter((p) => p.system?.id === s.id)
+        .map(({ id, name }) => ({ id, name })),
     };
+  }
+
+  /** Every project Brainstorm knows, by name, with the system its brainstorms build with (ADR 009). */
+  projects(): ProjectListing[] {
+    const systems = this.#store.systems();
+    return this.#store
+      .projects()
+      .map((p): ProjectListing => {
+        const system = p.system === null ? null : systems.find((s) => s.id === p.system);
+        // A project Brainstorm saw only as a system's source, before it named projects on `add`, goes by that folder.
+        const source = systems.find((s) => s.projectId === p.id);
+        return {
+          id: p.id,
+          name: p.name ?? (source === undefined ? null : basename(source.source.root)),
+          system: system === null || system === undefined ? null : { id: system.id, name: system.name, awaitingReview: system.review?.state === "pending" },
+        };
+      })
+      .sort((a, b) => (a.name ?? "￿").localeCompare(b.name ?? "￿") || a.id.localeCompare(b.id));
+  }
+
+  project(id: ProjectId): ProjectListing {
+    return this.projects().find((p) => p.id === id) ?? { id, name: this.#store.projectName(id), system: null };
+  }
+
+  /**
+   * Sets the system a project's brainstorms build with, or clears it with null. A system awaiting Rob's review may be
+   * set; brainstorms wait for his confirmation as they do when the agent names it.
+   */
+  setProjectSystem(project: ProjectId, ref: string | null): Result<ProjectListing> {
+    // The window sets only projects it listed; an agent's project is recorded before it gets here.
+    if (!this.projects().some((p) => p.id === project)) return fail({ code: "not_found", entity: "project", message: `Brainstorm doesn't know project ${project}` });
+    let id: SystemId | null = null;
+    if (ref !== null) {
+      const found = this.find(ref);
+      if (!found.ok) return found;
+      id = found.data.id;
+    }
+    this.#store.setProjectSystem(project, id, this.#now());
+    this.#changed();
+    return ok(this.project(project));
+  }
+
+  /** The system a new session in `project` builds with, from the agent's choice (ADR 009). */
+  forNewSession(project: ProjectId, choice: SystemChoice): Result<ChosenSystem | null> {
+    if (choice.kind === "none") return ok(null);
+    const from = choice.kind === "named" ? "named" : "project";
+    const ref = choice.kind === "named" ? choice.ref : this.#store.projectSystem(project);
+    if (ref === null) return ok(null);
+    const found = this.forSession(ref);
+    if (!found.ok) {
+      if (from === "named") return found;
+      return fail({ ...found.error, message: `${found.error.message}. It is this project's design system; pass --system none for a brainstorm without it` });
+    }
+    return ok({ ...found.data, name: this.#store.system(found.data.id)?.name ?? found.data.id, from });
   }
 
   view(id: SystemId): Result<SystemView> {
@@ -152,18 +220,41 @@ export class Systems {
   /**
    * Finds the system in `path`, syncs its first version and saves it. A system that fails its first sync isn't saved.
    * A folder with no package and no adapter fails with `no_system`, which the window answers with an import.
+   * `thread` and `projectPath` are the adding agent's thread and folder; the window gives neither.
    */
-  async add(input: { path: string; name?: string | null; frame?: string | null; stubs?: Record<string, string>; thread?: ThreadId | null }): Promise<Result<SyncOutcome>> {
+  async add(input: {
+    path: string;
+    name?: string | null;
+    frame?: string | null;
+    stubs?: Record<string, string>;
+    thread?: ThreadId | null;
+    projectPath?: string | null;
+  }): Promise<Result<SyncOutcome>> {
     const root = resolve(input.path);
     if (!existsSync(root) || !statSync(root).isDirectory()) return fail({ code: "usage", message: `${root} isn't a folder` });
     const existing = this.#store.systems().find((s) => samePath(s.source.root, root));
     if (existing !== undefined) {
-      return fail({ code: "invalid_action", message: `${root} is already the design system "${existing.name}" (${existing.id}); sync it instead` });
+      return fail(alreadyAdded(root, existing, input.thread != null));
     }
     const overrides: SourceOverrides = { name: input.name ?? null, frame: input.frame ?? null, ...(input.stubs === undefined ? {} : { stubs: input.stubs }) };
     const source = detectSource(root, overrides);
     if (!source.ok) return fail(syncFailed(source.issues));
-    const projectId = await this.#projectOf(root, input.thread ?? null);
+    // The system belongs to the project whose repo holds it, where Promote and reviews send their work. The project
+    // that added it wants it too, which differs when an agent adds a library from another repo.
+    const adder = input.thread == null ? null : await this.#threadProject(input.thread);
+    const adderPath = adder === null ? null : (input.projectPath ?? null);
+    // Each project is named after its own repo: the library's from the library's folder, the adder's from its own.
+    const repo = await repoAt(root);
+    const adderRepo = adderPath === null ? null : await repoAt(adderPath);
+    // An agent adding a library from its own repo is in the library's project, known to Brainstorm or not.
+    const sameRepo = repo !== null && adderRepo !== null && samePath(adderRepo.git, repo.git);
+    const found = sameRepo ? null : await this.#repoProject(root, repo?.git ?? null);
+    const home = sameRepo ? adder : (found?.id ?? null);
+    // A project is recorded with a repo only from its own folder. One found through another library's folder may live
+    // in another repo, and the first repo stored is kept.
+    const homeRepo = found?.via === "repo" ? repo : null;
+    const projectId = home ?? adder;
+    const users = [...new Set([home, adder].filter((p): p is ProjectId => p !== null))];
     const synced = await syncSystem(source.value, this.#checker);
     if (!synced.ok) return fail(syncFailed(synced.issues));
     const id = this.#newId();
@@ -183,6 +274,13 @@ export class Systems {
       this.#store.setReview(id, review);
       this.#store.setSystemInputs(id, inputsOf(source.value, synced.value.inputs));
       this.#store.insertSystemVersion({ system: id, n: 1 as SystemVersionN, ...synced.value, syncedAt: at });
+      // Each of those projects builds with it from now on, in every worktree, unless it has a system already.
+      for (const project of users) {
+        const own = project === adder ? adderRepo : homeRepo;
+        this.#store.ensureProject(project, project === adder ? adderPath : null, at, own?.git ?? null);
+        if (own?.name != null && this.#store.projectName(project) === null) this.#store.nameProject(project, own.name);
+        if (this.#store.projectSystem(project) === null) this.#store.setProjectSystem(project, id, at);
+      }
       // The import an agent ran for this folder is done once the system it wrote is added.
       if (imported !== undefined) this.#store.deleteImport(imported.root);
     });
@@ -313,7 +411,7 @@ export class Systems {
     if (repairing === null) {
       const existing = this.#store.systems().find((s) => samePath(s.source.root, root));
       if (existing !== undefined) {
-        return fail({ code: "invalid_action", message: `${root} is already the design system "${existing.name}" (${existing.id}); sync it instead` });
+        return fail(alreadyAdded(root, existing, false));
       }
     }
     const projectId = repairing?.projectId ?? this.#store.projectsHolding(root)[0] ?? null;
@@ -469,10 +567,41 @@ export class Systems {
     return ok({ ...observeWork(shown.snapshot), link: shown.snapshot.thread.link });
   }
 
-  async #projectOf(root: string, thread: ThreadId | null): Promise<ProjectId | null> {
-    const known = this.#store.projectsHolding(root)[0];
-    if (known !== undefined) return known;
-    if (thread === null) return null;
+  /**
+   * The known project whose repo holds `root`. Repos are compared by their main checkout's `.git`, so a project known
+   * from a worktree matches its library in the main checkout, and a project whose folder merely contains `root`, such
+   * as a parent folder of several repos, doesn't. Outside git, a stored folder that holds `root` is the best there is.
+   * A project's repo is stored when its folder is first seen, so a project known only from a deleted worktree matches.
+   * A project known only from a system, added by path from a thread elsewhere, holds that system's repo.
+   */
+  async #repoProject(root: string, repo: string | null): Promise<{ readonly id: ProjectId; readonly via: "repo" | "folder" | "system" } | null> {
+    if (repo === null) {
+      const holding = this.#store.projectsHolding(root)[0];
+      return holding === undefined ? null : { id: holding, via: "folder" };
+    }
+    const placed = new Set<ProjectId>();
+    for (const p of this.#store.projectRepos()) {
+      let theirs = p.repoGit;
+      // A project stored before repos were: read its folder while it's still there, and keep the answer.
+      if (theirs === null && p.repoPath !== null && existsSync(p.repoPath)) {
+        theirs = (await repoAt(p.repoPath))?.git ?? null;
+        if (theirs !== null) this.#store.setProjectRepo(p.id, theirs);
+      }
+      if (theirs === null) continue;
+      if (samePath(theirs, repo)) return { id: p.id, via: "repo" };
+      placed.add(p.id);
+    }
+    // A project known only from a system has no folder to compare, so its systems' folders stand in for one. A project
+    // whose repo is known and different only added a library from elsewhere, so its systems don't count.
+    for (const s of this.#store.systems()) {
+      if (s.projectId === null || placed.has(s.projectId) || !existsSync(s.source.root)) continue;
+      const theirs = (await repoAt(s.source.root))?.git ?? null;
+      if (theirs !== null && samePath(theirs, repo)) return { id: s.projectId, via: "system" };
+    }
+    return null;
+  }
+
+  async #threadProject(thread: ThreadId): Promise<ProjectId | null> {
     const shown = await this.#bridge.snapshot(thread, { messages: 1 });
     return shown.kind === "found" ? shown.snapshot.thread.projectId : null;
   }
@@ -482,7 +611,8 @@ export class Systems {
     const wanted = ref.trim().toLowerCase();
     const all = this.#store.systems();
     const s = all.find((x) => x.id === ref) ?? all.find((x) => x.name.toLowerCase() === wanted);
-    if (s === undefined) return fail(noSystem(ref));
+    // The agent names a system from what Rob said, so a miss lists the names it could have meant.
+    if (s === undefined) return fail({ ...noSystem(ref), message: `no design system ${ref}; ${all.length === 0 ? "Brainstorm has none yet" : `Brainstorm has ${all.map((x) => `"${x.name}"`).sort().join(", ")}`}` });
     const latest = this.#store.latestSystemVersion(s.id);
     if (latest === null) return fail(noSystem(`${ref} (it has no synced version)`));
     return ok({ id: s.id, n: latest.n });

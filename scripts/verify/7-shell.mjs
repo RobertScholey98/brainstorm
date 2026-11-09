@@ -673,7 +673,7 @@ try {
     [null, "chores", "Start a task"],
   );
   check(
-    "the brainstorm sidebar shows the back control, the slot picker where the thread link was (ADR 009) and the slot's variants",
+    "the brainstorm sidebar shows the back control, the slot picker where the thread link was (ADR 010) and the slot's variants",
     [
       (await window.textContent("[data-back]"))?.trim(),
       await window.getAttribute("[data-slot-picker]", "data-slot-picker"),
@@ -1165,7 +1165,7 @@ try {
   await window.click("[data-back]");
   await (await openSession(window, roulette)).waitForSelector('[data-bid="wheel/neon"]');
   check(
-    "the sidebar shows one slot at a time (ADR 009), which marks its showing variant and tints its row",
+    "the sidebar shows one slot at a time (ADR 010), which marks its showing variant and tints its row",
     [
       await window.$$eval("[data-variant][data-showing]", (els) => els.map((e) => e.dataset.variant)),
       await window.$$eval("[data-variant][data-active]", (els) => els.map((e) => e.dataset.variant)),
@@ -1194,7 +1194,7 @@ try {
     { alone: true, notes: false, about: 0 },
   );
   check(
-    "the brainstorm panel ends on Confirm's foot, held at the bottom (ADR 009), and nothing fades over its rows: they clip at its edge",
+    "the brainstorm panel ends on Confirm's foot, held at the bottom (ADR 010), and nothing fades over its rows: they clip at its edge",
     await window.$eval('[data-slot="sidebar-content"]', (el) => {
       const masked = [...el.querySelectorAll("*")].filter((c) => getComputedStyle(c).backgroundImage.includes("gradient") || getComputedStyle(c).maskImage !== "none").length;
       const foot = el.lastElementChild;
@@ -1373,10 +1373,10 @@ try {
   await window.setViewportSize({ width: 1440, height: 900 });
   await window.waitForSelector("[data-home-overview]");
   await window.click(`[data-session="${loose}"]`);
-  // The thread lives in the top bar's chip (ADR 009), which says when it is gone; the way on stands beside it.
+  // The thread lives in the top bar's chip (ADR 010), which says when it is gone; the way on stands beside it.
   await window.waitForFunction(() => document.querySelector("[data-thread-chip]")?.textContent.trim() === "Thread lost");
   check("a brainstorm whose thread is gone says Thread lost on the top bar's thread chip", (await window.textContent("[data-thread-chip]"))?.trim(), "Thread lost");
-  // Rebaselined for ADR 009, the chip carries the thread's state: with no request open the bar still offers Start a
+  // Rebaselined for ADR 010, the chip carries the thread's state: with no request open the bar still offers Start a
   // fresh thread, once, beside the chip, so the chip's menu no longer repeats it and only says what happened.
   check(
     "with no request open, the bar offers Start a fresh thread once beside the chip, and says Thread lost nowhere else",

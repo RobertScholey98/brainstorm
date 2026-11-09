@@ -102,6 +102,7 @@ describe("commit", () => {
       data: {
         session: { id: S, projectId: "proj-a", title: "Chore wheel", brief: "Pick who does chores", createdAt: AT },
         attachment: { session: S, threadId: T1, attachedAt: AT, lostAt: null },
+        system: null,
       },
     });
     expect(await service.commit({ session: S, thread: T1, files: copy(null), addresses: [], note: "first cut" })).toEqual({
@@ -675,7 +676,7 @@ describe("request phases", () => {
     bridge.sendMode = "fail";
     data(await service.branch(S, { from: 2 as IterationN, marks: NONE, instruction: "Try a slot machine" }));
     bridge.sendMode = "deliver";
-    // What migration 11 can leave: the root's request open beside an old fork's failed one.
+    // What migration 12 can leave: the root's request open beside an old fork's failed one.
     const db = new DatabaseSync(dbPath);
     db.prepare("INSERT INTO request(session_id, n, body_json, feedback_ids_json, base, thread_id, state, created_at) VALUES (?, 1, ?, '[]', 3, ?, 'sent', ?)").run(
       S,
@@ -776,7 +777,7 @@ describe("request phases", () => {
     bridge.sendMode = "hang";
     const branching = service.branch(S, { from: 2 as IterationN, marks: NONE, instruction: "Try a slot machine" });
     await vi.waitFor(async () => expect((await phaseOf(service, F))?.phase).toBe("sending"));
-    // What migration 11 can leave: the root's request open beside the branch's.
+    // What migration 12 can leave: the root's request open beside the branch's.
     const db = new DatabaseSync(dbPath);
     db.prepare("INSERT INTO request(session_id, n, body_json, feedback_ids_json, base, thread_id, state, created_at) VALUES (?, 1, ?, '[]', 3, ?, 'sent', ?)").run(
       S,
@@ -806,7 +807,7 @@ describe("request phases", () => {
     bridge.sendMode = "fail";
     data(await service.branch(S, { from: 2 as IterationN, marks: NONE, instruction: "Try a slot machine" }));
     bridge.sendMode = "deliver";
-    // What migration 11 can leave: the root's request open beside an old fork's failed one.
+    // What migration 12 can leave: the root's request open beside an old fork's failed one.
     const db = new DatabaseSync(dbPath);
     db.prepare("INSERT INTO request(session_id, n, body_json, feedback_ids_json, base, thread_id, state, created_at) VALUES (?, 1, ?, '[]', 3, ?, 'sent', ?)").run(
       S,
@@ -1111,7 +1112,7 @@ const REEL = "wheel/reel" as BlockId;
 const slotReelJson = JSON.stringify({ title: "Slot reel", props: wheelProps });
 /** Neon as the agent leaves it once it has merged a graft in. */
 const MERGED = { tsx: neonTsx.replace(">Spin<", ">SPIN<"), json: neonJson };
-/** Calm as it was: a confirm that grafts from it keeps it (ADR 009). */
+/** Calm as it was: a confirm that grafts from it keeps it (ADR 010). */
 const CALM_AS_IS = { "wheel/calm": { tsx: neonTsx, json: calmJson } };
 
 /** Iteration 3 changes only the result sheet, so iteration 2, with both wheels, is in the past. */
@@ -2290,7 +2291,7 @@ export default function Badge({ label }) {
       const { service } = await setup();
       const added = data(await service.systems.add({ path: lib, thread: T1 }));
       data(await service.systems.review(added.system.id, { kind: "confirm" }));
-      data(await service.newSession({ title: "Chores", brief: "", thread: T1, projectPath: null, system: "@fixture/kit" }));
+      data(await service.newSession({ title: "Chores", brief: "", thread: T1, projectPath: null, system: { kind: "named", ref: "@fixture/kit" } }));
       const first = data(await service.commit({ session: S, thread: T1, files: files(null, { a: listTsx, b: badgeTsx }, ["Badge", "ChoreList", "ChoreRow"]), addresses: [], note: null }));
       expect(first.warnings).toEqual([]);
 

@@ -20,7 +20,7 @@ import {
   settlementOf,
 } from "./machines";
 import { prefRows, readPrefs, type UiPrefs, type UiPrefsPatch } from "./prefs";
-import { projectNameAt } from "./projectName";
+import { repoAt } from "./projectName";
 import { appearanceProp, classifyOverrides, parseAppearanceValue, resolveProps } from "./props";
 import { exportFileName } from "./fileName";
 import { Branches } from "./branch";
@@ -77,6 +77,8 @@ import {
   type Override,
   type PartName,
   type ProjectId,
+  type ProjectListing,
+  type SystemChoice,
   type ProposedDraft,
   type ProposedName,
   type ProposedView,
@@ -275,18 +277,15 @@ export class Brainstorm {
     brief: string;
     thread: ThreadId;
     projectPath: string | null;
-    /** A design system's id or name; the session builds with its newest version. */
-    system?: string | null;
+    /** The project's design system unless the agent names one or asks for none; it builds with the newest version. */
+    system?: SystemChoice;
   }): Promise<Result<NewSessionResult>> {
-    let system: SessionSystem | null = null;
-    if (input.system !== undefined && input.system !== null) {
-      const found = this.#systems.forSession(input.system);
-      if (!found.ok) return found;
-      system = found.data;
-    }
     const thread = await this.#resolveThread(input.thread);
     if (!thread.ok) return thread;
-    const name = input.projectPath === null ? null : await projectNameAt(input.projectPath);
+    const chosen = this.#systems.forNewSession(thread.data.projectId, input.system ?? { kind: "project" });
+    if (!chosen.ok) return chosen;
+    const system = chosen.data;
+    const repo = input.projectPath === null ? null : await repoAt(input.projectPath);
     const session: SessionSummary = {
       id: this.#newSessionId(),
       projectId: thread.data.projectId,
@@ -295,12 +294,39 @@ export class Brainstorm {
       createdAt: this.#now(),
     };
     this.#store.tx(() => {
-      this.#store.ensureProject(session.projectId, input.projectPath, session.createdAt);
-      if (name !== null) this.#store.nameProject(session.projectId, name);
-      this.#store.createSession(session, input.thread, system);
+      this.#store.ensureProject(session.projectId, input.projectPath, session.createdAt, repo?.git ?? null);
+      if (repo?.name != null) this.#store.nameProject(session.projectId, repo.name);
+      this.#store.createSession(session, input.thread, system === null ? null : { id: system.id, n: system.n });
     });
     this.#emit(session.id);
-    return ok({ session, attachment: this.#store.attachment(session.id) });
+    return ok({ session, attachment: this.#store.attachment(session.id), system });
+  }
+
+  /** The design system of the thread's project (ADR 009). */
+  async projectSystem(thread: ThreadId): Promise<Result<ProjectListing>> {
+    const info = await this.#resolveThread(thread);
+    return info.ok ? ok(this.#systems.project(info.data.projectId)) : info;
+  }
+
+  /**
+   * Sets the design system of the thread's project, or clears it with null. `projectPath` is the agent's folder, which
+   * names a project Brainstorm hasn't seen yet so the window can list it.
+   */
+  async setProjectSystem(input: { thread: ThreadId; projectPath: string | null; system: string | null }): Promise<Result<ProjectListing>> {
+    const info = await this.#resolveThread(input.thread);
+    if (!info.ok) return info;
+    const project = info.data.projectId;
+    // A system Brainstorm doesn't have changes nothing, not even which projects it knows.
+    if (input.system !== null) {
+      const found = this.#systems.find(input.system);
+      if (!found.ok) return found;
+    }
+    const repo = input.projectPath === null ? null : await repoAt(input.projectPath);
+    this.#store.tx(() => {
+      this.#store.ensureProject(project, input.projectPath, this.#now(), repo?.git ?? null);
+      if (repo?.name != null) this.#store.nameProject(project, repo.name);
+    });
+    return this.#systems.setProjectSystem(project, input.system);
   }
 
   /** The sessions in the thread's project, or every session when `thread` is null. */
@@ -315,7 +341,7 @@ export class Brainstorm {
   }
 
   /**
-   * One row per brainstorm (ADR 009): its root's title, and everything else from its primary branch, which the row
+   * One row per brainstorm (ADR 010): its root's title, and everything else from its primary branch, which the row
    * opens. Activity and an open request count from any branch, since they share one thread.
    */
   #listings(project: ProjectId | null): SessionListing[] {
@@ -365,7 +391,7 @@ export class Brainstorm {
   /**
    * Settles a brainstorm, or brings it back with `settled: false`, by any of its branches. Nothing else changes: its
    * iterations, feedback and working copy stay as they are. Settling one that is already settled keeps when it was
-   * settled, as T3 does. The settle is the tree's, so it is written on the root (ADR 009).
+   * settled, as T3 does. The settle is the tree's, so it is written on the root (ADR 010).
    */
   settle(id: SessionId, settled: boolean): Result<SessionListing> {
     if (this.#store.session(id) === null) return fail(notFound("session", `no session ${id}`));
@@ -403,7 +429,7 @@ export class Brainstorm {
       });
     }
     const current = this.#store.attachment(session.id);
-    // Every branch of a brainstorm shares one thread, so taking one over takes them all (ADR 009).
+    // Every branch of a brainstorm shares one thread, so taking one over takes them all (ADR 010).
     this.#moveTree(session.id, input.thread);
     return ok({
       session,
@@ -1429,7 +1455,7 @@ export class Brainstorm {
   }
 
   /**
-   * Locks Rob's marks in (ADR 009). With grafts it is a request like any other, which the agent merges, behind
+   * Locks Rob's marks in (ADR 010). With grafts it is a request like any other, which the agent merges, behind
    * Regenerate's gate. With nothing to graft, `Confirms` (confirm.ts) writes the narrowed iteration itself, so only an
    * open request holds it, not a lost thread.
    */
@@ -1468,7 +1494,7 @@ export class Brainstorm {
     const thread = result.thread;
     // Read the open requests again: the start awaited T3, so one may have opened, or been withdrawn, meanwhile. Every
     // one still open moves. The thread takes one at a time, so the first goes now, this branch's if it has one, and
-    // the rest wait for Rob's retry, as migration 11 leaves a second one.
+    // the rest wait for Rob's retry, as migration 12 leaves a second one.
     const moved = this.#store.tx(() => {
       this.#moveTree(session.id, thread);
       const open = this.#trees.membersOf(session.id).flatMap((m) => {
@@ -1494,7 +1520,7 @@ export class Brainstorm {
     const claimed = this.#store.tx((): Result<{ open: Request; thread: ThreadId }> => {
       const open = this.#store.openRequest(id);
       if (open === null) return fail(invalid(`${id} has no open request to retry`));
-      // Migration 11 and a fresh thread can leave several branches' requests open; the thread takes one at a time.
+      // Migration 12 and a fresh thread can leave several branches' requests open; the thread takes one at a time.
       const busy = this.#holdingElsewhere(id);
       if (busy !== null) {
         return fail({ code: "request_open", message: `branch ${busy.session} has request ${busy.n} open on this thread; let it finish or withdraw it first`, n: busy.n });
@@ -1545,7 +1571,7 @@ export class Brainstorm {
   }
 
   /**
-   * Confirms on a past iteration (ADR 009): a new branch of the brainstorm, on its thread, that continues from iteration
+   * Confirms on a past iteration (ADR 010): a new branch of the brainstorm, on its thread, that continues from iteration
    * `from` of `parentId`. `Branches` (branch.ts) makes it; the service tells the window and sends request 1, when the
    * branch has one to send, as it does for any request.
    */

@@ -15,7 +15,7 @@ import { useComposerPlace } from "./useComposerPlace";
 import { varyTarget } from "./Vary";
 
 /**
- * The Inspector's Pick row, under Vary (ADR 009): a pick of its own on the same machinery, which brings the clicked
+ * The Inspector's Pick row, under Vary (ADR 010): a pick of its own on the same machinery, which brings the clicked
  * element into a slot's Main. Like 👍 and 🗑 it marks, so it runs no agent until Confirm.
  */
 export function PickSection({
@@ -85,7 +85,7 @@ export function PickComposer({
   onCancel: () => void;
 }) {
   const { ref, left, top } = useComposerPlace(at, rect, bounds, POPOVER_WIDTH.md);
-  // A pick goes into the slot Rob is working on (ADR 009), else the one it came from; another slot is a choice away.
+  // A pick goes into the slot Rob is working on (ADR 010), else the one it came from; another slot is a choice away.
   const [into, setInto] = useState<SlotId>(current ?? block?.slot ?? slots[0]!.id);
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);

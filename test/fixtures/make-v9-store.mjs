@@ -1,10 +1,10 @@
 // Writes test/fixtures/v9-store.sql: a schema version 9 store made by version 9's own code, so the migration test
-// (test/store.test.ts) runs migrations 10 and 11 on rows that code wrote, every column included.
+// (test/store.test.ts) runs migrations 10 to 12 on rows that code wrote, every column included.
 //
-// It runs inside a checkout of the last commit before ADR 009, as one of that commit's own vitest files, because
+// It runs inside a checkout of the last commit before ADR 010, as one of that commit's own vitest files, because
 // its service needs vitest's TypeScript transform and the check worker its global setup builds:
 //
-//   git worktree add --detach <tmp> 6988cfb        # main before ADR 009; src/core/store.ts as of 7f6b644 (user_version 9)
+//   git worktree add --detach <tmp> 6988cfb        # main before ADR 010; src/core/store.ts as of 7f6b644 (user_version 9)
 //   (junction <tmp>/node_modules to an installed node_modules)
 //   cp test/fixtures/make-v9-store.mjs <tmp>/test/make-v9-store.test.ts
 //   cd <tmp> && BS_V9_OUT=<repo>/test/fixtures/v9-store.sql npx vitest run test/make-v9-store.test.ts

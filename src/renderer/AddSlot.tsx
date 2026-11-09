@@ -7,7 +7,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 
 /**
- * Add slot, from the sidebar's slot picker (ADR 009): a prompt for a new slot, which goes to the agent as a request.
+ * Add slot, from the sidebar's slot picker (ADR 010): a prompt for a new slot, which goes to the agent as a request.
  * The dialog stays small, a prompt and its send, over the window.
  */
 export function AddSlotDialog({
