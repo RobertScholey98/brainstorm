@@ -3,6 +3,7 @@ import {
   blockedMessage,
   canAppend,
   foldFeedback,
+  formatRefreshMessage,
   formatRequestMessage,
   observeRequest,
   originText,
@@ -24,6 +25,7 @@ import type {
   RequestScope,
   RequestState,
   RunId,
+  SlotId,
   SessionId,
   ThreadId,
   ThreadMessage,
@@ -150,9 +152,8 @@ describe("requestPhase, one test per design.md row", () => {
   test("sent, attachment lost", () => {
     expect(seen(sent, lost, { kind: "running", pendingRequestCount: 0 })).toEqual({
       phase: "thread_lost",
-      actions: ["copy_phrase", "withdraw"],
-      message:
-        'This session\'s thread is gone. In a T3 thread on this project, say: pick up the brainstorm session titled "Chore wheel"',
+      actions: ["fresh_thread", "withdraw"],
+      message: "This brainstorm's thread is gone. Start a fresh thread, and the open request goes to it.",
     });
   });
 
@@ -237,7 +238,7 @@ test("blockedMessage says why Regenerate is shut, after the hint's lead name", (
   expect([blockedMessage("no_iteration", undefined), blockedMessage("request_open", 3 as RequestN), blockedMessage("thread_lost", undefined)]).toEqual([
     "Needs a first iteration",
     "Request 3 is still open",
-    "This session's thread is gone. Take it over from a T3 thread first.",
+    "This brainstorm's thread is gone. Start a fresh thread from the top bar.",
   ]);
 });
 
@@ -327,29 +328,38 @@ describe("the [brainstorm] message", () => {
   });
 });
 
-describe("a fork's thread start", () => {
-  const pending = `pending:${session}` as ThreadId;
-  const unstarted: Attachment = { ...attached, threadId: pending };
-
-  test("starting has nothing to press, and a failed start offers Retry and Discard only", () => {
-    expect(seen({ state: "sending" }, unstarted, null, pending)).toEqual({ phase: "starting", actions: [], message: "Starting a T3 thread" });
-    expect(seen({ state: "send_failed", error: "t3 exited 1" }, unstarted, null, pending)).toEqual({
-      phase: "start_failed",
-      actions: ["retry", "discard"],
-      message: "Couldn't start a T3 thread (t3 exited 1). The fork is saved.",
-    });
-  });
-
-  test("the first message says where the fork came from and has the new agent attach", () => {
+describe("branches, confirms and fresh threads", () => {
+  test("a branch's first request says where it left, on the thread the agent already has", () => {
     const first = formatRequestMessage(
       { ...request({ state: "sending" }), n: 1 as RequestN, scope: { kind: "all" }, feedbackIds: [], freetext: "slot machine" },
       { fork: { parent: "s_parent1" as SessionId, from: 3 as IterationN } },
     );
     expect(first).toBe(
-      '[brainstorm] session s_8f2k3a · request 1 · fork of s_parent1 iteration 3 · scope: all · freetext: "slot machine"\n' +
-        "Handle with the use-brainstorm skill: this thread is new, so run `brainstorm session attach s_8f2k3a`, then `brainstorm context s_8f2k3a`.",
+      '[brainstorm] session s_8f2k3a · request 1 · branch of s_parent1 iteration 3 · scope: all · freetext: "slot machine"\n' +
+        "Handle with the use-brainstorm skill: run `brainstorm context s_8f2k3a`.",
     );
     expect(parseRequestMarker(first)).toEqual({ session: "s_8f2k3a", n: 1 });
+  });
+
+  test("a confirm's scope names Main, what goes into it and what goes", () => {
+    const confirm = {
+      kind: "confirm" as const,
+      mains: [{ slot: "wheel" as SlotId, variant: "neon" as VariantKey }],
+      grafts: [{ from: { blockId: "wheel/calm" as BlockId, part: "spin-button" as PartName }, into: "wheel" as SlotId, instruction: null }],
+      drop: ["wheel/calm" as BlockId],
+    };
+    expect(scopeText(confirm)).toBe("confirm main wheel/neon; graft wheel/calm [spin-button] into wheel; drop wheel/calm");
+    expect(scopeText({ ...confirm, mains: [], grafts: [] })).toBe("confirm; drop wheel/calm");
+    expect(scopeText({ kind: "add_slot" })).toBe("add_slot");
+  });
+
+  test("a fresh thread's first message has the new agent attach and read the brainstorm, with no request to answer", () => {
+    const message = formatRefreshMessage(session, "Chore wheel", null);
+    expect(message).toBe(
+      '[brainstorm] session s_8f2k3a · fresh thread for "Chore wheel"\n' +
+        "Handle with the use-brainstorm skill: this thread is new, so run `brainstorm session attach s_8f2k3a`, then `brainstorm context s_8f2k3a`, and reply in one line once you have read it.",
+    );
+    expect(parseRequestMarker(message), "nothing for the request machinery to wait on").toBe(null);
   });
 });
 
@@ -370,7 +380,7 @@ describe("vary and history text", () => {
 
   test("originText says where each iteration came from", () => {
     expect(originText({ kind: "brief" })).toBe("First designs, from the brief");
-    expect(originText({ kind: "fork", parent: "Chore wheel", from: 2 as IterationN })).toBe("Your picks from iteration 2");
+    expect(originText({ kind: "fork", parent: "Chore wheel", from: 2 as IterationN })).toBe("Branched from iteration 2");
     expect(originText({ kind: "agent", note: null })).toBe("The agent's own commit");
     expect(originText({ kind: "agent", note: "tidied" })).toBe("tidied");
     expect(originText({ kind: "request", n: 1 as RequestN, body: { scope: { kind: "all" }, freetext: null }, changed: ["Neon wheel", "Slot reel", "Assignment card"] })).toBe(

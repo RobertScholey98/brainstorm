@@ -1,17 +1,20 @@
-import { ChevronRight, Download, GitBranch, History, PanelRight } from "lucide-react";
-import { useMemo, useRef, type ReactNode } from "react";
+import { ChevronRight, Download, ExternalLink, History, PanelRight, RefreshCw } from "lucide-react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { BlockedHint, Hint, HintAnchor } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
-import type { BlockId, ContentHash, ExportResult, ForkInput, IterationN, IterationView, RobAction, SessionId, SessionView } from "../core/types";
+import type { BlockId, ContentHash, ExportResult, IterationN, IterationView, OpenPhase, RobAction, SessionId, SessionView } from "../core/types";
 import { ExportButton } from "./Export";
-import { ForkButton } from "./Fork";
 import { COLLAPSE, COMPACT, COMPACT_LABEL, useHeaderFit } from "./headerAction";
 import { Mark } from "./Mark";
 import { PhaseActions, phaseActions, Regenerate, RegenerateLabel, RequestStatus } from "./Regenerate";
+import { PhaseDot } from "./SessionStatus";
+import { echoTone } from "./status";
 
 /** The right panel's toggle, as T3 Code has it: pressed while the panel shows. */
 export type PanelToggle = {
@@ -41,13 +44,13 @@ export function TopBar({
   const header = useRef<HTMLElement>(null);
   const cluster = useRef<HTMLDivElement>(null);
   useHeaderFit(header);
-  // The row its hints open left of: the right cluster, and the request status before it when there is one. The text
-  // they open over is the breadcrumb and its badge.
+  // The row its hints open left of: the right cluster, and the thread chip and request status before it. The text they
+  // open over is the breadcrumb and its badge.
   const row = useMemo(
     () => ({
       anchor: () => {
         const actions = cluster.current;
-        const status = header.current?.querySelector("[data-header-status]");
+        const status = header.current?.querySelector("[data-header-thread], [data-header-status]");
         if (actions === null || status == null) return actions;
         return {
           getBoundingClientRect: () => {
@@ -134,13 +137,11 @@ export function SessionBar({
   iteration,
   past,
   selected,
-  blockErrors,
+  blockErrors: _blockErrors,
   send,
-  fork,
   exportHtml,
   panel,
   history,
-  onDiscard,
   onOpen,
 }: {
   title: string;
@@ -154,15 +155,16 @@ export function SessionBar({
   selected: BlockId | null;
   blockErrors: ReadonlyMap<ContentHash, string>;
   send: (action: RobAction) => Promise<SessionView | null>;
-  fork: (input: ForkInput) => Promise<boolean>;
   exportHtml: () => Promise<ExportResult | null>;
   panel: PanelToggle;
   history: PanelToggle;
-  /** Throws away a fork whose thread never started. */
-  onDiscard: () => void;
+  /** Opens another branch of the brainstorm: the primary, from the breadcrumb. */
   onOpen: (id: SessionId) => void;
 }) {
   const latest = view?.iteration?.n ?? null;
+  // A brainstorm goes by its root's title; a branch that isn't the primary is named after it (ADR 009).
+  const branch = view !== null && view.session.id !== view.tree.primary;
+  const heading = view === null ? title : branch ? view.session.title : view.tree.root.title;
   return (
     <TopBar
       panel={panel}
@@ -171,10 +173,6 @@ export function SessionBar({
         view === null ? (
           // Held in place while the brainstorm loads, so the bar doesn't change shape when it arrives.
           <>
-            <Button variant="outline" disabled className={COMPACT} data-collapse={COLLAPSE.fork} data-fork-toggle>
-              <GitBranch data-icon="inline-start" aria-hidden />
-              <span className={COMPACT_LABEL}>Fork</span>
-            </Button>
             <Button variant="accent" disabled data-regenerate-toggle>
               <RegenerateLabel />
             </Button>
@@ -187,12 +185,11 @@ export function SessionBar({
           <>
             {phaseActions(view).length > 0 && (
               <>
-                <PhaseActions view={view} send={send} onDiscard={onDiscard} />
+                <PhaseActions view={view} send={send} />
                 {/* The request's actions, then the session's. */}
                 <Separator orientation="vertical" data-phase-divider />
               </>
             )}
-            <ForkButton view={view} iteration={iteration} past={past !== null} blockErrors={blockErrors} fork={fork} />
             <Regenerate view={view} selected={selected} past={past} send={send} />
             <ExportButton disabled={view.iteration === null} exportHtml={exportHtml} />
           </>
@@ -211,15 +208,34 @@ export function SessionBar({
               <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
             </>
           )}
-          {view !== null && <Lineage view={view} onOpen={onOpen} />}
+          {/* On a branch the primary's title gives way well before the branch's own, whose floor comes first. */}
+          {view !== null && branch && (
+            <span className="flex min-w-0 shrink-8 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onOpen(view.tree.primary)}
+                className="flex min-w-0 max-w-menu rounded-sm text-fg-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring"
+                data-breadcrumb-primary={view.tree.primary}
+              >
+                <Truncate data-breadcrumb-root>{view.tree.root.title}</Truncate>
+              </button>
+              <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
+            </span>
+          )}
           <h1 className="flex min-w-0 font-semibold">
-            <Truncate data-session-title>{title}</Truncate>
+            <Truncate data-session-title>{heading}</Truncate>
           </h1>
         </nav>
         {latest !== null && (
           <Badge data-iteration={past ?? latest} data-iteration-past={past !== null || undefined}>
             {past === null ? `Iteration ${latest}` : `Iteration ${past} of ${latest}`}
           </Badge>
+        )}
+        {view !== null && (
+          <div className="flex shrink-0 items-center gap-2" data-header-thread>
+            <Separator orientation="vertical" />
+            <ThreadChip view={view} send={send} />
+          </div>
         )}
         {/* In the past the badge names the iteration shown, so a closed request's result, about the latest, steps aside. */}
         {view !== null && (view.attachment.lostAt !== null || (view.request !== null && (past === null || view.request.phase.actions.length > 0))) && (
@@ -233,47 +249,95 @@ export function SessionBar({
   );
 }
 
-const LINEAGE_SHOWN = 2;
+/** The open request's phase, or null once it has closed. */
+function openPhase(view: SessionView): OpenPhase | null {
+  const phase = view.request?.phase.phase;
+  return phase === undefined || phase === "fulfilled" || phase === "withdrawn" ? null : phase;
+}
 
 /**
- * A fork's ancestors between the project and its title, oldest first, each a link to its brainstorm. A long line keeps
- * the nearest two and folds the rest into an ellipsis that names them.
+ * The brainstorm's T3 thread, which every branch shares (ADR 009): its state as a dot and a word, and a menu that
+ * opens the thread in T3 or starts a fresh one, which moves every branch to it. A fresh thread is also the way back
+ * from a lost one, so then the chip says so and the menu leads with it.
  */
-function Lineage({ view, onOpen }: { view: SessionView; onOpen: (id: SessionId) => void }) {
-  const all = view.lineage;
-  if (all.length === 0) return null;
-  const folded = all.slice(0, Math.max(0, all.length - LINEAGE_SHOWN));
-  const shown = all.slice(folded.length);
+function ThreadChip({ view, send }: { view: SessionView; send: (action: RobAction) => Promise<SessionView | null> }) {
+  const [open, setOpen] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const lost = view.attachment.lostAt !== null;
+  const phase = openPhase(view);
+  const state = lost ? "lost" : (phase ?? "attached");
+  const busy = phase !== null || (!view.regenerate.ok && view.regenerate.reason === "branch_busy");
+  const blocked = phase !== null ? "A request is open. Let it finish or withdraw it first." : busy ? "Another branch's request is open on this thread" : null;
+  const refresh = async () => {
+    setStarting(true);
+    const done = await send({ kind: "refresh_thread" });
+    setStarting(false);
+    if (done !== null) setOpen(false);
+  };
+  const fresh = (
+    <FreshThread key="fresh" blocked={blocked} starting={starting} primary={lost} onClick={() => void refresh()} />
+  );
+  const link =
+    view.thread === null || lost ? null : (
+      <Button
+        key="open"
+        variant="outline"
+        className="w-full"
+        nativeButton={false}
+        render={<a href={view.thread.link} target="_blank" rel="noreferrer" />}
+        data-open-thread
+      >
+        <ExternalLink data-icon="inline-start" aria-hidden />
+        Open in T3
+      </Button>
+    );
   return (
-    <>
-      {folded.length > 0 && (
-        <>
-          <Hint label={folded.map((a) => a.title).join(" › ")} side="right">
-            <span tabIndex={0} className="shrink-0 text-fg-muted" data-lineage-folded={folded.length}>
-              …
-            </span>
-          </Hint>
-          <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
-        </>
-      )}
-      {shown.map((a) => (
-        <span key={a.id} className="flex min-w-0 shrink items-center gap-1">
-          {a.gone ? (
-            <Truncate className="max-w-menu text-fg-muted line-through" data-lineage={a.id} data-lineage-gone>
-              {a.title}
-            </Truncate>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onOpen(a.id)}
-              className="flex min-w-0 max-w-menu rounded-sm text-fg-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Truncate data-lineage={a.id}>{a.title}</Truncate>
-            </button>
-          )}
-          <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
-        </span>
-      ))}
-    </>
+    <Popover open={open} onOpenChange={setOpen}>
+      <Hint label={lost ? "This brainstorm's thread is gone" : (view.thread?.title ?? "The brainstorm's T3 thread")} side="right">
+        <PopoverTrigger render={<Button variant="ghost" className={COMPACT} data-collapse={COLLAPSE.thread} data-thread-chip data-thread={state} />}>
+          <ThreadDot lost={lost} phase={phase} />
+          <span className={cn(COMPACT_LABEL, lost ? "text-fg" : "text-fg-muted")}>{lost ? "Thread lost" : "Thread"}</span>
+        </PopoverTrigger>
+      </Hint>
+      <PopoverContent align="start" data-thread-menu>
+        <PopoverHeader
+          heading={lost ? "Thread lost" : (view.thread?.title ?? "T3 thread")}
+          description={
+            lost
+              ? "This brainstorm's thread is gone. Start a fresh one, and every branch carries on there."
+              : "Every branch of this brainstorm works in this thread. A fresh one gives the agent a clean context."
+          }
+        />
+        <div className="flex flex-col gap-1.5">{lost ? [fresh, link] : [link, fresh]}</div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Green while the thread is attached and idle, the phase's dot while a request is open, muted once it is lost. */
+function ThreadDot({ lost, phase }: { lost: boolean; phase: OpenPhase | null }) {
+  if (lost) return <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-fg-muted" />;
+  if (phase === null) return <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-success" />;
+  return <PhaseDot phase={phase} tone={echoTone(phase)} />;
+}
+
+function FreshThread({ blocked, starting, primary, onClick }: { blocked: string | null; starting: boolean; primary: boolean; onClick: () => void }) {
+  const button = (
+    <Button
+      variant={primary ? "accent" : "outline"}
+      className="w-full"
+      disabled={blocked !== null || starting}
+      onClick={onClick}
+      data-refresh-thread
+    >
+      <RefreshCw data-icon="inline-start" aria-hidden className={starting ? "animate-spin" : undefined} />
+      {starting ? "Starting a fresh thread" : "Start a fresh thread"}
+    </Button>
+  );
+  if (blocked === null) return button;
+  return (
+    <BlockedHint label={blocked} side="left" data-refresh-blocked>
+      {button}
+    </BlockedHint>
   );
 }

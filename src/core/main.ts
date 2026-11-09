@@ -113,3 +113,33 @@ export function confirmLines(slots: readonly SlotShape[], plan: ConfirmScope): C
     return [{ slot: slot.id, keeps: slot.variants.filter((v) => !plan.drop.includes(blockIdOf(slot.id, v))), grafts, dropped }];
   });
 }
+
+/**
+ * The marks after a 👍, a trash, a restore or a pick, for marks the window keeps itself: on a past iteration, which
+ * the store never writes to. The service applies the same rules to its rows.
+ */
+export function withApproval(marks: Marks, slot: SlotShape, block: BlockShape): Marks {
+  const verdict = approval(slot, block, marks);
+  switch (verdict.kind) {
+    case "main":
+      return { ...marks, mains: { ...marks.mains, [slot.id]: block.variant }, trashed: marks.trashed.filter((b) => b !== block.id) };
+    case "unmain": {
+      const { [slot.id]: _gone, ...mains } = marks.mains;
+      return { ...marks, mains };
+    }
+    case "graft":
+      return withGraft(marks, { from: verdict.from, into: slot.id, instruction: null });
+    case "ungraft":
+      return { ...marks, grafts: marks.grafts.filter((g) => g.id !== verdict.graft.id) };
+  }
+}
+
+export function withTrash(marks: Marks, block: BlockId, trashed: boolean): Marks {
+  const rest = marks.trashed.filter((b) => b !== block);
+  return { ...marks, trashed: trashed ? [...rest, block] : rest };
+}
+
+export function withGraft(marks: Marks, graft: Omit<StoredGraft, "id">): Marks {
+  const id = (Math.max(0, ...marks.grafts.map((g) => g.id)) + 1) as StoredGraft["id"];
+  return { ...marks, grafts: [...marks.grafts, { ...graft, id }] };
+}

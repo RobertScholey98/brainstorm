@@ -4,7 +4,7 @@ import { sessionPhase } from "./status";
 /** A system notification for one brainstorm. */
 export type Alert = { readonly session: SessionId; readonly title: string; readonly body: string };
 
-const FAILED: ReadonlySet<OpenPhase> = new Set(["send_failed", "start_failed", "run_failed"]);
+const FAILED: ReadonlySet<OpenPhase> = new Set(["send_failed", "run_failed"]);
 
 /**
  * What changed for Rob between two readings of the list, one alert per brainstorm at most: a new iteration, else the

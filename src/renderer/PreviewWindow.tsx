@@ -15,8 +15,10 @@ import { setKitSource } from "./kit";
 import { describe, openChannel, type MirrorScene, type PreviewSettings, type ToMain, type ToPreview } from "./mirror";
 import { failedTitle, type Notice } from "./notice";
 import { VaryComposer } from "./Vary";
+import { PickComposer } from "./Pick";
+import type { PickKind } from "./mirror";
 
-type Composing = { readonly for: "comment" | "vary"; readonly pin: Pin; readonly at: { x: number; y: number }; readonly rect: CanvasRect };
+type Composing = { readonly for: PickKind; readonly pin: Pin; readonly at: { x: number; y: number }; readonly rect: CanvasRect };
 
 const NO_SETTINGS: PreviewSettings = { look: "clean", hold: false };
 
@@ -226,6 +228,21 @@ export function PreviewWindow({ api }: { api: Api }) {
               bounds={bounds}
               onSend={async (count, direction) => {
                 if (await act({ kind: "vary", target: composing.pin, count, direction })) setComposing(null);
+              }}
+              onCancel={() => setComposing(null)}
+            />
+          )}
+          {composing?.for === "graft" && (
+            <PickComposer
+              key={JSON.stringify(composing)}
+              pin={composing.pin}
+              at={composing.at}
+              rect={composing.rect}
+              block={blockOf(composing.pin)}
+              slots={scene.slots}
+              bounds={bounds}
+              onAdd={async (into, instruction) => {
+                if (await act({ kind: "add_graft", from: composing.pin, into, instruction })) setComposing(null);
               }}
               onCancel={() => setComposing(null)}
             />

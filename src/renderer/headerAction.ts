@@ -4,17 +4,18 @@ import type { RequestPhaseAction } from "../core/types";
 
 /**
  * The order the header gives up its words when the breadcrumb runs short, first to last: Regenerate drops its glyph,
- * the request status drops its time, then falls to its short name, then Export, then Fork, then the phase actions (see
- * `actionRank`). Each step costs the least where Rob is looking: Export matters least while a request is open, and the
- * first phase action is its recovery.
+ * the request status drops its time, then falls to its short name, then the thread chip folds to its dot, then Export,
+ * then the phase actions (see `actionRank`). Each step costs the least where Rob is looking: the chip's word repeats
+ * what its dot and the status say, Export matters least while a request is open, and the first phase action is its
+ * recovery.
  */
-export const COLLAPSE = { glyph: 0, elapsed: 1, status: 2, export: 3, fork: 4, action: 10 } as const;
+export const COLLAPSE = { glyph: 0, elapsed: 1, status: 2, thread: 3, export: 4, action: 10 } as const;
 
 /**
  * The order the phase actions give way. Open thread goes first, since its glyph reads alone where Withdraw's would read
  * as the withdrawn status; the phase's own step, its recovery, goes last.
  */
-const ACTION_RANK: Record<RequestPhaseAction, number> = { open_thread: 0, withdraw: 1, discard: 1, retry: 2, resend: 2, copy_phrase: 2 };
+const ACTION_RANK: Record<RequestPhaseAction, number> = { open_thread: 0, withdraw: 1, retry: 2, resend: 2, fresh_thread: 2 };
 
 export const actionRank = (action: RequestPhaseAction): number => COLLAPSE.action + ACTION_RANK[action];
 
@@ -22,13 +23,13 @@ export const actionRank = (action: RequestPhaseAction): number => COLLAPSE.actio
 export const COMPACT = "data-collapsed:size-7";
 export const COMPACT_LABEL = "in-data-collapsed:sr-only";
 
-/** The breadcrumb's floors: the title keeps 160 px or reads whole, and an ancestor keeps 64 px or reads whole. */
+/** The breadcrumb's floors: the title keeps 160 px or reads whole, and a branch's primary keeps 64 px or reads whole. */
 const TITLE_FLOOR = 160;
 const ANCESTOR_FLOOR = 64;
 
 function crumbFits(header: HTMLElement): boolean {
   const title = header.querySelector("[data-session-title]");
-  return (title === null || shows(title, TITLE_FLOOR)) && [...header.querySelectorAll("[data-lineage]")].every((a) => shows(a, ANCESTOR_FLOOR));
+  return (title === null || shows(title, TITLE_FLOOR)) && [...header.querySelectorAll("[data-breadcrumb-root]")].every((a) => shows(a, ANCESTOR_FLOOR));
 }
 
 /**
@@ -65,7 +66,7 @@ function useFit(ref: RefObject<HTMLElement | null>, fits: (row: HTMLElement) => 
 }
 
 /** The header keeps its breadcrumb's floors, giving up its labels in `COLLAPSE` order. */
-export const useHeaderFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, crumbFits, "[data-header-actions], [data-header-status], [data-session-title]", COLLAPSE.status);
+export const useHeaderFit = (ref: RefObject<HTMLElement | null>): void => useFit(ref, crumbFits, "[data-header-actions], [data-header-thread], [data-header-status], [data-session-title]", COLLAPSE.status);
 
 /** A list row's title outranks its status: what the row says after the title gives way before the title cuts. */
 const rowFits = (row: HTMLElement): boolean => {
@@ -85,7 +86,7 @@ export const BAR_COLLAPSE = { holdSuffix: 0, present: 1, preview: 2, hold: 3 } a
  * The bar sets aside the room its longest pick hint needs, picking or not, here or away, so the labels depend on the
  * bar's width alone and nothing in it moves when a pick starts or the canvas leaves for the preview window.
  */
-export const PICK_HINTS = { comment: "Click to pin", vary: "Click to vary" } as const;
+export const PICK_HINTS = { comment: "Click to pin", vary: "Click to vary", graft: "Click to pick" } as const;
 let ruler: CanvasRenderingContext2D | null = null;
 const barFits = (bar: HTMLElement): boolean => {
   const hint = bar.querySelector("[data-bar-hint]");

@@ -131,7 +131,7 @@ export function requestPhase(request: Request, attachment: Attachment, observati
       break;
   }
   if (request.threadId !== attachment.threadId) return { phase: "previous_thread", actions: open(["resend"]) };
-  if (attachment.lostAt !== null) return { phase: "thread_lost", actions: open(["copy_phrase"]) };
+  if (attachment.lostAt !== null) return { phase: "thread_lost", actions: open(["fresh_thread"]) };
   switch (observation?.kind) {
     case undefined:
     case "not_seen":
@@ -142,10 +142,6 @@ export function requestPhase(request: Request, attachment: Attachment, observati
     case "ended":
       return { phase: observation.failed ? "run_failed" : "no_change", actions: open(["retry"]) };
   }
-}
-
-export function takeoverPhrase(title: string): string {
-  return `pick up the brainstorm session titled "${title}"`;
 }
 
 /**
@@ -162,7 +158,7 @@ export function phaseMessage(phase: RequestPhase, context: { title: string; chan
     case "previous_thread":
       return "Sent to the previous thread";
     case "thread_lost":
-      return `This session's thread is gone. In a T3 thread on this project, say: ${takeoverPhrase(context.title)}`;
+      return "This brainstorm's thread is gone. Start a fresh thread, and the open request goes to it.";
     case "queued":
       return "Queued in T3";
     case "asking":
@@ -234,8 +230,7 @@ export function originText(origin: IterationOrigin): string {
     case "brief":
       return "First designs, from the brief";
     case "fork":
-      // The strip's stub beside it already names the parent, so this says what is Rob's.
-      return `Your picks from iteration ${origin.from}`;
+      return `Branched from iteration ${origin.from}`;
     case "agent":
       return origin.note ?? "The agent's own commit";
     case "request": {

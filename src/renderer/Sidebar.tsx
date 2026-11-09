@@ -1,7 +1,8 @@
-import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, Component, ExternalLink, GitBranch, LayoutGrid, Undo2 } from "lucide-react";
-import { Fragment, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, Component, CornerDownRight, GitBranch, LayoutGrid, Plus, ThumbsUp, Trash2, Undo2, X } from "lucide-react";
+import { createContext, useContext, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectSeparator, SelectTrigger } from "@/components/ui/select";
 import { cn } from "cn";
-import { Callout } from "@/components/ui/callout";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ResizeHandle } from "@/components/ui/resize-handle";
 import {
@@ -17,7 +18,6 @@ import {
   SidebarMenuItem,
   SidebarMenuMark,
   SidebarMenuSkeleton,
-  SidebarSeparator,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
@@ -25,16 +25,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { Count } from "@/components/ui/count";
-import { blockIdOf, isPendingThread, type BlockView, type ContentHash, type OpenPhase, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type VariantKey } from "../core/types";
+import { blockIdOf, type BlockView, type ContentHash, type IterationN, type Marks, type SessionId, type SessionListing, type SessionView, type SlotId, type SlotView, type StoredGraft, type VariantKey } from "../core/types";
+import { approval, mainOf, shownVariants, trashRefusal } from "../core/main";
+import { partLabel } from "../core/part";
 import { keyEchoesTitle } from "../core/fork";
 import type { PaneLimits } from "./hooks/use-pane-width";
 import { useRowFit } from "./headerAction";
 import { Mark } from "./Mark";
-import { TakeoverPhrase } from "./Regenerate";
 import { SidebarFoot } from "./Update";
 import type { AppUpdateState } from "../core/appUpdate";
-import { Elapsed, PhaseDot, SessionStatus } from "./SessionStatus";
-import { echoTone, loudestPhase, PHASE, sessionPhase } from "./status";
+import { PhaseDot, SessionStatus } from "./SessionStatus";
+import { loudestPhase, PHASE, sessionPhase } from "./status";
 import { groupByProject, splitSettled } from "./sessionGroups";
 import { SETTLE_SHORTCUT, settleLabel, settleUndoes } from "./settle";
 import { age, useNow } from "./time";
@@ -275,18 +276,6 @@ function SessionRow({
         <Truncate className="flex-1" data-row-title>
           {s.title}
         </Truncate>
-        {/* The branch mark trails the title, so a fork's title keeps its siblings' text edge. */}
-        {s.fork !== null && (
-          <span className="flex shrink-0 text-fg-muted" data-row-fork>
-            {/* After the status's time and words, the glyph gives way before the title cuts; the card still names the parent. */}
-            <span data-collapse={3} className="flex data-collapsed:hidden">
-              <GitBranch aria-hidden />
-            </span>
-            <span className="sr-only">
-              from {s.fork.parentTitle} · iteration {s.fork.from}
-            </span>
-          </span>
-        )}
         {/* An open request says what it is waiting on and for how long, as T3 Code's thread rows do, in the age's place. A lost thread echoes muted: the card beside it carries the warning. */}
         <span className="flex shrink-0 text-xs font-normal text-fg-muted tabular-nums group-focus-within/menu-item:hidden group-hover/menu-item:hidden">
           {sessionPhase(s) === null || s.settlement.state === "settled" ? <span data-age={since}>{age(since, now)}</span> : <SessionStatus session={s} now={now} tone={sessionPhase(s) === "thread_lost" ? "muted" : undefined} collapsible />}
@@ -313,31 +302,57 @@ function SessionRow({
   );
 }
 
+export type MarkHandlers = {
+  onApprove: (block: BlockView) => void;
+  onTrash: (block: BlockView) => void;
+  onRestore: (block: BlockView) => void;
+  onRemoveGraft: (graft: StoredGraft) => void;
+};
+
+/**
+ * One brainstorm's sidebar (ADR 009): the slot picker, then the picked slot's Main and its options, each option with a
+ * 👍 and a 🗑, and the trashed fold. Confirm sits at its foot. A branch that isn't the primary says so above Main.
+ */
 export function SessionPanel({
   view,
   slots,
   blocks,
   blockErrors,
+  marks,
+  past,
   onHome,
   onOpen,
   selectedSlot,
   onSlot,
   onVariant,
+  onAddSlot,
+  marking,
+  confirm,
 }: {
   view: SessionView | null;
   slots: readonly SlotView[];
   blocks: readonly BlockView[];
   blockErrors: ReadonlyMap<ContentHash, string>;
+  /** The marks on the iteration showing: the stored ones at the latest, the window's own in the past. */
+  marks: Marks;
+  /** The past iteration on the canvas, or null at the latest. */
+  past: IterationN | null;
   onHome: () => void;
-  /** Opens another brainstorm: a fork's parent. */
+  /** Opens another branch of the brainstorm: the primary, or the one this branch left. */
   onOpen: (id: SessionId) => void;
   selectedSlot: SlotId | null;
   onSlot: (slot: SlotId) => void;
   onVariant: (slot: SlotId, variant: VariantKey) => void;
+  onAddSlot: () => void;
+  /** Null while the marks can't change: a confirm is open. The reason shows on the buttons. */
+  marking: (MarkHandlers & { blocked: null }) | { blocked: string };
+  /** Confirm, at the panel's foot. */
+  confirm: ReactNode;
 }) {
   const byId = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
+  const slot = slots.find((s) => s.id === selectedSlot) ?? slots[0] ?? null;
   return (
-    <SidebarContent className="animate-in pb-8 fade-in-0 slide-in-from-right-3 duration-200" data-sidebar-panel="session">
+    <SidebarContent className="animate-in fade-in-0 slide-in-from-right-3 duration-200" data-sidebar-panel="session">
       <SidebarGroup className="pb-0">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -348,153 +363,424 @@ export function SessionPanel({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroup>
-      {view === null ? (
+      {view === null || slot === null ? (
         <div data-session-loading>
-          {/* The panel it stands for: the thread, then each slot's heading and variant rows. */}
           <SidebarGroup className="py-1">
+            {/* The slot picker, then Main and the options. */}
+            <Skeleton className="mx-2 h-7" />
+          </SidebarGroup>
+          <SidebarGroup>
             <div className="flex h-8 items-center px-2">
               <Skeleton className="h-3 w-12" />
             </div>
-            {/* The thread row's two lines: its title, then its status. */}
-            <div className="flex flex-col justify-center gap-1.5 px-2 py-2">
-              <Skeleton className="h-3.5 w-2/3" />
-              <Skeleton className="h-3 w-1/4" />
-            </div>
+            <SidebarMenu>
+              {(["w-1/2", "w-2/3", "w-1/2"] as const).map((width, i) => (
+                <SidebarMenuItem key={i}>
+                  <SidebarMenuSkeleton width={width} />
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
           </SidebarGroup>
-          {[3, 2].map((rows, slot) => (
-            <Fragment key={slot}>
-              <SidebarSeparator />
-              <SidebarGroup>
-                <div className="flex h-8 items-center justify-between px-2">
-                  <Skeleton className="h-3 w-16" />
-                  <Skeleton className="h-3 w-12" />
-                </div>
-                <SidebarMenu>
-                  {(["w-1/2", "w-2/3", "w-1/2"] as const).slice(0, rows).map((width, i) => (
-                    <SidebarMenuItem key={i}>
-                      <SidebarMenuSkeleton width={width} />
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroup>
-            </Fragment>
-          ))}
         </div>
       ) : (
-        <ThreadSection view={view} onOpen={onOpen} />
+        <>
+          <SlotPicker slots={slots} slot={slot} onSlot={onSlot} onAddSlot={onAddSlot} canAdd={past === null} />
+          {view.session.id !== view.tree.primary && <BranchLine view={view} />}
+          <SlotMarks
+            key={slot.id}
+            slot={slot}
+            blocks={byId}
+            blockErrors={blockErrors}
+            marks={marks}
+            onVariant={(v) => onVariant(slot.id, v)}
+            marking={marking}
+          />
+        </>
       )}
-      {slots.map((slot) => (
-        <SlotSection
-          key={slot.id}
-          slot={slot}
-          blocks={byId}
-          blockErrors={blockErrors}
-          selected={slot.id === selectedSlot}
-          onSlot={() => onSlot(slot.id)}
-          onVariant={(v) => onVariant(slot.id, v)}
-        />
-      ))}
+      {view !== null && slot !== null && <div className="sticky bottom-0 mt-auto bg-app px-2 pt-2 pb-2">{confirm}</div>}
     </SidebarContent>
   );
 }
 
-/**
- * The brainstorm's T3 thread. An attached thread is a link out to it. A lost one is a status, not a control: one line
- * that says "Thread lost", the term the bar and home use, and under it the phrase that takes the brainstorm over.
- */
-function ThreadSection({ view, onOpen }: { view: SessionView; onOpen: (id: SessionId) => void }) {
-  const lost = view.attachment.lostAt !== null;
-  // A fork has no thread until T3 starts one; the bar says how that is going, so this names the state only.
-  const pending = isPendingThread(view.attachment.threadId);
-  const failed = view.request?.phase.phase === "start_failed";
-  const fork = view.fork;
-  // A lost thread with a request in flight already says so, with the phrase, in the request strip.
-  const showTakeover = lost && view.request?.phase.phase !== "thread_lost";
+const ADD_SLOT = "__add_slot";
+
+/** Which slot the panel shows, where the thread used to be. Add slot opens its dialog; adding needs the latest. */
+function SlotPicker({
+  slots,
+  slot,
+  onSlot,
+  onAddSlot,
+  canAdd,
+}: {
+  slots: readonly SlotView[];
+  slot: SlotView;
+  onSlot: (slot: SlotId) => void;
+  onAddSlot: () => void;
+  canAdd: boolean;
+}) {
+  const items = [...slots.map((s) => ({ value: s.id as string, label: s.title })), ...(canAdd ? [{ value: ADD_SLOT, label: "Add slot…" }] : [])];
   return (
     <SidebarGroup className="py-1">
-      <SidebarGroupLabel>Thread</SidebarGroupLabel>
-      <SidebarMenu>
-        <SidebarMenuItem>
-          {pending ? (
-            <div className="flex h-8 items-center gap-2 px-2 text-sm" data-thread-link>
-              <SidebarMenuMark className={failed ? "bg-fg-muted" : "bg-accent"} />
-              <span className="text-fg-muted" data-thread={failed ? "start_failed" : "starting"}>
-                {failed ? "New thread didn't start" : "New thread · starting"}
-              </span>
-            </div>
-          ) : lost || view.thread === null ? (
-            // T3 may not have answered yet for an attached thread, so it shows the state without a name or a link.
-            <div className="flex h-8 items-center gap-2 px-2 text-sm" data-thread-link>
-              {/* The header names a lost thread in amber, and its strip says what to do, so the row only states it. */}
-              {lost ? <SidebarMenuMark className="bg-fg-muted" /> : <ThreadMark view={view} />}
-              {lost ? (
-                <span className="text-fg-muted" data-thread="lost">
-                  Thread lost
+      <Select
+        items={items}
+        value={slot.id as string}
+        onValueChange={(v) => {
+          if (v === ADD_SLOT) onAddSlot();
+          else if (v !== null) onSlot(v as SlotId);
+        }}
+      >
+        <SelectTrigger aria-label="Slot" className="w-full justify-between" data-slot-picker={slot.id}>
+          <span className="flex min-w-0 flex-1 items-center gap-2">
+            <Truncate className="font-medium">{slot.title}</Truncate>
+            <Count className="ml-auto" data-slot-count>
+              {slot.variants.length} {slot.variants.length === 1 ? "variant" : "variants"}
+            </Count>
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {slots.map((s) => (
+              <SelectItem key={s.id} value={s.id} data-slot-option={s.id}>
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <Truncate>{s.title}</Truncate>
+                  <span className="ml-auto text-xs text-fg-muted tabular-nums">{s.variants.length}</span>
                 </span>
-              ) : (
-                <ThreadState view={view} />
-              )}
-            </div>
-          ) : (
-            <SidebarMenuButton size="tall" render={<a href={view.thread.link} target="_blank" rel="noreferrer" />} data-thread-link>
-              <span className="mt-0.5 flex">
-                <ThreadMark view={view} />
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <Truncate>{view.thread.title}</Truncate>
-                <ThreadState view={view} className="text-xs" />
-              </span>
-              <ExternalLink aria-hidden className="mt-0.5 text-fg-muted" />
-            </SidebarMenuButton>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+          {canAdd && (
+            <>
+              <SelectSeparator />
+              <SelectItem value={ADD_SLOT} data-add-slot>
+                <Plus aria-hidden className="size-3.5" />
+                Add slot…
+              </SelectItem>
+            </>
           )}
-        </SidebarMenuItem>
-      </SidebarMenu>
-      {fork !== null && (
-        <SidebarMenu>
-          <SidebarMenuItem>
-            {fork.parent.state === "gone" ? (
-              <div className="flex h-8 items-center gap-2 px-2 text-xs text-fg-muted" data-forked-from="gone">
-                <GitBranch aria-hidden className="size-4 shrink-0" />
-                <ForkedFrom title={fork.parent.title} from={`iteration ${fork.from}, since discarded`} />
-              </div>
-            ) : (
-              <SidebarMenuButton tone="quiet" onClick={() => onOpen(fork.parent.id)} data-forked-from={fork.parent.id}>
-                <GitBranch aria-hidden />
-                <ForkedFrom title={fork.parent.title} from={`iteration ${fork.from}`} />
-              </SidebarMenuButton>
-            )}
-          </SidebarMenuItem>
-        </SidebarMenu>
-      )}
-      {showTakeover && (
-        // The room under it matches a row's text above the next rule, so the rule doesn't ride on the callout.
-        <div className="pt-1 pb-1.5" data-takeover>
-          <Callout tone="warning" wide actions={<TakeoverPhrase title={view.session.title} />}>
-            <p>In a T3 thread on this project, say:</p>
-          </Callout>
-        </div>
-      )}
+        </SelectContent>
+      </Select>
     </SidebarGroup>
   );
 }
 
-/** The open request's phase, or null once it has closed. */
-function openPhase(view: SessionView): OpenPhase | null {
-  const phase = view.request?.phase.phase;
-  return phase === undefined || phase === "fulfilled" || phase === "withdrawn" ? null : phase;
+/** A branch that isn't the primary, the first line included once another took its place: what it is, and Make primary. */
+function BranchLine({ view }: { view: SessionView }) {
+  return (
+    <SidebarGroup className="py-1" data-branch-line={view.session.id}>
+      <div className="flex min-h-8 items-center gap-2 rounded-md bg-muted px-2 py-1.5 text-xs text-fg-muted">
+        <GitBranch aria-hidden className="size-3.5 shrink-0" />
+        <Truncate className="flex-1">{view.fork === null ? "The first line, now an offshoot" : `Branch from iteration ${view.fork.from}`}</Truncate>
+        <MakePrimary />
+      </div>
+    </SidebarGroup>
+  );
 }
 
-/**
- * The Thread row's lead mark: green while the thread is attached and idle, the phase's dot while a request is open. A
- * phase in a status hue shows muted here, since the header and its strip already carry the hue.
- */
-function ThreadMark({ view }: { view: SessionView }) {
-  const phase = openPhase(view);
-  if (phase === null) return <SidebarMenuMark className="bg-success" />;
+/** Make primary is the session's own action, sent through the panel's context so the line needs no handler threading. */
+function MakePrimary() {
+  const act = useContext(PanelActions);
   return (
-    <span className="flex size-4 shrink-0 items-center justify-center" data-thread-mark={echoTone(phase)}>
-      <PhaseDot phase={phase} tone={echoTone(phase)} />
-    </span>
+    <Hint label="Make this branch the brainstorm's main line" side="right">
+      <Button variant="outline" size="xs" onClick={act.onMakePrimary} data-make-primary>
+        Make primary
+      </Button>
+    </Hint>
+  );
+}
+
+export const PanelActions = createContext<{ onMakePrimary: () => void }>({ onMakePrimary: () => {} });
+
+/**
+ * The picked slot: Main and what goes into it, then the other variants as options, then the ones Rob trashed. Up and
+ * down move between the variant rows, Main's and the options', as one list.
+ */
+function SlotMarks({
+  slot,
+  blocks,
+  blockErrors,
+  marks,
+  onVariant,
+  marking,
+}: {
+  slot: SlotView;
+  blocks: ReadonlyMap<string, BlockView>;
+  blockErrors: ReadonlyMap<ContentHash, string>;
+  marks: Marks;
+  onVariant: (variant: VariantKey) => void;
+  marking: (MarkHandlers & { blocked: null }) | { blocked: string };
+}) {
+  const main = mainOf(slot, marks);
+  const shown = shownVariants(slot, marks);
+  const options = shown.filter((v) => v !== main);
+  const trashed = slot.variants.filter((v) => !shown.includes(v));
+  const grafts = marks.grafts.filter((g) => g.into === slot.id);
+  const row = (variant: VariantKey, role: "main" | "option") => {
+    const block = blocks.get(blockIdOf(slot.id, variant));
+    return (
+      <VariantRow
+        key={variant}
+        slot={slot}
+        variant={variant}
+        block={block}
+        failed={block !== undefined && blockErrors.has(block.hash)}
+        role={role}
+        marks={marks}
+        onVariant={onVariant}
+        marking={marking}
+      />
+    );
+  };
+  return (
+    <div
+      role="radiogroup"
+      aria-label={`${slot.title} variant`}
+      className="flex flex-col"
+      onKeyDown={(e) => {
+        const next = arrowFocus(e, "[data-variant]")?.dataset.variant;
+        if (next !== undefined) onVariant(next as VariantKey);
+      }}
+      data-slot-id={slot.id}
+    >
+      <SidebarGroup data-main-group>
+        <SidebarGroupLabel>Main</SidebarGroupLabel>
+        <SidebarMenu>
+          {main === null ? (
+            <li className="px-2 py-1.5 text-xs text-fg-muted" data-main-empty>
+              Give a design a <ThumbsUp aria-label="thumbs up" className="inline size-3 align-text-bottom" /> to make it Main
+            </li>
+          ) : (
+            row(main, "main")
+          )}
+          {grafts.map((g) => (
+            <GraftRow key={g.id} graft={g} source={blocks.get(g.from.blockId)} marking={marking} />
+          ))}
+        </SidebarMenu>
+      </SidebarGroup>
+      {options.length > 0 && (
+        <SidebarGroup data-options-group>
+          <SidebarGroupLabel className="gap-2">
+            Options
+            <Count className="ml-auto">{options.length}</Count>
+          </SidebarGroupLabel>
+          <SidebarMenu>{options.map((v) => row(v, "option"))}</SidebarMenu>
+        </SidebarGroup>
+      )}
+      {trashed.length > 0 && <TrashedFold slot={slot} variants={trashed} blocks={blocks} marking={marking} />}
+    </div>
+  );
+}
+
+/** A variant: picking it shows it; its 👍 and 🗑 sit at the right, on hover, on focus and on the showing row. */
+function VariantRow({
+  slot,
+  variant,
+  block,
+  failed,
+  role,
+  marks,
+  onVariant,
+  marking,
+}: {
+  slot: SlotView;
+  variant: VariantKey;
+  block: BlockView | undefined;
+  failed: boolean;
+  role: "main" | "option";
+  marks: Marks;
+  onVariant: (variant: VariantKey) => void;
+  marking: (MarkHandlers & { blocked: null }) | { blocked: string };
+}) {
+  const active = variant === slot.active;
+  const title = block?.title ?? variant;
+  const verdict = block === undefined ? null : approval(slot, block, marks);
+  const trashBlock = trashRefusal(slot, variant, marks);
+  const approveLabel =
+    verdict === null
+      ? ""
+      : verdict.kind === "main"
+        ? "Make this Main"
+        : verdict.kind === "unmain"
+          ? "Stop keeping this as Main"
+          : verdict.kind === "graft"
+            ? `Bring ${partLabel(verdict.from.part!)} into Main`
+            : `Take ${partLabel(verdict.graft.from.part!)} back out of Main`;
+  const pressed = verdict?.kind === "unmain" || verdict?.kind === "ungraft";
+  const blocked = marking.blocked;
+  return (
+    <SidebarMenuItem data-variant-row={variant} data-variant-role={role}>
+      <SidebarMenuButton
+        role="radio"
+        aria-checked={active}
+        tabIndex={active ? 0 : -1}
+        isActive={active}
+        onClick={() => onVariant(variant)}
+        // The two marks' room, so the title gives way to them rather than run under them.
+        className="pr-12"
+        data-variant={variant}
+        data-showing={active || undefined}
+      >
+        <SidebarMenuMark className={cn(active && "bg-fg-muted", block?.isNew === true && "outline-2 outline-offset-1 outline-accent")} />
+        {block?.isNew === true && (
+          <span className="sr-only" data-variant-new>
+            new
+          </span>
+        )}
+        <Truncate className="max-w-full shrink-0" data-variant-title>
+          {title}
+        </Truncate>
+        {failed && (
+          <Hint label="This block failed to render" side="left">
+            <CircleAlert aria-label="Failed to render" className="text-danger" data-variant-error />
+          </Hint>
+        )}
+        {!keyEchoesTitle(variant, title) && (
+          <Truncate className="flex-1 text-right text-xs font-normal text-fg-muted" data-variant-key>
+            {variant}
+          </Truncate>
+        )}
+      </SidebarMenuButton>
+      <div
+        className={cn(
+          "absolute top-1 right-1 flex gap-0.5 transition-opacity md:opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100",
+          (active || pressed) && "md:opacity-100",
+        )}
+        data-marks
+      >
+        {verdict !== null && (
+          <RowMark
+            label={blocked ?? approveLabel}
+            blocked={blocked !== null}
+            pressed={pressed}
+            onClick={() => blocked === null && block !== undefined && marking.onApprove(block)}
+            data-approve={variant}
+            data-approve-kind={verdict.kind}
+          >
+            <ThumbsUp aria-hidden className={cn(pressed && "fill-current")} />
+          </RowMark>
+        )}
+        {role === "option" && (
+          <RowMark
+            label={blocked ?? trashBlock ?? "Trash this option"}
+            blocked={blocked !== null || trashBlock !== null}
+            onClick={() => blocked === null && trashBlock === null && block !== undefined && marking.onTrash(block)}
+            data-trash={variant}
+          >
+            <Trash2 aria-hidden />
+          </RowMark>
+        )}
+      </div>
+    </SidebarMenuItem>
+  );
+}
+
+/** A row's 24 px icon action, named by its hint, which says why when it can't act. */
+function RowMark({
+  label,
+  blocked,
+  pressed,
+  onClick,
+  children,
+  ...data
+}: {
+  label: string;
+  blocked: boolean;
+  pressed?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+} & Record<`data-${string}`, string | undefined>) {
+  return (
+    <Hint label={label} side="right">
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={label}
+        aria-pressed={pressed}
+        aria-disabled={blocked || undefined}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        {...data}
+      >
+        {children}
+      </Button>
+    </Hint>
+  );
+}
+
+/** An element on its way into Main: what it is and where it comes from, with its removal. */
+function GraftRow({ graft, source, marking }: { graft: StoredGraft; source: BlockView | undefined; marking: (MarkHandlers & { blocked: null }) | { blocked: string } }) {
+  const what = graft.from.part === null ? (source?.title ?? graft.from.blockId) : partLabel(graft.from.part);
+  const from = source?.title ?? graft.from.blockId;
+  return (
+    <SidebarMenuItem data-graft={graft.id}>
+      <div className="flex min-h-8 items-start gap-2 py-1.5 pr-8 pl-2 text-sm">
+        <CornerDownRight aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-muted" />
+        <span className="flex min-w-0 flex-col">
+          <Truncate>{what}</Truncate>
+          <Truncate className="text-xs text-fg-muted">{graft.instruction === null ? `from ${from}` : `from ${from} · ${graft.instruction}`}</Truncate>
+        </span>
+      </div>
+      <div className="absolute top-1 right-1">
+        <RowMark
+          label={marking.blocked ?? `Leave ${what} out of Main`}
+          blocked={marking.blocked !== null}
+          onClick={() => marking.blocked === null && marking.onRemoveGraft(graft)}
+          data-remove-graft={String(graft.id)}
+        >
+          <X aria-hidden />
+        </RowMark>
+      </div>
+    </SidebarMenuItem>
+  );
+}
+
+/** The slot's trashed variants, shut by default with their count. Each comes back with its restore. */
+function TrashedFold({
+  slot,
+  variants,
+  blocks,
+  marking,
+}: {
+  slot: SlotView;
+  variants: readonly VariantKey[];
+  blocks: ReadonlyMap<string, BlockView>;
+  marking: (MarkHandlers & { blocked: null }) | { blocked: string };
+}) {
+  return (
+    <Collapsible className="group/trashed" data-trashed-fold={variants.length}>
+      <SidebarGroup className="pt-0">
+        <SidebarGroupLabel render={<CollapsibleTrigger />} className="w-full cursor-pointer gap-2 hover:bg-hover hover:text-fg" data-trashed-toggle>
+          <ChevronRight aria-hidden className="size-3.5 transition-transform group-data-[open]/trashed:rotate-90" />
+          {variants.length} trashed
+        </SidebarGroupLabel>
+        <CollapsibleContent>
+          <SidebarMenu>
+            {variants.map((v) => {
+              const block = blocks.get(blockIdOf(slot.id, v));
+              const title = block?.title ?? v;
+              return (
+                <SidebarMenuItem key={v} data-trashed={v}>
+                  <div className="flex h-8 items-center gap-2 pr-8 pl-2 text-sm text-fg-muted line-through decoration-fg-muted/60">
+                    <Truncate>{title}</Truncate>
+                  </div>
+                  <div className="absolute top-1 right-1">
+                    <RowMark
+                      label={marking.blocked ?? `Bring ${title} back`}
+                      blocked={marking.blocked !== null}
+                      onClick={() => marking.blocked === null && block !== undefined && marking.onRestore(block)}
+                      data-restore={v}
+                    >
+                      <Undo2 aria-hidden />
+                    </RowMark>
+                  </div>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
   );
 }
 
@@ -510,125 +796,3 @@ function GroupPhase({ sessions }: { sessions: readonly SessionListing[] }) {
   );
 }
 
-/**
- * What the attached thread is doing, in the words home's rows use: the open request's phase and how long it has been
- * open, or Attached once nothing is open. The lead mark carries the tone, so the words stay muted and keep one edge.
- */
-function ThreadState({ view, className }: { view: SessionView; className?: string }) {
-  const request = view.request;
-  const phase = openPhase(view);
-  const counting = phase !== null && PHASE[phase].ended !== true;
-  const now = useNow(counting ? 1_000 : undefined);
-  if (request === null || phase === null) {
-    return (
-      <span className={cn("text-fg-muted", className)} data-thread="attached">
-        Attached
-      </span>
-    );
-  }
-  return (
-    <span className={cn("flex gap-1 text-fg-muted", className)} data-thread={phase}>
-      {PHASE[phase].short}
-      {counting && (
-        <>
-          {/* The gap lays the words apart; the space keeps them apart in the row's text and for screen readers. */}
-          {" "}
-          <Elapsed since={request.request.sentAt ?? request.request.createdAt} now={now} />
-        </>
-      )}
-    </span>
-  );
-}
-
-function SlotSection({
-  slot,
-  blocks,
-  blockErrors,
-  selected,
-  onSlot,
-  onVariant,
-}: {
-  slot: SlotView;
-  blocks: ReadonlyMap<string, BlockView>;
-  blockErrors: ReadonlyMap<ContentHash, string>;
-  selected: boolean;
-  onSlot: () => void;
-  onVariant: (variant: VariantKey) => void;
-}) {
-  return (
-    <>
-      <SidebarSeparator />
-      <SidebarGroup data-slot-id={slot.id}>
-        <SidebarGroupLabel
-          render={<button type="button" onClick={onSlot} />}
-          className="w-full cursor-pointer gap-2 hover:bg-hover hover:text-fg"
-        >
-          <Truncate>{slot.title}</Truncate>
-          <Count className="ml-auto" data-slot-count>
-            {slot.variants.length} {slot.variants.length === 1 ? "variant" : "variants"}
-          </Count>
-        </SidebarGroupLabel>
-        <SidebarMenu
-          role="radiogroup"
-          aria-label={`${slot.title} variant`}
-          onKeyDown={(e) => {
-            const next = arrowFocus(e, "[data-variant]")?.dataset.variant;
-            if (next !== undefined) onVariant(next as VariantKey);
-          }}
-        >
-          {slot.variants.map((variant) => {
-            const block = blocks.get(blockIdOf(slot.id, variant));
-            const active = variant === slot.active;
-            const failed = block !== undefined && blockErrors.has(block.hash);
-            return (
-              <SidebarMenuItem key={variant}>
-                <SidebarMenuButton
-                  role="radio"
-                  aria-checked={active}
-                  tabIndex={active ? 0 : -1}
-                  // Only the selected slot's row is tinted; the others mark what's showing with a dot.
-                  isActive={active && selected}
-                  onClick={() => onVariant(variant)}
-                  data-variant={variant}
-                  data-showing={active || undefined}
-                >
-                  {/* What shows is a filled dot. A variant the agent just added rings the mark in the accent, the agent's colour,
-                      until Rob has seen it, so the two read apart by form and not hue alone, and one row can carry both. */}
-                  <SidebarMenuMark className={cn(active && "bg-fg-muted", block?.isNew === true && "outline-2 outline-offset-1 outline-accent")} />
-                  {block?.isNew === true && (
-                    <span className="sr-only" data-variant-new>
-                      new
-                    </span>
-                  )}
-                  {/* The name Rob reads keeps its width; the raw key beside it gives way first, down to nothing, and shows only when it says more than the name. */}
-                  <Truncate className="max-w-full shrink-0" data-variant-title>
-                    {block?.title ?? variant}
-                  </Truncate>
-                  {failed && (
-                    <Hint label="This block failed to render" side="left">
-                      <CircleAlert aria-label="Failed to render" className="text-danger" data-variant-error />
-                    </Hint>
-                  )}
-                  {!keyEchoesTitle(variant, block?.title ?? variant) && (
-                    <Truncate className="flex-1 text-right text-xs font-normal text-fg-muted" data-variant-key>
-                      {variant}
-                    </Truncate>
-                  )}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      </SidebarGroup>
-    </>
-  );
-}
-
-/** Only the parent's title gives way, so the iteration, which the breadcrumb doesn't show, always reads whole. */
-function ForkedFrom({ title, from }: { title: string; from: string }) {
-  return (
-    <Truncate className="text-xs" tail={` · ${from}`} data-forked-line>
-      {`from ${title}`}
-    </Truncate>
-  );
-}

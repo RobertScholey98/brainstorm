@@ -11,6 +11,7 @@ import { Hint } from "@/components/ui/tooltip";
 import type { CanvasLayout } from "../core/prefs";
 import type { SlotId, SlotView } from "../core/types";
 import { PICK_HINTS, useBarFit } from "./headerAction";
+import type { PickKind } from "./mirror";
 
 const VIEWS: readonly { value: CanvasLayout["view"]; label: string }[] = [
   { value: "stage", label: "One slot" },
@@ -40,7 +41,7 @@ export function CanvasBar({
   /** The selected frame's scale below 1, from the fit rules, or null at full size. */
   zoom: number | null;
   /** What a pick is for, while the canvas is in pick mode. */
-  picking: "comment" | "vary" | null;
+  picking: PickKind | null;
   onSlot: (slot: SlotId) => void;
   onView: (view: CanvasLayout["view"]) => void;
   onCancelPick: () => void;
@@ -93,7 +94,7 @@ export function CanvasBar({
             <span className="flex h-7 min-w-0 items-center gap-1 rounded-md border border-accent/40 bg-accent/10 pr-0.5 pl-2 text-fg" data-tint data-pick-chip>
               <MousePointer2 aria-hidden className="size-3 shrink-0 text-accent" />
               <Truncate className="min-w-0" data-bar-hint-words>
-                {picking === "vary" ? PICK_HINTS.vary : PICK_HINTS.comment}
+                {PICK_HINTS[picking ?? "comment"]}
               </Truncate>
               <Hint label="Stop picking" shortcut="Esc" side="bottom">
                 <Button variant="ghost" size="icon-xs" aria-label="Stop picking" onClick={onCancelPick} data-pick-cancel>

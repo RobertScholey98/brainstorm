@@ -1,80 +1,16 @@
 import { partLabel } from "./part";
-import { appearanceProp } from "./props";
 import {
-  blockIdOf,
   SLOT_ID_PATTERN,
-  type AppearanceProp,
   type AppearanceValue,
-  type BlockId,
-  type BlockView,
-  type Feedback,
   type NonEmpty,
-  type Override,
   type PartName,
   type PropName,
-  type SlotView,
   type VariantKey,
   type VaryVariant,
 } from "./types";
 
-/** One slot as the fork carries it: its picked variant only. */
-export type CarriedSlot = { readonly slot: SlotView; readonly blockId: BlockId; readonly title: string };
-export type CarriedSetting = { readonly blockId: BlockId; readonly prop: PropName; readonly value: AppearanceValue; readonly text: string };
-
-/** What a fork of one iteration carries. The popover lists it and the service writes it, so the two can't disagree. */
-export type CarryOver = {
-  readonly slots: readonly CarriedSlot[];
-  /** Rob's settings that apply to a picked variant, baked into its defaults. */
-  readonly settings: readonly CarriedSetting[];
-  /** Open feedback pinned to a picked variant. */
-  readonly pins: readonly Feedback[];
-};
-
-export type CarryOverInput = {
-  readonly slots: readonly SlotView[];
-  readonly blocks: readonly Pick<BlockView, "id" | "title" | "props">[];
-  /** Variants Rob picked; a slot left out carries the variant it shows. */
-  readonly picks: Readonly<Record<string, VariantKey>>;
-  readonly applicable: readonly Override[];
-  readonly feedback: readonly Feedback[];
-};
-
-export function carryOver(input: CarryOverInput): { ok: true; value: CarryOver } | { ok: false; message: string } {
-  for (const [slot, variant] of Object.entries(input.picks)) {
-    const s = input.slots.find((x) => x.id === slot);
-    if (s === undefined || !s.variants.includes(variant)) return { ok: false, message: `${slot}/${variant} is not in this iteration` };
-  }
-  const slots = input.slots.map((slot) => {
-    const blockId = blockIdOf(slot.id, input.picks[slot.id] ?? slot.active);
-    return { slot, blockId, title: input.blocks.find((b) => b.id === blockId)?.title ?? blockId };
-  });
-  const carried = new Set(slots.map((s) => s.blockId));
-  const settings = input.applicable.flatMap((o) => {
-    const prop = carried.has(o.blockId) ? input.blocks.find((b) => b.id === o.blockId)?.props : undefined;
-    const spec = prop === undefined ? undefined : appearanceProp(prop, o.prop);
-    return spec === undefined || spec.default === o.value ? [] : [{ blockId: o.blockId, prop: o.prop, value: o.value, text: settingText(spec, o.value) }];
-  });
-  const pins = input.feedback.filter((f) => f.status.state === "open" && carried.has(f.pin.blockId));
-  return { ok: true, value: { slots, settings, pins } };
-}
-
-/** How the carry list names a setting: its label and value, as the control shows it. */
-export function settingText(prop: AppearanceProp, value: AppearanceValue): string {
-  switch (prop.type) {
-    case "number":
-      return `${prop.label} ${value}${prop.unit ?? ""}`;
-    case "color":
-      return `${prop.label} ${String(value).toUpperCase()}`;
-    case "boolean":
-      return `${prop.label} ${value ? "on" : "off"}`;
-    case "enum":
-    case "text":
-      return `${prop.label} “${String(value)}”`;
-  }
-}
-
 /** `block.json` with `settings` as its appearance defaults. Only the defaults change, so the schema stays the agent's. */
-export function bakeDefaults(json: string, settings: readonly Pick<CarriedSetting, "prop" | "value">[]): string {
+export function bakeDefaults(json: string, settings: readonly { readonly prop: PropName; readonly value: AppearanceValue }[]): string {
   if (settings.length === 0) return json;
   const block = JSON.parse(json) as { props: { appearance: Record<string, { default: unknown }> } };
   for (const s of settings) {

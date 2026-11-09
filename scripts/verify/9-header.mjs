@@ -20,26 +20,25 @@ const PHASES = {
   no_change: { message: "The agent replied in T3 without changing the design", actions: ["retry", "open_thread", "withdraw"] },
   send_failed: { message: "Couldn't send (T3 is not running). The request is saved.", actions: ["retry", "open_thread", "withdraw"], error: "T3 is not running" },
   previous_thread: { message: "Sent to the previous thread", actions: ["resend", "open_thread", "withdraw"] },
-  thread_lost: { message: "This session's thread is gone.", actions: ["copy_phrase", "withdraw"], lost: true },
-  starting: { message: "Starting a T3 thread", actions: [] },
-  start_failed: { message: "Couldn't start a T3 thread (T3 is not running). The fork is saved.", actions: ["retry", "discard"], error: "T3 is not running" },
+  thread_lost: { message: "This brainstorm's thread is gone. Start a fresh thread, and the open request goes to it.", actions: ["fresh_thread", "withdraw"], lost: true },
   fulfilled: { message: "Iteration 2 · changed Neon wheel and Assignment card", actions: [], iteration: 2 },
   withdrawn: { message: "Request withdrawn", actions: [] },
 };
 
+/** Each case's title, and for a branch the primary line the breadcrumb leads with. */
 const TITLES = {
-  short: { title: "Chore roulette", lineage: [] },
-  long: { title: "Onboarding a new flatmate into the chore rota without a fight", lineage: [] },
-  fork: { title: "Try a calmer wheel for mornings", lineage: [{ id: "s_parent", title: "Rota handover", gone: false }] },
-  rota: { title: "Rota handover", lineage: [] },
+  short: { title: "Chore roulette", primary: null },
+  long: { title: "Onboarding a new flatmate into the chore rota without a fight", primary: null },
+  branch: { title: "Try a calmer wheel for mornings", primary: { id: "s_parent", title: "Rota handover" } },
+  rota: { title: "Rota handover", primary: null },
 };
 
 let shape = null;
 
-/** The real view with the case's title, lineage and request laid over it. */
+/** The real view with the case's title, its tree and request laid over it. */
 function dress(view) {
   if (shape === null) return view;
-  const { title, lineage } = TITLES[shape.title];
+  const { title, primary } = TITLES[shape.title];
   const phase = shape.phase === null ? null : { ...PHASES[shape.phase], ...(shape.message === undefined ? {} : { message: shape.message }) };
   const thread = view.attachment.threadId;
   // Five minutes before each fetch, so every case reads one count, whenever in the run it lands.
@@ -47,7 +46,7 @@ function dress(view) {
   return {
     ...view,
     session: { ...view.session, title },
-    lineage,
+    tree: primary === null ? { root: { id: view.session.id, title }, primary: view.session.id } : { root: primary, primary: primary.id },
     attachment: { ...view.attachment, lostAt: phase?.lost ? NOW : null },
     regenerate: phase === null || phase.actions.length === 0 ? view.regenerate : { ok: false, reason: "request_open" },
     request:
@@ -82,9 +81,9 @@ const measure = () =>
       const whole = (el) => ink(el) <= box(el) + 0.01;
       const roomy = (el, floor) => box(el) >= Math.min(ink(el), floor) - 0.01;
       const fits = () =>
-        roomy(header.querySelector("[data-session-title]"), titleFloor) && [...header.querySelectorAll("[data-lineage]")].every((a) => roomy(a, ancestorFloor));
+        roomy(header.querySelector("[data-session-title]"), titleFloor) && [...header.querySelectorAll("[data-breadcrumb-root]")].every((a) => roomy(a, ancestorFloor));
       const steps = [...header.querySelectorAll("[data-collapse]")].sort((a, b) => Number(a.dataset.collapse) - Number(b.dataset.collapse));
-      const name = (el) => el.dataset.requestAction ?? (el.matches("[data-fork-toggle]") ? "fork" : el.matches("[data-export]") ? "export" : el.matches("[data-status-elapsed]") ? "elapsed" : el.matches("svg") ? "glyph" : "status");
+      const name = (el) => el.dataset.requestAction ?? (el.matches("[data-thread-chip]") ? "thread" : el.matches("[data-export]") ? "export" : el.matches("[data-status-elapsed]") ? "elapsed" : el.matches("svg") ? "glyph" : "status");
       const collapsed = steps.filter((s) => s.hasAttribute("data-collapsed"));
       // The glyph and the time are marks, not labels, so either comes back once a later label frees its room.
       const labels = steps.filter((s) => Number(s.dataset.collapse) >= 2);
@@ -102,7 +101,8 @@ const measure = () =>
       const shortBy = collapsed.length === 0 ? 0 : back(collapsed.at(-1)).by;
       const bar = header.getBoundingClientRect();
       const words = [...header.querySelectorAll("[data-request-message], [data-request-label], [data-request-short], [data-regenerate-toggle], [data-collapse]:not([data-collapsed]) span")].filter(
-        (el) => el.getClientRects().length > 0,
+        // A dot's empty span is a mark, not a word.
+        (el) => el.getClientRects().length > 0 && el.textContent.trim() !== "",
       );
       const controls = [...header.querySelectorAll("button, a")].filter((el) => el.getClientRects().length > 0);
       return {
@@ -161,7 +161,7 @@ try {
       [1100, 720],
     ]) {
       await window.setViewportSize({ width, height });
-      for (const title of ["short", "long", "fork"]) {
+      for (const title of ["short", "long", "branch"]) {
         for (const phase of [null, ...Object.keys(PHASES)]) {
           shape = { title, phase };
           // Home keeps an open brainstorm's view until another is chosen, so opening the spare first makes the app
@@ -272,41 +272,36 @@ try {
     [],
   );
   check(
-    "at 1440 with a short title, the header counts how long a running request has been open, as the sidebar does, an ended one counts nothing, and previous thread, the fullest bar, gives its time up first",
+    "at 1440 with a short title, the header counts how long a running request has been open, as the sidebar does, an ended one counts nothing, and asking, the longest status beside its actions, gives its time up first",
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, /^\d+[smh]/.test(results.get(`light 1440 short ${p}`)?.elapsed ?? "")])),
-    Object.fromEntries(Object.keys(PHASES).map((p) => [p, ["sending", "starting", "queued", "working", "asking"].includes(p)])),
+    Object.fromEntries(Object.keys(PHASES).map((p) => [p, ["sending", "queued", "working", "previous_thread"].includes(p)])),
   );
   check(
-    "at 1440 a short title keeps every label but in previous thread, where the time goes, the status folds to \"Previous thread\" and Export gives way, in ADR 003's order, and reads whole in every phase; beside a recovery's three actions, or the asking status and its time, only Regenerate's glyph goes",
+    "at 1440 a short title keeps every label until a recovery's three actions fold the thread chip to its dot, and in previous thread the status folds to \"Previous thread\" and Export gives way too, in ADR 003's order, and reads whole in every phase; beside the working and asking statuses only a mark goes",
     Object.fromEntries(Object.keys(PHASES).map((p) => [p, [gaveWay(`light 1440 short ${p}`)?.join(), results.get(`light 1440 short ${p}`)?.titleWhole]])),
-    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [p === "previous_thread" ? "elapsed,status,export" : ["asking", "no_change", "send_failed"].includes(p) ? "glyph" : "", true]])),
+    Object.fromEntries(Object.keys(PHASES).map((p) => [p, [{ working: "glyph", asking: "elapsed", run_failed: "thread", no_change: "thread", send_failed: "thread", previous_thread: "glyph,status,thread,export", thread_lost: "glyph" }[p] ?? "", true]])),
   );
   check(
     "at 1440 in previous thread, the room left of Resend is short of Export's label: putting it back cuts \"Chore roulette\" by 20 px or more",
     results.get("light 1440 short previous_thread")?.shortBy >= 20,
     true,
   );
-  check("at 1100 with a short title and a request queued, the time goes, the status drops \"in T3\" and Export and Fork give way, so Withdraw and Open thread keep their names and the title reads whole", [gaveWay("light 1100 short queued"), results.get("light 1100 short queued")?.titleWhole], [["elapsed", "status", "export", "fork"], true]);
+  check("at 1100 with a short title and a request queued, the marks go, the status drops \"in T3\", the thread chip folds to its dot and Export gives way, so Withdraw and Open thread keep their names and the title reads whole", [gaveWay("light 1100 short queued"), results.get("light 1100 short queued")?.titleWhole], [["glyph", "elapsed", "status", "thread", "export"], true]);
   check(
     "at 1100 a long title with a send failure keeps 160 px or more, and Retry, the recovery, is the last label to give way",
     [gaveWay("light 1100 long send_failed"), results.get("light 1100 long send_failed")?.titleShown >= TITLE_FLOOR],
-    [["export", "fork", "open_thread", "withdraw", "retry"], true],
+    [["thread", "export", "open_thread", "withdraw", "retry"], true],
   );
   check(
-    "at 1440 a fork's title reads whole while nothing fills the bar, and keeps 160 px in every phase whose status and actions do",
+    "at 1440 a branch's title reads whole while nothing fills the bar or beside a recovery, its primary's crumb giving way first, and keeps 160 px in every phase whose status and actions fill it",
     Object.keys(PHASES)
-      .filter((p) => !results.get(`light 1440 fork ${p}`)?.titleWhole)
-      .map((p) => [p, results.get(`light 1440 fork ${p}`)?.titleShown >= TITLE_FLOOR]),
+      .filter((p) => !results.get(`light 1440 branch ${p}`)?.titleWhole)
+      .map((p) => [p, results.get(`light 1440 branch ${p}`)?.titleShown >= TITLE_FLOOR]),
     [
       ["queued", true],
       ["working", true],
       ["asking", true],
-      ["run_failed", true],
-      ["no_change", true],
-      ["send_failed", true],
       ["previous_thread", true],
-      ["thread_lost", true],
-      ["start_failed", true],
     ],
   );
   check("a fulfilled request's long result gives way to its short name before a long title is cut under 160 px", results.get("light 1440 long fulfilled")?.titleShown >= TITLE_FLOOR, true);
@@ -328,9 +323,9 @@ try {
     [],
   );
   check(
-    "at 1100 a fork's title beside a send failure cuts after a word, not after the space that follows it, and in both themes",
-    ["light", "dark"].map((t) => results.get(`${t} 1100 fork send_failed`)?.cut),
-    ["Try a calmer wheel…", "Try a calmer wheel…"],
+    "at 1100 a branch's title beside a send failure keeps more than 160 px, its primary's crumb giving way first, and cuts on a letter, not after a space, in both themes",
+    ["light", "dark"].map((t) => results.get(`${t} 1100 branch send_failed`)?.cut),
+    ["Try a calmer wheel for mor…", "Try a calmer wheel for mor…"],
   );
   check("the window logged no errors or warnings", errors, []);
 } finally {

@@ -11,7 +11,7 @@ Pick the branch that matches the turn:
 
 - For a turn that starts with `[brainstorm] promote <Name> from session <id>`, follow **Promote a component**.
 - For a turn that starts with `[brainstorm] import the design system from <root>`, `[brainstorm] repair the <name> design system (<id>)` or `[brainstorm] review of the <name> design system (<id>)`, follow **Import a design system**.
-- For a turn that starts with `[brainstorm] session <id> · request 1 · fork of <parent> iteration <n>`, follow **Start a fork**.
+- For a turn that starts with `[brainstorm] session <id> · fresh thread for`, follow **Take a fresh thread**.
 - For any other turn that starts with `[brainstorm] session <id> · request <n>`, follow **Handle a request**.
 - For "pick up the brainstorm session titled X", follow **Take over a session**.
 - For anything else this skill triggered on, follow **Start a study**.
@@ -41,19 +41,17 @@ Every branch runs `brainstorm` commands. Read [the Brainstorm loop](references/b
 
 1. Run `brainstorm context <id>`. If it shows no open request, reply in one line that there is nothing to do and stop. If it says this thread is not attached, reply in one line that the session moved to another thread and stop.
 2. Run `pull` into a fresh copy. Your earlier copy is stale.
-3. Change only the blocks in scope. Address the requested feedback and free text. Keep every `data-part` name an open feedback pin points at, and keep Rob's overridden props valid for his values. A `vary` scope asks for new variants of one element; build them as the loop reference's **Vary** says.
+3. Change only the blocks in scope. Address the requested feedback and free text. Keep every `data-part` name an open feedback pin points at, and keep Rob's overridden props valid for his values. A `vary` scope asks for new variants of one element, a `confirm` scope brings picked elements into Rob's Main and deletes what he let go, and an `add_slot` scope asks for one new slot; build each as the loop reference's section of that name says. A `branch of` line in `context` means the session is a branch of the brainstorm; handle it the same way, since every branch shares this thread.
 4. Run `commit --addresses <ids>` with only the feedback you actually addressed. Fix errors until it succeeds, and act on each warning as the loop reference says.
 5. Reply in one line naming what changed and any feedback left open. The whole reply looks like `Request 2: changed pin-flow/pick-and-widen; addressed #1, #3 still open.`
 
-## Start a fork
+## Take a fresh thread
 
-Rob forked one iteration of a brainstorm to try something new from it, and the app started this thread for the fork.
+Rob started this thread so the brainstorm carries on with a clean context. The app moves every branch of the brainstorm to it.
 
 1. If the message names `BRAINSTORM_HOME`, set it on every `brainstorm` command as it says. T3 started this thread with its own environment.
-2. Run `brainstorm session attach <id>` with the fork's session id from the message. The fork waits for this thread, so attach takes it.
-3. Run `brainstorm context <id>`. Its `fork of` line names the parent and the iteration. The fork's iteration 1 is that iteration narrowed to the variant Rob picked in each slot, with his settings baked in as the props' defaults (one `baked default` line each) and his open pins carried over. That is the accepted baseline: build from it, not from the parent's other variants.
-4. Handle request 1 as **Handle a request** from step 2. Its free text is what Rob asked the fork to try, and its scope is everything, so add variants or slots when that asks for them. Keep the baked defaults unless the instruction is about them.
-5. Reply in one line naming the fork, its parent and what changed. The whole reply looks like `Fork s_y of s_x: added 3 calmer wheels; #1 still open.`
+2. Run `brainstorm session attach <id>` with the session id from the message, then `brainstorm context <id>`. `rob's main` names the variants he chose to carry forward: they are the accepted baseline.
+3. If `context` shows an open request, handle it as **Handle a request** from step 2. Otherwise reply in one line that this thread now holds the brainstorm. The whole reply looks like `Fresh thread for "Chore wheel" (s_x); main is wheel/neon, no request open.`
 
 ## Promote a component
 

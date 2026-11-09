@@ -69,7 +69,6 @@ import {
   type IterationOrigin,
   type IterationSummary,
   type IterationView,
-  type Marks,
   type NewSessionResult,
   type OpenPhase,
   type Override,
@@ -687,11 +686,13 @@ export class Brainstorm {
       before: new Set(previous.map((b) => b.id)),
       newSlots: draft.manifest.slots.filter((s) => !(latest?.slots ?? []).some((x) => x.id === s.id)).length,
     };
+    // A confirm drops the variants Rob let go, so their settings and pins going with them is no news to the agent.
+    const letGo = request?.scope.kind === "confirm" ? request.scope.drop.map((b) => `slots/${b}/`) : [];
+    const asked = (i: Issue) => !letGo.some((dir) => i.file?.startsWith(dir) === true);
     const warnings = [
       ...parsed.warnings,
       ...checkIssues,
-      ...droppedOverrides(overrides, before.schemas, after.schemas),
-      ...lostPins(feedback, before.parts, after.parts),
+      ...[...droppedOverrides(overrides, before.schemas, after.schemas), ...lostPins(feedback, before.parts, after.parts)].filter(asked),
       ...(request === null ? [] : requestWarnings(request, [...changed, ...removed], input.addresses, byId, drawn)),
     ];
     return ok({
@@ -1553,16 +1554,23 @@ export class Brainstorm {
 
   /**
    * Starts a new T3 thread for the brainstorm and moves every branch to it, so the agent works on with a fresh context.
-   * The new agent's own attach moves them too, so a start whose reply is lost still ends attached.
+   * The new agent's own attach moves them too, so a start whose reply is lost still ends attached. While the thread
+   * works a request it waits; once the thread is gone, this is the way on, and the open request follows to the new one.
    */
   async #refreshThread(session: SessionSummary): Promise<Failure | null> {
     const open = this.#store.openRequest(session.id) ?? this.#busyElsewhere(session.id);
-    if (open !== null) return { code: "request_open", message: `request ${open.n} is still open; let it finish or withdraw it first`, n: open.n };
+    const lost = this.#store.attachment(session.id).lostAt !== null;
+    if (open !== null && !lost) return { code: "request_open", message: `request ${open.n} is still open; let it finish or withdraw it first`, n: open.n };
     const root = this.#rootOf(session.id);
     const title = this.#store.sessionName(root)?.title ?? session.title;
     const result = await this.#bridge.start({ project: session.projectId, title, message: formatRefreshMessage(session.id, title, this.#agentHome) });
     if (result.kind === "failed") return { code: "unavailable", message: `couldn't start a T3 thread: ${result.error}` };
     this.#moveTree(session.id, result.thread);
+    if (open !== null) {
+      this.#store.setRequestState(open.session, open.n, { state: "sending" }, { threadId: result.thread });
+      this.#emit(open.session);
+      await this.#send(open.session, open.n, result.thread);
+    }
     return null;
   }
 
@@ -1625,10 +1633,12 @@ export class Brainstorm {
     if (source === null) return fail(notFound("iteration", `${parentId} has no iteration ${input.from}`));
     const blocks = this.#store.iterationBlocks(parentId, source.n);
     const slotShapes = this.#slotShapes(source, blocks);
-    const marks = liveMarks(input.marks, slotShapes);
-    for (const b of [...Object.entries(marks.mains).map(([s, v]) => blockIdOf(s as SlotId, v!)), ...marks.trashed, ...marks.grafts.map((g) => g.from.blockId)]) {
+    // Marks made on this iteration name only its blocks, so one that doesn't is refused rather than quietly dropped.
+    const named = [...Object.entries(input.marks.mains).map(([s, v]) => blockIdOf(s as SlotId, v!)), ...input.marks.trashed, ...input.marks.grafts.map((g) => g.from.blockId)];
+    for (const b of named) {
       if (!blocks.some((x) => x.id === b)) return fail(notFound("block", `${b} is not in iteration ${source.n}`));
     }
+    const marks = liveMarks(input.marks, slotShapes);
     const instruction = input.instruction?.trim() || null;
     const plan = confirmPlan(slotShapes, marks);
     const grafting = plan !== null && plan.grafts.length > 0;

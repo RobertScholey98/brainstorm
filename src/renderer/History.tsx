@@ -1,27 +1,36 @@
 import { ChevronLeft, ChevronRight, GitBranch, History as HistoryIcon } from "lucide-react";
-import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { originText } from "../core/machines";
 import type { ForkBranch, HistoryEntry, IterationN, Result, SessionId, SessionPreview, SessionView, SlotId } from "../core/types";
 import { IterationStill, STILL_BOX } from "./Preview";
-import { pageAt, pageOf, pageRest, stripFit, type EntryNeed, type StripFit } from "./stripFit";
+import { entryKey, runOf, splitRuns, type Run } from "./runs";
+import { pageAt, pageOf, pageRest, STRIP_INSET, stripFit, type EntryNeed, type StripFit } from "./stripFit";
 import { age, useNow } from "./time";
 
-export type LoadIterationStill = (at: { readonly n: IterationN; readonly slot: SlotId | null }) => Promise<Result<SessionPreview | null>>;
+/** One iteration on a branch's trail: the branch it belongs to, and its number there. */
+export type TrailPoint = { readonly session: SessionId; readonly n: IterationN };
 
-/** One place in the strip, in the order it shows: the stub back to a fork's parent, then each iteration and its forks. */
-type StripItem = { readonly kind: "stub" } | { readonly kind: "iteration"; readonly entry: HistoryEntry } | { readonly kind: "fork"; readonly fork: ForkBranch };
+export type LoadIterationStill = (at: { readonly session: SessionId; readonly n: IterationN; readonly slot: SlotId | null }) => Promise<Result<SessionPreview | null>>;
+
+/** One place in the strip, in the order it shows: each iteration of the run, then the branches that leave it. */
+type StripItem = { readonly kind: "iteration"; readonly entry: HistoryEntry } | { readonly kind: "fork"; readonly fork: ForkBranch };
+
+const samePoint = (a: TrailPoint, b: TrailPoint) => a.session === b.session && a.n === b.n;
 
 /**
- * The brainstorm's history along the bottom of the canvas: a still per iteration, oldest first, each with what made it
- * and its age, and the forks made from an iteration after its still. Inside a fork the strip starts with a stub back to
- * the iteration it came from. It is one listbox: Left and Right step through it, Home and End jump, and the option Rob
- * lands on is what the canvas shows.
+ * The branch's history along the bottom of the canvas (ADR 009): its whole trail, its ancestors' iterations up to each
+ * branch point and then its own, cut into runs at each confirm. The strip shows one run, by default the one holding
+ * the iteration on the canvas, and a dropdown in its head steps between runs, newest first. Each run is a still per
+ * iteration, oldest first, with what made it and its age, and the branches that leave an iteration after its still. It
+ * is one listbox: Left and Right step through the run, Home and End jump, and the option Rob lands on is what the
+ * canvas shows. Choosing another run in the dropdown changes only the strip.
  *
  * While the entries fit they share the strip by what their lines need. Once they don't, they fill it a page at a time,
  * still by need, and the strip rests only on a page's start and hides any entry it can't show whole there, so at rest
@@ -38,12 +47,12 @@ export function Filmstrip({
 }: {
   view: SessionView;
   /** The iteration on the canvas. */
-  showing: IterationN;
+  showing: TrailPoint;
   /** The slot the stills show, so they match the stage. */
   slot: SlotId | null;
   revision: number;
   loadStill: LoadIterationStill;
-  onShow: (n: IterationN) => void;
+  onShow: (at: TrailPoint) => void;
   onOpen: (id: SessionId) => void;
 }) {
   const now = useNow();
@@ -53,12 +62,20 @@ export function Filmstrip({
   const steps = useRef<HTMLSpanElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const latest = iterations.at(-1)?.n;
-  const items: StripItem[] = [
-    ...(view.fork === null ? [] : [{ kind: "stub" } as const]),
-    ...iterations.flatMap((entry) => [{ kind: "iteration", entry } as const, ...forks.filter((f) => f.from === entry.n).map((fork) => ({ kind: "fork", fork }) as const)]),
-  ];
-  const shownAt = items.findIndex((i) => i.kind === "iteration" && i.entry.n === showing);
+  const latest = iterations.at(-1);
+  const runs = splitRuns(iterations);
+  // The run Rob chose in the dropdown, until the canvas moves; otherwise the run holding what the canvas shows.
+  const [chosen, setChosen] = useState<string | null>(null);
+  const showingKey = entryKey(showing);
+  useEffect(() => setChosen(null), [showingKey]);
+  const run = runs.find((r) => r.key === chosen) ?? runOf(runs, showing);
+  const entries = run?.entries ?? [];
+  const items: StripItem[] = entries.flatMap((entry) => [
+    { kind: "iteration", entry } as const,
+    ...forks.filter((f) => f.parent === entry.session && f.from === entry.n).map((fork) => ({ kind: "fork", fork }) as const),
+  ]);
+  const shownAt = items.findIndex((i) => i.kind === "iteration" && samePoint(i.entry, showing));
+  const branches = forks.filter((f) => entries.some((e) => e.session === f.parent && e.n === f.from)).length;
 
   const [fit, setFit] = useState<StripFit>(() => stripFit(0, items.map(() => ({ need: 0, floor: 0 })), shownAt));
   const overflows = fit.pages !== null;
@@ -104,15 +121,19 @@ export function Filmstrip({
       sizes.disconnect();
       lines.disconnect();
     };
-  }, [items.length, refit]);
+  }, [items.length, run?.key, refit]);
 
   // At rest the strip shows only whole entries. Past the oldest page, the next page's first entry can sit cut at the
   // end, so it stays out of sight until the strip moves.
   const settle = useCallback(() => {
     const box = scroller.current;
     if (box === null) return;
-    setEnds({ start: box.scrollLeft <= 1, end: box.scrollLeft >= box.scrollWidth - box.clientWidth - 1 });
-    const room = box.getBoundingClientRect();
+    const ends = { start: box.scrollLeft <= 1, end: box.scrollLeft >= box.scrollWidth - box.clientWidth - 1 };
+    setEnds(ends);
+    // An end with more beyond it fades its inset, so an entry reaching into that fade counts as cut too, as a narrow
+    // branch tile can after the oldest page.
+    const edge = box.getBoundingClientRect();
+    const room = { left: edge.left + (ends.start ? 0 : STRIP_INSET), right: edge.right - (ends.end ? 0 : STRIP_INSET) };
     for (const entry of list.current?.children ?? []) {
       if (!(entry instanceof HTMLElement)) continue;
       const r = entry.getBoundingClientRect();
@@ -133,7 +154,7 @@ export function Filmstrip({
     rest();
     const frame = requestAnimationFrame(rest);
     return () => cancelAnimationFrame(frame);
-  }, [fit, shownAt, items.length, settle]);
+  }, [fit, shownAt, items.length, run?.key, settle]);
 
   const page = (by: -1 | 1) => {
     const box = scroller.current;
@@ -145,16 +166,18 @@ export function Filmstrip({
     for (const entry of list.current?.querySelectorAll<HTMLElement>("[data-off]") ?? []) delete entry.dataset.off;
   };
 
+  // The keys step through the run on show. From a run the canvas isn't in, Left and Right start at its ends.
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const at = iterations.findIndex((i) => i.n === showing);
+    const at = entries.findIndex((i) => samePoint(i, showing));
+    const from = at === -1 ? (e.key === "ArrowLeft" ? entries.length : -1) : at;
     const to =
-      e.key === "ArrowLeft" ? at - 1 : e.key === "ArrowRight" ? at + 1 : e.key === "Home" ? 0 : e.key === "End" ? iterations.length - 1 : null;
+      e.key === "ArrowLeft" ? from - 1 : e.key === "ArrowRight" ? from + 1 : e.key === "Home" ? 0 : e.key === "End" ? entries.length - 1 : null;
     if (to === null) return;
     e.preventDefault();
-    const next = iterations[Math.max(0, Math.min(iterations.length - 1, to))];
+    const next = entries[Math.max(0, Math.min(entries.length - 1, to))];
     if (next === undefined) return;
-    onShow(next.n);
-    list.current?.querySelector<HTMLElement>(`[data-history-n="${next.n}"]`)?.focus({ preventScroll: true });
+    onShow({ session: next.session, n: next.n });
+    list.current?.querySelector<HTMLElement>(`[data-history-key="${entryKey(next)}"]`)?.focus({ preventScroll: true });
   };
 
   return (
@@ -168,9 +191,13 @@ export function Filmstrip({
           </span>
         }
       >
-        <span className="whitespace-nowrap" data-history-count>
-          {`${iterations.length} ${iterations.length === 1 ? "iteration" : "iterations"}${forks.length > 0 ? ` · ${forks.length} ${forks.length === 1 ? "fork" : "forks"}` : ""}`}
-        </span>
+        {runs.length > 1 && run !== null ? (
+          <RunPicker runs={runs} run={run} now={now} onRun={setChosen} />
+        ) : (
+          <span className="whitespace-nowrap" data-history-count>
+            {`${entries.length} ${entries.length === 1 ? "iteration" : "iterations"}${branches > 0 ? ` · ${branches} ${branches === 1 ? "branch" : "branches"}` : ""}`}
+          </span>
+        )}
       </StripHead>
       <div className="relative flex min-w-0 flex-1 self-stretch">
         <EdgeCue side="start" shown={overflows && !ends.start} />
@@ -188,22 +215,22 @@ export function Filmstrip({
         >
           {items.map((item, i) => {
             const snap = fit.pages?.includes(i) === true;
-            return item.kind === "stub" ? (
-              <ForkStub key="stub" view={view} snap={snap} onOpen={onOpen} />
-            ) : item.kind === "fork" ? (
-              <Offshoot key={item.fork.id} fork={item.fork} snap={snap} onOpen={onOpen} />
+            return item.kind === "fork" ? (
+              <Offshoot key={`${item.fork.id}@${entryKey({ session: item.fork.parent, n: item.fork.from })}`} fork={item.fork} snap={snap} onOpen={onOpen} />
             ) : (
               <StillOption
-                key={item.entry.n}
+                key={entryKey(item.entry)}
                 snap={snap}
                 entry={item.entry}
-                latest={item.entry.n === latest}
-                selected={item.entry.n === showing}
+                latest={latest !== undefined && samePoint(item.entry, latest)}
+                selected={samePoint(item.entry, showing)}
+                // With the canvas in another run, the run's first entry takes the tab stop, so the list stays reachable.
+                tabbable={shownAt === -1 ? i === 0 : samePoint(item.entry, showing)}
                 now={now}
                 slot={slot}
                 revision={revision}
                 loadStill={loadStill}
-                onShow={() => onShow(item.entry.n)}
+                onShow={() => onShow({ session: item.entry.session, n: item.entry.n })}
               />
             );
           })}
@@ -252,7 +279,7 @@ type Measured = { readonly lines: readonly EntryNeed[]; readonly plain: number; 
 
 /**
  * What each entry needs: its width at max-content for every line to read whole, and its width with only the words
- * that never give way: an iteration's number, its age and "latest", and a fork's link line.
+ * that never give way: an iteration's number, its age and "latest", and a branch's link line.
  */
 function needs(list: HTMLElement): EntryNeed[] {
   const entries = [...list.children].filter((entry) => entry instanceof HTMLElement);
@@ -283,6 +310,50 @@ function StripHead({ children, steps, ref }: { children: ReactNode; steps?: Reac
       </span>
       {children}
     </div>
+  );
+}
+
+/**
+ * The runs of the trail, newest first, as the head's second line: the run on show by its name, and each option with
+ * its age and what its confirm did. It takes the head's words' width, so the head stays as wide as its words.
+ */
+function RunPicker({ runs, run, now, onRun }: { runs: readonly Run[]; run: Run; now: number; onRun: (key: string) => void }) {
+  const newestFirst = [...runs].reverse();
+  const items = newestFirst.map((r) => ({ value: r.key, label: r.label }));
+  return (
+    <Select items={items} value={run.key} onValueChange={(key) => key !== null && onRun(key)}>
+      <SelectTrigger
+        size="sm"
+        aria-label={`History run: ${run.label}`}
+        className="h-6 w-max border-transparent bg-transparent px-1 py-0 text-xs text-fg-muted hover:text-fg"
+        data-strip-run={run.label}
+      >
+        <span className="whitespace-nowrap">
+          {run.label}
+          <span className="tabular-nums">{` · ${run.entries.length} ${run.entries.length === 1 ? "iteration" : "iterations"}`}</span>
+        </span>
+      </SelectTrigger>
+      <SelectContent align="start" className="w-auto">
+        <SelectGroup>
+          {newestFirst.map((r) => {
+            const first = r.entries[0]!;
+            return (
+              <SelectItem key={r.key} value={r.key} data-run-option={r.label}>
+                <span className="grid gap-0.5">
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="font-medium">{r.label}</span>
+                    <span className="text-xs text-fg-muted tabular-nums">
+                      {`Iteration ${first.n}${r.entries.length > 1 ? `–${r.entries.at(-1)!.n}` : ""} · ${age(first.createdAt, now)}`}
+                    </span>
+                  </span>
+                  <Truncate className="max-w-menu text-xs text-fg-muted">{originText(first.origin)}</Truncate>
+                </span>
+              </SelectItem>
+            );
+          })}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -330,6 +401,7 @@ function StillOption({
   snap,
   latest,
   selected,
+  tabbable,
   now,
   slot,
   revision,
@@ -340,13 +412,14 @@ function StillOption({
   snap: boolean;
   latest: boolean;
   selected: boolean;
+  tabbable: boolean;
   now: number;
   slot: SlotId | null;
   revision: number;
   loadStill: LoadIterationStill;
   onShow: () => void;
 }) {
-  const load = useCallback(() => loadStill({ n: entry.n, slot }), [loadStill, entry.n, slot]);
+  const load = useCallback(() => loadStill({ session: entry.session, n: entry.n, slot }), [loadStill, entry.session, entry.n, slot]);
   const origin = originText(entry.origin);
   const when = `${age(entry.createdAt, now)}${latest ? " · latest" : ""}`;
   return (
@@ -355,11 +428,13 @@ function StillOption({
         role="option"
         aria-selected={selected}
         aria-label={`Iteration ${entry.n}, ${when.replace(" · ", ", ")}: ${origin}`}
-        tabIndex={selected ? 0 : -1}
+        tabIndex={tabbable ? 0 : -1}
         onClick={onShow}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onShow())}
         className={cn(ENTRY, snap && SNAP, ENTRY_BOX, "cursor-pointer outline-none inset-ring-border-strong hover:bg-hover focus-visible:inset-ring-2 focus-visible:inset-ring-ring", selected && "bg-selected")}
         data-history-n={entry.n}
+        data-history-session={entry.session}
+        data-history-key={entryKey(entry)}
         data-selected={selected || undefined}
         data-tint={selected || undefined}
       >
@@ -386,16 +461,21 @@ function StillOption({
   );
 }
 
-/** A fork made from the iteration before it, as wide as a still and dashed as the fork's own stub, so it never reads as one more iteration. */
+/**
+ * A branch that leaves the trail at the iteration before it, as wide as a still and dashed, so it never reads as one
+ * more iteration. An ancestor's own continuation past the point this trail left it reads the same way: once another
+ * branch is primary, the old primary is one more branch off the trail.
+ */
 function Offshoot({ fork, snap, onOpen }: { fork: ForkBranch; snap: boolean; onOpen: (id: SessionId) => void }) {
   return (
-    <Hint label={`Open the fork ${fork.title}`} side="top">
+    <Hint label={`Open the branch ${fork.title}`} side="top">
       <button
         type="button"
         onClick={() => onOpen(fork.id)}
         className={cn(ENTRY, snap && SNAP, FORK_BOX, "outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring")}
         data-history-fork={fork.id}
         data-history-from={fork.from}
+        data-history-continues={fork.id === fork.parent || undefined}
       >
         <ForkLines first={fork.title} second={`from iteration ${fork.from}`} />
       </button>
@@ -406,41 +486,17 @@ function Offshoot({ fork, snap, onOpen }: { fork: ForkBranch; snap: boolean; onO
 /** Dashed in the entries' strong edge, so a link off the strip holds its shape as an entry does. */
 const FORK_BOX = "flex h-still items-center gap-2 rounded-lg border border-dashed border-border-strong px-3 text-left";
 
-function ForkLines({ first, second, lead }: { first: string; second: string; lead?: string }) {
+function ForkLines({ first, second }: { first: string; second: string }) {
   return (
     <>
       <GitBranch aria-hidden className="size-3.5 shrink-0 text-fg-muted" />
       <span className="grid min-w-0 flex-1 gap-0.5 text-xs">
-        <span className="flex min-w-0 gap-1">
-          {lead !== undefined && <span className="shrink-0">{lead}</span>}
-          <Truncate className="font-medium" data-history-link-name>
-            {first}
-          </Truncate>
-        </span>
+        <Truncate className="font-medium" data-history-link-name>
+          {first}
+        </Truncate>
         <span className="text-fg-muted">{second}</span>
       </span>
     </>
-  );
-}
-
-/** Where a fork came from, first in its strip: a link back to that iteration's brainstorm, unless it is gone. */
-function ForkStub({ view, snap, onOpen }: { view: SessionView; snap: boolean; onOpen: (id: SessionId) => void }) {
-  const fork = view.fork;
-  if (fork === null) return null;
-  const label = <ForkLines lead="from" first={fork.parent.title} second={fork.parent.state === "gone" ? `iteration ${fork.from} · discarded` : `iteration ${fork.from}`} />;
-  return fork.parent.state === "gone" ? (
-    <span className={cn(ENTRY, snap && SNAP, FORK_BOX)} data-fork-stub="gone">
-      {label}
-    </span>
-  ) : (
-    <button
-      type="button"
-      onClick={() => onOpen(fork.parent.id)}
-      className={cn(ENTRY, snap && SNAP, FORK_BOX, "outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring")}
-      data-fork-stub={fork.parent.id}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -454,7 +510,7 @@ export function PastBar({ n, onLatest }: { n: IterationN; onLatest: () => void }
     <div role="status" className="flex h-10 shrink-0 items-center gap-2 border-b border-info/40 bg-info-subtle pr-2 pl-4 text-sm" data-tint data-past-bar={n}>
       <HistoryIcon aria-hidden className="size-3.5 shrink-0 text-info" />
       <span className="shrink-0 font-medium">Viewing iteration {n}</span>
-      <Truncate className="w-0 flex-1 text-fg-muted">Pick variants, then fork from here.</Truncate>
+      <Truncate className="w-0 flex-1 text-fg-muted">Mark what to keep, then confirm as a branch from here.</Truncate>
       <Kbd>Esc</Kbd>
       <Button variant="outline" onClick={onLatest} data-back-to-latest>
         Back to latest

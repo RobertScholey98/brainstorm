@@ -122,7 +122,7 @@ try {
 
   await regenerate("blocks", "make the spin feel less random");
   check(
-    "Regenerate leads with a glyph as Fork and Export do, and its popover's description takes their grammar, the brainstorm then a clause",
+    "Regenerate leads with a glyph as Export does, and its popover's description takes its grammar, the brainstorm then a clause",
     [
       await window.$eval("[data-regenerate-toggle]", (b) => b.firstElementChild?.tagName.toLowerCase()),
       (await window.textContent("[data-regenerate-menu] [data-slot=popover-description]"))?.trim(),
@@ -331,7 +331,7 @@ try {
         const hint = document.querySelector('[data-slot="tooltip-content"]').getBoundingClientRect();
         const crumb = document.querySelector("[data-topbar] nav").getBoundingClientRect();
         const end = Math.max(crumb.right, document.querySelector("[data-topbar] [data-iteration]").getBoundingClientRect().right);
-        const row = (document.querySelector("[data-header-status]") ?? document.querySelector("[data-header-actions]")).getBoundingClientRect();
+        const row = document.querySelector("[data-header-thread], [data-header-status], [data-header-actions]").getBoundingClientRect();
         return {
           offRow: Math.round(row.left - hint.right) >= 8,
           badgeCovered: hint.right >= end - 0.5,
@@ -341,7 +341,7 @@ try {
       }),
     );
   check(
-    "the blocked Regenerate's hint leads with Regenerate, stands at least 8 px off the status's divider, and covers the breadcrumb and badge from start to end, leaving no half-word or sliver",
+    "the blocked Regenerate's hint leads with Regenerate, stands at least 8 px off the thread chip's divider, and covers the breadcrumb and badge from start to end, leaving no half-word or sliver",
     await overText(),
     { offRow: true, badgeCovered: true, text: "covered from its start", name: "Regenerate" },
   );
@@ -349,17 +349,17 @@ try {
   await window.setViewportSize({ width: 1100, height: 720 });
   check("nor at 1100", await headerHints(), [[], [], []]);
   check(
-    "at 1100 with a request open, Fork and Export give up their labels for icons, so the title still reads whole",
+    "at 1100 with a request open, Export gives up its label for its icon, so the title still reads whole",
     await settled(() =>
       window.evaluate(() => {
         const title = document.querySelector("[data-session-title]");
         return [
-          ["[data-fork-toggle]", "[data-export]"].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().width)),
+          ["[data-export]"].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().width)),
           title.scrollWidth <= title.clientWidth,
         ];
       }),
     ),
-    [[28, 28], true],
+    [[28], true],
   );
   await window.setViewportSize({ width: 1440, height: 900 });
   await window.click('[data-request-action="open_thread"]');
@@ -369,16 +369,13 @@ try {
   t3.startRun(DEMO_THREAD);
   check("working", await phase("working"), { message: "Agent working", actions: ["open_thread", "withdraw"] });
   check("working shows progress", await window.isVisible("[data-request-phase] [data-progress]"), true);
-  // A count says nothing in its first second.
-  await window.waitForFunction(() => document.querySelector('[data-thread="working"] [data-status-elapsed]')?.textContent !== "");
   check(
-    "the sidebar's thread row says the agent is working and for how long, in the mark home's rows use",
-    await window.$eval('[data-thread="working"]', (el) => ({
-      text: el.textContent.trim().replace(/\d+/, "N"),
-      mark: document.querySelector("[data-thread-mark]")?.dataset.threadMark,
-      pulses: document.querySelector("[data-thread-mark] .animate-ping") !== null,
+    "the top bar's thread chip says the thread is busy with the pulsing mark home's rows use",
+    await window.$eval('[data-thread-chip][data-thread="working"]', (el) => ({
+      text: el.textContent.trim(),
+      pulses: el.querySelector(".animate-ping") !== null,
     })),
-    { text: "Agent working Ns", mark: "accent", pulses: true },
+    { text: "Thread", pulses: true },
   );
   at.push(await withdrawAt());
   await window.click("[data-back]");
@@ -430,9 +427,9 @@ try {
   check("no change", await phase("no_change"), { message: "The agent replied in T3 without changing the design.", actions: ["retry", "open_thread", "withdraw"] });
   at.push(await withdrawAt());
   check(
-    "Open thread and Withdraw keep one x from queued through working, asking and run failed, and at no change move only by what the fit takes from Regenerate",
-    [at.slice(0, -1).map(([x]) => x), at.map(([, fromRegenerate]) => fromRegenerate)],
-    [Array(at.length - 1).fill(at[0][0]), Array(at.length).fill(at[0][1])],
+    "Open thread and Withdraw keep one x from queued through working and asking, and once Retry joins them at run failed and no change move only by what the fit takes from the header, never from beside Regenerate",
+    [at.slice(0, 3).map(([x]) => x), at.map(([, fromRegenerate]) => fromRegenerate)],
+    [Array(3).fill(at[0][0]), Array(at.length).fill(at[0][1])],
   );
   await window.click('[data-request-action="withdraw"]');
   check("Withdraw closes the request", await phase("withdrawn"), { message: "Request withdrawn", actions: [] });
@@ -472,90 +469,18 @@ try {
   check("Resend sends it to the new thread", [await phase("queued"), markers(TAKEOVER, 3)], [{ message: "Queued in T3", actions: ["open_thread", "withdraw"] }, 1]);
 
   t3.setMissing(TAKEOVER, true);
-  const phrase = 'pick up the brainstorm session titled "Chore roulette"';
-  check("missing thread", await phase("thread_lost"), { message: "This brainstorm's thread is gone. In a T3 thread on this project, say:", actions: ["withdraw"] });
-  check(
-    "the strip holds the takeover phrase on its own line, with Copy phrase beside it at the same height, 8 px off",
-    await window.$eval("[data-request-detail]", (el) => {
-      const phrase = el.querySelector("[data-takeover-phrase]");
-      const copy = el.querySelector('[data-request-action="copy_phrase"]').getBoundingClientRect();
-      const box = phrase.getBoundingClientRect();
-      return [
-        phrase.textContent,
-        getComputedStyle(phrase).fontFamily.includes("Cascadia") || getComputedStyle(phrase).fontFamily.includes("mono"),
-        [Math.round(box.top), Math.round(box.bottom)].join() === [Math.round(copy.top), Math.round(copy.bottom)].join(),
-        Math.round(copy.left - box.right),
-      ];
-    }),
-    [phrase, true, true, 8],
-  );
-  check("the session's thread reads Thread lost, the bar's term", (await window.textContent('[data-thread="lost"]'))?.trim(), "Thread lost");
-  check(
-    "one lost thread takes one amber status: the header's, beside its divider, with the strip saying what to do and the sidebar row only stating it",
-    await window.evaluate(() => {
-      const probe = document.body.appendChild(Object.assign(document.createElement("i"), { style: "color: var(--warning)" }));
-      const amber = getComputedStyle(probe).color;
-      probe.remove();
-      const row = document.querySelector('[data-thread="lost"]');
-      const mark = row.parentElement.querySelector('[data-slot="sidebar-menu-mark"] > span');
-      const divider = document.querySelector('[data-header-status] [data-slot="separator"]').getBoundingClientRect();
-      return {
-        header: getComputedStyle(document.querySelector("[data-topbar] [data-request-label]")).color === amber,
-        row: getComputedStyle(row).color === amber || getComputedStyle(mark).backgroundColor === amber,
-        divider: [Math.round(divider.width), Math.round(divider.height)],
-      };
-    }),
-    { header: true, row: false, divider: [1, 16] },
-  );
-  await window.click('[data-request-detail] [data-request-action="copy_phrase"]');
-  await window.waitForSelector('[data-request-detail] [data-request-action="copy_phrase"] [data-copied]');
-  // The clipboard is the machine's, and an app holding it open makes a read come back empty, so the read is retried.
-  const clipboardText = async () => {
-    for (let tries = 0; tries < 20; tries++) {
-      const text = await app.evaluate(({ clipboard }) => clipboard.readText());
-      if (text !== "") return text;
-      await window.waitForTimeout(100);
-    }
-    return "";
-  };
-  check("Copy phrase puts the takeover phrase on the clipboard", await clipboardText(), phrase);
+  check("missing thread", await phase("thread_lost"), {
+    message: "This brainstorm's thread is gone. Start a fresh thread, and the open request goes to it.",
+    actions: ["fresh_thread", "withdraw"],
+  });
+  check("the top bar's thread chip reads Thread lost", (await window.textContent("[data-thread-chip]"))?.trim(), "Thread lost");
+  check("Regenerate is disabled while the thread is lost", await window.isDisabled("[data-regenerate-toggle]"), true);
   await shot(window, shots, "8-thread-lost");
-  await window.click('[data-request-action="withdraw"]');
-  await window.waitForSelector('[data-thread-lost][data-request-phase="withdrawn"]', { timeout: PHASE_MS });
-  check("once withdrawn, the bar still names the lost thread, not the withdrawal", (await window.textContent("[data-thread-lost]"))?.trim(), "Thread lost");
-  check(
-    "with no request open, the top bar still offers the takeover phrase",
-    await window.$eval("[data-takeover]", (el) => [...el.querySelectorAll("p")].map((p) => p.textContent).concat(el.querySelector("button")?.innerText.trim())),
-    ["In a T3 thread on this project, say:", phrase, "Copy phrase"],
-  );
-  check("Regenerate is disabled while the session is unattached", await window.isDisabled("[data-regenerate-toggle]"), true);
-  check(
-    "the takeover callout stands 8 to 12 px clear of the next section's rule, the room a row's text keeps above it",
-    await window.$eval("[data-takeover] [data-slot=callout]", (callout) => {
-      const bottom = callout.getBoundingClientRect().bottom;
-      const rule = [...document.querySelectorAll("[data-sidebar=separator]")].map((r) => r.getBoundingClientRect().top).find((top) => top > bottom);
-      return rule !== undefined && rule - bottom >= 8 && rule - bottom <= 12;
-    }),
-    true,
-  );
-  await window.setViewportSize({ width: 1100, height: 720 });
-  check(
-    "in the 240 px sidebar at 1100 the icon opens the sentence's line, so the icon, the sentence and the phrase start on one edge, and the phrase keeps to three lines",
-    await settled(() =>
-      window.$eval("[data-takeover]", (el) => {
-        const callout = el.querySelector("[data-slot=callout]").getBoundingClientRect();
-        const phrase = el.querySelector("[data-takeover-phrase]");
-        const box = phrase.getBoundingClientRect();
-        const style = getComputedStyle(phrase);
-        const lines = Math.round((box.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)) / parseFloat(style.lineHeight));
-        const [icon, sentence] = [el.querySelector("svg[data-callout-tone]").getBoundingClientRect(), el.querySelector("p").getBoundingClientRect()];
-        return [[icon, sentence, box].map((r) => Math.round(r.left - callout.left)), Math.round(icon.top) >= Math.round(sentence.top), Math.round(callout.right - box.right) <= 12, lines <= 3];
-      }),
-    ),
-    [[12, 12, 12], true, true, true],
-  );
-  await window.setViewportSize({ width: 1440, height: 900 });
-  await shot(window, shots, "9-unattached");
+  await window.click('[data-request-action="fresh_thread"]');
+  await window.waitForSelector('[data-request-phase="queued"]', { timeout: PHASE_MS });
+  const fresh = t3.started();
+  check("Start a fresh thread starts one T3 thread, and the open request follows to it", [fresh.length, markers(fresh[0]?.thread, 3)], [1, 1]);
+  await shot(window, shots, "9-fresh-thread");
 
   check("the window logged no errors or warnings", errors, []);
 } finally {

@@ -1,0 +1,43 @@
+import type { HistoryEntry, IterationN, SessionId } from "../core/types";
+
+/**
+ * A run of history (ADR 009): the iterations from one confirm up to the next. Confirms are like commits, so the strip
+ * shows one run at a time and a dropdown steps between them. A branch's first iteration is a confirm made on a past
+ * iteration, so it starts a run too.
+ */
+export type Run = {
+  /** The run's first entry, as `session:n`, which never changes as the run grows. */
+  readonly key: string;
+  /** "Start" for what came before the first confirm, otherwise "Confirm k", counting confirms on the trail from 1. */
+  readonly label: string;
+  readonly entries: readonly HistoryEntry[];
+};
+
+export const entryKey = (at: { readonly session: SessionId; readonly n: IterationN }): string => `${at.session}:${at.n}`;
+
+/** Whether an entry starts a run: a fulfilled confirm, or a branch's first iteration. */
+export function startsRun(entry: HistoryEntry): boolean {
+  return entry.origin.kind === "fork" || (entry.origin.kind === "request" && entry.origin.body.scope.kind === "confirm");
+}
+
+/** The trail cut into runs, oldest first. A trail that opens on a confirm has no Start run. */
+export function splitRuns(entries: readonly HistoryEntry[]): Run[] {
+  const runs: HistoryEntry[][] = [];
+  for (const entry of entries) {
+    const last = runs.at(-1);
+    if (last === undefined || startsRun(entry)) runs.push([entry]);
+    else last.push(entry);
+  }
+  let confirms = 0;
+  return runs.map((run) => {
+    const first = run[0]!;
+    const label = startsRun(first) ? `Confirm ${(confirms += 1)}` : "Start";
+    return { key: entryKey(first), label, entries: run };
+  });
+}
+
+/** The run holding `at`, or the newest run when none does. */
+export function runOf(runs: readonly Run[], at: { readonly session: SessionId; readonly n: IterationN }): Run | null {
+  const key = entryKey(at);
+  return runs.find((r) => r.entries.some((e) => entryKey(e) === key)) ?? runs.at(-1) ?? null;
+}

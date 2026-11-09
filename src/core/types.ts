@@ -525,7 +525,7 @@ export type Observation =
   | { readonly kind: "running"; readonly pendingRequestCount: number }
   | { readonly kind: "ended"; readonly failed: boolean };
 
-export type RequestPhaseAction = "retry" | "resend" | "withdraw" | "open_thread" | "copy_phrase";
+export type RequestPhaseAction = "retry" | "resend" | "withdraw" | "open_thread" | "fresh_thread";
 
 export type RequestPhase = { readonly actions: readonly RequestPhaseAction[] } & (
   | { readonly phase: "sending" }

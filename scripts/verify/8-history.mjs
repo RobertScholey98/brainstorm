@@ -214,6 +214,19 @@ async function stripScroll(window, act) {
 const canvasAt = (window) =>
   window.$eval("[data-canvas-iteration]", (el) => ({ n: Number(el.dataset.canvasIteration), past: el.dataset.canvasPast === undefined ? null : Number(el.dataset.canvasPast) }));
 const pool = (canvas) => canvas.textContent(inBlock("wheel/neon", "pool"));
+/** The sidebar shows one slot at a time (ADR 009); its picker switches. */
+async function showSlot(window, slot) {
+  if ((await window.getAttribute("[data-slot-picker]", "data-slot-picker")) === slot) return;
+  await window.click("[data-slot-picker]");
+  await window.click(`[data-slot-option="${slot}"]`);
+  await window.waitForSelector(`[data-slot-picker="${slot}"]`);
+}
+const rows = (window, group) => window.$$eval(`[${group}] [data-variant]`, (els) => els.map((e) => e.dataset.variant));
+/** A row's marks show on hover, as T3 Code's row actions do. */
+async function mark(window, kind, variant) {
+  await window.hover(`[data-slot-id] [data-variant="${variant}"]`);
+  await window.click(`[data-${kind}="${variant}"]`);
+}
 
 let { app, window, errors } = await launch(home, env);
 let session;
@@ -311,6 +324,7 @@ try {
   );
   await shot(window, shots, "1-strip");
 
+  await showSlot(window, "wheel");
   const latestWheel = await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant");
   await window.click('[data-history-n="1"]');
   await window.waitForSelector("[data-past-bar]");
@@ -332,9 +346,9 @@ try {
     0,
   );
   check(
-    "in the past Regenerate is off, Fork reads Fork iteration 1, and the badge reads Iteration 1 of 2",
-    [await window.isDisabled("[data-regenerate-toggle]"), (await window.textContent("[data-fork-toggle]")).trim(), (await window.textContent("[data-iteration-past]")).trim()],
-    [true, "Fork iteration 1", "Iteration 1 of 2"],
+    "in the past Regenerate is off, Confirm at the sidebar's foot reads Confirm as a branch, and the badge reads Iteration 1 of 2",
+    [await window.isDisabled("[data-regenerate-toggle]"), (await window.textContent("[data-confirm-toggle]")).trim(), (await window.textContent("[data-iteration-past]")).trim()],
+    [true, "Confirm as a branch", "Iteration 1 of 2"],
   );
   check("the past shows no pins", await canvas.$$eval(".bs-pin", (els) => els.length), 0);
   await canvas.click(inBlock("result/card", "chore"));
@@ -371,38 +385,36 @@ try {
   await shot(window, shots, "2-past");
 
   // A pick in the past is kept apart: the latest iteration's own pick doesn't move.
+  await showSlot(window, "wheel");
   await window.click('[data-slot-id="wheel"] [data-variant="reel"]');
   await canvas.waitForSelector(".bs-frame[data-slot=wheel] div[data-bid='wheel/reel']", { state: "attached" });
   check("the past shows the variant picked there", await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant"), "reel");
 
-  await window.click('[data-fork-toggle]');
-  await window.waitForSelector("[data-fork-menu]");
-  check("in the past the fork popover takes the button's name", [(await window.textContent("[data-fork-toggle]")).trim(), (await window.$eval("[data-fork-menu]", (el) => [el.querySelector("[data-slot=popover-title]").textContent.trim(), el.querySelector("[data-slot=popover-description]").textContent.trim()]))[0]], ["Fork iteration 1", "Fork iteration 1"]);
+  // Marks in the past are the window's own, for a branch from there (ADR 009).
+  check("with nothing marked, Confirm as a branch is still on, since a word on what to try can make a branch alone", await window.isDisabled("[data-confirm-toggle]"), false);
+  await mark(window, "approve", "reel");
+  await window.waitForSelector('[data-main-group] [data-variant="reel"]');
+  check("a thumbs up in the past makes Reel the wheel's Main there, at the top, and the rest its options", [await rows(window, "data-main-group"), await rows(window, "data-options-group")], [["reel"], ["neon", "terminal"]]);
+  await window.click("[data-confirm-toggle]");
+  await window.waitForSelector("[data-confirm-menu]");
   check(
-    "forking from the past carries the variants picked there",
-    await window.$$eval("[data-fork-menu] [data-carry-slot]", (els) => els.map((e) => [e.dataset.carrySlot, e.querySelector("dd span").textContent.trim()])),
-    [
-      ["wheel", "Slot reel"],
-      ["result", "Assignment card"],
-    ],
+    "its popover is named for the branch and lists what the branch starts with",
+    await window.$eval("[data-confirm-menu]", (el) => [
+      el.querySelector("[data-slot=popover-title]").textContent.trim(),
+      [...el.querySelectorAll("[data-confirm-slot]")].map((s) => s.dataset.confirmSlot),
+      el.querySelector("[data-confirm-dropped]")?.dataset.confirmDropped ?? null,
+      el.querySelector("[data-confirm-hint]").textContent.trim(),
+    ]),
+    ["Confirm as a branch", ["wheel"], "2", "Applies at once"],
   );
-  const carriesEdge = () =>
-    window.$eval("[data-fork-menu] [data-fork-carries] dl", (box) => {
-      const probe = document.body.appendChild(document.createElement("div"));
-      probe.style.color = "var(--border-strong)";
-      const strong = getComputedStyle(probe).color;
-      probe.remove();
-      return getComputedStyle(box).borderTopColor === strong ? "border-strong" : getComputedStyle(box).borderTopColor;
-    });
-  const edges = [await carriesEdge()];
-  await window.emulateMedia({ colorScheme: "dark" });
-  edges.push(await settled(carriesEdge));
-  await window.emulateMedia({ colorScheme: "light" });
-  check("the carries-over box keeps the strong edge in both themes, so it holds its shape on the popover in dark", edges, ["border-strong", "border-strong"]);
-  await shot(window, shots, "3-fork-past");
+  await window.fill("[data-confirm-instruction]", "Try the reel for mornings");
+  check("an instruction there goes to the agent instead", (await window.textContent("[data-confirm-hint]")).trim(), "Goes to the agent");
+  await window.fill("[data-confirm-instruction]", "");
+  check("nothing in the confirm popover runs past its box", await outsideBox(window, "[data-confirm-menu]"), []);
+  await shot(window, shots, "3-confirm-past");
   await window.keyboard.press("Escape");
-  await window.waitForSelector("[data-fork-menu]", { state: "detached" });
-  check("Escape closes the Fork popover and stays in the past", (await canvasAt(window)).past, 1);
+  await window.waitForSelector("[data-confirm-menu]", { state: "detached" });
+  check("Escape closes the popover and stays in the past", (await canvasAt(window)).past, 1);
 
   // Keyboard: the strip is one listbox.
   await window.focus('[data-history-n="1"]');
@@ -418,6 +430,7 @@ try {
   await window.waitForSelector("[data-past-bar]", { state: "detached" });
   check("Escape in the past goes back to latest", [await canvasAt(window), (await pool(canvas)).includes("weighted by chores")], [{ n: 2, past: null }, true]);
   check("where the pick made in the past didn't move the latest one", await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant"), latestWheel);
+  check("nor did the marks made there: the latest has no Main", (await window.$("[data-main-empty]")) !== null, true);
   await window.click('[data-history-n="1"]');
   await window.click("[data-back-to-latest]");
   await window.waitForSelector("[data-past-bar]", { state: "detached" });
@@ -440,250 +453,77 @@ try {
   await window.click("[data-history-toggle]");
   await window.waitForSelector("[data-history]");
 
-  // Fork from the latest iteration.
-  await window.click('[data-slot-id="wheel"] [data-variant="neon"]');
-  await window.waitForFunction(() => document.querySelector('[data-slot-id="wheel"] [data-variant="neon"]')?.getAttribute("aria-checked") === "true");
-  await window.click("[data-fork-toggle]");
-  await window.waitForSelector("[data-fork-menu]");
-  check("from the latest the button reads Fork", (await window.textContent("[data-fork-toggle]")).trim(), "Fork");
-  check(
-    "and its popover takes the button's name, with the iteration in its description, in the one <context> · <clause> grammar",
-    await window.$eval("[data-fork-menu]", (el) => [el.querySelector("[data-slot=popover-title]").textContent.trim(), el.querySelector("[data-slot=popover-description]").textContent.trim()]),
-    ["Fork", "Chore roulette · a new brainstorm from iteration 2, with the variant showing in each slot"],
-  );
-  check(
-    "the fork popover's labels take the one overlay label, 12 px medium in the description's muted tone, and its footer marks the new thread with Fork's own glyph, not a link's",
-    await window.$eval("[data-fork-menu]", (el) => {
-      const muted = getComputedStyle(el.querySelector("[data-slot=popover-description]")).color;
-      return {
-        labels: [...el.querySelectorAll("[data-slot=field-label]")].map((l) => [l.textContent.trim(), getComputedStyle(l).fontSize, getComputedStyle(l).fontWeight, getComputedStyle(l).color === muted]),
-        glyph: el.querySelector("[data-fork-hint] svg").getAttribute("class"),
-      };
-    }),
-    { labels: [["Instruction", "12px", "500", true], ["Carries over", "12px", "500", true]], glyph: "lucide lucide-git-branch size-3.5" },
-  );
-  check(
-    "the popover lists what carries over: a variant per slot, one setting, one open pin",
-    await window.$eval("[data-fork-menu]", (el) => ({
-      slots: [...el.querySelectorAll("[data-carry-slot]")].map((e) => e.dataset.carrySlot),
-      settings: Number(el.querySelector("[data-carry-settings]").dataset.carrySettings),
-      pins: Number(el.querySelector("[data-carry-pins]").dataset.carryPins),
-      send: el.querySelector("[data-fork-send]").disabled,
-      hint: el.querySelector("[data-fork-hint]").textContent.trim(),
-    })),
-    { slots: ["wheel", "result"], settings: 1, pins: 1, send: true, hint: "Say what the fork should try" },
-  );
-  await window.fill("[data-fork-instruction]", "Try a calmer wheel for mornings");
-  check("an instruction turns Send on and the hint to the new thread", [await window.isDisabled("[data-fork-send]"), (await window.textContent("[data-fork-hint]")).trim()], [false, "Starts a new T3 thread"]);
-  await shot(window, shots, "5-fork-latest");
-  await window.click("[data-fork-send]");
-  await window.waitForSelector("[data-lineage]");
-  await window.waitForSelector('[data-thread]:not([data-thread="starting"])', { timeout: PHASE_MS });
+  // Marks at the latest are Rob's, stored, and undone the same way (ADR 009).
+  await showSlot(window, "wheel");
+  check("at the latest Confirm reads Confirm and waits for a mark", [(await window.textContent("[data-confirm-toggle]")).trim(), await window.isDisabled("[data-confirm-toggle]")], ["Confirm", true]);
+  await mark(window, "trash", "terminal");
+  await window.waitForSelector("[data-trashed-fold]");
+  check("a trashed option leaves the options for a fold below them", await rows(window, "data-options-group"), ["neon", "reel"]);
+  await mark(window, "approve", "neon");
+  await window.waitForSelector('[data-main-group] [data-variant="neon"]');
+  check("a thumbs up makes Neon Main, at the top, and what shows", [await rows(window, "data-main-group"), await window.getAttribute('[data-slot-id="wheel"] [data-showing]', "data-variant")], [["neon"], "neon"]);
+  check("both marks are stored, so the agent reads them in context", context(session).marks, { mains: { wheel: "neon" }, grafts: [], trashed: ["wheel/terminal"] });
+  check("Confirm is on once there is something to lock in", await window.isDisabled("[data-confirm-toggle]"), false);
+  await shot(window, shots, "5-marks");
+  await mark(window, "approve", "neon");
+  await window.waitForSelector("[data-main-empty]");
+  await window.click("[data-trashed-fold] button");
+  await window.click('[data-restore="terminal"]');
+  await window.waitForSelector("[data-trashed-fold]", { state: "detached" });
+  check("a second thumbs up and Restore undo them", context(session).marks, { mains: {}, grafts: [], trashed: [] });
 
-  const started = t3.started();
-  check("Send runs one thread start in the parent's project", started.map((s) => s.project), ["chore-roulette"]);
-  // The fork's id as its message names it; the parent's offshoot below has to link to the same one.
-  const forkId = started[0]?.message.match(/session (s_[a-z0-9]+)/)?.[1];
-  check("the window opened the fork, whose sidebar links back to the parent", await window.getAttribute("[data-forked-from]", "data-forked-from"), session);
+  // Confirm on a past iteration makes a branch, on the same thread (ADR 009).
+  await window.click('[data-history-n="1"]');
+  await window.waitForSelector("[data-past-bar]");
+  await showSlot(window, "wheel");
+  await mark(window, "approve", "reel");
+  await window.waitForSelector('[data-main-group] [data-variant="reel"]');
+  const sentBefore = t3.sent().length;
+  await window.click("[data-confirm-toggle]");
+  await window.click("[data-confirm-send]");
+  await window.waitForSelector("[data-branch-line]");
+  const branchId = await window.getAttribute("[data-branch-line]", "data-branch-line");
+  check("the window opened the branch, which says where it left from and offers Make primary", [(await window.textContent("[data-branch-line]")).replace("Make primary", "").trim(), (await window.$("[data-make-primary]")) !== null], ["Branch from iteration 1", true]);
+  check("keeping a Main needs no agent and no new thread", [t3.sent().length - sentBefore, t3.started()], [0, []]);
+  const branched = context(branchId);
+  check("the branch is on the brainstorm's own thread", branched.attachedThread, DEMO_THREAD);
+  check("its first iteration numbers on from where it left, 2, with only Reel in the wheel and the unmarked result as it was", [branched.latest.n, [...branched.latest.blocks].sort()], [2, ["result/card", "result/receipt", "wheel/reel"]]);
+  check("Rob's setting is baked in as a default", branched.fork.baked.map((b) => [b.blockId, b.prop, b.value]), [["result/card", "headline", "Fate has spoken"]]);
+  const branchCopy = join(home, "branch-copy");
+  must("pull branch", brainstorm(env, ["pull", branchId, "--out", branchCopy, "--json"]));
   check(
-    "the line words the fork as the strip's stub does, from its parent and then the iteration, the branch glyph saying fork, so the parent's name keeps the room",
-    await window.$eval("[data-forked-line]", (el) => [el.textContent, el.dataset.cut ?? null]),
-    ["from Chore roulette · iteration 2", null],
+    "in the block itself, with one variant folder in the wheel",
+    [JSON.parse(readFileSync(join(branchCopy, "slots", "result", "card", "block.json"), "utf8")).props.appearance.headline.default, readdirSync(join(branchCopy, "slots", "wheel"))],
+    ["Fate has spoken", ["reel"]],
   );
-  check(
-    "the line is one phrase on one line, the iteration one space after the parent's name, not a second column",
-    await window.$eval("[data-forked-line]", (el) => {
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
-      return [el.children.length, lines.size];
-    }),
-    [0, 1],
-  );
-  check(
-    "a long parent title gives way on that line, and the iteration it forked from reads whole after the cut",
-    await window.$eval("[data-forked-line]", (el) => {
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      el.style.maxWidth = `${range.getBoundingClientRect().width - 30}px`;
-      return new Promise((done) =>
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            const cut = el.dataset.cut ?? "";
-            el.style.removeProperty("max-width");
-            done([cut.startsWith("from Chore"), cut.endsWith("… · iteration 2")]);
-          }),
-        ),
-      );
-    }),
-    [true, true],
-  );
-  check(
-    "the fork line's glyph sits on the Thread row's mark column, and its text on the Thread title's edge",
-    await window.evaluate(() => {
-      const centre = (el) => {
-        const r = el.getBoundingClientRect();
-        return r.left + r.width / 2;
-      };
-      const dot = document.querySelector("[data-thread-link] span.size-1\\.5");
-      const glyph = document.querySelector("[data-forked-from] svg");
-      const title = document.querySelector("[data-thread-link] [data-slot='truncate'], [data-thread-link] [data-thread]");
-      const line = document.querySelector("[data-forked-line]");
-      return [Math.round(centre(glyph) - centre(dot)), Math.round(line.getBoundingClientRect().left - title.getBoundingClientRect().left)];
-    }),
-    [0, 0],
-  );
-  check(
-    "its first message is the [brainstorm] marker for the fork's request 1, telling the new thread to attach",
-    started[0]?.message.split("\n").slice(0, 2),
-    [
-      `[brainstorm] session ${forkId} · request 1 · fork of ${session} iteration 2 · scope: all · feedback: #1 · freetext: "Try a calmer wheel for mornings"`,
-      `Handle with the use-brainstorm skill: this thread is new, so run \`brainstorm session attach ${forkId}\`, then \`brainstorm context ${forkId}\`.`,
-    ],
-  );
-  const forked = context(forkId);
-  check("the fork is attached to the thread thread start made", forked.attachedThread, started[0]?.thread);
-  check(
-    "its iteration 1 narrows each slot to the variant that was showing",
-    [...forked.latest.blocks].sort(),
-    ["result/card", "wheel/neon"],
-  );
-  check("Rob's setting is baked in as a default", forked.fork.baked.map((b) => [b.blockId, b.prop, b.value]), [["result/card", "headline", "Fate has spoken"]]);
-  const forkCopy = join(home, "fork-copy");
-  must("pull fork", brainstorm(env, ["pull", forkId, "--out", forkCopy, "--json"]));
-  check(
-    "in the block itself, with one variant folder per slot",
-    [
-      JSON.parse(readFileSync(join(forkCopy, "slots", "result", "card", "block.json"), "utf8")).props.appearance.headline.default,
-      readdirSync(join(forkCopy, "slots", "wheel")),
-    ],
-    ["Fate has spoken", ["neon"]],
-  );
-  check("the open pin carries over", forked.feedback.open.map((f) => [f.text, f.pin.blockId]), [["Make the headline louder", "result/card"]]);
-  check("and the fork's request 1 is open, sent to its new thread", [forked.request?.n, forked.request?.scope], [1, { kind: "all" }]);
-
-  check(
-    "the fork's breadcrumb shows its lineage",
-    (await window.textContent("[data-lineage]")).replace(/\s+/g, " ").trim().includes("Chore roulette"),
-    true,
-  );
-  check(
-    "a fork opens on one iteration, so its strip starts shut whatever Rob chose in the parent",
-    [await window.getAttribute("[data-history-toggle]", "aria-pressed"), (await window.$("[data-history]")) !== null],
-    ["false", false],
-  );
-  await window.click("[data-history-toggle]");
+  check("the open pin carries over, and no request is open", [branched.feedback.open.map((f) => [f.text, f.pin.blockId]), branched.request], [[["Make the headline louder", "result/card"]], null]);
+  if ((await window.$("[data-history]")) === null) await window.click("[data-history-toggle]");
   await window.waitForSelector("[data-history]");
-  check("its strip starts with a stub back to the parent",await window.getAttribute("[data-fork-stub]", "data-fork-stub"), session);
-  check("and its first still says where it came from", (await strip(window)).map((s) => s.origin), ["Your picks from iteration 2"]);
-  check("its strip, stub and all, is the same 84 px", await stripHeight(window), 84);
-  check("the stub's dashed edge takes the entries' strong edge", await stripEdges(window), [
-    ["stub", true, true],
-    ["iteration 1", true, true],
-  ]);
-  await shot(window, shots, "6-fork-page");
+  check("its strip shows the branch's own run, which starts with the confirm that made it", [await window.getAttribute("[data-strip-run]", "data-strip-run"), (await strip(window)).map((e) => [e.n, e.origin])], ["Confirm 1", [[2, "Branched from iteration 1"]]]);
+  await shot(window, shots, "6-branch");
+  await window.click("[data-strip-run]");
+  await window.click('[data-run-option="Start"]');
+  await window.waitForSelector(`[data-history-fork="${session}"]`);
+  check("its Start run is the first line's iteration 1, and the first line carries on from it as an offshoot", [(await strip(window)).map((e) => e.n), await window.$eval(`[data-history-fork="${session}"]`, (el) => el.previousElementSibling.dataset.historyN)], [[1], "1"]);
 
-  // The parent's view is held back a moment, so the loading strip can be measured before it lands.
-  await app.context().route(`**/v1/ui/sessions/${session}`, async (route) => {
-    if (route.request().method() === "GET") await new Promise((r) => setTimeout(r, 800));
-    await route.continue();
-  });
-  await window.click("[data-fork-stub]");
-  await window.waitForSelector("[data-history-loading]");
-  check("while the parent loads, the strip's place is held at the same 84 px", await window.$eval("[data-history-loading]", (el) => Math.round(el.getBoundingClientRect().height)), 84);
-  check(
-    "and its panel draws the landed panel's rule before each slot, in the tone of the sidebar's other rules",
-    await window.$$eval("[data-session-loading] [data-sidebar=separator]", (rules) => {
-      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "background: var(--separator)" }));
-      const tone = getComputedStyle(probe).backgroundColor;
-      probe.remove();
-      return rules.map((rule) => getComputedStyle(rule).backgroundColor === tone);
-    }),
-    [true, true],
-  );
-  // The head's count line holds what loads, so only the entry's top and size, and its still's place in it, can match.
-  const entryAndStill = (entry, still) => {
-    const [e, s] = [entry.getBoundingClientRect(), still.getBoundingClientRect()];
-    return { entry: [e.top, e.width, e.height].map(Math.round), still: [s.left - e.left, s.top, s.width, s.height].map(Math.round) };
-  };
-  const skeleton = await window.evaluate(
-    `(${entryAndStill})(document.querySelector("[data-history-skeleton-entry]"), document.querySelector("[data-history-skeleton-still]"))`,
-  );
-  const loadingEdge = await stripEdges(window);
-  const loadingClipped = await edgesClipped(window);
-  await window.waitForSelector(`[data-history-fork="${forkId}"]`);
-  await app.context().unroute(`**/v1/ui/sessions/${session}`);
-  check("the loading entry's edge is the landed entry's strong edge", loadingEdge, [["loading", true, true]]);
-  check("and it draws on all four sides, none cut by the strip's clip, so the placeholder reads as a tile", loadingClipped, []);
-  const landed = await window.evaluate(`(() => {
-    const el = document.querySelector('[data-history-n="1"]');
-    el.style.width = "max-content";
-    const landed = (${entryAndStill})(el, el.querySelector("[data-preview]"));
-    el.style.removeProperty("width");
-    return landed;
-  })()`);
-  const within = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 2) || a;
-  check(
-    "the loading strip's entry and still land at the first iteration's top and size, its still in the same place, so nothing jumps",
-    { entry: within(landed.entry, skeleton.entry), still: within(landed.still, skeleton.still) },
-    { entry: true, still: true },
-  );
-  check("and with a fork hanging off a still it is still 84 px", await stripHeight(window), 84);
-  check("every landed entry, link and stub draws its edge on all four sides inside the strip's clip", await edgesClipped(window), []);
-  check(
-    "the parent's strip hangs the fork off iteration 2, the entry after its still, saying where it came from in the lineage's one wording",
-    await window.$eval(`[data-history-fork="${forkId}"]`, (el) => [el.previousElementSibling.dataset.historyN, el.dataset.historyFrom, [...el.querySelectorAll(".grid > *")].map((line) => line.textContent.trim())]),
-    ["2", "2", ["Try a calmer wheel for mornings", "from iteration 2"]],
-  );
-  check(
-    "two iterations and a fork still fit at 1440: the strip rests at its start, nothing cut",
-    await settled(async () => ({ ...(await stripRest(window)), insets: (await stripRest(window)).insets.map((inset, i) => (i === 0 ? inset : inset >= 16)) })),
-    { inView: ["iteration 1", "iteration 2", "fork"], cut: [], shown: true, insets: [16, true], scrolled: 0, arrows: 0 },
-  );
-  const lines = await settled(() => stripLines(window));
-  console.log(`  strip lines cut at 1440 with a fork: ${lines.cut.join(", ") || "none"}`);
-  check("an entry wider than its lines need holds no room while another's line is cut", lines.spare, []);
-  check("the fork's dashed link takes the entries' strong edge, so every edge in the strip is one tone", await stripEdges(window), [
-    ["iteration 1", true, true],
-    ["iteration 2", true, true],
-    ["fork", true, true],
-  ]);
-
+  // Make primary: the branch becomes the line home shows, and the first line an offshoot it can come back from.
+  await window.click("[data-make-primary]");
+  await window.waitForSelector("[data-branch-line]", { state: "detached" });
   await window.click("[data-back]");
-  await window.click("[data-overview]");
-  await window.waitForSelector(`[data-overview-session="${forkId}"] [data-fork-of]`);
-  check("home names the fork's parent and iteration with the session's word, from, behind the branch mark", (await window.textContent(`[data-overview-session="${forkId}"] [data-fork-of]`)).replace(/\s+/g, " ").trim(), "from Chore roulette · iteration 2");
-  await shot(window, shots, "7-home-fork");
-  /** Whether a sidebar row's title reads whole, and which of its status's words and time still show. */
-  const rowFit = (id) =>
-    settled(() =>
-      window.$eval(`[data-session="${id}"]`, (row) => {
-        const title = row.querySelector("[data-row-title]");
-        const range = document.createRange();
-        range.selectNodeContents(title);
-        const shown = (el) => el !== null && !el.hasAttribute("data-collapsed");
-        const [words, time] = [shown(row.querySelector("[data-status-words]")), shown(row.querySelector("[data-status-elapsed]"))];
-        return { whole: range.getBoundingClientRect().width <= title.getBoundingClientRect().width + 0.01, bareTime: time && !words };
-      }),
-    );
-  check("at 1440 the live fork row's title reads whole, its status giving up its time before its words, so no bare count sits in the ages' column", await rowFit(forkId), { whole: true, bareTime: false });
-  await window.setViewportSize({ width: 1100, height: 720 });
-  check("at 1100 too the status never folds to a bare count", await rowFit(forkId).then(({ bareTime }) => bareTime), false);
-  check(
-    "a running count keeps its unit's widest room, so the words before it never move as it goes from 5 to 17",
-    await window.$eval(`[data-overview-session="${forkId}"] [data-status-elapsed]`, (slot) => {
-      const count = slot.firstElementChild;
-      const [was, unit] = [count.textContent, slot.dataset.countSlot.slice(-1)];
-      const widths = [`5${unit}`, `17${unit}`].map((text) => {
-        count.textContent = text;
-        return slot.getBoundingClientRect().width;
-      });
-      count.textContent = was;
-      return widths[0] === widths[1];
-    }),
-    true,
-  );
-  await window.setViewportSize({ width: 1440, height: 900 });
+  await window.waitForSelector(`[data-session="${branchId}"]`);
+  check("home lists the brainstorm once, by its first title, opening the primary branch", [(await window.$(`[data-session="${session}"]`)) === null, (await window.textContent(`[data-session="${branchId}"] [data-row-title]`)).trim()], [true, "Chore roulette"]);
+  await shot(window, shots, "7-home-primary");
+  canvas = await openSession(window, branchId);
+  await window.waitForSelector("[data-history]");
+  await window.click("[data-strip-run]");
+  await window.click('[data-run-option="Start"]');
+  await window.click(`[data-history-fork="${session}"]`);
+  await window.waitForSelector(`[data-branch-line="${session}"]`);
+  check("the first line, now an offshoot, says so and can take its place back", (await window.textContent("[data-branch-line]")).replace("Make primary", "").trim(), "The first line, now an offshoot");
+  await window.click("[data-make-primary]");
+  await window.waitForSelector("[data-branch-line]", { state: "detached" });
+  await window.click("[data-back]");
+  await window.waitForSelector(`[data-session="${session}"]`);
 
   // Vary, back in the parent.
   canvas = await openSession(window, session);
@@ -838,12 +678,12 @@ try {
     ],
   );
   check(
-    "at 1100 the overflowing strip shows two whole entries, the latest among them, 16 px off both ends, with its arrows",
+    "at 1100 the overflowing strip shows the latest whole, 16 px off both ends, with its arrows",
     await settled(async () => {
       const rest = await stripRest(window);
       return [rest.inView, rest.cut, rest.shown, rest.insets, rest.arrows];
     }),
-    [["fork", "iteration 3"], [], true, [16, 16], 2],
+    [["iteration 3"], [], true, [16, 16], 2],
   );
   check("the later arrow is off at the end, the earlier one on", [await window.isDisabled('[data-history-step="end"]'), await window.isDisabled('[data-history-step="start"]')], [true, false]);
   check("only the start, where entries hide, shows its cue that more waits that way", await edgeCues(window), ["start"]);
@@ -900,7 +740,7 @@ try {
     "the earlier arrow steps back a page at a time and rests on each page's start, every entry it shows whole, the cut one out of sight",
     back,
     [
-      [["iteration 2"], [], 16, 1],
+      [["fork", "iteration 2"], [], 16, 1],
       [["iteration 1"], [], 16, 1],
     ],
   );
@@ -916,7 +756,7 @@ try {
       const rest = await stripRest(window);
       return [rest.inView, rest.cut, rest.shown];
     }),
-    [["fork", "iteration 3"], [], true],
+    [["iteration 3"], [], true],
   );
   await window.setViewportSize({ width: 1440, height: 900 });
   check(
@@ -925,7 +765,7 @@ try {
       const rest = await stripRest(window);
       return [rest.inView, rest.cut, rest.shown, rest.insets, rest.arrows];
     }),
-    [["iteration 2", "fork", "iteration 3"], [], true, [16, 16], 2],
+    [["fork", "iteration 2", "iteration 3"], [], true, [16, 16], 2],
   );
   check("and both iterations in view read their age whole, and latest whole or not at all", await uncut(), [
     [2, "whole", "uncut"],
@@ -968,6 +808,35 @@ try {
     ["spin-button-b", "spin-button-c"],
   );
 
+  // Confirm at the latest: Main goes forward, the rest goes, and the strip starts a new run (ADR 009).
+  await showSlot(window, "wheel");
+  await mark(window, "approve", "neon");
+  await window.waitForSelector('[data-main-group] [data-variant="neon"]');
+  const sentBeforeConfirm = t3.sent().length;
+  await window.click("[data-confirm-toggle]");
+  await window.waitForSelector("[data-confirm-menu]");
+  check("the confirm popover counts what goes, and applies at once", [await window.getAttribute("[data-confirm-dropped]", "data-confirm-dropped"), (await window.textContent("[data-confirm-hint]")).trim()], ["5", "Applies at once"]);
+  await window.click("[data-confirm-send]");
+  await window.waitForSelector('[data-canvas-iteration="4"]', { timeout: PHASE_MS });
+  check("Confirm writes iteration 4 with only Main in the wheel, the unmarked result as it was, and no agent turn", [[...context(session).latest.blocks].sort(), t3.sent().length - sentBeforeConfirm], [["result/card", "result/receipt", "wheel/neon"], 0]);
+  check("the marks are spent", context(session).marks, { mains: {}, grafts: [], trashed: [] });
+  check("the strip opens a new run on the confirm, named for it", [await window.getAttribute("[data-strip-run]", "data-strip-run"), (await strip(window)).map((e) => [e.n, e.origin])], ["Confirm 1", [[4, "Confirmed · 5 options dropped"]]]);
+  await window.click("[data-strip-run]");
+  await window.waitForSelector("[data-run-option]");
+  check("the run picker lists the runs newest first", await window.$$eval("[data-run-option]", (els) => els.map((e) => e.dataset.runOption)), ["Confirm 1", "Start"]);
+  await shot(window, shots, "11-runs");
+  await window.keyboard.press("Escape");
+
+  // The thread lives in the top bar, with a fresh thread for a clean context.
+  await window.click("[data-thread-chip]");
+  await window.waitForSelector("[data-thread-menu]");
+  await shot(window, shots, "12-thread-menu");
+  await window.click("[data-refresh-thread]");
+  await window.waitForSelector("[data-thread-menu]", { state: "detached" });
+  const fresh = t3.started();
+  check("a fresh thread starts one T3 thread for the brainstorm, whose first message has the agent attach", [fresh.length, fresh[0]?.message.split("\n")[0]], [1, `[brainstorm] session ${session} · fresh thread for "Chore roulette"`]);
+  check("and moves every branch to it", [context(session).attachedThread, context(branchId).attachedThread], [fresh[0]?.thread, fresh[0]?.thread]);
+
   check("the window logged no errors or warnings", errors, []);
 
   await app.close();
@@ -976,12 +845,12 @@ try {
   await openSession(window, session);
   await window.waitForSelector("[data-history-n]");
   check(
-    "after a restart at 1100 the strip opens on the latest, whole, with nothing cut at either end",
+    "after a restart at 1100 the strip opens on the latest run, the confirm's, whole, with nothing cut at either end",
     await settled(async () => {
       const rest = await stripRest(window);
       return [rest.inView, rest.cut, rest.shown];
     }),
-    [["fork", "iteration 3"], [], true],
+    [["iteration 4"], [], true],
   );
   await shot(window, shots, "10-strip-restart-1100");
 } finally {

@@ -42,7 +42,7 @@ Confirm, at the foot of the sidebar, locks the marks in. It opens a popover that
 - in a slot with a Main: Main, with its grafts applied
 - in a slot with no Main: its variants that aren't trashed
 
-Confirm is a request with scope `{ kind: "confirm", mains, grafts, trashed }`, so it shares Regenerate's gate, phases
+Confirm is a request with scope `{ kind: "confirm", mains, grafts, drop }` (`drop` lists every block the confirm removes: trashed options and the options beside a Main), so it shares Regenerate's gate, phases
 and history origin.
 
 - **Nothing to graft.** The app answers the request itself. It writes the narrowed iteration, keeping each block's
@@ -77,7 +77,7 @@ working per branch without change.
   an adopt or a refresh writes the same thread to every session in the tree. Only one request is open per brainstorm,
   since one thread works on one thing at a time. A branch starts no thread of its own.
 - **Numbering.** A branch continues its source's numbers: a branch from iteration 3 starts at 4, so a trail reads
-  1, 2, 3, 4 whichever branch it ends on. Migration 10 renumbers existing forks the same way.
+  1, 2, 3, 4 whichever branch it ends on. Migration 11 renumbers existing forks the same way, and a request still open on an old fork's own thread becomes send failed, since the fork now shares its tree's thread.
 - **Primary.** One branch is primary: the trail leading to the final design. It is the root until Rob presses **Make
   primary** on another, which sits on the branch's line in the sidebar ("Branch from iteration 3 · Make primary").
   The `primary_branch` row records it. The primary's strip shows its whole trail, its ancestors' iterations up to each
