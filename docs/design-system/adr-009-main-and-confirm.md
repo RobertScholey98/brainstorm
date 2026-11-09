@@ -43,7 +43,9 @@ Confirm, at the foot of the sidebar, locks the marks in. It opens a popover that
 - in a slot with no Main: its variants that aren't trashed
 
 Confirm is a request with scope `{ kind: "confirm", mains, grafts, drop }` (`drop` lists every block the confirm removes: trashed options and the options beside a Main), so it shares Regenerate's gate, phases
-and history origin.
+and history origin. One confirm that asks the agent nothing runs no agent turn, so a lost thread doesn't hold it; an
+open request anywhere in the brainstorm still does, since that request's commit could land on top (`confirmGate` in
+`machines.ts`, used by the service and the window).
 
 - **Nothing to graft.** The app answers the request itself. It writes the narrowed iteration, keeping each block's
   content and Rob's settings as they were, and marks the request fulfilled. No agent turn runs. Its marker and context
@@ -55,13 +57,16 @@ and history origin.
   for), and `out_of_scope` when it changes any other block. The settings and pins it drops with the variants are no news, so they raise no
   `override_dropped` or `pin_lost`.
 
-A confirm clears the marks it carried once its iteration lands. While it is open, the marks stay as they were sent and
+A confirm clears the marks it carried once its iteration lands, except a graft the commit didn't apply (the
+`confirm_mismatch` cases above): that one stays under Main for the next Confirm, with its slot's Main mark kept when the
+commit left other variants beside Main. A graft whose source the commit removed goes, since nothing is left to take it
+from. While it is open, the marks stay as they were sent and
 Rob can't change them. A graft still waiting for its slot's Main was never part of the confirm, so it stays. A confirm
 Rob withdraws before its commit lands is no longer open, so that commit lands as the agent's own: the confirm stays
 withdrawn, the marks stay except those naming a block or slot the commit removed, and nothing is let go of.
 
-A confirm as a branch that asks the agent nothing still shares the gate: it waits for an open request and for a lost
-thread to be replaced, like Confirm at the latest.
+A confirm as a branch follows the same gate: one that asks the agent nothing (no grafts, no instruction) waits for an
+open request but not for a lost thread, and is made lost with its tree.
 
 When its iteration lands, a confirm also lets go of what belonged to the variants it dropped: Rob's settings on them,
 and his open pins, which are deleted as when he deletes one. No later request asks the agent about a block that is
