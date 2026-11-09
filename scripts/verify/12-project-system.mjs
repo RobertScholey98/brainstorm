@@ -163,6 +163,10 @@ try {
   check("project use --thread records no folder for another project", [elsewhere.code, elsewhere.out], [0, ["this project: no design system; its brainstorms are freeform"]]);
   check("so that project isn't named after this repo", (await ui("GET", "/v1/ui/projects")).data.find((p) => p.id === "proj-other")?.name, null);
 
+  // An agent passing its own thread id as --thread is still in its own folder.
+  const own = cli(["project", "use", "none", "--thread", OTHER], { thread: OTHER, cwd: mainCheckout });
+  check("project use --thread with the agent's own thread records its folder", [own.code, (await ui("GET", "/v1/ui/projects")).data.find((p) => p.id === "proj-other")?.name], [0, repoName]);
+
   const second = cli(["system", "add", kit2], { thread: MAIN, cwd: mainCheckout });
   const charts = (await ui("GET", "/v1/ui/systems")).data.find((s) => s.name === "@fixture/charts")?.id;
   check("system add says the project keeps the system it has", [second.code, second.out.slice(-2)], [

@@ -35,7 +35,7 @@ project, which is why `docs/design.md` keys sessions by it and never by path.
 
 - **`system add`** makes the new system its project's, unless the project has one already. This covers an imported
   system and every worktree after it with no extra step. A system belongs to the known project whose repo holds it,
-  compared by the main checkout's `.git`, so a project known from a worktree matches and a parent folder doesn't;
+  compared by the main checkout's `.git`, so a project known from a worktree matches and, in git, a parent folder doesn't;
   Promote and reviews start their threads there. Brainstorm stores each project's `.git` when it first sees a folder
   of the project, so the match holds after T3 removes the worktree. When an agent on another project adds it, as with a shared library
   in its own repo, that project builds with it too. Without a match, the adding thread's project is the system's.
