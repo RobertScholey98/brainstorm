@@ -342,7 +342,8 @@ function threadFrom(flags: Flags, { required }: { required: boolean }): ThreadId
 const folderOf = (flags: Flags): string | null => {
   const named = str(flags, "project");
   if (named !== undefined) return resolve(named);
-  return str(flags, "thread") === undefined ? resolve(".") : null;
+  const thread = str(flags, "thread");
+  return thread === undefined || thread === process.env.T3CODE_THREAD_ID ? resolve(".") : null;
 };
 
 function sessionFrom(raw: string | undefined): SessionId | Failure {

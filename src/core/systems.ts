@@ -248,7 +248,11 @@ export class Systems {
     const adderRepo = adderPath === null ? null : await repoAt(adderPath);
     // An agent adding a library from its own repo is in the library's project, known to Brainstorm or not.
     const sameRepo = repo !== null && adderRepo !== null && samePath(adderRepo.git, repo.git);
-    const home = sameRepo ? adder : await this.#repoProject(root, repo?.git ?? null);
+    const found = sameRepo ? null : await this.#repoProject(root, repo?.git ?? null);
+    const home = sameRepo ? adder : (found?.id ?? null);
+    // A project is recorded with a repo only from its own folder. One found through another library's folder may live
+    // in another repo, and the first repo stored is kept.
+    const homeRepo = found?.via === "repo" ? repo : null;
     const projectId = home ?? adder;
     const users = [...new Set([home, adder].filter((p): p is ProjectId => p !== null))];
     const synced = await syncSystem(source.value, this.#checker);
@@ -272,7 +276,7 @@ export class Systems {
       this.#store.insertSystemVersion({ system: id, n: 1 as SystemVersionN, ...synced.value, syncedAt: at });
       // Each of those projects builds with it from now on, in every worktree, unless it has a system already.
       for (const project of users) {
-        const own = project === home ? repo : adderRepo;
+        const own = project === adder ? adderRepo : homeRepo;
         this.#store.ensureProject(project, project === adder ? adderPath : null, at, own?.git ?? null);
         if (own?.name != null && this.#store.projectName(project) === null) this.#store.nameProject(project, own.name);
         if (this.#store.projectSystem(project) === null) this.#store.setProjectSystem(project, id, at);
@@ -570,8 +574,11 @@ export class Systems {
    * A project's repo is stored when its folder is first seen, so a project known only from a deleted worktree matches.
    * A project known only from a system, added by path from a thread elsewhere, holds that system's repo.
    */
-  async #repoProject(root: string, repo: string | null): Promise<ProjectId | null> {
-    if (repo === null) return this.#store.projectsHolding(root)[0] ?? null;
+  async #repoProject(root: string, repo: string | null): Promise<{ readonly id: ProjectId; readonly via: "repo" | "folder" | "system" } | null> {
+    if (repo === null) {
+      const holding = this.#store.projectsHolding(root)[0];
+      return holding === undefined ? null : { id: holding, via: "folder" };
+    }
     const placed = new Set<ProjectId>();
     for (const p of this.#store.projectRepos()) {
       let theirs = p.repoGit;
@@ -581,15 +588,15 @@ export class Systems {
         if (theirs !== null) this.#store.setProjectRepo(p.id, theirs);
       }
       if (theirs === null) continue;
-      if (samePath(theirs, repo)) return p.id;
+      if (samePath(theirs, repo)) return { id: p.id, via: "repo" };
       placed.add(p.id);
     }
-    // A project known only from a system has no folder; add records this repo for it, so the loop above finds it next.
-    // A project whose repo is known and different only added a library from elsewhere, so its systems don't count.
+    // A project known only from a system has no folder to compare, so its systems' folders stand in for one. A project
+    // whose repo is known and different only added a library from elsewhere, so its systems don't count.
     for (const s of this.#store.systems()) {
       if (s.projectId === null || placed.has(s.projectId) || !existsSync(s.source.root)) continue;
       const theirs = (await repoAt(s.source.root))?.git ?? null;
-      if (theirs !== null && samePath(theirs, repo)) return s.projectId;
+      if (theirs !== null && samePath(theirs, repo)) return { id: s.projectId, via: "system" };
     }
     return null;
   }

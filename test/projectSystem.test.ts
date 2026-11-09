@@ -18,6 +18,7 @@ const LIB = "55555555-5555-5555-5555-555555555555" as ThreadId;
 const SIDE = "66666666-6666-6666-6666-666666666666" as ThreadId;
 const GONE = "77777777-7777-7777-7777-777777777777" as ThreadId;
 const SHARED = "88888888-8888-8888-8888-888888888888" as ThreadId;
+const APP = "99999999-9999-9999-9999-999999999999" as ThreadId;
 const AT = "2026-11-09T01:00:00.000Z";
 
 // Copies inside the repo, so each library resolves react and tailwindcss from the repo's node_modules.
@@ -54,6 +55,7 @@ beforeAll(async () => {
   bridge.add(SIDE, "proj-side", "An app that adds the library");
   bridge.add(GONE, "proj-gone", "A project last seen in a worktree since removed");
   bridge.add(SHARED, "proj-shared", "A project Brainstorm knows only from a system");
+  bridge.add(APP, "proj-app", "An app whose agent added a library from another repo by path");
   let id = 0;
   service = await Brainstorm.open({
     dbPath: join(home, "brainstorm.db"),
@@ -202,6 +204,33 @@ describe("a project's design system", () => {
       expect(data(await service.systems.add({ path: join(repo, "tables"), thread: SIDE })).system.projectId).toBe("proj-side");
     } finally {
       rmSync(repo, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("records a project's repo from its own folder, not from a library it was matched to", async () => {
+    const kitRepo = (name: string) => {
+      const repo = mkdtempSync(join(import.meta.dirname, ".kit-"));
+      execFileSync("git", ["init", "-q", repo]);
+      cpSync(join(import.meta.dirname, "kit-lib"), join(repo, name), { recursive: true });
+      const file = join(repo, name, "package.json");
+      writeFileSync(file, readFileSync(file, "utf8").replace("@fixture/kit", `@fixture/${name}`));
+      return repo;
+    };
+    const lib = kitRepo("icons");
+    const app = kitRepo("app-ui");
+    cpSync(join(import.meta.dirname, "kit-lib"), join(lib, "motion"), { recursive: true });
+    writeFileSync(join(lib, "motion", "package.json"), readFileSync(join(lib, "motion", "package.json"), "utf8").replace("@fixture/kit", "@fixture/motion"));
+    try {
+      // The app's agent adds a library from another repo by path, before Brainstorm knows the app's own folder.
+      expect(data(await service.systems.add({ path: join(lib, "icons"), thread: APP })).system.projectId).toBe("proj-app");
+      // Rob adds another library from that repo in the window, which finds proj-app through the first library.
+      data(await service.systems.add({ path: join(lib, "motion") }));
+      // The app's first brainstorm comes from its own repo, which is the repo Brainstorm keeps for it.
+      data(await service.newSession({ title: "App", brief: "", thread: APP, projectPath: app, system: { kind: "none" } }));
+      expect(data(await service.systems.add({ path: join(app, "app-ui") })).system.projectId).toBe("proj-app");
+    } finally {
+      rmSync(lib, { recursive: true, force: true });
+      rmSync(app, { recursive: true, force: true });
     }
   }, 120_000);
 

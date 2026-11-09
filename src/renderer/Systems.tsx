@@ -648,7 +648,7 @@ function SystemProjects({ api, view, showNotice }: { api: Api; view: SystemView;
         )}
         {/* T3 can't list its projects, so this says how to reach one the list hasn't met yet. */}
         <p className="text-xs text-fg-muted" data-system-projects-new>
-          Brainstorm lists a project once a brainstorm or a design system comes from it. For a project not listed, ask its agent to run{" "}
+          Brainstorm lists a project once a brainstorm or a design system comes from it, or its agent sets one. For a project not listed, ask its agent to run{" "}
           <span className="font-mono">{`brainstorm project use ${view.id}`}</span>.
         </p>
       </PopoverContent>

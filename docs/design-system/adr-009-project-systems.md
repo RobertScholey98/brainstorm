@@ -105,5 +105,12 @@ window can name it; a row made without a path takes the first path a session giv
 - Round 6 found that the round 5 match could name a project whose repo Brainstorm knows to be another, because it once
   added a library from this repo. Only a project with no known repo matches by its systems' folders now. The window's
   route refuses a project Brainstorm doesn't know, which would otherwise show up in every picker.
+- Round 7 found that a project matched through another library's folder was stored with that library's repo, and the
+  first repo stored is kept, so its own repo never matched afterwards. A project's repo now comes only from its own
+  folder. An explicit `--thread` equal to `$T3CODE_THREAD_ID` counts as the agent's own thread.
+- `system add` takes no `--project`: with `--thread` naming another thread it sends no folder, and the library's
+  project comes from the repo match alone.
+- A project whose only system was still awaiting Rob's review before the upgrade gets that system too, so its
+  brainstorms are refused until he confirms it, where they were freeform before.
 - "Unless the project has one already" reads the project as it is now. A project cleared with `project use none`
   takes the next system added from it.
